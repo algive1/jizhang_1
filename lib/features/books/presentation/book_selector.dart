@@ -200,7 +200,10 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: Image.asset(AppAssets.bookshelf, fit: BoxFit.fill),
+                      child: Image.asset(
+                        AppAssets.bookshelfEmpty,
+                        fit: BoxFit.fill,
+                      ),
                     ),
                     Positioned(
                       top: imageHeight * .035,
@@ -1330,80 +1333,117 @@ class _ShelfBookRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = switch (book.type) {
-      BookType.personal => Icons.person,
-      BookType.family => Icons.home,
-      BookType.enterprise => Icons.business,
-    };
+    final color = _bookTypeColor(book.type);
+    final dark = Color.lerp(color, Colors.black, .24)!;
+    final light = Color.lerp(color, Colors.white, .32)!;
     final subtitle = switch (book.type) {
       BookType.personal => '记录自己的精彩生活',
       BookType.family => '和家人一起打理幸福',
       BookType.enterprise => '高效管理商务收支',
     };
+    final radius = BorderRadius.circular(8);
     return Semantics(
+      selected: selected,
       button: true,
       label: '${book.name}，$subtitle${selected ? '，当前账本' : ''}',
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 34,
-                child: Center(
-                  child: Icon(
-                    icon,
-                    color: selected
-                        ? AppColors.primaryDark
-                        : const Color(0xFF8B745E),
-                    size: 20,
-                  ),
-                ),
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [light, color, dark],
+              stops: const [0, .42, 1],
+            ),
+            borderRadius: radius,
+            border: Border.all(
+              color: selected ? Colors.white : dark,
+              width: selected ? 2 : 1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000),
+                blurRadius: 5,
+                offset: Offset(2, 3),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF34271D),
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF806B58),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (selected)
-                const Padding(
-                  padding: EdgeInsets.only(right: 6),
-                  child: CircleAvatar(
-                    radius: 11,
-                    backgroundColor: AppColors.primary,
-                    child: Icon(Icons.check, color: Colors.white, size: 15),
-                  ),
-                ),
             ],
+          ),
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            borderRadius: radius,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 34,
+                  height: double.infinity,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [dark, color, light.withValues(alpha: .48)],
+                      ),
+                      border: Border(
+                        right: BorderSide(
+                          color: Colors.white.withValues(alpha: .28),
+                        ),
+                      ),
+                    ),
+                    child: Icon(
+                      _bookTypeIcon(book.type),
+                      color: Colors.white.withValues(alpha: .94),
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          book.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(color: Color(0x55000000), blurRadius: 2),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: .86),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (selected)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: CircleAvatar(
+                      radius: 11,
+                      backgroundColor: AppColors.primary,
+                      child: Icon(Icons.check, color: Colors.white, size: 15),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

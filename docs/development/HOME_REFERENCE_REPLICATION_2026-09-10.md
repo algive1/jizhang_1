@@ -32,7 +32,7 @@
 6. 执行现有相关测试、Flutter analyze 和目标平台 build，输出截图及剩余差异。不得以检查通过替代视觉验收。
 
 ## 下一步
-等待用户确认素材可用性和像素一致验收边界，再决定开发。无需重复询问是否允许使用指定 Luna 子代理，用户已授权，但前提是先解决上述可行性问题。
+按用户确认的计划继续逐段实施；每个切片完成后先由主代理完成代码、测试和截图复核，再进入下一项。无需重复询问是否允许使用指定 Luna 子代理，用户已授权，但仍以实际验收结果为准。
 
 ## 用户后续确认（2026-09-10）
 - 接受按参考图尽量逼近，允许使用内置 imagegen 生成相似素材。
@@ -43,7 +43,8 @@
 
 ## 素材来源
 均使用内置 imagegen，以用户原图作为参考，不使用外部 API 密钥。
-- assets/images/bookshelf_reference_v1.png：以卡片3为编辑目标，去掉手机头部及所有字/图标，保留木柜、三色横向书册、藤叶、盆栽和空白新建面板。动态账本仍必须由组件绘制，不能将装饰书册视为真实存在的账本。
+- assets/images/bookshelf_reference_v1.png：原始书架设计参考，保留木柜、三色横向书册、藤叶、盆栽和空白新建面板，仅作参考，不作为运行时背景。
+- assets/images/bookshelf_empty_background_v1.png：运行时书架背景，移除上层三色装饰书，只保留木柜、层板、植物和底层装饰；动态账本由组件独立绘制，不能将背景装饰视为真实账本。
 - assets/images/pro_cloud_reference_v1.png：以卡片1中 Pro 云备份图案为参考，生成透明底浅奶油/鼠尾草绿叠放卡片和云朵，无文字。
 - assets/images/leaves_reference_v1.png：以卡片1右上植物为参考，生成透明底右上角垂落绿叶，无文字或家具。
 - assets/images/home_living_scene.png：复用项目原有透明底家具及藤叶素材。
@@ -67,7 +68,7 @@
 ### 第三项：账本选择抽屉
 - `book_selector.dart` 改为木质书架抽屉：标题、管理入口、关闭按钮、个人/家庭/企业横向书册、新建账本入口及“查看更多账本”均由组件绘制。
 - 抽屉顶部保留与首页一致的头像、账本标题、铃铛和搜索入口；铃铛/搜索仍分别进入现有通知和流水搜索路由。
-- 书架纹理、藤叶和三种空白书册背景来自 `assets/images/bookshelf_reference_v1.png`，账本名称、类型、选中状态和管理操作仍来自真实 `LedgerBook` 数据，未把图片中的文字当作数据。
+- 书架纹理、藤叶和底层装饰来自 `assets/images/bookshelf_empty_background_v1.png`，账本名称、类型、选中状态和管理操作仍来自真实 `LedgerBook` 数据；个人/家庭/企业书本由 `_ShelfBookRow` 独立绘制，未把图片中的文字或书册当作数据。
 - 账本切换、关闭、长按管理、新建入口以及首页月份/账本联动测试均通过。
 
 ## 当前验收产物
@@ -79,7 +80,7 @@
 
 ## 验证结果（2026-09-10）
 - `flutter analyze`：通过，无问题。
-- `flutter test`：全量通过，125 个测试通过。
+- `flutter test`：全量通过，153 个测试通过。
 - `test/home_reference_page_capture_test.dart`：真实 Provider + 隔离内存数据库截图通过，并生成上述三张 QA 截图。
 - `flutter build apk --debug`：构建成功，产物为 `build/app/outputs/flutter-apk/app-debug.apk`。
 - 主要交互覆盖：隐私金额隐藏/恢复、周预算诚实提示、预算/月切换、目标节点、账本切换/关闭/管理、会员入口、铃铛入口、首页交易行及小屏大字号无布局溢出。

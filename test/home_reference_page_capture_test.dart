@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
+import 'package:jizhang_app/core/constants/app_assets.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/family.dart';
@@ -67,7 +68,7 @@ void main() {
           'assets/images/home_living_scene.png',
           'assets/images/pro_cloud_reference_v1.png',
           'assets/images/leaves_reference_v1.png',
-          'assets/images/bookshelf_reference_v1.png',
+          AppAssets.bookshelfEmpty,
         ]) {
           debugPrint('QA loading $asset');
           await precacheImage(AssetImage(asset), context);

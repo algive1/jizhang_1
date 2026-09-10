@@ -8,4 +8,6 @@ abstract final class AppAssets {
   static const proCloud = 'assets/images/pro_cloud_reference_v1.png';
   static const homeLeaves = 'assets/images/leaves_reference_v1.png';
   static const bookshelf = 'assets/images/bookshelf_reference_v1.png';
+  static const bookshelfEmpty =
+      'assets/images/bookshelf_empty_background_v1.png';
 }

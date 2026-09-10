@@ -28,6 +28,9 @@
 - 2026-09-10 抽屉切片 1 已统一账本数量规则：Free 10、Pro 20、Family 50；共享他人账本不占创建额度；预览沿创建顺序展示，活动账本在前三本之外时替换第三位。
 - 2026-09-10 抽屉切片 2 已完成可搜索的全部账本管理视图、显式管理入口和一体化新建表单；新建默认个人用途，成功后真实持久化并切换，320dp/1.6 字号回归无布局异常。
 - 2026-09-10 抽屉切片 2 已通过 `flutter build apk --debug`，产物为 `build/app/outputs/flutter-apk/app-debug.apk`；本机本次未连接 Android 设备，未虚报安装截图验收。
+- 2026-09-10 抽屉切片 3 已新增无内置账本的木质书架背景，并将个人/家庭/企业账本改为独立 Flutter 书本层；QA 预缓存清单同步更新，避免截屏在新素材加载前完成。
+- 2026-09-10 抽屉切片 3 已完成全量回归：153 个 Flutter tests、analyze 和 Debug APK 构建均通过；本机仍无 Android 设备，未虚报安装验收。
+- 2026-09-10 抽屉切片 3 的 Release APK 已成功构建，且 APK 内确认包含 `bookshelf_empty_background_v1.png`；构建仍有既存 `speech_to_text` KGP 兼容性 warning。
 
 ## 当前未完成或未联调
 
@@ -37,7 +40,7 @@
 - 公网云部署、对象存储、家庭短信邀请和企业报税。
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
 - iOS 真机、签名和发布验收。
-- 账本抽屉计划中的书架背景拆分、全部账本搜索管理、新建一体化表单和交易详情尚未完成。
+- 账本抽屉计划中最近交易查询、交易详情/附件预览及阶段二、阶段三能力尚未完成。
 
 ## 当前架构风险
 
@@ -55,20 +58,24 @@ flutter analyze
 → No issues found
 
 flutter test --reporter expanded
-→ All tests passed（120 个）
+→ All tests passed（153 个）
+
+flutter build apk --debug
+→ Built build/app/outputs/flutter-apk/app-debug.apk
 
 flutter build apk --release
-→ Built build/app/outputs/flutter-apk/app-release.apk（72,799,794 bytes）
+→ Built build/app/outputs/flutter-apk/app-release.apk（77,229,866 bytes）
 
 server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
 ```
 
-当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，72,799,794 bytes，SHA-256：
-`ea4762b9b8964bb6ebb015e4f1e79a6c9bad53747059e2dae878bf17d924d81c`。
+当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,229,866 bytes，SHA-256：
+`a03ccd9bfb0d11ad7c262abc19fce51f6961146751bfd14904430211f059d2e9`。
 
 Android 模拟器 `emulator-5554` 已安装 Release APK 并实际打开首页、顶部书架抽屉：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。
+以上模拟器截图是 2026-09-09 的历史版本证据；切片 3 构建后本机没有连接设备，因此未声称已重新安装验收。
 
 测试期间有 Drift Widget 测试重复创建内存数据库的 debug warning，但没有测试失败；后续应统一测试数据库生命周期。
 
