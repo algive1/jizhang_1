@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
@@ -13,6 +14,16 @@ import '../../intelligence/data/merchant_rule_repository.dart';
 import '../data/transactions_repository.dart';
 
 enum _TransactionAction { edit, category, delete }
+
+void openTransactionDetail(
+  BuildContext context,
+  TransactionRecord transaction,
+) {
+  context.push(
+    '/transactions/${Uri.encodeComponent(transaction.id)}',
+    extra: transaction,
+  );
+}
 
 Future<void> showTransactionActions(
   BuildContext context,

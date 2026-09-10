@@ -155,7 +155,8 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         child: TransactionDateGroup(
           dateLabel: label,
           transactions: entry.value,
-          onTransactionTap: _showTransactionActions,
+          onTransactionTap: (transaction) =>
+              openTransactionDetail(context, transaction),
           onTransactionLongPress: _showTransactionActions,
         ),
       );

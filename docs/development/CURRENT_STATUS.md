@@ -1,6 +1,6 @@
 # 当前开发状态
 
-更新时间：2026-09-10
+更新时间：2026-09-11
 
 ## 项目定位
 
@@ -32,7 +32,10 @@
 - 2026-09-10 抽屉切片 3 已完成全量回归：153 个 Flutter tests、analyze 和 Debug APK 构建均通过；本机仍无 Android 设备，未虚报安装验收。
 - 2026-09-10 抽屉切片 3 的 Release APK 已成功构建，且 APK 内确认包含 `bookshelf_empty_background_v1.png`；构建仍有既存 `speech_to_text` KGP 兼容性 warning。
 - 2026-09-11 抽屉切片 4 已将首页最近交易改为当前账本数据库限量查询（10 条）、本地日期分组和本地时间显示；保留完整流水给预算/分析统计。
-- 2026-09-11 抽屉切片 4 已通过全量 156 个 Flutter tests、analyze 和 Release APK 构建；本机无 Android 设备，未虚报安装验收。
+- 2026-09-11 抽屉切片 4 已补充 SQL 级未来流水过滤，确保计划流水不会占用最近 10 条名额。
+- 2026-09-11 交易详情切片 5 已统一首页、流水、搜索三个入口：点击进入详情，长按保留操作菜单；详情展示金额、类型、发生时间、账户、分类、备注、记录人和同步状态。
+- 2026-09-11 交易详情切片 5 已补齐旧 metadata 附件的图片缩略图/全屏缩放、PDF/其他文件系统打开、无处理器提示、文件缺失提示和重新添加入口；编辑、分类修正和软删除复用既有 Service/权限链路。
+- 2026-09-11 交易详情切片 5 已通过全量 162 个 Flutter tests、analyze 和 Release APK 构建，并在 Pixel 7 Android emulator 安装打开检查详情页。
 
 ## 当前未完成或未联调
 
@@ -41,17 +44,18 @@
 - 账号体系、会员购买、支付验签、订单服务和权益刷新。
 - 公网云部署、对象存储、家庭短信邀请和企业报税。
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
-- iOS 真机、签名和发布验收。
-- 账本抽屉计划中交易详情/附件预览及阶段二、阶段三能力尚未完成。
+- iOS 真机、签名和发布验收；当前 `flutter build ios --no-codesign` 被既有 `Application not configured for iOS` 配置问题阻断。
+- 账本抽屉计划中的阶段二、阶段三能力尚未完成；阶段一交易详情入口及本地附件展示已完成。
 
 ## 当前架构风险
 
 1. 流水、分析和去重仍存在全量加载/内存计算，长期大数据量需要分页和 SQL 聚合。
 2. Android Release 未配置正式 keystore，当前产物只能作为本地验收包。
 3. 共享服务已完成本地真实联调，尚未进行公网部署、TLS 证书、监控和生产备份验收。
-4. 提醒设置仍只有未启用的菜单项；支付、短信、附件云存储和企业报税未接入。
+4. 提醒设置仍只有未启用的菜单项；支付、短信、独立附件记录/附件云存储和企业报税未接入。
 5. Release 构建仍收到 `speech_to_text` 使用 Kotlin Gradle Plugin 的未来兼容性 warning；当前构建成功，后续需等待插件迁移到 Built-in Kotlin。
 6. 当前账本创建顺序的兼容排序使用 SQLite `rowid` 作为同时间戳的 tie-breaker；后续若需要跨导入/跨设备保持业务创建序号，应在账本模型中增加显式稳定序号并纳入同步协议。
+7. 交易详情的系统文件打开依赖 Android/iOS 系统处理器；iOS 尚未完成可编译项目配置和真机验证，阶段二仍需把附件从 `metadata.attachments` 迁移为独立记录。
 
 ## 实际验证结果
 
@@ -59,27 +63,27 @@
 flutter analyze
 → No issues found
 
-flutter test --reporter expanded
-→ All tests passed（156 个）
+flutter test --reporter compact
+→ All tests passed（162 个）
 
 flutter build apk --debug
 → Built build/app/outputs/flutter-apk/app-debug.apk
 
 flutter build apk --release
-→ Built build/app/outputs/flutter-apk/app-release.apk（77,246,250 bytes）
+→ Built build/app/outputs/flutter-apk/app-release.apk（77,607,562 bytes）
 
 server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
 ```
 
-当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,246,250 bytes，SHA-256：
-`8f02cf23a18227d2e5fe591f9247c35149bb75d788732d9e9b4743405afd5213`。
+当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,607,562 bytes，SHA-256：
+`76576e3e8b1b34d11e4d4875f8387923cc9c179272704597d90f98bf5a445bc8`。
 
-Android 模拟器 `emulator-5554` 已安装 Release APK 并实际打开首页、顶部书架抽屉：
+Android 模拟器 `emulator-5554` 已安装当前 Release APK，并实际打开首页、流水列表和交易详情页：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。
-以上模拟器截图是 2026-09-09 的历史版本证据；切片 3 构建后本机没有连接设备，因此未声称已重新安装验收。
+以上三个链接仍是历史版本截图；本次详情页的当前截图保存在本机 `/tmp/jizhang-slice5-release-final.png`，并已在模拟器窗口保持打开供人工查看。
 
-测试期间有 Drift Widget 测试重复创建内存数据库的 debug warning，但没有测试失败；后续应统一测试数据库生命周期。
+测试期间有 Drift Widget 测试重复创建内存数据库的 debug warning，但没有测试失败；后续应统一测试数据库生命周期。Release 构建另有既存 `speech_to_text` KGP 兼容性 warning，但构建成功。
 
 完整备份使用 SQLite 文件并校验核心表与 schema 版本；恢复不会在当前页面强制关闭活动数据库，而是先写入待恢复文件，应用下一次启动数据库连接前完成替换。备份不包含独立文件系统中的附件，且没有加密或密码保护。
 

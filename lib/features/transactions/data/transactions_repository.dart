@@ -12,6 +12,7 @@ abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchRecent({int limit = 10});
   Future<List<TransactionRecord>> getAll();
   Future<List<TransactionRecord>> getRecent({int limit = 10});
+  Future<TransactionRecord?> getById(String id);
   Future<TransactionRecord> create(TransactionRecord transaction);
   Future<List<TransactionRecord>> createAll(
     List<TransactionRecord> transactions,
@@ -37,7 +38,7 @@ class DriftTransactionRepository implements TransactionRepository {
   Stream<List<TransactionRecord>> watchRecent({int limit = 10}) {
     _validateRecentLimit(limit);
     return _database.transactionDao
-        .watchActive(bookId: bookId, limit: limit)
+        .watchActive(bookId: bookId, limit: limit, onlyOccurred: true)
         .asyncMap(_mapEntities);
   }
 
@@ -51,9 +52,24 @@ class DriftTransactionRepository implements TransactionRepository {
   @override
   Future<List<TransactionRecord>> getRecent({int limit = 10}) async {
     _validateRecentLimit(limit);
+    // The home page is a history view: scheduled/future transactions must
+    // not consume its recent-items limit.
     return _mapEntities(
-      await _database.transactionDao.getActive(bookId: bookId, limit: limit),
+      await _database.transactionDao.getActive(
+        bookId: bookId,
+        limit: limit,
+        onlyOccurred: true,
+      ),
     );
+  }
+
+  @override
+  Future<TransactionRecord?> getById(String id) async {
+    final entity = await _database.transactionDao.findActiveById(
+      id,
+      bookId: bookId,
+    );
+    return entity == null ? null : _mapEntity(entity);
   }
 
   @override

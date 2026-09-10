@@ -47,9 +47,9 @@ void main() {
         type: TransactionType.expense,
         amount: 99,
         accountId: scopedSeedId(family.id, SeedIds.cashAccount),
-        occurredAt: now.add(const Duration(hours: 1)),
-        createdAt: now.add(const Duration(hours: 1)),
-        updatedAt: now.add(const Duration(hours: 1)),
+        occurredAt: now.subtract(const Duration(hours: 1)),
+        createdAt: now.subtract(const Duration(hours: 1)),
+        updatedAt: now.subtract(const Duration(hours: 1)),
       ),
     );
 
@@ -87,6 +87,43 @@ void main() {
     );
     await expectLater(personal.getRecent(limit: 0), throwsArgumentError);
   });
+
+  test(
+    'recent query excludes future transactions before applying its limit',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final now = DateTime.now();
+      final repository = DriftTransactionRepository(
+        database,
+        bookId: SeedIds.personalBook,
+      );
+      TransactionRecord transaction(String id, DateTime occurredAt) {
+        return TransactionRecord(
+          id: id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 12,
+          accountId: scopedSeedId(SeedIds.personalBook, SeedIds.cashAccount),
+          occurredAt: occurredAt,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        );
+      }
+
+      await repository.createAll([
+        transaction('未来计划', now.add(const Duration(days: 1))),
+        for (var index = 0; index < 10; index++)
+          transaction('已发生-$index', now.subtract(Duration(days: index + 1))),
+      ]);
+
+      final recent = await repository.getRecent();
+      expect(recent, hasLength(10));
+      expect(recent.map((item) => item.id), isNot(contains('未来计划')));
+      expect(await repository.getAll(), hasLength(11));
+    },
+  );
 
   testWidgets('home recent transactions are grouped by local calendar date', (
     tester,

@@ -351,9 +351,8 @@ class _HomePageState extends ConsumerState<HomePage>
                   showDivider:
                       !(groupIndex == entries.length - 1 &&
                           itemIndex == entries[groupIndex].value.length - 1),
-                  onTap: () => showTransactionActions(
+                  onTap: () => openTransactionDetail(
                     context,
-                    ref,
                     entries[groupIndex].value[itemIndex],
                   ),
                   onLongPress: () => showTransactionActions(
@@ -480,7 +479,7 @@ class _HomePageState extends ConsumerState<HomePage>
                       transaction: record,
                       homeStyle: true,
                       showDate: true,
-                      onTap: () => showTransactionActions(context, ref, record),
+                      onTap: () => openTransactionDetail(context, record),
                       onLongPress: () =>
                           showTransactionActions(context, ref, record),
                     ),

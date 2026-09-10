@@ -43,8 +43,8 @@ class TransactionTile extends StatelessWidget {
     final merchant = transaction.merchant ?? transaction.note ?? '未命名交易';
     return Semantics(
       button: true,
-      label: '$merchant，$category，交易操作',
-      hint: onLongPress == null ? '点击打开操作菜单' : '点击或长按打开操作菜单',
+      label: '$merchant，$category，交易详情',
+      hint: onLongPress == null ? '点击查看详情' : '点击查看详情，长按打开操作菜单',
       onTap: onTap,
       onLongPress: onLongPress,
       child: InkWell(

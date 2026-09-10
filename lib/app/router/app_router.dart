@@ -15,8 +15,10 @@ import '../../features/notifications/presentation/payment_notification_page.dart
 import '../../features/membership/presentation/membership_page.dart';
 import '../../features/profile/presentation/profile_page.dart';
 import '../../features/data_export/presentation/data_export_page.dart';
+import '../../core/models/transaction_record.dart';
 import '../../features/transactions/presentation/transactions_page.dart';
 import '../../features/transactions/presentation/transaction_search_page.dart';
+import '../../features/transactions/presentation/transaction_detail_page.dart';
 import '../../core/widgets/app_scaffold.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -41,6 +43,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'inbox',
                 builder: (context, state) => const BillInboxPage(),
+              ),
+              GoRoute(
+                path: ':transactionId',
+                builder: (context, state) => TransactionDetailPage(
+                  transactionId: state.pathParameters['transactionId']!,
+                  initialTransaction: state.extra is TransactionRecord
+                      ? state.extra as TransactionRecord
+                      : null,
+                ),
               ),
             ],
           ),

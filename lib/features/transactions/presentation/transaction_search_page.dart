@@ -123,7 +123,8 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                               transaction: entry.value,
                               showDivider: entry.key != results.length - 1,
                               showDate: true,
-                              onTap: () => _showTransactionActions(entry.value),
+                              onTap: () =>
+                                  openTransactionDetail(context, entry.value),
                               onLongPress: () =>
                                   _showTransactionActions(entry.value),
                             ),

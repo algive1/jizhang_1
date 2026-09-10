@@ -131,6 +131,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('瑞幸咖啡').first);
     await tester.pumpAndSettle();
+    expect(find.text('交易详情'), findsOneWidget);
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
     expect(find.text('编辑流水'), findsOneWidget);
     expect(find.text('删除流水'), findsOneWidget);
 
@@ -148,7 +151,7 @@ void main() {
     );
   });
 
-  testWidgets('transaction click and long press open the same action menu', (
+  testWidgets('transaction click opens detail and long press opens action menu', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 700));
@@ -162,9 +165,8 @@ void main() {
 
     await tester.tap(transaction);
     await tester.pumpAndSettle();
-    expect(find.text('编辑流水'), findsOneWidget);
-    expect(find.text('删除流水'), findsOneWidget);
-    Navigator.of(tester.element(find.text('编辑流水'))).pop();
+    expect(find.text('交易详情'), findsOneWidget);
+    Navigator.of(tester.element(find.text('交易详情'))).pop();
     await tester.pumpAndSettle();
 
     await tester.longPress(transaction);

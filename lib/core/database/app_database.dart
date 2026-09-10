@@ -947,7 +947,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     with _$TransactionDaoMixin {
   TransactionDao(super.attachedDatabase);
 
-  Stream<List<TransactionEntity>> watchActive({String? bookId, int? limit}) {
+  Stream<List<TransactionEntity>> watchActive({
+    String? bookId,
+    int? limit,
+    bool onlyOccurred = false,
+  }) {
     final query = select(transactionEntries)
       ..where(
         (row) =>
@@ -955,7 +959,12 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
             CustomExpression<bool>(
               SharedSyncSchema.visibleBooksSql('book_id'),
             ) &
-            (bookId == null ? const Constant(true) : row.bookId.equals(bookId)),
+            (bookId == null
+                ? const Constant(true)
+                : row.bookId.equals(bookId)) &
+            (onlyOccurred
+                ? row.occurredAt.isSmallerOrEqualValue(DateTime.now())
+                : const Constant(true)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -966,7 +975,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
-  Future<List<TransactionEntity>> getActive({String? bookId, int? limit}) {
+  Future<List<TransactionEntity>> getActive({
+    String? bookId,
+    int? limit,
+    bool onlyOccurred = false,
+  }) {
     final query = select(transactionEntries)
       ..where(
         (row) =>
@@ -974,7 +987,12 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
             CustomExpression<bool>(
               SharedSyncSchema.visibleBooksSql('book_id'),
             ) &
-            (bookId == null ? const Constant(true) : row.bookId.equals(bookId)),
+            (bookId == null
+                ? const Constant(true)
+                : row.bookId.equals(bookId)) &
+            (onlyOccurred
+                ? row.occurredAt.isSmallerOrEqualValue(DateTime.now())
+                : const Constant(true)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -989,6 +1007,21 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return (select(
       transactionEntries,
     )..where((row) => row.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<TransactionEntity?> findActiveById(String id, {String? bookId}) {
+    return (select(transactionEntries)..where(
+          (row) =>
+              row.id.equals(id) &
+              row.deletedAt.isNull() &
+              CustomExpression<bool>(
+                SharedSyncSchema.visibleBooksSql('book_id'),
+              ) &
+              (bookId == null
+                  ? const Constant(true)
+                  : row.bookId.equals(bookId)),
+        ))
+        .getSingleOrNull();
   }
 
   Future<void> insertOne(TransactionEntriesCompanion transaction) async {
