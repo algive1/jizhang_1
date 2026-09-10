@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
@@ -94,14 +95,19 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     final width = MediaQuery.sizeOf(context).width.clamp(320.0, 600.0);
     final imageHeight = width * 1095 / 1437;
     final active = books.where((book) => book.id == selectedId).firstOrNull;
-    final ordered = <LedgerBook>[];
-    for (final type in BookType.values) {
-      final match = books.where((book) => book.type == type).firstOrNull;
-      if (match != null) ordered.add(match);
+    final ordered = [...books];
+    final previewBooks = ordered.take(3).toList();
+    if (active != null && !previewBooks.any((book) => book.id == active.id)) {
+      if (previewBooks.length == 3) {
+        previewBooks[2] = active;
+      } else {
+        previewBooks.add(active);
+      }
     }
-    for (final book in books) {
-      if (!ordered.any((item) => item.id == book.id)) ordered.add(book);
-    }
+    final ownedCount = BookLimitPolicy.ownedCount(
+      books,
+      ownerUserId: ref.read(databaseProvider).currentActor,
+    );
     return Material(
       color: const Color(0xFFFAF7EF),
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
@@ -277,7 +283,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                           child: const Text('账本读取失败，点击重试'),
                         ),
                       ),
-                    ...ordered.take(3).toList().asMap().entries.map((entry) {
+                    ...previewBooks.asMap().entries.map((entry) {
                       final book = entry.value;
                       final top =
                           imageHeight * [0.174, 0.369, 0.553][entry.key];
@@ -306,7 +312,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                         child: InkWell(
                           onTap: _switching
                               ? null
-                              : (books.length >=
+                              : (ownedCount >=
                                         BookLimitPolicy.forPlan(
                                           membership?.membership.plan ??
                                               MembershipPlan.free,
@@ -383,7 +389,9 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                             : null,
                         child: Center(
                           child: Text(
-                            '—   查看更多账本（${books.length > 3 ? books.length : '3个以上'}）   —',
+                            books.length > 3
+                                ? '—   查看全部账本（${books.length}）   —'
+                                : '共 ${books.length} 个账本',
                             style: TextStyle(
                               color: const Color(
                                 0xFF76502C,

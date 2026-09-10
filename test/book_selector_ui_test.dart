@@ -107,6 +107,76 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'preview follows creation order and keeps the active book visible',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final repository = DriftBookRepository(
+        database,
+        _ProMembershipRepository(),
+      );
+      final family = await repository.create(
+        name: '家庭账本',
+        type: BookType.family,
+      );
+      final personal = await repository.create(
+        name: '旅行账本',
+        type: BookType.personal,
+      );
+      final enterprise = await repository.create(
+        name: '企业账本',
+        type: BookType.enterprise,
+      );
+      final fourth = await repository.create(
+        name: '第四本账本',
+        type: BookType.personal,
+      );
+      final container = ProviderContainer(
+        overrides: [databaseProvider.overrideWithValue(database)],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: BookSelectorButton()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await container.read(activeBookIdProvider.notifier).select(fourth.id);
+      await tester.tap(find.byType(BookSelectorButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(ValueKey('book-shelf-row-${family.id}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(ValueKey('book-shelf-row-${personal.id}')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(ValueKey('book-shelf-row-${fourth.id}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(ValueKey('book-shelf-row-${enterprise.id}')),
+        findsNothing,
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('book-more')));
+      expect(find.textContaining('查看全部账本（5）'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'selecting an archived book fails without changing the active id',
     () async {

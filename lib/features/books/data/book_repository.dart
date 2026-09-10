@@ -13,7 +13,7 @@ import '../../membership/data/membership_repository.dart';
 import '../../settings/data/app_settings_repository.dart';
 
 abstract final class BookLimitPolicy {
-  static const free = 3;
+  static const free = 10;
   static const pro = 20;
   static const family = 50;
 
@@ -22,6 +22,15 @@ abstract final class BookLimitPolicy {
     MembershipPlan.pro => pro,
     MembershipPlan.family => family,
   };
+
+  static int ownedCount(
+    Iterable<LedgerBook> books, {
+    required String ownerUserId,
+  }) {
+    return books
+        .where((book) => !book.isShared || book.ownerUserId == ownerUserId)
+        .length;
+  }
 }
 
 abstract interface class BookRepository {
@@ -40,7 +49,9 @@ class DriftBookRepository implements BookRepository {
   final MembershipRepository _membership;
 
   Selectable<QueryRow> _visible(String userId) => _database.customSelect(
-    "SELECT b.*,s.role AS shared_role,s.remote_id AS shared_id,s.phase AS shared_phase FROM books b LEFT JOIN sync_books s ON s.book_id=b.id WHERE b.is_archived=0 AND ((b.family_id IS NULL AND b.owner_user_id=?) OR (s.user_id=(SELECT actor_id FROM sync_control WHERE id=1) AND s.access=1)) ORDER BY b.created_at",
+    // Old databases store several creations in the same date-time precision;
+    // rowid preserves their insertion order as the stable tie-breaker.
+    "SELECT b.*,s.role AS shared_role,s.remote_id AS shared_id,s.phase AS shared_phase FROM books b LEFT JOIN sync_books s ON s.book_id=b.id WHERE b.is_archived=0 AND ((b.family_id IS NULL AND b.owner_user_id=?) OR (s.user_id=(SELECT actor_id FROM sync_control WHERE id=1) AND s.access=1)) ORDER BY b.created_at,b.rowid",
     variables: [Variable(userId)],
     readsFrom: {_database.bookEntries},
   );
@@ -69,11 +80,10 @@ class DriftBookRepository implements BookRepository {
     final membership = await _membership.getCurrent();
     final books = await getForUser(SeedIds.localUser);
     final limit = BookLimitPolicy.forPlan(membership.membership.plan);
-    if (books
-            .where(
-              (b) => !b.isShared || b.ownerUserId == _database.currentActor,
-            )
-            .length >=
+    if (BookLimitPolicy.ownedCount(
+          books,
+          ownerUserId: _database.currentActor,
+        ) >=
         limit) {
       throw BookLimitReachedException(limit: limit);
     }
