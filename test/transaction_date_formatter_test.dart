@@ -42,4 +42,17 @@ void main() {
       expect(TransactionDateFormatter.monthDayTime(occurredAt), '9月8日 07:05');
     },
   );
+
+  test('formats UTC timestamps in the device local timezone', () {
+    final local = DateTime(2026, 9, 8, 7, 5);
+    final utc = local.toUtc();
+    expect(
+      TransactionDateFormatter.time(utc),
+      TransactionDateFormatter.time(local),
+    );
+    expect(
+      TransactionDateFormatter.monthDayTime(utc),
+      TransactionDateFormatter.monthDayTime(local),
+    );
+  });
 }

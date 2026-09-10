@@ -63,6 +63,7 @@
 - 已完成 `home_page.dart` 首页结构调整：顶部头像/账本标题/皇冠会员/铃铛/搜索入口、预算目标卡、值得关注卡、Pro 卡、趋势、分类、最近交易和底部导航按原型顺序排列。
 - 皇冠和 Pro 卡都连接既有会员路由；铃铛连接既有支付通知记账页面；本周预算入口保留并提示“本周预算暂未开放”，没有新增虚假周预算数据。
 - `home_expense_trend.dart` 使用真实收支 Provider 绘制预算切换、周/月/年视图、折线及选中点，不再依赖固定演示金额；`transaction_tile.dart` 增加首页两行式交易布局并显示真实账户名。
+- 首页最近交易使用当前账本的数据库 `LIMIT 10` 查询，按本地日期分组；分组内行只显示本地时分，账户名、金额和操作入口仍使用真实流水数据。
 - `app_bottom_navigation.dart`、`quick_add_button.dart` 调整为原型中的绿色主色和悬浮加号样式。
 
 ### 第三项：账本选择抽屉
@@ -78,9 +79,9 @@
 - 账本抽屉截图：[bookshelf.png](../qa/home-reference-2026-09-10/bookshelf.png)。
 - 预算/目标卡截图：[home-spending-goal-card.png](../qa/home-reference-2026-09-10/home-spending-goal-card.png)。
 
-## 验证结果（2026-09-10）
+## 验证结果（2026-09-11）
 - `flutter analyze`：通过，无问题。
-- `flutter test`：全量通过，153 个测试通过。
+- `flutter test`：全量通过，156 个测试通过。
 - `test/home_reference_page_capture_test.dart`：真实 Provider + 隔离内存数据库截图通过，并生成上述三张 QA 截图。
 - `flutter build apk --debug`：构建成功，产物为 `build/app/outputs/flutter-apk/app-debug.apk`。
 - 主要交互覆盖：隐私金额隐藏/恢复、周预算诚实提示、预算/月切换、目标节点、账本切换/关闭/管理、会员入口、铃铛入口、首页交易行及小屏大字号无布局溢出。

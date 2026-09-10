@@ -414,29 +414,37 @@ Future<AppDatabase> _pumpApp(
   ).getMonth(budgetMonthKey(DateTime.now()));
   final membership = await LocalOnlyMembershipRepository().getCurrent();
   addTearDown(database.close);
+  final container = ProviderContainer(
+    overrides: [
+      databaseProvider.overrideWithValue(database),
+      if (liveTransactions)
+        transactionsProvider.overrideWith((ref) async* {
+          yield await DriftTransactionRepository(database).getAll();
+        })
+      else
+        transactionsProvider.overrideWithValue(AsyncData(transactions)),
+      accountsProvider.overrideWithValue(AsyncData(accounts)),
+      allAccountsProvider.overrideWithValue(AsyncData(accounts)),
+      categoriesProvider.overrideWithValue(AsyncData(categories)),
+      allCategoriesProvider.overrideWithValue(AsyncData(categories)),
+      goalsProvider.overrideWithValue(AsyncData(goals)),
+      currentMonthBudgetsProvider.overrideWithValue(AsyncData(budgets)),
+      pendingInboxProvider.overrideWithValue(const AsyncData([])),
+      membershipProvider.overrideWithValue(AsyncData(membership)),
+      if (speechService != null)
+        speechRecognitionServiceProvider.overrideWithValue(speechService),
+    ],
+  );
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    container.dispose();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 1));
+  });
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        databaseProvider.overrideWithValue(database),
-        if (liveTransactions)
-          transactionsProvider.overrideWith((ref) async* {
-            yield await DriftTransactionRepository(database).getAll();
-          })
-        else
-          transactionsProvider.overrideWithValue(AsyncData(transactions)),
-        accountsProvider.overrideWithValue(AsyncData(accounts)),
-        allAccountsProvider.overrideWithValue(AsyncData(accounts)),
-        categoriesProvider.overrideWithValue(AsyncData(categories)),
-        allCategoriesProvider.overrideWithValue(AsyncData(categories)),
-        goalsProvider.overrideWithValue(AsyncData(goals)),
-        currentMonthBudgetsProvider.overrideWithValue(AsyncData(budgets)),
-        pendingInboxProvider.overrideWithValue(const AsyncData([])),
-        membershipProvider.overrideWithValue(AsyncData(membership)),
-        if (speechService != null)
-          speechRecognitionServiceProvider.overrideWithValue(speechService),
-      ],
-      child: const JizhangApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const JizhangApp()),
   );
   return database;
 }

@@ -61,6 +61,7 @@ class TransactionTile extends StatelessWidget {
                     return _HomeReferenceTransactionRow(
                       transaction: transaction,
                       accountName: accountName,
+                      showDate: showDate,
                     );
                   }
                   if (constraints.maxWidth < 300) {
@@ -202,9 +203,11 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
   const _HomeReferenceTransactionRow({
     required this.transaction,
     this.accountName,
+    this.showDate = true,
   });
   final TransactionRecord transaction;
   final String? accountName;
+  final bool showDate;
 
   @override
   Widget build(BuildContext context) {
@@ -218,20 +221,18 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
         ? '转账'
         : (transaction.categoryName ?? '未分类');
     final now = DateTime.now();
-    final date = DateTime(
-      transaction.occurredAt.year,
-      transaction.occurredAt.month,
-      transaction.occurredAt.day,
-    );
+    final occurredAt = transaction.occurredAt.toLocal();
+    final date = DateUtils.dateOnly(occurredAt);
     final today = DateTime(now.year, now.month, now.day);
     final dayLabel = date == today
         ? '今天'
         : date == today.subtract(const Duration(days: 1))
         ? '昨天'
-        : '${transaction.occurredAt.month}月${transaction.occurredAt.day}日';
+        : '${occurredAt.month}月${occurredAt.day}日';
     final merchant = transaction.merchant ?? transaction.note ?? '未命名交易';
-    final time =
-        '$dayLabel ${transaction.occurredAt.hour.toString().padLeft(2, '0')}:${transaction.occurredAt.minute.toString().padLeft(2, '0')}';
+    final clock =
+        '${occurredAt.hour.toString().padLeft(2, '0')}:${occurredAt.minute.toString().padLeft(2, '0')}';
+    final time = showDate ? '$dayLabel $clock' : clock;
     return Row(
       children: [
         CategoryIcon(

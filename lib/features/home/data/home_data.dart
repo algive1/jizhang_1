@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/transaction_record.dart';
@@ -76,9 +77,15 @@ final homeInsightProvider = Provider<FinancialInsight>((ref) {
   );
 });
 
-final homeRecentTransactionsProvider = Provider<List<TransactionRecord>>((ref) {
-  final transactions = ref.watch(transactionsProvider).value ?? const [];
-  return transactions.take(6).toList(growable: false);
+const homeRecentTransactionLimit = 10;
+
+final homeRecentTransactionsProvider = StreamProvider<List<TransactionRecord>>((
+  ref,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* ref
+      .watch(transactionRepositoryProvider)
+      .watchRecent(limit: homeRecentTransactionLimit);
 });
 
 class HomeMonthController extends Notifier<DateTime?> {

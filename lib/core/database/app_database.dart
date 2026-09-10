@@ -947,36 +947,42 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     with _$TransactionDaoMixin {
   TransactionDao(super.attachedDatabase);
 
-  Stream<List<TransactionEntity>> watchActive({String? bookId}) {
-    return (select(transactionEntries)
-          ..where(
-            (row) =>
-                row.deletedAt.isNull() &
-                CustomExpression<bool>(
-                  SharedSyncSchema.visibleBooksSql('book_id'),
-                ) &
-                (bookId == null
-                    ? const Constant(true)
-                    : row.bookId.equals(bookId)),
-          )
-          ..orderBy([(row) => OrderingTerm.desc(row.occurredAt)]))
-        .watch();
+  Stream<List<TransactionEntity>> watchActive({String? bookId, int? limit}) {
+    final query = select(transactionEntries)
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (bookId == null ? const Constant(true) : row.bookId.equals(bookId)),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    return query.watch();
   }
 
-  Future<List<TransactionEntity>> getActive({String? bookId}) {
-    return (select(transactionEntries)
-          ..where(
-            (row) =>
-                row.deletedAt.isNull() &
-                CustomExpression<bool>(
-                  SharedSyncSchema.visibleBooksSql('book_id'),
-                ) &
-                (bookId == null
-                    ? const Constant(true)
-                    : row.bookId.equals(bookId)),
-          )
-          ..orderBy([(row) => OrderingTerm.desc(row.occurredAt)]))
-        .get();
+  Future<List<TransactionEntity>> getActive({String? bookId, int? limit}) {
+    final query = select(transactionEntries)
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (bookId == null ? const Constant(true) : row.bookId.equals(bookId)),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    return query.get();
   }
 
   Future<TransactionEntity?> findById(String id) {

@@ -31,6 +31,8 @@
 - 2026-09-10 抽屉切片 3 已新增无内置账本的木质书架背景，并将个人/家庭/企业账本改为独立 Flutter 书本层；QA 预缓存清单同步更新，避免截屏在新素材加载前完成。
 - 2026-09-10 抽屉切片 3 已完成全量回归：153 个 Flutter tests、analyze 和 Debug APK 构建均通过；本机仍无 Android 设备，未虚报安装验收。
 - 2026-09-10 抽屉切片 3 的 Release APK 已成功构建，且 APK 内确认包含 `bookshelf_empty_background_v1.png`；构建仍有既存 `speech_to_text` KGP 兼容性 warning。
+- 2026-09-11 抽屉切片 4 已将首页最近交易改为当前账本数据库限量查询（10 条）、本地日期分组和本地时间显示；保留完整流水给预算/分析统计。
+- 2026-09-11 抽屉切片 4 已通过全量 156 个 Flutter tests、analyze 和 Release APK 构建；本机无 Android 设备，未虚报安装验收。
 
 ## 当前未完成或未联调
 
@@ -40,7 +42,7 @@
 - 公网云部署、对象存储、家庭短信邀请和企业报税。
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
 - iOS 真机、签名和发布验收。
-- 账本抽屉计划中最近交易查询、交易详情/附件预览及阶段二、阶段三能力尚未完成。
+- 账本抽屉计划中交易详情/附件预览及阶段二、阶段三能力尚未完成。
 
 ## 当前架构风险
 
@@ -58,20 +60,20 @@ flutter analyze
 → No issues found
 
 flutter test --reporter expanded
-→ All tests passed（153 个）
+→ All tests passed（156 个）
 
 flutter build apk --debug
 → Built build/app/outputs/flutter-apk/app-debug.apk
 
 flutter build apk --release
-→ Built build/app/outputs/flutter-apk/app-release.apk（77,229,866 bytes）
+→ Built build/app/outputs/flutter-apk/app-release.apk（77,246,250 bytes）
 
 server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
 ```
 
-当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,229,866 bytes，SHA-256：
-`a03ccd9bfb0d11ad7c262abc19fce51f6961146751bfd14904430211f059d2e9`。
+当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,246,250 bytes，SHA-256：
+`8f02cf23a18227d2e5fe591f9247c35149bb75d788732d9e9b4743405afd5213`。
 
 Android 模拟器 `emulator-5554` 已安装 Release APK 并实际打开首页、顶部书架抽屉：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。

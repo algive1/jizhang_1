@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../books/data/book_repository.dart';
 import '../../sharing/application/shared_book_sync_service.dart';
@@ -12,6 +13,7 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
+import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../../core/widgets/user_avatar.dart';
@@ -61,6 +63,7 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.invalidate(budgetOverviewProvider);
       ref.invalidate(dashboardSnapshotProvider);
       ref.invalidate(homeMonthlySummaryProvider);
+      ref.invalidate(homeRecentTransactionsProvider);
       ref.invalidate(analysisRepositoryProvider);
       ref.invalidate(homeInsightProvider);
       if (mounted) setState(() {});
@@ -103,7 +106,8 @@ class _HomePageState extends ConsumerState<HomePage>
         .watch(analysisRepositoryProvider)
         .analyze(period: AnalysisPeriod.currentMonth);
     final insight = ref.watch(homeInsightProvider);
-    final recent = ref.watch(homeRecentTransactionsProvider);
+    final recentState = ref.watch(homeRecentTransactionsProvider);
+    final recent = recentState.value ?? const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final accountNames = {
       for (final account in accounts) account.id: account.name,
@@ -254,7 +258,18 @@ class _HomePageState extends ConsumerState<HomePage>
                       onTap: () => context.go('/transactions'),
                     ),
                     const SizedBox(height: 6),
-                    if (recent.isEmpty)
+                    if (recentState.hasError)
+                      _ReadError(
+                        label: '最近交易',
+                        onRetry: () =>
+                            ref.invalidate(homeRecentTransactionsProvider),
+                      )
+                    else if (recentState.isLoading && !recentState.hasValue)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (recent.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Column(
@@ -280,19 +295,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         ),
                       )
                     else
-                      ...recent.map(
-                        (transaction) => TransactionTile(
-                          transaction: transaction,
-                          homeStyle: true,
-                          showDate: true,
-                          accountName: accountNames[transaction.accountId],
-                          showDivider: transaction != recent.last,
-                          onTap: () =>
-                              showTransactionActions(context, ref, transaction),
-                          onLongPress: () =>
-                              showTransactionActions(context, ref, transaction),
-                        ),
-                      ),
+                      ..._buildRecentGroups(recent, accountNames),
                   ],
                 ),
               ),
@@ -300,6 +303,69 @@ class _HomePageState extends ConsumerState<HomePage>
         ),
       ),
     );
+  }
+
+  List<Widget> _buildRecentGroups(
+    List<TransactionRecord> transactions,
+    Map<String, String> accountNames,
+  ) {
+    final groups = <DateTime, List<TransactionRecord>>{};
+    for (final transaction in transactions) {
+      final date = DateUtils.dateOnly(transaction.occurredAt.toLocal());
+      groups.putIfAbsent(date, () => []).add(transaction);
+    }
+    final entries = groups.entries.toList(growable: false);
+    return [
+      for (var groupIndex = 0; groupIndex < entries.length; groupIndex++)
+        Padding(
+          padding: EdgeInsets.only(
+            top: groupIndex == 0 ? 0 : 10,
+            bottom: groupIndex == entries.length - 1 ? 0 : 4,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 2),
+                child: Text(
+                  TransactionDateFormatter.groupLabel(entries[groupIndex].key),
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              for (
+                var itemIndex = 0;
+                itemIndex < entries[groupIndex].value.length;
+                itemIndex++
+              )
+                TransactionTile(
+                  transaction: entries[groupIndex].value[itemIndex],
+                  homeStyle: true,
+                  accountName:
+                      accountNames[entries[groupIndex]
+                          .value[itemIndex]
+                          .accountId],
+                  showDivider:
+                      !(groupIndex == entries.length - 1 &&
+                          itemIndex == entries[groupIndex].value.length - 1),
+                  onTap: () => showTransactionActions(
+                    context,
+                    ref,
+                    entries[groupIndex].value[itemIndex],
+                  ),
+                  onLongPress: () => showTransactionActions(
+                    context,
+                    ref,
+                    entries[groupIndex].value[itemIndex],
+                  ),
+                ),
+            ],
+          ),
+        ),
+    ];
   }
 
   Future<void> _showCalculation(DashboardSnapshot snapshot) =>

@@ -34,11 +34,13 @@ final class TransactionDateFormatter {
   }
 
   static String time(DateTime value) {
-    return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+    final local = value.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   static String monthDayTime(DateTime value) {
-    return '${value.month}月${value.day}日 ${time(value)}';
+    final local = value.toLocal();
+    return '${local.month}月${local.day}日 ${time(local)}';
   }
 
   static DateTime _dateOnly(DateTime value) =>

@@ -9,7 +9,9 @@ import '../../books/data/book_repository.dart';
 
 abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchAll();
+  Stream<List<TransactionRecord>> watchRecent({int limit = 10});
   Future<List<TransactionRecord>> getAll();
+  Future<List<TransactionRecord>> getRecent({int limit = 10});
   Future<TransactionRecord> create(TransactionRecord transaction);
   Future<List<TransactionRecord>> createAll(
     List<TransactionRecord> transactions,
@@ -32,9 +34,25 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Stream<List<TransactionRecord>> watchRecent({int limit = 10}) {
+    _validateRecentLimit(limit);
+    return _database.transactionDao
+        .watchActive(bookId: bookId, limit: limit)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
   Future<List<TransactionRecord>> getAll() async {
     return _mapEntities(
       await _database.transactionDao.getActive(bookId: bookId),
+    );
+  }
+
+  @override
+  Future<List<TransactionRecord>> getRecent({int limit = 10}) async {
+    _validateRecentLimit(limit);
+    return _mapEntities(
+      await _database.transactionDao.getActive(bookId: bookId, limit: limit),
     );
   }
 
@@ -306,6 +324,10 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   int _toCents(double amount) => (amount * 100).round();
+
+  void _validateRecentLimit(int limit) {
+    if (limit < 1) throw ArgumentError.value(limit, 'limit', 'must be > 0');
+  }
 
   void _ensureBookForWrite(String transactionBookId) {
     if (bookId != null && transactionBookId != bookId) {
