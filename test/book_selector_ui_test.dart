@@ -177,6 +177,239 @@ void main() {
     },
   );
 
+  testWidgets(
+    'all books view supports search and explicit management actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final repository = DriftBookRepository(
+        database,
+        _ProMembershipRepository(),
+      );
+      final family = await repository.create(
+        name: '家庭账本',
+        type: BookType.family,
+      );
+      final enterprise = await repository.create(
+        name: '企业账本',
+        type: BookType.enterprise,
+      );
+      await repository.create(name: '旅行账本', type: BookType.personal);
+      final container = ProviderContainer(
+        overrides: [databaseProvider.overrideWithValue(database)],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: BookSelectorButton()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(BookSelectorButton));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('book-more')));
+      await tester.tap(find.byKey(const ValueKey('book-more')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('all-books-search')), findsOneWidget);
+      expect(find.byKey(const ValueKey('all-books-create')), findsOneWidget);
+      expect(find.byKey(ValueKey('book-all-row-${family.id}')), findsOneWidget);
+      expect(find.textContaining('家庭账本 · 仅本机'), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('book-manage-${enterprise.id}')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('all-books-search')),
+        '企业',
+      );
+      await tester.pump();
+      expect(
+        find.byKey(ValueKey('book-all-row-${enterprise.id}')),
+        findsOneWidget,
+      );
+      expect(find.byKey(ValueKey('book-all-row-${family.id}')), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('all-books-search')),
+        '',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(ValueKey('book-manage-${family.id}')));
+      await tester.pumpAndSettle();
+      expect(find.text('重命名账本'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('create form keeps name, type and preview in one sheet', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: BookSelectorButton()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BookSelectorButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('book-create-area')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择账本用途'), findsNothing);
+    expect(find.byKey(const ValueKey('book-create-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('book-create-preview')), findsOneWidget);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.byKey(const ValueKey('book-type-personal')))
+          .selected,
+      isTrue,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('book-create-name')),
+      '旅行账本',
+    );
+    await tester.tap(find.byKey(const ValueKey('book-type-family')));
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('book-create-preview')),
+        matching: find.text('家庭账本'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('book-create-preview')),
+        matching: find.text('旅行账本'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('book-create-cancel')));
+    await tester.pumpAndSettle();
+
+    expect(
+      (await DriftBookRepository(
+        database,
+        LocalOnlyMembershipRepository(),
+      ).getForUser(SeedIds.localUser)),
+      hasLength(1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('submitting the create form creates and switches once', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: BookSelectorButton()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BookSelectorButton));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('book-create-area')));
+    await tester.tap(find.byKey(const ValueKey('book-create-area')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('book-create-name')),
+      '旅行账本',
+    );
+    await tester.tap(find.byKey(const ValueKey('book-create-submit')));
+    await tester.pumpAndSettle();
+
+    final books = await DriftBookRepository(
+      database,
+      LocalOnlyMembershipRepository(),
+    ).getForUser(SeedIds.localUser);
+    expect(books, hasLength(2));
+    final created = books.singleWhere((book) => book.name == '旅行账本');
+    expect(container.read(activeBookIdProvider), created.id);
+    expect(find.text('已创建并切换到「旅行账本」'), findsOneWidget);
+    expect(find.text('选择账本'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('create form remains reachable at narrow width and large text', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.6)),
+            child: child!,
+          ),
+          home: const Scaffold(body: BookSelectorButton()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BookSelectorButton));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('book-create-area')));
+    await tester.tap(find.byKey(const ValueKey('book-create-area')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('book-create-submit')),
+    );
+
+    expect(find.byKey(const ValueKey('book-create-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('book-create-preview')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test(
     'selecting an archived book fails without changing the active id',
     () async {

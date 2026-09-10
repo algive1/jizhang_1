@@ -122,20 +122,21 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                height: largeText ? 82 : 56,
+                height: largeText ? 132 : 56,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
                   child: Row(
                     children: [
                       const UserAvatar(radius: 20),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 0,
                               children: [
                                 Text(
                                   '我的账本',
@@ -155,6 +156,8 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                             ),
                             Text(
                               '记录生活  更好地生活',
+                              maxLines: largeText ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 11,
@@ -652,17 +655,21 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
   }
 
   Future<void> _createBook(BuildContext context, WidgetRef ref) async {
-    final type = await _askType(context);
-    if (type == null || !context.mounted) return;
-    final name = await _askName(context, title: '新建${type.label}');
-    if (name == null || !context.mounted) return;
+    final draft = await _askCreateBook(context);
+    if (draft == null || !context.mounted) return;
     try {
       final book = await ref
           .read(bookRepositoryProvider)
-          .create(name: name, type: type);
+          .create(name: draft.name, type: draft.type);
       ref.invalidate(booksProvider);
       await ref.read(activeBookIdProvider.notifier).select(book.id);
-      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        Navigator.pop(context);
+        messenger?.showSnackBar(
+          SnackBar(content: Text('已创建并切换到「${book.name}」')),
+        );
+      }
     } on Object catch (error) {
       if (context.mounted) _showError(context, error);
     }
@@ -672,33 +679,38 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     BuildContext context,
     List<LedgerBook> books,
   ) async {
+    final membership = ref.read(membershipProvider).value;
+    final ownedCount = BookLimitPolicy.ownedCount(
+      books,
+      ownerUserId: ref.read(databaseProvider).currentActor,
+    );
+    final limit = BookLimitPolicy.forPlan(
+      membership?.membership.plan ?? MembershipPlan.free,
+    );
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: ListView.separated(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-          itemCount: books.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (_, index) {
-            final book = books[index];
-            return _ShelfBookRow(
-              book: book,
-              selected: book.id == ref.read(activeBookIdProvider),
-              onTap: _switching
-                  ? null
-                  : () {
-                      Navigator.pop(sheetContext);
-                      _select(book);
-                    },
-              onLongPress: () {
-                Navigator.pop(sheetContext);
-                _manageBook(context, ref, book);
-              },
-            );
-          },
-        ),
+      builder: (sheetContext) => _AllBooksSheet(
+        initialBooks: books,
+        ownedCount: ownedCount,
+        limit: limit,
+        onCreate: () {
+          Navigator.pop(sheetContext);
+          if (ownedCount >= limit) {
+            _showLimitMessage(context, membership);
+          } else {
+            _createBook(context, ref);
+          }
+        },
+        onSelect: (book) {
+          Navigator.pop(sheetContext);
+          _select(book);
+        },
+        onManage: (book) {
+          Navigator.pop(sheetContext);
+          _manageBook(context, ref, book);
+        },
       ),
     );
   }
@@ -819,6 +831,16 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     );
   }
 
+  Future<_CreateBookDraft?> _askCreateBook(BuildContext context) {
+    return showModalBottomSheet<_CreateBookDraft>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => const _CreateBookSheet(),
+    );
+  }
+
   void _showLimitMessage(BuildContext context, MembershipSnapshot? membership) {
     final plan = membership?.membership.plan.label ?? 'Free';
     ScaffoldMessenger.of(context)
@@ -833,6 +855,419 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 }
+
+class _AllBooksSheet extends ConsumerStatefulWidget {
+  const _AllBooksSheet({
+    required this.initialBooks,
+    required this.ownedCount,
+    required this.limit,
+    required this.onCreate,
+    required this.onSelect,
+    required this.onManage,
+  });
+
+  final List<LedgerBook> initialBooks;
+  final int ownedCount;
+  final int limit;
+  final VoidCallback onCreate;
+  final ValueChanged<LedgerBook> onSelect;
+  final ValueChanged<LedgerBook> onManage;
+
+  @override
+  ConsumerState<_AllBooksSheet> createState() => _AllBooksSheetState();
+}
+
+class _AllBooksSheetState extends ConsumerState<_AllBooksSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final books = ref.watch(booksProvider).value ?? widget.initialBooks;
+    final query = _query.trim().toLowerCase();
+    final filteredBooks = query.isEmpty
+        ? books
+        : books
+              .where((book) => book.name.toLowerCase().contains(query))
+              .toList();
+    return Material(
+      color: AppColors.background,
+      child: SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .86,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '全部账本',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('all-books-create'),
+                      onPressed: widget.onCreate,
+                      icon: const Icon(Icons.add),
+                      label: const Text('新建'),
+                    ),
+                  ],
+                ),
+                Text(
+                  '自有账本 ${widget.ownedCount}/${widget.limit} · 加入的共享账本不占额度',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  key: const ValueKey('all-books-search'),
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: const InputDecoration(
+                    hintText: '搜索账本名称',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (filteredBooks.isEmpty)
+                  const Expanded(child: Center(child: Text('没有匹配的账本')))
+                else
+                  Expanded(
+                    child: ListView.separated(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      itemCount: filteredBooks.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final book = filteredBooks[index];
+                        return _AllBookListRow(
+                          key: ValueKey('book-all-row-${book.id}'),
+                          book: book,
+                          selected: book.id == ref.watch(activeBookIdProvider),
+                          onSelect: () => widget.onSelect(book),
+                          onManage: () => widget.onManage(book),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AllBookListRow extends StatelessWidget {
+  const _AllBookListRow({
+    super.key,
+    required this.book,
+    required this.selected,
+    required this.onSelect,
+    required this.onManage,
+  });
+
+  final LedgerBook book;
+  final bool selected;
+  final VoidCallback onSelect;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (book.type) {
+      BookType.personal => Icons.person,
+      BookType.family => Icons.home,
+      BookType.enterprise => Icons.business,
+    };
+    final iconColor = switch (book.type) {
+      BookType.personal => AppColors.primaryDark,
+      BookType.family => const Color(0xFF976537),
+      BookType.enterprise => const Color(0xFF44677E),
+    };
+    final syncLabel = !book.isShared
+        ? '仅本机'
+        : book.sharedPhase == 'promoting'
+        ? '同步中'
+        : '已同步';
+    return Semantics(
+      button: true,
+      selected: selected,
+      label:
+          '${book.name}，${book.type.label}，$syncLabel${selected ? '，当前账本' : ''}',
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onSelect,
+          onLongPress: onManage,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: iconColor.withValues(alpha: .12),
+                  child: Icon(icon, color: iconColor, size: 21),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        book.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${book.type.label} · $syncLabel',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 2),
+                    child: Icon(Icons.check_circle, color: AppColors.primary),
+                  ),
+                IconButton(
+                  key: ValueKey('book-manage-${book.id}'),
+                  tooltip: '管理${book.name}',
+                  onPressed: onManage,
+                  icon: const Icon(Icons.more_horiz),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateBookDraft {
+  const _CreateBookDraft({required this.name, required this.type});
+
+  final String name;
+  final BookType type;
+}
+
+class _CreateBookSheet extends StatefulWidget {
+  const _CreateBookSheet();
+
+  @override
+  State<_CreateBookSheet> createState() => _CreateBookSheetState();
+}
+
+class _CreateBookSheetState extends State<_CreateBookSheet> {
+  late final TextEditingController _nameController = TextEditingController();
+  BookType _type = BookType.personal;
+  String? _errorText;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = '请输入账本名称');
+      return;
+    }
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    Navigator.pop(context, _CreateBookDraft(name: name, type: _type));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _nameController.text.trim();
+    return Material(
+      color: const Color(0xFFFAF7EF),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '新建账本',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: const ValueKey('book-create-cancel'),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('取消'),
+                  ),
+                ],
+              ),
+              const Text(
+                '填写名称，选择一种用途，再开始记录。',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('book-create-name'),
+                controller: _nameController,
+                autofocus: true,
+                maxLength: 40,
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setState(() => _errorText = null),
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  labelText: '账本名称',
+                  hintText: '例如：旅行、装修、日常',
+                  errorText: _errorText,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '选择用途',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final type in BookType.values)
+                    ChoiceChip(
+                      key: ValueKey('book-type-${type.name}'),
+                      selected: _type == type,
+                      onSelected: (_) => setState(() => _type = type),
+                      avatar: Icon(_bookTypeIcon(type), size: 18),
+                      label: Text(type.label),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _BookCreatePreview(type: _type, name: name),
+              const SizedBox(height: 18),
+              FilledButton(
+                key: const ValueKey('book-create-submit'),
+                onPressed: _submitting ? null : _submit,
+                child: const Text('创建账本'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookCreatePreview extends StatelessWidget {
+  const _BookCreatePreview({required this.type, required this.name});
+
+  final BookType type;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _bookTypeColor(type);
+    return Container(
+      key: const ValueKey('book-create-preview'),
+      height: 116,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: .76), color],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: Colors.white.withValues(alpha: .86),
+            child: Icon(_bookTypeIcon(type), color: color, size: 28),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? '未命名账本' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  type.label,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+IconData _bookTypeIcon(BookType type) => switch (type) {
+  BookType.personal => Icons.person,
+  BookType.family => Icons.home,
+  BookType.enterprise => Icons.business,
+};
+
+Color _bookTypeColor(BookType type) => switch (type) {
+  BookType.personal => AppColors.primaryDark,
+  BookType.family => const Color(0xFF976537),
+  BookType.enterprise => const Color(0xFF44677E),
+};
 
 class _BookNameDialog extends StatefulWidget {
   const _BookNameDialog({required this.title, this.initial});
