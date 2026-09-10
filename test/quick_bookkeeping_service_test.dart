@@ -1,0 +1,248 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:jizhang_app/core/database/database_provider.dart';
+import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/core/models/transaction_record.dart';
+import 'package:jizhang_app/features/bookkeeping/application/amount_input.dart';
+import 'package:jizhang_app/features/bookkeeping/application/quick_bookkeeping_service.dart';
+import 'package:jizhang_app/features/intelligence/application/transaction_intelligence_service.dart';
+import 'package:jizhang_app/features/intelligence/data/bill_inbox_repository.dart';
+import 'package:jizhang_app/features/intelligence/data/economic_event_repository.dart';
+import 'package:jizhang_app/features/intelligence/data/merchant_rule_repository.dart';
+import 'package:jizhang_app/features/intelligence/domain/merchant_classification_service.dart';
+import 'package:jizhang_app/features/intelligence/domain/transaction_fingerprint_service.dart';
+import 'package:jizhang_app/features/settings/data/app_settings_repository.dart';
+import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
+
+void main() {
+  test('custom amount input rejects invalid decimal states', () {
+    var input = const AmountInput();
+    for (final key in ['3', '8', '.', '5', '0', '9', '.']) {
+      input = input.enter(key);
+    }
+    expect(input.value, '38.50');
+    expect(input.amount, 38.5);
+    expect(input.displayValue, '38.50');
+    expect(input.isValid, isTrue);
+
+    input = input.backspace().backspace();
+    expect(input.value, '38.');
+    expect(input.displayValue, '38.00');
+  });
+
+  test('quick bookkeeping persists expense, income and transfer', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final settings = DriftAppSettingsRepository(database);
+    final service = QuickBookkeepingService(transactions, settings);
+    final now = DateTime(2026, 8, 31, 20, 45);
+
+    final cashBefore = (await database.accountDao.findById(
+      SeedIds.cashAccount,
+    ))!.balanceInCents;
+    final bankBefore = (await database.accountDao.findById(
+      SeedIds.bankAccount,
+    ))!.balanceInCents;
+
+    await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 38.5,
+        categoryId: 'expense-food',
+        categoryName: '餐饮',
+        accountId: SeedIds.cashAccount,
+        occurredAt: now,
+        tags: const ['聚餐'],
+      ),
+    );
+    await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.income,
+        amount: 100,
+        categoryId: 'income-other',
+        categoryName: '其他收入',
+        accountId: SeedIds.bankAccount,
+        occurredAt: now,
+      ),
+    );
+    await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.transfer,
+        amount: 25,
+        accountId: SeedIds.bankAccount,
+        destinationAccountId: SeedIds.cashAccount,
+        occurredAt: now,
+      ),
+    );
+
+    final cashAfter = (await database.accountDao.findById(SeedIds.cashAccount))!
+        .balanceInCents;
+    final bankAfter = (await database.accountDao.findById(SeedIds.bankAccount))!
+        .balanceInCents;
+    expect(cashAfter, cashBefore - 3850 + 2500);
+    expect(bankAfter, bankBefore + 10000 - 2500);
+    expect(
+      await settings.get(QuickBookkeepingService.lastAccountKey),
+      SeedIds.bankAccount,
+    );
+
+    final saved = await transactions.getAll();
+    expect(saved.where((item) => item.occurredAt == now), hasLength(3));
+    expect(
+      saved.firstWhere((item) => item.amount == 38.5).metadataJson,
+      contains('聚餐'),
+    );
+  });
+
+  test(
+    'editing a saved transaction updates its fields and balance effect',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final transactions = DriftTransactionRepository(database);
+      final service = QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      );
+      final saved = await service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 10,
+          categoryId: 'expense-food',
+          categoryName: '餐饮',
+          accountId: SeedIds.cashAccount,
+          merchant: '早餐店',
+          occurredAt: DateTime(2026, 8, 31, 8),
+        ),
+      );
+
+      final updated = await service.update(
+        saved,
+        QuickBookkeepingRequest(
+          type: TransactionType.income,
+          amount: 25,
+          categoryId: 'income-other',
+          categoryName: '其他收入',
+          accountId: SeedIds.bankAccount,
+          merchant: '退款',
+          occurredAt: DateTime(2026, 8, 31, 9),
+        ),
+      );
+
+      expect(updated.id, saved.id);
+      expect(updated.type, TransactionType.income);
+      expect(updated.amount, 25);
+      expect(updated.accountId, SeedIds.bankAccount);
+      expect((await transactions.getAll()), hasLength(1));
+      expect(
+        (await database.accountDao.findById(SeedIds.cashAccount))!
+            .balanceInCents,
+        0,
+      );
+      expect(
+        (await database.accountDao.findById(SeedIds.bankAccount))!
+            .balanceInCents,
+        2500,
+      );
+    },
+  );
+
+  test('batch bookkeeping rolls back every item when one item fails', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+    final before = await transactions.getAll();
+    final cashBefore = (await database.accountDao.findById(
+      SeedIds.cashAccount,
+    ))!.balanceInCents;
+
+    await expectLater(
+      service.saveAll([
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 12,
+          accountId: SeedIds.cashAccount,
+          occurredAt: DateTime(2026, 8, 31),
+        ),
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 20,
+          accountId: 'missing-account',
+          occurredAt: DateTime(2026, 8, 31),
+        ),
+      ]),
+      throwsStateError,
+    );
+
+    expect(await transactions.getAll(), hasLength(before.length));
+    expect(
+      (await database.accountDao.findById(SeedIds.cashAccount))!.balanceInCents,
+      cashBefore,
+    );
+  });
+
+  test(
+    'saved transactions run classification and duplicate inspection',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final transactions = DriftTransactionRepository(database);
+      final inbox = DriftBillInboxRepository(database);
+      const fingerprints = TransactionFingerprintService();
+      final rules = DriftMerchantRuleRepository(
+        database,
+        transactions,
+        const MerchantClassificationService(),
+      );
+      final intelligence = TransactionIntelligenceService(
+        transactions: transactions,
+        merchantRules: rules,
+        inbox: inbox,
+        economicEvents: EconomicEventRepository(database, fingerprints),
+        fingerprints: fingerprints,
+      );
+      final service = QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+        intelligence: intelligence,
+      );
+      final occurredAt = DateTime(2026, 8, 31, 19);
+
+      await service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 38,
+          accountId: SeedIds.cashAccount,
+          merchant: '瑞幸咖啡',
+          occurredAt: occurredAt,
+        ),
+      );
+      final classified = (await transactions.getAll()).single;
+      expect(classified.categoryId, 'expense-food');
+
+      await service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 38,
+          categoryId: 'expense-food',
+          categoryName: '餐饮',
+          accountId: SeedIds.cashAccount,
+          merchant: '瑞幸咖啡',
+          occurredAt: occurredAt.add(const Duration(seconds: 30)),
+        ),
+      );
+      final pending = await inbox.getPending();
+      expect(pending, hasLength(1));
+      expect(pending.single.reason.name, 'suspectedDuplicate');
+      expect((await transactions.getAll()).first.duplicateConfidence, .72);
+    },
+  );
+}

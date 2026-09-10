@@ -1,0 +1,353 @@
+import 'package:drift/drift.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/database/app_database.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../core/models/family.dart';
+import '../../../core/models/transaction_record.dart';
+import '../../books/data/book_repository.dart';
+
+abstract interface class TransactionRepository {
+  Stream<List<TransactionRecord>> watchAll();
+  Future<List<TransactionRecord>> getAll();
+  Future<TransactionRecord> create(TransactionRecord transaction);
+  Future<List<TransactionRecord>> createAll(
+    List<TransactionRecord> transactions,
+  );
+  Future<TransactionRecord> update(TransactionRecord transaction);
+  Future<void> softDelete(String id);
+}
+
+class DriftTransactionRepository implements TransactionRepository {
+  DriftTransactionRepository(this._database, {this.bookId});
+  final String? bookId;
+
+  final AppDatabase _database;
+
+  @override
+  Stream<List<TransactionRecord>> watchAll() {
+    return _database.transactionDao
+        .watchActive(bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Future<List<TransactionRecord>> getAll() async {
+    return _mapEntities(
+      await _database.transactionDao.getActive(bookId: bookId),
+    );
+  }
+
+  @override
+  Future<TransactionRecord> create(TransactionRecord transaction) async {
+    return (await createAll([transaction])).single;
+  }
+
+  @override
+  Future<List<TransactionRecord>> createAll(
+    List<TransactionRecord> transactions,
+  ) async {
+    if (transactions.isEmpty) return const [];
+    for (final transaction in transactions) {
+      _validate(transaction);
+      _ensureBookForWrite(transaction.bookId);
+    }
+    final ids = transactions.map((item) => item.id).toSet();
+    if (ids.length != transactions.length) {
+      throw ArgumentError('Transaction IDs must be unique within a batch');
+    }
+    return _database.transaction(() async {
+      for (final transaction in transactions) {
+        if (await _database.transactionDao.findById(transaction.id) != null) {
+          throw StateError('Transaction ${transaction.id} already exists');
+        }
+        await _ensureAccountsExist(transaction);
+      }
+      for (final transaction in transactions) {
+        await _database.transactionDao.insertOne(_toCompanion(transaction));
+        await _applyBalanceEffect(transaction, 1);
+      }
+      return List<TransactionRecord>.unmodifiable(transactions);
+    });
+  }
+
+  @override
+  Future<TransactionRecord> update(TransactionRecord transaction) async {
+    _validate(transaction);
+    _ensureBookForWrite(transaction.bookId);
+    return _database.transaction(() async {
+      final oldEntity = await _database.transactionDao.findById(transaction.id);
+      if (oldEntity == null || oldEntity.deletedAt != null) {
+        throw StateError('Transaction ${transaction.id} does not exist');
+      }
+      final old = await _mapEntity(oldEntity);
+      if (old.bookId != transaction.bookId)
+        throw ArgumentError('不能通过编辑移动流水到其他账本');
+      await _ensureAccountsExist(transaction);
+      await _applyBalanceEffect(old, -1);
+      await _database.transactionDao.replaceOne(_toCompanion(transaction));
+      await _applyBalanceEffect(transaction, 1);
+      return transaction;
+    });
+  }
+
+  @override
+  Future<void> softDelete(String id) async {
+    await _database.transaction(() async {
+      final entity = await _database.transactionDao.findById(id);
+      if (entity == null || entity.deletedAt != null) return;
+      final existing = await _mapEntity(entity);
+      await _applyBalanceEffect(existing, -1);
+      final now = DateTime.now();
+      await _database.transactionDao.replaceOne(
+        _toCompanion(existing.copyWith(deletedAt: now, updatedAt: now)),
+      );
+    });
+  }
+
+  void _validate(TransactionRecord transaction) {
+    if (!transaction.amount.isFinite ||
+        (transaction.type == TransactionType.adjustment
+            ? _toCents(transaction.amount) == 0
+            : _toCents(transaction.amount) <= 0)) {
+      throw ArgumentError.value(transaction.amount, 'amount', 'must be > 0');
+    }
+    if (transaction.type == TransactionType.transfer) {
+      final destination = transaction.destinationAccountId;
+      if (destination == null || destination == transaction.accountId) {
+        throw ArgumentError(
+          'A transfer requires two different source/destination accounts',
+        );
+      }
+    }
+  }
+
+  Future<void> _ensureAccountsExist(TransactionRecord transaction) async {
+    for (final categoryId in [
+      transaction.categoryId,
+      transaction.subcategoryId,
+    ].whereType<String>()) {
+      final category = await _database.categoryDao.findById(categoryId);
+      if (category == null || category.bookId != transaction.bookId)
+        throw ArgumentError('分类与流水必须属于同一账本');
+    }
+    for (final id in [
+      transaction.accountId,
+      transaction.destinationAccountId,
+    ].whereType<String>()) {
+      final account = await _database.accountDao.findById(id);
+      if (account == null) throw StateError('账户不存在');
+      if (account.bookId != transaction.bookId)
+        throw ArgumentError('账户与流水必须属于同一账本');
+      if (account.currency.toUpperCase() !=
+          transaction.currency.toUpperCase()) {
+        throw ArgumentError('账户与流水币种必须一致；暂不支持跨币种转账');
+      }
+    }
+  }
+
+  Future<void> _applyBalanceEffect(
+    TransactionRecord transaction,
+    int direction,
+  ) async {
+    final amountInCents = _toCents(transaction.amount) * direction;
+    final updatedAt = transaction.updatedAt;
+    switch (transaction.type) {
+      case TransactionType.expense:
+      case TransactionType.lend:
+      case TransactionType.repayment:
+      case TransactionType.assetPurchase:
+        await _database.accountDao.adjustBalance(
+          transaction.accountId,
+          -amountInCents,
+          updatedAt,
+        );
+      case TransactionType.income:
+      case TransactionType.refund:
+      case TransactionType.reimbursement:
+      case TransactionType.borrow:
+      case TransactionType.adjustment:
+        await _database.accountDao.adjustBalance(
+          transaction.accountId,
+          amountInCents,
+          updatedAt,
+        );
+      case TransactionType.transfer:
+        await _database.accountDao.adjustBalance(
+          transaction.accountId,
+          -amountInCents,
+          updatedAt,
+        );
+        await _database.accountDao.adjustBalance(
+          transaction.destinationAccountId!,
+          amountInCents,
+          updatedAt,
+        );
+    }
+  }
+
+  Future<List<TransactionRecord>> _mapEntities(
+    List<TransactionEntity> entities,
+  ) async {
+    final categories = await _database.categoryDao.getAll();
+    final categoriesByBookAndId = {
+      for (final category in categories)
+        '${category.bookId}\u0000${category.id}': category,
+    };
+    return entities
+        .map(
+          (entity) => _fromEntity(
+            entity,
+            entity.categoryId == null
+                ? null
+                : categoriesByBookAndId['${entity.bookId}\u0000${entity.categoryId}'],
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<TransactionRecord> _mapEntity(TransactionEntity entity) async {
+    final categories = await _database.categoryDao.getAll();
+    CategoryEntity? category;
+    for (final item in categories) {
+      if (item.id == entity.categoryId && item.bookId == entity.bookId) {
+        category = item;
+        break;
+      }
+    }
+    return _fromEntity(entity, category);
+  }
+
+  TransactionRecord _fromEntity(
+    TransactionEntity entity,
+    CategoryEntity? category,
+  ) {
+    return TransactionRecord(
+      id: entity.id,
+      bookId: entity.bookId,
+      userId: entity.userId,
+      type: TransactionType.values.byName(entity.type),
+      amount: entity.amountInCents / 100,
+      currency: entity.currency,
+      categoryId: entity.categoryId,
+      categoryName: category?.name,
+      categoryIcon: category?.icon,
+      subcategoryId: entity.subcategoryId,
+      accountId: entity.accountId,
+      destinationAccountId: entity.destinationAccountId,
+      merchant: entity.merchant,
+      note: entity.note,
+      occurredAt: entity.occurredAt,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+      deletedAt: entity.deletedAt,
+      isRecurring: entity.isRecurring,
+      isOneTime: entity.isOneTime,
+      isLargeTransaction: entity.isLargeTransaction,
+      isPlanned: entity.isPlanned,
+      source: TransactionSource.values.byName(entity.source),
+      aiConfidence: entity.aiConfidence,
+      userCorrected: entity.userCorrected,
+      syncStatus: SyncStatus.values.byName(entity.syncStatus),
+      deviceId: entity.deviceId,
+      originalTransactionId: entity.originalTransactionId,
+      metadataJson: entity.metadataJson,
+      duplicateConfidence: entity.duplicateConfidence,
+      visibility: TransactionVisibility.values.byName(entity.visibility),
+      createdBy: entity.createdBy,
+      updatedBy: entity.updatedBy,
+      version: entity.version,
+    );
+  }
+
+  TransactionEntriesCompanion _toCompanion(TransactionRecord transaction) {
+    return TransactionEntriesCompanion(
+      id: Value(transaction.id),
+      bookId: Value(transaction.bookId),
+      userId: Value(
+        transaction.userId == null || transaction.userId == 'user-local'
+            ? _database.currentActor
+            : transaction.userId,
+      ),
+      type: Value(transaction.type.name),
+      amountInCents: Value(_toCents(transaction.amount)),
+      currency: Value(transaction.currency),
+      categoryId: Value(transaction.categoryId),
+      subcategoryId: Value(transaction.subcategoryId),
+      accountId: Value(transaction.accountId),
+      destinationAccountId: Value(transaction.destinationAccountId),
+      merchant: Value(transaction.merchant),
+      note: Value(transaction.note),
+      occurredAt: Value(transaction.occurredAt),
+      createdAt: Value(transaction.createdAt),
+      updatedAt: Value(transaction.updatedAt),
+      deletedAt: Value(transaction.deletedAt),
+      isRecurring: Value(transaction.isRecurring),
+      isOneTime: Value(transaction.isOneTime),
+      isLargeTransaction: Value(transaction.isLargeTransaction),
+      isPlanned: Value(transaction.isPlanned),
+      source: Value(transaction.source.name),
+      aiConfidence: Value(transaction.aiConfidence),
+      userCorrected: Value(transaction.userCorrected),
+      syncStatus: Value(transaction.syncStatus.name),
+      deviceId: Value(transaction.deviceId),
+      originalTransactionId: Value(transaction.originalTransactionId),
+      metadataJson: Value(transaction.metadataJson),
+      duplicateConfidence: Value(transaction.duplicateConfidence),
+      visibility: Value(transaction.visibility.name),
+      createdBy: Value(
+        transaction.createdBy == null || transaction.createdBy == 'user-local'
+            ? _database.currentActor
+            : transaction.createdBy,
+      ),
+      updatedBy: Value(_database.currentActor),
+      version: Value(transaction.version),
+    );
+  }
+
+  int _toCents(double amount) => (amount * 100).round();
+
+  void _ensureBookForWrite(String transactionBookId) {
+    if (bookId != null && transactionBookId != bookId) {
+      throw ArgumentError('流水必须属于当前账本');
+    }
+  }
+}
+
+final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
+  return DriftTransactionRepository(
+    ref.watch(databaseProvider),
+    bookId: ref.watch(activeBookIdProvider),
+  );
+});
+
+final transactionsProvider = StreamProvider<List<TransactionRecord>>((
+  ref,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final bookId = ref.watch(activeBookIdProvider);
+  yield* DriftTransactionRepository(
+    ref.watch(databaseProvider),
+    bookId: bookId,
+  ).watchAll();
+});
+
+final transactionControllerProvider = Provider<TransactionController>((ref) {
+  return TransactionController(ref.watch(transactionRepositoryProvider));
+});
+
+class TransactionController {
+  TransactionController(this._repository);
+
+  final TransactionRepository _repository;
+
+  Future<TransactionRecord> add(TransactionRecord transaction) {
+    return _repository.create(transaction);
+  }
+
+  Future<TransactionRecord> update(TransactionRecord transaction) {
+    return _repository.update(transaction);
+  }
+
+  Future<void> delete(String id) => _repository.softDelete(id);
+}

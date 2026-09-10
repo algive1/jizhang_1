@@ -1,0 +1,58 @@
+// @version=2
+// BTC-USDT-SWAP 1H 0-100趋势指数（AiCoin Script v2，副图指标）
+// 使用要求：加载在 OKX BTCUSDT 永续 1H 标准K线的副图。
+// 本文件只绘制指数，不包含交易函数，避免与主策略重复下单。
+
+indicator(precision=2)
+
+// === 参数 ===
+ema_fast = 12
+ema_slow = 26
+macd_fast = 12
+macd_slow = 26
+macd_signal = 9
+rsi_fast = 7
+rsi_slow = 21
+vol_ma_length = 20
+vol_ratio = 1.3
+
+// === 指标计算 ===
+ma_f = ema(close, ema_fast)
+ma_s = ema(close, ema_slow)
+[dif, dea, macd_hist] = macd(close, macd_fast, macd_slow, macd_signal, 'EMA', 'EMA')
+rsi_f = rsi(close, rsi_fast)
+rsi_s = rsi(close, rsi_slow)
+// 按原始定义：均量包含当前柱与前19根柱。
+vol_ma = ma(volume, vol_ma_length)
+ready = !na(ma_s) && !na(macd_hist[1]) && !na(rsi_s) && !na(vol_ma)
+
+// === 方向条件 ===
+ema_bullish = ma_f > ma_s
+ema_bearish = ma_f < ma_s
+macd_bullish = dif > dea && macd_hist > macd_hist[1]
+macd_bearish = dif < dea && macd_hist < macd_hist[1]
+rsi_bullish = rsi_f > rsi_s && rsi_f > 50
+rsi_bearish = rsi_f < rsi_s && rsi_f < 50
+volume_confirm = volume > vol_ma * vol_ratio
+not_chop = rsi_f < 40 || rsi_f > 60
+
+// === 可解释方向分 D，范围[-50, 50] ===
+ema_score = ema_bullish ? 20 : (ema_bearish ? -20 : 0)
+macd_score = macd_bullish ? 20 : (macd_bearish ? -20 : (dif > dea ? 10 : (dif < dea ? -10 : 0)))
+rsi_score = rsi_bullish ? 10 : (rsi_bearish ? -10 : (rsi_f > 50 ? 5 : (rsi_f < 50 ? -5 : 0)))
+direction_score = ema_score + macd_score + rsi_score
+
+// 成交量与震荡只降低确信度、把指数拉向50，不改变多空方向。
+volume_factor = volume_confirm ? 1.0 : 0.75
+chop_factor = not_chop ? 1.0 : 0.5
+trend_index = ready ? 50 + direction_score * volume_factor * chop_factor : nan
+
+// === 副图 ===
+plot(trend_index, title='1H趋势指数', color='#2962FF', lineWidth=3)
+plot(80, title='强多阈值', color='#00C853', lineWidth=1, lineDash=[4,4])
+plot(60, title='偏多阈值', color='#66BB6A', lineWidth=1, lineDash=[2,2])
+plot(50, title='中轴', color='#9E9E9E', lineWidth=1, lineDash=[1,2])
+plot(40, title='偏空阈值', color='#FF7043', lineWidth=1, lineDash=[2,2])
+plot(20, title='强空阈值', color='#D50000', lineWidth=1, lineDash=[4,4])
+
+// 指数解释：0-20强空，20-40偏空，40-60中性/震荡，60-80偏多，80-100强多。

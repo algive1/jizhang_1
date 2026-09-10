@@ -1,0 +1,335 @@
+现在进入第二阶段：
+
+把当前以 Mock 数据为主的 App，
+升级为真正可以长期使用的本地记账 App。
+
+本阶段核心目标：
+
+“所有账单、账户、分类、目标数据都真正存入本地数据库，
+关闭 App、重新启动以后数据仍然存在。”
+
+技术栈：
+
+Flutter
+Riverpod
+Drift
+SQLite
+
+不要开发云同步。
+不要开发登录。
+不要接后端。
+
+==================================================
+一、首先检查当前代码
+==================================================
+
+先完整检查：
+
+lib/
+pubspec.yaml
+已有 Model
+已有 Repository
+已有 Mock 数据
+已有页面
+已有公共组件
+
+不要直接重写。
+
+需要尽量保留当前已经完成的 UI 和设计系统。
+
+执行前先告诉我：
+
+1. 当前数据架构是什么
+2. 哪些 Mock 数据需要替换
+3. 准备新增哪些数据库表
+4. 准备修改哪些文件
+5. 是否存在需要迁移的 Model
+
+然后再执行。
+
+==================================================
+二、建立 Drift 数据库
+==================================================
+
+至少建立：
+
+transactions
+accounts
+categories
+goals
+goal_milestones
+app_settings
+
+第一阶段先不要建几十张表。
+
+==================================================
+三、Transaction 数据模型
+==================================================
+
+账单不能只有金额和分类。
+
+Transaction 至少包含：
+
+id
+bookId
+userId nullable
+
+type
+
+支持：
+
+expense
+income
+transfer
+refund
+reimbursement
+borrow
+lend
+repayment
+assetPurchase
+adjustment
+
+amount
+
+currency
+默认 CNY
+
+categoryId
+subcategoryId nullable
+
+accountId
+
+merchant nullable
+note nullable
+
+occurredAt
+
+createdAt
+updatedAt
+deletedAt nullable
+
+isRecurring
+isOneTime
+isLargeTransaction
+isPlanned
+
+source
+
+manual
+voice
+ocr
+auto
+import
+
+aiConfidence nullable
+
+userCorrected
+
+syncStatus
+
+localOnly
+pending
+synced
+conflict
+
+deviceId nullable
+
+originalTransactionId nullable
+
+metadataJson nullable
+
+==================================================
+四、Account 数据模型
+==================================================
+
+支持：
+
+现金
+微信
+支付宝
+银行卡
+信用卡
+其他
+
+字段：
+
+id
+name
+type
+balance
+currency
+icon
+color
+sortOrder
+isArchived
+createdAt
+updatedAt
+
+注意：
+
+余额变化不能只依赖手动设置。
+
+新增/删除/修改交易时，
+必须能够正确影响对应账户余额。
+
+但设计时避免每次都重新计算全部流水。
+
+==================================================
+五、Category
+==================================================
+
+支持：
+
+支出分类
+收入分类
+
+建议默认分类：
+
+餐饮
+交通
+购物
+娱乐
+住房
+生活缴费
+医疗
+教育培训
+旅行
+人情
+宠物
+数码
+汽车
+其他
+
+收入：
+
+工资
+奖金
+兼职
+投资收益
+退款
+其他收入
+
+支持：
+
+一级分类
+二级分类
+
+字段：
+
+id
+parentId nullable
+name
+icon
+type
+sortOrder
+isDefault
+isArchived
+
+==================================================
+六、Repository
+==================================================
+
+建立清晰 Repository：
+
+TransactionRepository
+AccountRepository
+CategoryRepository
+GoalRepository
+
+UI 不允许直接调用 Drift DAO。
+
+结构：
+
+UI
+↓
+Controller / Provider
+↓
+Repository
+↓
+DAO
+↓
+SQLite
+
+==================================================
+七、替换 Mock 数据
+==================================================
+
+首页
+流水页
+目标页
+
+现在全部从真实 Repository 获取数据。
+
+但为了第一次运行体验：
+
+数据库为空时自动创建：
+
+默认账户
+默认分类
+演示目标可选
+
+注意：
+
+不要每次启动重复插入。
+
+需要 seed/version 机制。
+
+==================================================
+八、删除逻辑
+==================================================
+
+重要：
+
+账单删除默认使用软删除：
+
+deletedAt
+
+不要直接物理删除。
+
+因为后续：
+
+云同步
+多设备
+恢复
+冲突处理
+
+都需要 deletedAt。
+
+==================================================
+九、数据库版本
+==================================================
+
+从第一版开始建立：
+
+schemaVersion
+migration
+
+不要以后修改字段直接删库。
+
+==================================================
+十、测试
+==================================================
+
+至少验证：
+
+新增账单
+修改账单
+删除账单
+重新启动 App
+流水仍然存在
+
+收入
+支出
+转账
+
+对应账户余额正确。
+
+运行：
+
+flutter analyze
+flutter test
+
+如果存在数据库 migration 风险，
+明确说明。
+
+不要因为数据库改造而改变现有 UI 风格。

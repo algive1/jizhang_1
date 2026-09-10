@@ -1,0 +1,180 @@
+import 'package:flutter/material.dart';
+
+class CategoryIcon extends StatelessWidget {
+  const CategoryIcon({
+    required this.category,
+    super.key,
+    this.size = 46,
+    this.vivid = false,
+    this.monochrome = false,
+    this.iconKey,
+  });
+
+  final String category;
+  final double size;
+  final bool vivid;
+  final bool monochrome;
+
+  /// The persisted icon key is used when a category has been renamed or is
+  /// custom and therefore cannot be resolved from its display name.
+  final String? iconKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final vividStyle = _styleFor(category, iconKey);
+    // Keep the same icon glyph in every surface. The non-vivid variant only
+    // softens the container so list rows and the quick-add sheet do not drift.
+    final style = vivid
+        ? vividStyle
+        : (const Color(0xFFF1F4EA), vividStyle.$2, vividStyle.$3);
+    final resolvedStyle = monochrome
+        ? (const Color(0xFFEAF2D9), style.$2, const Color(0xFF709A34))
+        : style;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: resolvedStyle.$1,
+        borderRadius: BorderRadius.circular(vivid ? size * .32 : size / 2),
+      ),
+      child: Icon(resolvedStyle.$2, color: resolvedStyle.$3, size: size * .48),
+    );
+  }
+
+  static Color accentFor(String category, {String? iconKey}) =>
+      _styleFor(category, iconKey).$3;
+
+  static (Color, IconData, Color) _styleFor(String category, String? iconKey) {
+    return _vividStyles[category] ??
+        _vividStyles[_categoryByIconKey[iconKey]] ??
+        _vividStyles['其他']!;
+  }
+
+  static const _categoryByIconKey = <String, String>{
+    'restaurant_outlined': '餐饮',
+    'directions_car_outlined': '交通',
+    'shopping_bag_outlined': '购物',
+    'movie_outlined': '娱乐',
+    'home_outlined': '住房',
+    'receipt_long_outlined': '生活缴费',
+    'medical_services_outlined': '医疗',
+    'school_outlined': '教育培训',
+    'flight_takeoff_outlined': '旅行',
+    'redeem_outlined': '人情',
+    'pets_outlined': '宠物',
+    'devices_outlined': '数码',
+    'directions_car_filled_outlined': '汽车',
+    'work_outline': '工资',
+    'stars_outlined': '奖金',
+    'schedule_outlined': '兼职',
+    'trending_up': '投资收益',
+    'undo': '退款',
+    'add_circle_outline': '其他收入',
+    'payments_outlined': '工资薪酬',
+    'campaign_outlined': '营销推广',
+    'more_horiz': '其他',
+    'category_outlined': '其他',
+  };
+  static const _vividStyles = <String, (Color, IconData, Color)>{
+    '餐饮': (Color(0xFFFFF0DF), Icons.restaurant_rounded, Color(0xFFFF973F)),
+    '购物': (Color(0xFFFFEAF2), Icons.shopping_bag_rounded, Color(0xFFF75C9A)),
+    '交通': (Color(0xFFE7F2FF), Icons.directions_car_rounded, Color(0xFF398FF2)),
+    '居家': (Color(0xFFE0F8EF), Icons.home_rounded, Color(0xFF12B992)),
+    '住房': (Color(0xFFE0F8EF), Icons.home_rounded, Color(0xFF12B992)),
+    '商务餐饮': (Color(0xFFFFF0DF), Icons.restaurant_rounded, Color(0xFFFF973F)),
+    '娱乐': (Color(0xFFF0EAFE), Icons.sports_esports_rounded, Color(0xFF9D77EE)),
+    '日用': (Color(0xFFEAF2FF), Icons.shopping_cart_rounded, Color(0xFF539AF2)),
+    '医疗': (Color(0xFFE3F8F1), Icons.local_hospital_rounded, Color(0xFF19B798)),
+    '教育': (Color(0xFFE9F2FF), Icons.school_rounded, Color(0xFF408FE6)),
+    '人情': (Color(0xFFFFEDF2), Icons.favorite_rounded, Color(0xFFEF789E)),
+    '工资': (Color(0xFFE1F8EF), Icons.work_rounded, Color(0xFF11B690)),
+    '收入': (
+      Color(0xFFE1F8EF),
+      Icons.account_balance_wallet_rounded,
+      Color(0xFF11B690),
+    ),
+    '生活缴费': (Color(0xFFEAF2FF), Icons.receipt_long_rounded, Color(0xFF539AF2)),
+    '教育培训': (Color(0xFFE9F2FF), Icons.school_rounded, Color(0xFF408FE6)),
+    '家庭娱乐': (
+      Color(0xFFF0EAFE),
+      Icons.sports_esports_rounded,
+      Color(0xFF9D77EE),
+    ),
+    '家庭缴费': (Color(0xFFEAF2FF), Icons.receipt_long_rounded, Color(0xFF539AF2)),
+    '家庭医疗': (
+      Color(0xFFE3F8F1),
+      Icons.local_hospital_rounded,
+      Color(0xFF19B798),
+    ),
+    '家庭旅行': (
+      Color(0xFFE5F5FC),
+      Icons.flight_takeoff_rounded,
+      Color(0xFF38A2C8),
+    ),
+    '家庭人情': (Color(0xFFFFEDF2), Icons.favorite_rounded, Color(0xFFEF789E)),
+    '家庭数码': (Color(0xFFEAF0FF), Icons.devices_rounded, Color(0xFF718EDD)),
+    '家庭汽车': (
+      Color(0xFFE7F2FF),
+      Icons.directions_car_rounded,
+      Color(0xFF398FF2),
+    ),
+    '家庭工资': (Color(0xFFE1F8EF), Icons.work_rounded, Color(0xFF11B690)),
+    '家庭奖金': (Color(0xFFFFF3D9), Icons.stars_rounded, Color(0xFFE4B345)),
+    '家庭兼职': (Color(0xFFE5F6F6), Icons.schedule_rounded, Color(0xFF30AFA6)),
+    '家庭投资收益': (Color(0xFFE1F8EF), Icons.trending_up_rounded, Color(0xFF11B690)),
+    '家庭退款': (Color(0xFFE9F2FF), Icons.undo_rounded, Color(0xFF408FE6)),
+    '旅行': (Color(0xFFE5F5FC), Icons.flight_takeoff_rounded, Color(0xFF38A2C8)),
+    '宠物': (Color(0xFFFFEFDE), Icons.pets_rounded, Color(0xFFD29B50)),
+    '数码': (Color(0xFFEAF0FF), Icons.devices_rounded, Color(0xFF718EDD)),
+    '汽车': (Color(0xFFE7F2FF), Icons.directions_car_rounded, Color(0xFF398FF2)),
+    '奖金': (Color(0xFFFFF3D9), Icons.stars_rounded, Color(0xFFE4B345)),
+    '兼职': (Color(0xFFE5F6F6), Icons.schedule_rounded, Color(0xFF30AFA6)),
+    '投资收益': (Color(0xFFE1F8EF), Icons.trending_up_rounded, Color(0xFF11B690)),
+    '退款': (Color(0xFFE9F2FF), Icons.undo_rounded, Color(0xFF408FE6)),
+    '其他收入': (Color(0xFFE1F8EF), Icons.add_circle_outline, Color(0xFF11B690)),
+    '家庭采购': (Color(0xFFEAF2FF), Icons.shopping_cart_rounded, Color(0xFF539AF2)),
+    '家庭出行': (
+      Color(0xFFE7F2FF),
+      Icons.directions_car_rounded,
+      Color(0xFF398FF2),
+    ),
+    '家庭购物': (Color(0xFFFFEAF2), Icons.shopping_bag_rounded, Color(0xFFF75C9A)),
+    '房屋居住': (Color(0xFFE0F8EF), Icons.home_rounded, Color(0xFF12B992)),
+    '子女教育': (Color(0xFFE9F2FF), Icons.school_rounded, Color(0xFF408FE6)),
+    '采购成本': (Color(0xFFEAF2FF), Icons.shopping_cart_rounded, Color(0xFF539AF2)),
+    '差旅交通': (
+      Color(0xFFE7F2FF),
+      Icons.directions_car_rounded,
+      Color(0xFF398FF2),
+    ),
+    '场地租赁': (Color(0xFFE0F8EF), Icons.home_rounded, Color(0xFF12B992)),
+    '培训会议': (Color(0xFFE9F2FF), Icons.school_rounded, Color(0xFF408FE6)),
+    '商务旅行': (
+      Color(0xFFE5F5FC),
+      Icons.flight_takeoff_rounded,
+      Color(0xFF38A2C8),
+    ),
+    '商务礼赠': (Color(0xFFFFEDF2), Icons.favorite_rounded, Color(0xFFEF789E)),
+    '营销推广': (Color(0xFFFFF0E0), Icons.campaign_rounded, Color(0xFFE28A30)),
+    '主营业务收入': (Color(0xFFE1F8EF), Icons.work_rounded, Color(0xFF11B690)),
+    '经营奖励': (Color(0xFFFFF3D9), Icons.stars_rounded, Color(0xFFE4B345)),
+    '其他业务收入': (Color(0xFFE5F6F6), Icons.schedule_rounded, Color(0xFF30AFA6)),
+    '其他支出': (Color(0xFFF0F3F7), Icons.more_horiz_rounded, Color(0xFF8799B0)),
+    '营销招待': (Color(0xFFFFF0E0), Icons.campaign_rounded, Color(0xFFE28A30)),
+    '办公税费': (Color(0xFFEAF2FF), Icons.receipt_long_rounded, Color(0xFF539AF2)),
+    '员工福利': (
+      Color(0xFFE3F8F1),
+      Icons.health_and_safety_rounded,
+      Color(0xFF19B798),
+    ),
+    '软件设备': (Color(0xFFEAF0FF), Icons.devices_rounded, Color(0xFF718EDD)),
+    '车辆运营': (
+      Color(0xFFE7F2FF),
+      Icons.directions_car_rounded,
+      Color(0xFF398FF2),
+    ),
+    '工资薪酬': (Color(0xFFE1F8EF), Icons.work_rounded, Color(0xFF11B690)),
+    '采购退款': (Color(0xFFE9F2FF), Icons.undo_rounded, Color(0xFF408FE6)),
+    '其他': (Color(0xFFF0F3F7), Icons.more_horiz_rounded, Color(0xFF8799B0)),
+  };
+}

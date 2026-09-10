@@ -1,0 +1,55 @@
+现在按照：
+
+docs/design_refs/transactions.png
+
+实现流水页面。
+
+视觉必须与首页保持完全统一。
+
+功能：
+
+顶部：
+流水
+
+Tab：
+全部 / 支出 / 收入
+
+搜索按钮
+筛选按钮
+
+月度数据：
+
+本月支出
+¥5,940
+
+本月收入
+¥9,800
+
+下面按日期进行流水分组。
+
+实现可复用：
+
+TransactionDateGroup
+TransactionTile
+TransactionSummaryCard
+
+Transaction 数据必须来自统一 Mock Repository，
+不要在页面里单独造另一份数据。
+
+点击：
+全部 / 支出 / 收入
+
+必须真实过滤当前 Mock 数据。
+
+搜索按钮暂时可以进入一个简单 Search 页面，
+筛选按钮打开 BottomSheet。
+
+保持原型中的：
+暖白
+奶油色
+鼠尾草绿
+低饱和
+轻阴影
+高可读性。
+
+完成后 flutter analyze。
