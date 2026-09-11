@@ -23,6 +23,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../application/amount_input.dart';
 import '../application/attachment_storage_service.dart';
 import '../application/quick_bookkeeping_service.dart';
+import '../../transactions/data/transaction_attachment_repository.dart';
 
 class QuickAddSheet extends ConsumerStatefulWidget {
   const QuickAddSheet({super.key, this.initialTransaction});
@@ -49,6 +50,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   bool _isRecurring = false;
   bool _isSaving = false;
   bool _showNumberPad = false;
+  bool _attachmentsChanged = false;
+  Future<void>? _attachmentsLoad;
   final List<StoredAttachment> _attachments = [];
 
   @override
@@ -82,14 +85,42 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     if (tags is List) {
       _tagsController.text = tags.map((item) => item.toString()).join(', ');
     }
-    final attachments = metadata['attachments'];
-    if (attachments is List) {
-      _attachments.addAll(
-        attachments.whereType<String>().map(
-          (path) => StoredAttachment(name: p.basename(path), path: path),
-        ),
-      );
+    _attachmentsLoad = _loadExistingAttachments(transaction);
+    unawaited(_attachmentsLoad!);
+  }
+
+  Future<void> _loadExistingAttachments(TransactionRecord transaction) async {
+    List<StoredAttachment>? restored;
+    try {
+      final persisted = await ref
+          .read(transactionAttachmentRepositoryProvider)
+          .getForTransaction(transaction.id, bookId: transaction.bookId);
+      if (persisted.isNotEmpty) {
+        restored = [
+          for (final attachment in persisted)
+            StoredAttachment(name: attachment.name, path: attachment.path),
+        ];
+      }
+    } on Object {
+      // Fall back to the legacy metadata shape for databases not yet upgraded.
     }
+    restored ??= _legacyAttachments(transaction.metadataJson);
+    if (!mounted || _attachmentsChanged) return;
+    setState(() {
+      _attachments
+        ..clear()
+        ..addAll(restored!);
+    });
+  }
+
+  List<StoredAttachment> _legacyAttachments(String? metadataJson) {
+    final raw = _decodeMetadata(metadataJson)['attachments'];
+    if (raw is! List) return const [];
+    return [
+      for (final path in raw.whereType<String>())
+        if (path.trim().isNotEmpty)
+          StoredAttachment(name: p.basename(path), path: path.trim()),
+    ];
   }
 
   @override
@@ -514,8 +545,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             if (value) _isOneTime = false;
                           }),
                           onAddAttachment: _pickAttachment,
-                          onRemoveAttachment: (attachment) =>
-                              setState(() => _attachments.remove(attachment)),
+                          onRemoveAttachment: (attachment) => setState(() {
+                            _attachmentsChanged = true;
+                            _attachments.remove(attachment);
+                          }),
                         ),
                       ],
                     ),
@@ -803,7 +836,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           .read(attachmentStorageServiceProvider)
           .pickAndStore();
       if (attachment != null && mounted) {
-        setState(() => _attachments.add(attachment));
+        setState(() {
+          _attachmentsChanged = true;
+          _attachments.add(attachment);
+        });
       }
     } on Object {
       if (!mounted) return;
@@ -837,6 +873,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
     setState(() => _isSaving = true);
     try {
+      await _attachmentsLoad;
       final tags = _tagsController.text
           .split(RegExp(r'[,，]'))
           .map((item) => item.trim())

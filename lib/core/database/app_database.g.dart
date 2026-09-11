@@ -11763,6 +11763,727 @@ class AdEventEntriesCompanion extends UpdateCompanion<AdEventEntity> {
   }
 }
 
+class $TransactionAttachmentEntriesTable extends TransactionAttachmentEntries
+    with
+        TableInfo<
+          $TransactionAttachmentEntriesTable,
+          TransactionAttachmentEntity
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TransactionAttachmentEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _transactionIdMeta = const VerificationMeta(
+    'transactionId',
+  );
+  @override
+  late final GeneratedColumn<String> transactionId = GeneratedColumn<String>(
+    'transaction_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES transactions (id)',
+    ),
+  );
+  static const VerificationMeta _pathMeta = const VerificationMeta('path');
+  @override
+  late final GeneratedColumn<String> path = GeneratedColumn<String>(
+    'path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('application/octet-stream'),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _sizeInBytesMeta = const VerificationMeta(
+    'sizeInBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeInBytes = GeneratedColumn<int>(
+    'size_in_bytes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _checksumMeta = const VerificationMeta(
+    'checksum',
+  );
+  @override
+  late final GeneratedColumn<String> checksum = GeneratedColumn<String>(
+    'checksum',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bookId,
+    transactionId,
+    path,
+    name,
+    mimeType,
+    sortOrder,
+    sizeInBytes,
+    checksum,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'transaction_attachments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TransactionAttachmentEntity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('transaction_id')) {
+      context.handle(
+        _transactionIdMeta,
+        transactionId.isAcceptableOrUnknown(
+          data['transaction_id']!,
+          _transactionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_transactionIdMeta);
+    }
+    if (data.containsKey('path')) {
+      context.handle(
+        _pathMeta,
+        path.isAcceptableOrUnknown(data['path']!, _pathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pathMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('size_in_bytes')) {
+      context.handle(
+        _sizeInBytesMeta,
+        sizeInBytes.isAcceptableOrUnknown(
+          data['size_in_bytes']!,
+          _sizeInBytesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('checksum')) {
+      context.handle(
+        _checksumMeta,
+        checksum.isAcceptableOrUnknown(data['checksum']!, _checksumMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TransactionAttachmentEntity map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TransactionAttachmentEntity(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      bookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_id'],
+      )!,
+      transactionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transaction_id'],
+      )!,
+      path: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}path'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      sizeInBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_in_bytes'],
+      ),
+      checksum: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}checksum'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $TransactionAttachmentEntriesTable createAlias(String alias) {
+    return $TransactionAttachmentEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class TransactionAttachmentEntity extends DataClass
+    implements Insertable<TransactionAttachmentEntity> {
+  final String id;
+  final String bookId;
+  final String transactionId;
+  final String path;
+  final String name;
+  final String mimeType;
+  final int sortOrder;
+  final int? sizeInBytes;
+  final String? checksum;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const TransactionAttachmentEntity({
+    required this.id,
+    required this.bookId,
+    required this.transactionId,
+    required this.path,
+    required this.name,
+    required this.mimeType,
+    required this.sortOrder,
+    this.sizeInBytes,
+    this.checksum,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['book_id'] = Variable<String>(bookId);
+    map['transaction_id'] = Variable<String>(transactionId);
+    map['path'] = Variable<String>(path);
+    map['name'] = Variable<String>(name);
+    map['mime_type'] = Variable<String>(mimeType);
+    map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || sizeInBytes != null) {
+      map['size_in_bytes'] = Variable<int>(sizeInBytes);
+    }
+    if (!nullToAbsent || checksum != null) {
+      map['checksum'] = Variable<String>(checksum);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  TransactionAttachmentEntriesCompanion toCompanion(bool nullToAbsent) {
+    return TransactionAttachmentEntriesCompanion(
+      id: Value(id),
+      bookId: Value(bookId),
+      transactionId: Value(transactionId),
+      path: Value(path),
+      name: Value(name),
+      mimeType: Value(mimeType),
+      sortOrder: Value(sortOrder),
+      sizeInBytes: sizeInBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sizeInBytes),
+      checksum: checksum == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checksum),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory TransactionAttachmentEntity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TransactionAttachmentEntity(
+      id: serializer.fromJson<String>(json['id']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      transactionId: serializer.fromJson<String>(json['transactionId']),
+      path: serializer.fromJson<String>(json['path']),
+      name: serializer.fromJson<String>(json['name']),
+      mimeType: serializer.fromJson<String>(json['mimeType']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      sizeInBytes: serializer.fromJson<int?>(json['sizeInBytes']),
+      checksum: serializer.fromJson<String?>(json['checksum']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'bookId': serializer.toJson<String>(bookId),
+      'transactionId': serializer.toJson<String>(transactionId),
+      'path': serializer.toJson<String>(path),
+      'name': serializer.toJson<String>(name),
+      'mimeType': serializer.toJson<String>(mimeType),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'sizeInBytes': serializer.toJson<int?>(sizeInBytes),
+      'checksum': serializer.toJson<String?>(checksum),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  TransactionAttachmentEntity copyWith({
+    String? id,
+    String? bookId,
+    String? transactionId,
+    String? path,
+    String? name,
+    String? mimeType,
+    int? sortOrder,
+    Value<int?> sizeInBytes = const Value.absent(),
+    Value<String?> checksum = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => TransactionAttachmentEntity(
+    id: id ?? this.id,
+    bookId: bookId ?? this.bookId,
+    transactionId: transactionId ?? this.transactionId,
+    path: path ?? this.path,
+    name: name ?? this.name,
+    mimeType: mimeType ?? this.mimeType,
+    sortOrder: sortOrder ?? this.sortOrder,
+    sizeInBytes: sizeInBytes.present ? sizeInBytes.value : this.sizeInBytes,
+    checksum: checksum.present ? checksum.value : this.checksum,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  TransactionAttachmentEntity copyWithCompanion(
+    TransactionAttachmentEntriesCompanion data,
+  ) {
+    return TransactionAttachmentEntity(
+      id: data.id.present ? data.id.value : this.id,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      transactionId: data.transactionId.present
+          ? data.transactionId.value
+          : this.transactionId,
+      path: data.path.present ? data.path.value : this.path,
+      name: data.name.present ? data.name.value : this.name,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      sizeInBytes: data.sizeInBytes.present
+          ? data.sizeInBytes.value
+          : this.sizeInBytes,
+      checksum: data.checksum.present ? data.checksum.value : this.checksum,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransactionAttachmentEntity(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('path: $path, ')
+          ..write('name: $name, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('sizeInBytes: $sizeInBytes, ')
+          ..write('checksum: $checksum, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    transactionId,
+    path,
+    name,
+    mimeType,
+    sortOrder,
+    sizeInBytes,
+    checksum,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TransactionAttachmentEntity &&
+          other.id == this.id &&
+          other.bookId == this.bookId &&
+          other.transactionId == this.transactionId &&
+          other.path == this.path &&
+          other.name == this.name &&
+          other.mimeType == this.mimeType &&
+          other.sortOrder == this.sortOrder &&
+          other.sizeInBytes == this.sizeInBytes &&
+          other.checksum == this.checksum &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class TransactionAttachmentEntriesCompanion
+    extends UpdateCompanion<TransactionAttachmentEntity> {
+  final Value<String> id;
+  final Value<String> bookId;
+  final Value<String> transactionId;
+  final Value<String> path;
+  final Value<String> name;
+  final Value<String> mimeType;
+  final Value<int> sortOrder;
+  final Value<int?> sizeInBytes;
+  final Value<String?> checksum;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const TransactionAttachmentEntriesCompanion({
+    this.id = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.transactionId = const Value.absent(),
+    this.path = const Value.absent(),
+    this.name = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.sizeInBytes = const Value.absent(),
+    this.checksum = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TransactionAttachmentEntriesCompanion.insert({
+    required String id,
+    required String bookId,
+    required String transactionId,
+    required String path,
+    required String name,
+    this.mimeType = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.sizeInBytes = const Value.absent(),
+    this.checksum = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       bookId = Value(bookId),
+       transactionId = Value(transactionId),
+       path = Value(path),
+       name = Value(name),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<TransactionAttachmentEntity> custom({
+    Expression<String>? id,
+    Expression<String>? bookId,
+    Expression<String>? transactionId,
+    Expression<String>? path,
+    Expression<String>? name,
+    Expression<String>? mimeType,
+    Expression<int>? sortOrder,
+    Expression<int>? sizeInBytes,
+    Expression<String>? checksum,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bookId != null) 'book_id': bookId,
+      if (transactionId != null) 'transaction_id': transactionId,
+      if (path != null) 'path': path,
+      if (name != null) 'name': name,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (sizeInBytes != null) 'size_in_bytes': sizeInBytes,
+      if (checksum != null) 'checksum': checksum,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TransactionAttachmentEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? bookId,
+    Value<String>? transactionId,
+    Value<String>? path,
+    Value<String>? name,
+    Value<String>? mimeType,
+    Value<int>? sortOrder,
+    Value<int?>? sizeInBytes,
+    Value<String?>? checksum,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return TransactionAttachmentEntriesCompanion(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      transactionId: transactionId ?? this.transactionId,
+      path: path ?? this.path,
+      name: name ?? this.name,
+      mimeType: mimeType ?? this.mimeType,
+      sortOrder: sortOrder ?? this.sortOrder,
+      sizeInBytes: sizeInBytes ?? this.sizeInBytes,
+      checksum: checksum ?? this.checksum,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (transactionId.present) {
+      map['transaction_id'] = Variable<String>(transactionId.value);
+    }
+    if (path.present) {
+      map['path'] = Variable<String>(path.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (sizeInBytes.present) {
+      map['size_in_bytes'] = Variable<int>(sizeInBytes.value);
+    }
+    if (checksum.present) {
+      map['checksum'] = Variable<String>(checksum.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TransactionAttachmentEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('path: $path, ')
+          ..write('name: $name, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('sizeInBytes: $sizeInBytes, ')
+          ..write('checksum: $checksum, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -11800,6 +12521,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FamilyBudgetEntriesTable familyBudgetEntries =
       $FamilyBudgetEntriesTable(this);
   late final $AdEventEntriesTable adEventEntries = $AdEventEntriesTable(this);
+  late final $TransactionAttachmentEntriesTable transactionAttachmentEntries =
+      $TransactionAttachmentEntriesTable(this);
   late final AccountDao accountDao = AccountDao(this as AppDatabase);
   late final CategoryDao categoryDao = CategoryDao(this as AppDatabase);
   late final TransactionDao transactionDao = TransactionDao(
@@ -11815,6 +12538,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final FamilyDao familyDao = FamilyDao(this as AppDatabase);
   late final AdEventDao adEventDao = AdEventDao(this as AppDatabase);
+  late final TransactionAttachmentDao transactionAttachmentDao =
+      TransactionAttachmentDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -11839,6 +12564,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     familyOperationLogEntries,
     familyBudgetEntries,
     adEventEntries,
+    transactionAttachmentEntries,
   ];
 }
 
@@ -13654,6 +14380,31 @@ final class $$TransactionEntriesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $TransactionAttachmentEntriesTable,
+    List<TransactionAttachmentEntity>
+  >
+  _transactionAttachmentEntriesRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.transactionAttachmentEntries,
+        aliasName: 'transactions__id__transaction_attachments__transaction_id',
+      );
+
+  $$TransactionAttachmentEntriesTableProcessedTableManager
+  get transactionAttachmentEntriesRefs {
+    final manager = $$TransactionAttachmentEntriesTableTableManager(
+      $_db,
+      $_db.transactionAttachmentEntries,
+    ).filter((f) => f.transactionId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _transactionAttachmentEntriesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$TransactionEntriesTableFilterComposer
@@ -13971,6 +14722,35 @@ class $$TransactionEntriesTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> transactionAttachmentEntriesRefs(
+    Expression<bool> Function(
+      $$TransactionAttachmentEntriesTableFilterComposer f,
+    )
+    f,
+  ) {
+    final $$TransactionAttachmentEntriesTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.transactionAttachmentEntries,
+          getReferencedColumn: (t) => t.transactionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$TransactionAttachmentEntriesTableFilterComposer(
+                $db: $db,
+                $table: $db.transactionAttachmentEntries,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -14502,6 +15282,35 @@ class $$TransactionEntriesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> transactionAttachmentEntriesRefs<T extends Object>(
+    Expression<T> Function(
+      $$TransactionAttachmentEntriesTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$TransactionAttachmentEntriesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.transactionAttachmentEntries,
+          getReferencedColumn: (t) => t.transactionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$TransactionAttachmentEntriesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.transactionAttachmentEntries,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$TransactionEntriesTableTableManager
@@ -14525,6 +15334,7 @@ class $$TransactionEntriesTableTableManager
             bool economicEventRecordEntriesRefs,
             bool inboxTransaction,
             bool inboxCandidateTransaction,
+            bool transactionAttachmentEntriesRefs,
           })
         > {
   $$TransactionEntriesTableTableManager(
@@ -14700,6 +15510,7 @@ class $$TransactionEntriesTableTableManager
                 economicEventRecordEntriesRefs = false,
                 inboxTransaction = false,
                 inboxCandidateTransaction = false,
+                transactionAttachmentEntriesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -14708,6 +15519,8 @@ class $$TransactionEntriesTableTableManager
                       db.economicEventRecordEntries,
                     if (inboxTransaction) db.inboxItemEntries,
                     if (inboxCandidateTransaction) db.inboxItemEntries,
+                    if (transactionAttachmentEntriesRefs)
+                      db.transactionAttachmentEntries,
                   ],
                   addJoins:
                       <
@@ -14841,6 +15654,27 @@ class $$TransactionEntriesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (transactionAttachmentEntriesRefs)
+                        await $_getPrefetchedData<
+                          TransactionEntity,
+                          $TransactionEntriesTable,
+                          TransactionAttachmentEntity
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TransactionEntriesTableReferences
+                              ._transactionAttachmentEntriesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TransactionEntriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).transactionAttachmentEntriesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.transactionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -14869,6 +15703,7 @@ typedef $$TransactionEntriesTableProcessedTableManager =
         bool economicEventRecordEntriesRefs,
         bool inboxTransaction,
         bool inboxCandidateTransaction,
+        bool transactionAttachmentEntriesRefs,
       })
     >;
 typedef $$GoalEntriesTableCreateCompanionBuilder =
@@ -21838,6 +22673,486 @@ typedef $$AdEventEntriesTableProcessedTableManager =
       AdEventEntity,
       PrefetchHooks Function()
     >;
+typedef $$TransactionAttachmentEntriesTableCreateCompanionBuilder =
+    TransactionAttachmentEntriesCompanion Function({
+      required String id,
+      required String bookId,
+      required String transactionId,
+      required String path,
+      required String name,
+      Value<String> mimeType,
+      Value<int> sortOrder,
+      Value<int?> sizeInBytes,
+      Value<String?> checksum,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$TransactionAttachmentEntriesTableUpdateCompanionBuilder =
+    TransactionAttachmentEntriesCompanion Function({
+      Value<String> id,
+      Value<String> bookId,
+      Value<String> transactionId,
+      Value<String> path,
+      Value<String> name,
+      Value<String> mimeType,
+      Value<int> sortOrder,
+      Value<int?> sizeInBytes,
+      Value<String?> checksum,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+final class $$TransactionAttachmentEntriesTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $TransactionAttachmentEntriesTable,
+          TransactionAttachmentEntity
+        > {
+  $$TransactionAttachmentEntriesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TransactionEntriesTable _transactionIdTable(_$AppDatabase db) => db
+      .transactionEntries
+      .createAlias('transaction_attachments__transaction_id__transactions__id');
+
+  $$TransactionEntriesTableProcessedTableManager get transactionId {
+    final $_column = $_itemColumn<String>('transaction_id')!;
+
+    final manager = $$TransactionEntriesTableTableManager(
+      $_db,
+      $_db.transactionEntries,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_transactionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TransactionAttachmentEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $TransactionAttachmentEntriesTable> {
+  $$TransactionAttachmentEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeInBytes => $composableBuilder(
+    column: $table.sizeInBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get checksum => $composableBuilder(
+    column: $table.checksum,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TransactionEntriesTableFilterComposer get transactionId {
+    final $$TransactionEntriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transactionId,
+      referencedTable: $db.transactionEntries,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionEntriesTableFilterComposer(
+            $db: $db,
+            $table: $db.transactionEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TransactionAttachmentEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TransactionAttachmentEntriesTable> {
+  $$TransactionAttachmentEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeInBytes => $composableBuilder(
+    column: $table.sizeInBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get checksum => $composableBuilder(
+    column: $table.checksum,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TransactionEntriesTableOrderingComposer get transactionId {
+    final $$TransactionEntriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transactionId,
+      referencedTable: $db.transactionEntries,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionEntriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.transactionEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TransactionAttachmentEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TransactionAttachmentEntriesTable> {
+  $$TransactionAttachmentEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get path =>
+      $composableBuilder(column: $table.path, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get sizeInBytes => $composableBuilder(
+    column: $table.sizeInBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get checksum =>
+      $composableBuilder(column: $table.checksum, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$TransactionEntriesTableAnnotationComposer get transactionId {
+    final $$TransactionEntriesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.transactionId,
+          referencedTable: $db.transactionEntries,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$TransactionEntriesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.transactionEntries,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$TransactionAttachmentEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TransactionAttachmentEntriesTable,
+          TransactionAttachmentEntity,
+          $$TransactionAttachmentEntriesTableFilterComposer,
+          $$TransactionAttachmentEntriesTableOrderingComposer,
+          $$TransactionAttachmentEntriesTableAnnotationComposer,
+          $$TransactionAttachmentEntriesTableCreateCompanionBuilder,
+          $$TransactionAttachmentEntriesTableUpdateCompanionBuilder,
+          (
+            TransactionAttachmentEntity,
+            $$TransactionAttachmentEntriesTableReferences,
+          ),
+          TransactionAttachmentEntity,
+          PrefetchHooks Function({bool transactionId})
+        > {
+  $$TransactionAttachmentEntriesTableTableManager(
+    _$AppDatabase db,
+    $TransactionAttachmentEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TransactionAttachmentEntriesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$TransactionAttachmentEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$TransactionAttachmentEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> transactionId = const Value.absent(),
+                Value<String> path = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> mimeType = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int?> sizeInBytes = const Value.absent(),
+                Value<String?> checksum = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TransactionAttachmentEntriesCompanion(
+                id: id,
+                bookId: bookId,
+                transactionId: transactionId,
+                path: path,
+                name: name,
+                mimeType: mimeType,
+                sortOrder: sortOrder,
+                sizeInBytes: sizeInBytes,
+                checksum: checksum,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String bookId,
+                required String transactionId,
+                required String path,
+                required String name,
+                Value<String> mimeType = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int?> sizeInBytes = const Value.absent(),
+                Value<String?> checksum = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TransactionAttachmentEntriesCompanion.insert(
+                id: id,
+                bookId: bookId,
+                transactionId: transactionId,
+                path: path,
+                name: name,
+                mimeType: mimeType,
+                sortOrder: sortOrder,
+                sizeInBytes: sizeInBytes,
+                checksum: checksum,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TransactionAttachmentEntriesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({transactionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (transactionId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.transactionId,
+                        referencedTable:
+                            $$TransactionAttachmentEntriesTableReferences
+                                ._transactionIdTable(db),
+                        referencedColumn:
+                            $$TransactionAttachmentEntriesTableReferences
+                                ._transactionIdTable(db)
+                                .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TransactionAttachmentEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TransactionAttachmentEntriesTable,
+      TransactionAttachmentEntity,
+      $$TransactionAttachmentEntriesTableFilterComposer,
+      $$TransactionAttachmentEntriesTableOrderingComposer,
+      $$TransactionAttachmentEntriesTableAnnotationComposer,
+      $$TransactionAttachmentEntriesTableCreateCompanionBuilder,
+      $$TransactionAttachmentEntriesTableUpdateCompanionBuilder,
+      (
+        TransactionAttachmentEntity,
+        $$TransactionAttachmentEntriesTableReferences,
+      ),
+      TransactionAttachmentEntity,
+      PrefetchHooks Function({bool transactionId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -21893,6 +23208,12 @@ class $AppDatabaseManager {
       $$FamilyBudgetEntriesTableTableManager(_db, _db.familyBudgetEntries);
   $$AdEventEntriesTableTableManager get adEventEntries =>
       $$AdEventEntriesTableTableManager(_db, _db.adEventEntries);
+  $$TransactionAttachmentEntriesTableTableManager
+  get transactionAttachmentEntries =>
+      $$TransactionAttachmentEntriesTableTableManager(
+        _db,
+        _db.transactionAttachmentEntries,
+      );
 }
 
 mixin _$AccountDaoMixin on DatabaseAccessor<AppDatabase> {
@@ -22131,5 +23452,42 @@ class AdEventDaoManager {
       $$AdEventEntriesTableTableManager(
         _db.attachedDatabase,
         _db.adEventEntries,
+      );
+}
+
+mixin _$TransactionAttachmentDaoMixin on DatabaseAccessor<AppDatabase> {
+  $CategoryEntriesTable get categoryEntries => attachedDatabase.categoryEntries;
+  $AccountEntriesTable get accountEntries => attachedDatabase.accountEntries;
+  $TransactionEntriesTable get transactionEntries =>
+      attachedDatabase.transactionEntries;
+  $TransactionAttachmentEntriesTable get transactionAttachmentEntries =>
+      attachedDatabase.transactionAttachmentEntries;
+  TransactionAttachmentDaoManager get managers =>
+      TransactionAttachmentDaoManager(this);
+}
+
+class TransactionAttachmentDaoManager {
+  final _$TransactionAttachmentDaoMixin _db;
+  TransactionAttachmentDaoManager(this._db);
+  $$CategoryEntriesTableTableManager get categoryEntries =>
+      $$CategoryEntriesTableTableManager(
+        _db.attachedDatabase,
+        _db.categoryEntries,
+      );
+  $$AccountEntriesTableTableManager get accountEntries =>
+      $$AccountEntriesTableTableManager(
+        _db.attachedDatabase,
+        _db.accountEntries,
+      );
+  $$TransactionEntriesTableTableManager get transactionEntries =>
+      $$TransactionEntriesTableTableManager(
+        _db.attachedDatabase,
+        _db.transactionEntries,
+      );
+  $$TransactionAttachmentEntriesTableTableManager
+  get transactionAttachmentEntries =>
+      $$TransactionAttachmentEntriesTableTableManager(
+        _db.attachedDatabase,
+        _db.transactionAttachmentEntries,
       );
 }

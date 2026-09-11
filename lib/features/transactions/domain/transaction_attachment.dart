@@ -4,15 +4,38 @@ import 'package:path/path.dart' as p;
 
 /// The attachment shape written by the current bookkeeping flow.
 ///
-/// Attachments deliberately remain metadata-backed in stage one. Stage two
-/// will migrate them to their own records without changing the detail page's
-/// rendering contract.
+/// The legacy metadata parser is retained for import and backward-compatible
+/// route snapshots; persisted attachments now use independent records.
 class TransactionAttachment {
-  const TransactionAttachment({required this.path});
+  const TransactionAttachment({
+    required this.path,
+    this.id,
+    this.bookId,
+    this.transactionId,
+    this.displayName,
+    this.mimeType,
+    this.sortOrder,
+    this.sizeInBytes,
+    this.checksum,
+    this.createdAt,
+    this.updatedAt,
+  });
 
+  final String? id;
+  final String? bookId;
+  final String? transactionId;
   final String path;
+  final String? displayName;
+  final String? mimeType;
+  final int? sortOrder;
+  final int? sizeInBytes;
+  final String? checksum;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   String get name {
+    final storedName = displayName?.trim();
+    if (storedName != null && storedName.isNotEmpty) return storedName;
     final value = p.basename(path).trim();
     return value.isEmpty || value == '.' ? '未命名附件' : value;
   }
@@ -34,6 +57,32 @@ class TransactionAttachment {
   }.contains(extension);
 
   bool get isPdf => extension == 'pdf';
+
+  String get resolvedMimeType => mimeType?.trim().isNotEmpty == true
+      ? mimeType!.trim()
+      : attachmentMimeType(path);
+}
+
+String attachmentMimeType(String path) {
+  final extension = p.extension(path).toLowerCase();
+  return switch (extension) {
+    '.bmp' => 'image/bmp',
+    '.gif' => 'image/gif',
+    '.heic' || '.heif' => 'image/heic',
+    '.jpeg' || '.jpg' => 'image/jpeg',
+    '.pdf' => 'application/pdf',
+    '.png' => 'image/png',
+    '.webp' => 'image/webp',
+    '.txt' => 'text/plain',
+    '.csv' => 'text/csv',
+    '.doc' => 'application/msword',
+    '.docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls' => 'application/vnd.ms-excel',
+    '.xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    _ => 'application/octet-stream',
+  };
 }
 
 class TransactionAttachmentMetadata {

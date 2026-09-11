@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import '../utils/entity_id.dart';
 
@@ -108,6 +109,29 @@ class TransactionEntries extends Table {
   TextColumn get createdBy => text().nullable()();
   TextColumn get updatedBy => text().nullable()();
   IntColumn get version => integer().withDefault(const Constant(1))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DataClassName('TransactionAttachmentEntity')
+class TransactionAttachmentEntries extends Table {
+  @override
+  String get tableName => 'transaction_attachments';
+
+  TextColumn get id => text()();
+  TextColumn get bookId => text()();
+  TextColumn get transactionId => text().references(TransactionEntries, #id)();
+  TextColumn get path => text()();
+  TextColumn get name => text()();
+  TextColumn get mimeType =>
+      text().withDefault(const Constant('application/octet-stream'))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  IntColumn get sizeInBytes => integer().nullable()();
+  TextColumn get checksum => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -470,6 +494,7 @@ class AdEventEntries extends Table {
     FamilyOperationLogEntries,
     FamilyBudgetEntries,
     AdEventEntries,
+    TransactionAttachmentEntries,
   ],
   daos: [
     AccountDao,
@@ -481,6 +506,7 @@ class AdEventEntries extends Table {
     IntelligenceDao,
     FamilyDao,
     AdEventDao,
+    TransactionAttachmentDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -521,7 +547,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -618,6 +644,11 @@ class AppDatabase extends _$AppDatabase {
           await _createBookIndexes();
         }
         if (from < 9) await _migrateBookScopes();
+        if (from < 11) {
+          await migrator.createTable(transactionAttachmentEntries);
+          await _migrateLegacyTransactionAttachments();
+          await _createAttachmentIndexes();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -652,6 +683,121 @@ class AppDatabase extends _$AppDatabase {
     await _createFamilyIndexes();
     await _createBookIndexes();
     await _createAdIndexes();
+    await _createAttachmentIndexes();
+  }
+
+  Future<void> _createAttachmentIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_transaction '
+      'ON transaction_attachments(transaction_id, deleted_at, created_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_book '
+      'ON transaction_attachments(book_id, deleted_at)',
+    );
+  }
+
+  Future<void> _migrateLegacyTransactionAttachments() async {
+    final hasMetadata = await _hasColumn('transactions', 'metadata_json');
+    if (!hasMetadata) return;
+    final hasBookId = await _hasColumn('transactions', 'book_id');
+    final rows = await customSelect(
+      'SELECT id, ${hasBookId ? 'book_id, ' : ''}metadata_json FROM transactions '
+      'WHERE metadata_json IS NOT NULL',
+    ).get();
+    for (final row in rows) {
+      final metadataJson = row.read<String>('metadata_json');
+      final decoded = _decodeLegacyMetadata(metadataJson);
+      if (decoded == null || !decoded.containsKey('attachments')) continue;
+      final rawAttachments = decoded['attachments'];
+      if (rawAttachments is! List) continue;
+
+      final transactionId = row.read<String>('id');
+      final bookId = hasBookId ? row.read<String>('book_id') : 'book-personal';
+      final now = DateTime.now();
+      final paths = <String>[];
+      final malformedAttachments = <Object?>[];
+      for (final raw in rawAttachments) {
+        final path = switch (raw) {
+          String value => value.trim(),
+          Map value =>
+            value['path'] is String ? (value['path'] as String).trim() : '',
+          _ => '',
+        };
+        if (path.isEmpty) {
+          malformedAttachments.add(raw);
+          continue;
+        }
+        if (paths.contains(path)) continue;
+        paths.add(path);
+        final attachmentTime = now.add(Duration(microseconds: paths.length));
+        await customStatement(
+          'INSERT INTO transaction_attachments '
+          '(id,book_id,transaction_id,path,name,mime_type,sort_order,created_at,updated_at) '
+          'VALUES (?,?,?,?,?,?,?,?,?)',
+          [
+            'attachment-${newEntityId()}',
+            bookId,
+            transactionId,
+            path,
+            _attachmentName(path),
+            _attachmentMimeType(path),
+            paths.length - 1,
+            attachmentTime.millisecondsSinceEpoch ~/ 1000,
+            attachmentTime.millisecondsSinceEpoch ~/ 1000,
+          ],
+        );
+      }
+
+      if (malformedAttachments.isEmpty) {
+        decoded.remove('attachments');
+      } else {
+        decoded['attachments'] = malformedAttachments;
+      }
+      await customStatement(
+        'UPDATE transactions SET metadata_json=? WHERE id=?',
+        [decoded.isEmpty ? null : jsonEncode(decoded), transactionId],
+      );
+    }
+  }
+
+  Map<String, dynamic>? _decodeLegacyMetadata(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map) {
+        return decoded.map((key, item) => MapEntry(key.toString(), item));
+      }
+    } on Object {
+      // Keep malformed legacy metadata untouched for the detail page to flag.
+    }
+    return null;
+  }
+
+  String _attachmentName(String path) {
+    final normalized = path.replaceAll('\\\\', '/');
+    final name = normalized.split('/').last.trim();
+    return name.isEmpty ? '未命名附件' : name;
+  }
+
+  String _attachmentMimeType(String path) {
+    final extension = _attachmentName(path).split('.').last.toLowerCase();
+    return switch (extension) {
+      'bmp' => 'image/bmp',
+      'gif' => 'image/gif',
+      'heic' || 'heif' => 'image/heic',
+      'jpeg' || 'jpg' => 'image/jpeg',
+      'pdf' => 'application/pdf',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'txt' => 'text/plain',
+      'csv' => 'text/csv',
+      'doc' => 'application/msword',
+      'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls' => 'application/vnd.ms-excel',
+      'xlsx' =>
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      _ => 'application/octet-stream',
+    };
   }
 
   Future<bool> _hasColumn(String table, String column) async {
@@ -1039,6 +1185,64 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         updatedAt: Value(deletedAt),
       ),
     );
+  }
+}
+
+@DriftAccessor(tables: [TransactionAttachmentEntries])
+class TransactionAttachmentDao extends DatabaseAccessor<AppDatabase>
+    with _$TransactionAttachmentDaoMixin {
+  TransactionAttachmentDao(super.attachedDatabase);
+
+  Stream<List<TransactionAttachmentEntity>> watchActiveForTransaction(
+    String transactionId, {
+    required String bookId,
+  }) {
+    final query = select(transactionAttachmentEntries)
+      ..where(
+        (row) =>
+            row.transactionId.equals(transactionId) &
+            row.bookId.equals(bookId) &
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(SharedSyncSchema.visibleBooksSql('book_id')),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.asc(row.sortOrder),
+        (row) => OrderingTerm.asc(row.createdAt),
+        (row) => OrderingTerm.asc(row.id),
+      ]);
+    return query.watch();
+  }
+
+  Future<List<TransactionAttachmentEntity>> getForTransaction(
+    String transactionId, {
+    required String bookId,
+    bool includeDeleted = false,
+  }) {
+    final query = select(transactionAttachmentEntries)
+      ..where(
+        (row) =>
+            row.transactionId.equals(transactionId) &
+            row.bookId.equals(bookId) &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (includeDeleted ? const Constant(true) : row.deletedAt.isNull()),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.asc(row.sortOrder),
+        (row) => OrderingTerm.asc(row.createdAt),
+        (row) => OrderingTerm.asc(row.id),
+      ]);
+    return query.get();
+  }
+
+  Future<void> insertOne(TransactionAttachmentEntriesCompanion attachment) {
+    return into(transactionAttachmentEntries).insert(attachment);
+  }
+
+  Future<void> replaceOne(TransactionAttachmentEntriesCompanion attachment) {
+    return into(transactionAttachmentEntries)
+        .insertOnConflictUpdate(attachment);
   }
 }
 

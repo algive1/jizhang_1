@@ -35,7 +35,9 @@
 - 2026-09-11 抽屉切片 4 已补充 SQL 级未来流水过滤，确保计划流水不会占用最近 10 条名额。
 - 2026-09-11 交易详情切片 5 已统一首页、流水、搜索三个入口：点击进入详情，长按保留操作菜单；详情展示金额、类型、发生时间、账户、分类、备注、记录人和同步状态。
 - 2026-09-11 交易详情切片 5 已补齐旧 metadata 附件的图片缩略图/全屏缩放、PDF/其他文件系统打开、无处理器提示、文件缺失提示和重新添加入口；编辑、分类修正和软删除复用既有 Service/权限链路。
-- 2026-09-11 交易详情切片 5 已通过全量 162 个 Flutter tests、analyze 和 Release APK 构建，并在 Pixel 7 Android emulator 安装打开检查详情页。
+- 2026-09-11 阶段二附件切片已将 schema 从 10 升到 11：新增独立 `transaction_attachments` 记录、按账本和交易隔离查询、顺序维护及软删除；旧 `metadata.attachments` 会在升级时迁移，其他 metadata 和 malformed 项保留。
+- 2026-09-11 阶段二附件切片已接入新建/编辑记账和交易详情；保存会等待附件加载，附件后处理失败会明确提示“流水已入账”，不隐式重复记账。
+- 2026-09-11 阶段二附件切片已通过全量 165 个 Flutter tests、analyze、Drift code generation 和 Release APK 构建；本次 `adb devices` 无连接设备，未安装本次 APK，未虚报 UI 验收。
 
 ## 当前未完成或未联调
 
@@ -45,17 +47,17 @@
 - 公网云部署、对象存储、家庭短信邀请和企业报税。
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
 - iOS 真机、签名和发布验收；当前 `flutter build ios --no-codesign` 被既有 `Application not configured for iOS` 配置问题阻断。
-- 账本抽屉计划中的阶段二、阶段三能力尚未完成；阶段一交易详情入口及本地附件展示已完成。
+- 账本抽屉计划中的阶段二仅完成独立附件记录和旧 metadata 迁移；版本化数据库＋附件文件备份、押金/结算、模板以及阶段三同步能力尚未完成。
 
 ## 当前架构风险
 
 1. 流水、分析和去重仍存在全量加载/内存计算，长期大数据量需要分页和 SQL 聚合。
 2. Android Release 未配置正式 keystore，当前产物只能作为本地验收包。
 3. 共享服务已完成本地真实联调，尚未进行公网部署、TLS 证书、监控和生产备份验收。
-4. 提醒设置仍只有未启用的菜单项；支付、短信、独立附件记录/附件云存储和企业报税未接入。
+4. 提醒设置仍只有未启用的菜单项；支付、短信、附件云存储和企业报税未接入。
 5. Release 构建仍收到 `speech_to_text` 使用 Kotlin Gradle Plugin 的未来兼容性 warning；当前构建成功，后续需等待插件迁移到 Built-in Kotlin。
 6. 当前账本创建顺序的兼容排序使用 SQLite `rowid` 作为同时间戳的 tie-breaker；后续若需要跨导入/跨设备保持业务创建序号，应在账本模型中增加显式稳定序号并纳入同步协议。
-7. 交易详情的系统文件打开依赖 Android/iOS 系统处理器；iOS 尚未完成可编译项目配置和真机验证，阶段二仍需把附件从 `metadata.attachments` 迁移为独立记录。
+7. 交易详情的系统文件打开依赖 Android/iOS 系统处理器；iOS 尚未完成可编译项目配置和真机验证。独立附件记录已完成，但附件文件内容尚未纳入备份/同步。
 
 ## 实际验证结果
 
@@ -64,22 +66,22 @@ flutter analyze
 → No issues found
 
 flutter test --reporter compact
-→ All tests passed（162 个）
+→ All tests passed（165 个）
 
 flutter build apk --debug
 → Built build/app/outputs/flutter-apk/app-debug.apk
 
 flutter build apk --release
-→ Built build/app/outputs/flutter-apk/app-release.apk（77,607,562 bytes）
+→ Built build/app/outputs/flutter-apk/app-release.apk（77,656,758 bytes）
 
 server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
 ```
 
-当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,607,562 bytes，SHA-256：
-`76576e3e8b1b34d11e4d4875f8387923cc9c179272704597d90f98bf5a445bc8`。
+当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,656,758 bytes，SHA-256：
+`ea3a57599c3b5d1d52598bb93ce2eae304d89130676d31b77fdce80b54464de1`。
 
-Android 模拟器 `emulator-5554` 已安装当前 Release APK，并实际打开首页、流水列表和交易详情页：
+此前交易详情切片的历史 Release APK 曾在 Pixel 7 Android emulator 安装并打开首页、流水列表和交易详情页；本次阶段二 Release APK 未安装：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。
 以上三个链接仍是历史版本截图；本次详情页的当前截图保存在本机 `/tmp/jizhang-slice5-release-final.png`，并已在模拟器窗口保持打开供人工查看。
 

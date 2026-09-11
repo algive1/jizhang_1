@@ -12,6 +12,7 @@ import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/features/bookkeeping/application/local_file_opener.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
+import 'package:jizhang_app/features/transactions/data/transaction_attachment_repository.dart';
 import 'package:jizhang_app/features/transactions/domain/transaction_attachment.dart';
 import 'package:jizhang_app/features/transactions/presentation/transaction_detail_page.dart';
 
@@ -147,6 +148,9 @@ void main() {
       ProviderScope(
         overrides: [
           allAccountsProvider.overrideWith((ref) => Stream.value([account])),
+          transactionAttachmentRepositoryProvider.overrideWithValue(
+            _EmptyAttachmentRepository(),
+          ),
         ],
         child: MaterialApp(
           home: TransactionDetailPage(
@@ -220,6 +224,9 @@ void main() {
         ProviderScope(
           overrides: [
             allAccountsProvider.overrideWith((ref) => Stream.value([account])),
+            transactionAttachmentRepositoryProvider.overrideWithValue(
+              _EmptyAttachmentRepository(),
+            ),
             localFileOpenerProvider.overrideWithValue(
               LocalFileOpener(channel: channel),
             ),
@@ -269,4 +276,25 @@ void main() {
       );
     },
   );
+}
+
+class _EmptyAttachmentRepository implements TransactionAttachmentRepository {
+  @override
+  Future<List<TransactionAttachment>> getForTransaction(
+    String transactionId, {
+    required String bookId,
+  }) async => const [];
+
+  @override
+  Future<void> replaceForTransaction({
+    required String transactionId,
+    required String bookId,
+    required List<String> paths,
+  }) async {}
+
+  @override
+  Stream<List<TransactionAttachment>> watchForTransaction(
+    String transactionId, {
+    required String bookId,
+  }) => Stream.value(const []);
 }

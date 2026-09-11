@@ -10,6 +10,7 @@ import '../../../core/models/transaction_record.dart';
 import '../../books/data/book_repository.dart';
 import '../../intelligence/application/transaction_intelligence_service.dart';
 import '../../settings/data/app_settings_repository.dart';
+import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 
 class QuickBookkeepingRequest {
@@ -86,6 +87,7 @@ class QuickBookkeepingService {
     this._settings, {
     this.intelligence,
     this.activeBookId,
+    this.attachments,
   });
 
   static const lastAccountKey = 'last_used_account_id';
@@ -94,6 +96,7 @@ class QuickBookkeepingService {
   final AppSettingsRepository _settings;
   final TransactionIntelligenceService? intelligence;
   final String Function()? activeBookId;
+  final TransactionAttachmentRepository? attachments;
 
   Future<TransactionRecord> save(QuickBookkeepingRequest request) async {
     return (await saveAll([request])).single;
@@ -105,7 +108,18 @@ class QuickBookkeepingService {
   ) async {
     _validate(request);
     final updated = _toRecord(request, DateTime.now(), existing: existing);
-    return _transactions.update(updated);
+    final saved = await _transactions.update(updated);
+    try {
+      await _persistAttachments([saved], [request]);
+    } on Object catch (error, stack) {
+      throw BookkeepingCommittedException(
+        records: [saved],
+        cause: error,
+        stage: 'attachment persistence',
+        stackTrace: stack,
+      );
+    }
+    return saved;
   }
 
   Future<List<TransactionRecord>> saveAll(
@@ -133,6 +147,12 @@ class QuickBookkeepingService {
       firstStack ??= stack;
     }
     try {
+      await _persistAttachments(saved, requests);
+    } on Object catch (error, stack) {
+      firstError ??= error;
+      firstStack ??= stack;
+    }
+    try {
       await _postProcess(saved);
     } on Object catch (error, stack) {
       firstError ??= error;
@@ -148,6 +168,22 @@ class QuickBookkeepingService {
       );
     }
     return saved;
+  }
+
+  Future<void> _persistAttachments(
+    List<TransactionRecord> records,
+    List<QuickBookkeepingRequest> requests,
+  ) async {
+    final attachments = this.attachments;
+    if (attachments == null) return;
+    for (var index = 0; index < records.length; index++) {
+      final record = records[index];
+      await attachments.replaceForTransaction(
+        transactionId: record.id,
+        bookId: record.bookId,
+        paths: requests[index].attachmentPaths,
+      );
+    }
   }
 
   Future<void> _postProcess(List<TransactionRecord> saved) async {
@@ -178,15 +214,18 @@ class QuickBookkeepingService {
     final metadata = <String, Object?>{
       ..._existingMetadata(existing?.metadataJson),
     };
+    if (attachments != null) metadata.remove('attachments');
     if (existing == null) {
       if (request.tags.isNotEmpty) metadata['tags'] = request.tags;
-      if (request.attachmentPaths.isNotEmpty) {
+      if (attachments == null && request.attachmentPaths.isNotEmpty) {
         metadata['attachments'] = request.attachmentPaths;
       }
       metadata.addAll(request.metadata);
     } else {
       metadata['tags'] = request.tags;
-      metadata['attachments'] = request.attachmentPaths;
+      if (attachments == null) {
+        metadata['attachments'] = request.attachmentPaths;
+      }
       metadata.addAll(request.metadata);
     }
     return TransactionRecord(
@@ -262,5 +301,6 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
     ref.watch(appSettingsRepositoryProvider),
     intelligence: ref.watch(transactionIntelligenceServiceProvider),
     activeBookId: () => ref.read(activeBookIdProvider),
+    attachments: ref.watch(transactionAttachmentRepositoryProvider),
   );
 });

@@ -11,6 +11,7 @@ import 'package:jizhang_app/features/intelligence/data/merchant_rule_repository.
 import 'package:jizhang_app/features/intelligence/domain/merchant_classification_service.dart';
 import 'package:jizhang_app/features/intelligence/domain/transaction_fingerprint_service.dart';
 import 'package:jizhang_app/features/settings/data/app_settings_repository.dart';
+import 'package:jizhang_app/features/transactions/data/transaction_attachment_repository.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 
 void main() {
@@ -146,6 +147,60 @@ void main() {
             .balanceInCents,
         2500,
       );
+    },
+  );
+
+  test(
+    'quick bookkeeping persists attachments outside transaction metadata',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final transactions = DriftTransactionRepository(database);
+      final service = QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+        attachments: DriftTransactionAttachmentRepository(database),
+      );
+
+      final saved = await service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 18,
+          accountId: SeedIds.cashAccount,
+          categoryId: 'expense-food',
+          occurredAt: DateTime(2026, 9, 11, 12),
+          tags: const ['午餐'],
+          attachmentPaths: const ['/documents/receipt.pdf'],
+        ),
+      );
+      expect(saved.metadataJson, contains('午餐'));
+      expect(saved.metadataJson, isNot(contains('attachments')));
+      expect(
+        await DriftTransactionAttachmentRepository(database)
+            .getForTransaction(saved.id, bookId: saved.bookId),
+        hasLength(1),
+      );
+
+      await service.update(
+        saved,
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 18,
+          accountId: SeedIds.cashAccount,
+          categoryId: 'expense-food',
+          occurredAt: saved.occurredAt,
+          tags: const ['已核对'],
+        ),
+      );
+      expect(
+        await DriftTransactionAttachmentRepository(database)
+            .getForTransaction(saved.id, bookId: saved.bookId),
+        isEmpty,
+      );
+      final updated = await transactions.getById(saved.id);
+      expect(updated!.metadataJson, contains('已核对'));
+      expect(updated.metadataJson, isNot(contains('attachments')));
     },
   );
 

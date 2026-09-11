@@ -1,6 +1,6 @@
 # 好好记账项目架构、功能与节点总览
 
-更新时间：2026-09-09
+更新时间：2026-09-11
 
 ## 1. 结论先行
 
@@ -16,10 +16,10 @@
 | 业务 Dart 代码量（不含 `app_database.g.dart`） | 20,325 行 |
 | Drift 生成代码 | 21,743 行 |
 | Feature 模块 | 18 个 |
-| SQLite 表 | 19 张 |
-| Drift DAO | 9 个 |
+| SQLite 表 | 20 张 |
+| Drift DAO | 10 个 |
 | GoRouter 路由节点 | 16 个 |
-| 本轮 `flutter test` | 120 个测试全部通过 |
+| 本轮 `flutter test` | 165 个测试全部通过 |
 
 项目根目录当前不是 Git repository，因此不能通过提交历史确认代码演进，只能以工作区当前文件和验证结果为准。
 
@@ -112,7 +112,7 @@ databaseProvider
 
 ## 5. 数据库与数据结构
 
-数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 10`，连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 使用当前 isolate 的 `NativeDatabase`，桌面端使用后台连接。开启了 SQLite foreign keys，并为交易、目标、智能分类、家庭、账本、同步事件和广告事件创建索引。
+数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 11`，连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 使用当前 isolate 的 `NativeDatabase`，桌面端使用后台连接。开启了 SQLite foreign keys，并为交易、附件、目标、智能分类、家庭、账本、同步事件和广告事件创建索引。
 
 ### 5.1 核心业务表
 
@@ -121,6 +121,7 @@ databaseProvider
 | `accounts` | 账户与账面余额 | `balanceInCents`、币种、账户类型、资金形式、归档 |
 | `categories` | 收入/支出分类 | 自引用 `parentId`，支持一级/二级和隐藏 |
 | `transactions` | 统一流水事实 | 类型、金额、账本、账户、转入账户、分类、来源、软删除、同步/隐私/版本字段 |
+| `transaction_attachments` | 交易附件记录 | 账本、交易、路径、文件名、MIME、顺序、大小/校验和预留字段、软删除 |
 | `goals` | 财务目标 | 目标金额、当前金额缓存、目标日期、账本、排序、月度预留 |
 | `goal_milestones` | 目标阶段节点 | 目标、金额、顺序、完成时间、庆祝状态 |
 | `goal_contributions` | 目标贡献流水 | 存入/取出/调整、来源流水预留、贡献人 |
@@ -143,7 +144,7 @@ databaseProvider
 
 ### 5.3 迁移与种子
 
-数据库迁移是 forward-only 的 1→10 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
+数据库迁移是 forward-only 的 1→11 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器；10→11 创建独立附件表和索引，并把旧交易 `metadata.attachments` 中可识别的路径迁移为记录，malformed 项和其他 metadata 保留。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
 
 ## 6. 核心业务调用链
 
@@ -159,6 +160,9 @@ databaseProvider
        ├─ 写入 transaction
        └─ 按交易类型更新账户余额
   → 写入上次使用账户
+  → TransactionAttachmentRepository.replaceForTransaction（有附件时）
+       ├─ 写入/恢复独立附件记录
+       └─ 对移除附件执行软删除
   → TransactionIntelligenceService
        ├─ 商户分类
        ├─ 指纹去重
@@ -252,7 +256,7 @@ SessionRepository（系统安全存储会话）
 | --- | --- | --- |
 | `home` | 首页真实派生月度收支、安心可花、目标、洞察、趋势、分类、资产和最近记录 | 依赖全量内存派生；安心可花未纳入未来账单 |
 | `transactions` | 流水筛选、分类筛选、搜索、编辑、分类修正、软删除 | 没有月份/账户等更细筛选；全量加载 |
-| `bookkeeping` | 手动支出/收入/转账、数字键盘、计划/一次性/周期、标签、附件路径 | OCR 未接；附件只保存本地路径，没有预览/打开工作流；扩展交易类型没有独立体验 |
+| `bookkeeping` | 手动支出/收入/转账、数字键盘、计划/一次性/周期、标签、独立附件记录 | OCR 未接；附件文件仍只保存本地路径，文件内容未进入备份/同步；扩展交易类型没有独立体验 |
 | `books` | 书架抽屉选择、新建 personal/family/enterprise、重命名、归档、数量限制 | 公网部署和正式权益服务未接入 |
 | `accounts` | 新增、编辑、归档/恢复、排序、资产/负债/资金形式、按账本余额校准 | 不支持跨账本直接转账 |
 | `categories` | 收入/支出、一级/二级、新增、编辑、排序、隐藏默认分类 | 没有批量导入/导出分类 |
@@ -260,7 +264,7 @@ SessionRepository（系统安全存储会话）
 | `goals` | 创建、17 类目标、动态节点、贡献、调整、排序、预测、完成庆祝、封面 | 目标贡献与交易只预留 `sourceTransactionId`，没有自动资金关联 |
 | `analysis` | 收支面板与消费习惯面板真实计算 | 全量拉取后内存计算，数据量大时需要 SQL 时间窗口/分页优化 |
 | `intelligence` | 商户分类优先级、个人记忆、指纹去重、经济事件候选、账单收件箱 | 没有独立账单导入入口；经济事件不等于自动消除统计重复 |
-| `data_export` | 导出未删除流水 CSV，带 BOM、字段转义和公式注入保护；可校验并恢复完整 SQLite 备份 | 恢复采用待启动替换，不含独立附件文件；备份没有加密/密码保护 |
+| `data_export` | 导出未删除流水 CSV，带 BOM、字段转义和公式注入保护；可校验并恢复完整 SQLite 备份，包含独立附件记录 | 恢复采用待启动替换，不含独立附件文件；备份没有加密/密码保护 |
 | `voice` | Android/iOS 语音接口抽象、设备端优先、规则解析、多笔确认保存 | 云 ASR/LLM 未接；当前生产 Provider 的 AI parser 为 `null`，AI 文本入口实际仍是规则解析 |
 | `notifications` | Android NotificationListenerService、权限设置、微信/支付宝/云闪付解析、幂等自动记账 | iOS 不支持；不识别通知保留在原生队列，没有完整人工导入修正流程 |
 | `membership` | Free/Pro/Family 模型、权益模型、会员购买记账幂等逻辑 | 真实购买、验签和权益刷新未接 |
@@ -295,18 +299,18 @@ flutter analyze
 → No issues found
 
 flutter test --reporter compact
-→ All tests passed（120 个）
+→ All tests passed（165 个）
 
 flutter build apk --release
-→ Built build/app/outputs/flutter-apk/app-release.apk（71.0MB）
+→ Built build/app/outputs/flutter-apk/app-release.apk（77,656,758 bytes）
 
 server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
 ```
 
-当前 APK 文件：`build/app/outputs/flutter-apk/app-release.apk`，大小 72,799,794 bytes，SHA-256 为 `ea4762b9b8964bb6ebb015e4f1e79a6c9bad53747059e2dae878bf17d924d81c`。
+当前 APK 文件：`build/app/outputs/flutter-apk/app-release.apk`，大小 77,656,758 bytes，SHA-256 为 `ea3a57599c3b5d1d52598bb93ce2eae304d89130676d31b77fdce80b54464de1`。
 
-Android 模拟器 `emulator-5554` 已实际安装并打开 Release APK：[首页截图](../../qa/home-book-icon-2026-09-09.png)、[立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png)、[系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。启动图标统一源为 `assets/images/icon.png`。
+此前交易详情切片的历史 Release APK 曾在 Pixel 7 Android emulator 安装并打开：[首页截图](../../qa/home-book-icon-2026-09-09.png)、[立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png)、[系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。本次阶段二 Release APK 未安装；启动图标统一源为 `assets/images/icon.png`。
 
 测试覆盖数据库、seed、Repository、余额事务、目标、预算、分析、智能分类/去重、会员记账幂等、支付通知、语音解析、家庭策略、广告策略、核心路由和小屏/大字体 Widget 布局。
 
@@ -317,7 +321,7 @@ Android 模拟器 `emulator-5554` 已实际安装并打开 Release APK：[首页
 1. **数据规模边界**：流水、分析和去重使用 `watchAll/getAll` 全量读入；新流水去重会与全部历史逐条比较，长期使用需增加 SQL 时间窗口、分页和索引查询。
 2. **AI 入口语义容易误导**：`CachedRetryingAiTransactionParser` 和严格 JSON decoder 已存在，但没有真实 `AiParsingGateway` Provider 注入；“AI 记账”当前不能调用云端模型。
 3. **外部系统范围**：共享后端只完成本地双端联调；公网部署、TLS、会员授权、订单验签、对象存储、云 ASR/LLM、第三方广告和生产埋点仍需要独立协议与测试环境。
-4. **完整备份仍有边界**：用户卸载应用可能丢失本地数据库；SQLite 备份不包含独立文件系统中的附件，也没有加密/密码保护。
+4. **完整备份仍有边界**：用户卸载应用可能丢失本地数据库；当前 SQLite 备份虽包含独立附件记录，但不包含文件内容，也没有加密/密码保护。
 5. **文档有历史漂移**：旧状态记录已移到 `docs/development/archive/audits/DEVELOPMENT_STATUS_legacy.md`，其中仍有旧 schema 和测试数字；后续以本文件、`CURRENT_STATUS.md` 和带日期的实施记录为准。
 6. **发布准备未完成**：Android 正式签名、隐私/通知权限说明、iOS Xcode/Team/Bundle ID、真机语音识别和通知适配仍需单独验收。
 7. **构建工具链提示**：`speech_to_text` 当前仍使用 Kotlin Gradle Plugin；本轮 Release 构建成功，但后续需随插件迁移到 Built-in Kotlin。
@@ -326,10 +330,11 @@ Android 模拟器 `emulator-5554` 已实际安装并打开 Release APK：[首页
 
 如果继续开发，建议按以下顺序选一个切片，不要同时扩展多个外部系统：
 
-1. 为本地共享服务补充公网部署、TLS、数据库备份和监控验收。
+1. 设计并实现“数据库＋附件文件”的版本化备份、校验、加密和可回滚恢复。
 2. 优化流水和分析的查询边界，再增加月份、账户等筛选。
-3. 如要开通 AI/会员/支付/广告，先取得真实服务端协议、测试环境和密钥托管方案；客户端不内置供应商秘密。
-4. 每次修改 Drift 表必须提升 schema version、补 forward-only migration、重新生成 `app_database.g.dart` 并新增升级测试。
+3. 完成押金/结算模型和账本模板后，再把附件纳入共享同步协议。
+4. 如要开通 AI/会员/支付/广告，先取得真实服务端协议、测试环境和密钥托管方案；客户端不内置供应商秘密。
+5. 每次修改 Drift 表必须提升 schema version、补 forward-only migration、重新生成 `app_database.g.dart` 并新增升级测试。
 
 本文件是当前项目的架构交接基线；功能实现以源码为准，外部联调状态必须单独记录“代码完成但未实际联调”。
 

@@ -15,6 +15,7 @@ import '../../../core/widgets/money_text.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../bookkeeping/application/local_file_opener.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
+import '../data/transaction_attachment_repository.dart';
 import '../data/transactions_repository.dart';
 import '../domain/transaction_attachment.dart';
 import 'transaction_actions.dart';
@@ -38,13 +39,19 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   TransactionRecord? _transaction;
   Object? _loadError;
   bool _loading = false;
+  bool _attachmentsLoading = false;
+  List<TransactionAttachment> _attachments = const [];
   final _attachmentExists = <String, Future<bool>>{};
 
   @override
   void initState() {
     super.initState();
     _transaction = widget.initialTransaction;
-    if (_transaction == null) unawaited(_loadTransaction());
+    if (_transaction == null) {
+      unawaited(_loadTransaction());
+    } else {
+      unawaited(_loadAttachments(_transaction!));
+    }
   }
 
   Future<void> _loadTransaction() async {
@@ -54,6 +61,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
       final transaction = await ref
           .read(transactionRepositoryProvider)
           .getById(widget.transactionId);
+      if (transaction != null) await _loadAttachments(transaction);
       if (!mounted) return;
       setState(() {
         _transaction = transaction;
@@ -67,6 +75,30 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadAttachments(TransactionRecord transaction) async {
+    if (mounted) setState(() => _attachmentsLoading = true);
+    List<TransactionAttachment>? attachments;
+    try {
+      final persisted = await ref
+          .read(transactionAttachmentRepositoryProvider)
+          .getForTransaction(transaction.id, bookId: transaction.bookId);
+      if (persisted.isNotEmpty) attachments = persisted;
+    } on Object {
+      // Keep old metadata readable if the database is still on the previous schema.
+    }
+    attachments ??= TransactionAttachmentMetadata.fromJson(
+      transaction.metadataJson,
+    ).attachments;
+    if (!mounted ||
+        (_transaction != null && _transaction!.id != transaction.id)) {
+      return;
+    }
+    setState(() {
+      _attachments = List.unmodifiable(attachments!);
+      _attachmentsLoading = false;
+    });
   }
 
   Future<void> _reloadAfterEdit() async {
@@ -188,9 +220,12 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     final accountNames = {
       for (final account in accounts) account.id: account.name,
     };
-    final metadata = TransactionAttachmentMetadata.fromJson(
+    final legacyMetadata = TransactionAttachmentMetadata.fromJson(
       transaction.metadataJson,
     );
+    final attachments = _attachments.isNotEmpty
+        ? _attachments
+        : legacyMetadata.attachments;
     final category = transaction.type == TransactionType.adjustment
         ? '余额校准'
         : transaction.type == TransactionType.transfer
@@ -291,15 +326,21 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
             children: [
               Text('附件', style: Theme.of(context).textTheme.titleMedium),
               const Spacer(),
-              if (metadata.attachments.isNotEmpty)
+              if (attachments.isNotEmpty)
                 Text(
-                  '${metadata.attachments.length} 个',
+                  '${attachments.length} 个',
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
             ],
           ),
           const SizedBox(height: 8),
-          if (metadata.attachments.isEmpty && !metadata.hasMalformedAttachments)
+          if (_attachmentsLoading && attachments.isEmpty)
+            const AppCard(
+              padding: EdgeInsets.all(18),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (attachments.isEmpty &&
+              !legacyMetadata.hasMalformedAttachments)
             const AppCard(
               padding: EdgeInsets.all(18),
               child: Text(
@@ -308,7 +349,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               ),
             )
           else ...[
-            if (metadata.hasMalformedAttachments)
+            if (legacyMetadata.hasMalformedAttachments)
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text(
@@ -316,7 +357,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                   style: TextStyle(color: AppColors.warning, fontSize: 12),
                 ),
               ),
-            for (final attachment in metadata.attachments)
+            for (final attachment in attachments)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _AttachmentTile(
