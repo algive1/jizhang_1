@@ -32,13 +32,14 @@
 - `flutter analyze`：通过，无问题。
 - `flutter test`：通过，253 项全部通过。
 - `flutter build apk --debug`：通过，产物为 `build/app/outputs/flutter-apk/app-debug.apk`。
+- 已将 Debug APK 安装到在线 Android 设备 `145a0a68` 并成功启动；启动后 logcat 未发现 `E/flutter`、`FATAL EXCEPTION` 或 `RenderFlex overflow`。
 - 个人中心视觉测试覆盖 320/360/393/430 宽度和 1.0/1.6 字体缩放，并实际点击照片筛选按钮；未发现 Flutter layout exception。
 - 静态审计确认临时输入控制器已清除，剩余 `controller.dispose()` 均位于对应 Stateful widget 的 `dispose` 生命周期内。
 
 ## 风险与边界
 
 - 本次照片筛选按钮最多展示 4 个账本，连同“全部”最多 5 个；更多账本仍通过照片弹窗的账本选择范围之外的数据统计，不改变账本管理页。
-- 当前验证完成了 Flutter widget/UI 矩阵和 Debug APK 构建；尚未对本次版本重新进行 Android 真机的人工点击验收。
+- 当前已完成 Flutter widget/UI 矩阵、Debug APK 构建、Android 安装和启动验证；尚未对本次版本重新进行 Android 真机的完整人工点击验收。
 - 项目仍有既存 `speech_to_text` 使用 Kotlin Gradle Plugin 的兼容性 warning，不影响本次 Debug 构建。
 
 ## 新窗口继续工作
