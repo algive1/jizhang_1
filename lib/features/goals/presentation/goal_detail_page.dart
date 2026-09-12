@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
@@ -57,6 +58,12 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
                   onBack: () => Navigator.maybePop(context),
                   onEdit: () => _editGoal(goal!),
                   onMilestones: () => _manageMilestones(goal!),
+                  onArchive: goal.status == GoalStatus.archived
+                      ? null
+                      : () => _archiveGoal(goal!),
+                  onRestore: goal.status == GoalStatus.archived
+                      ? () => _restoreGoal(goal!)
+                      : null,
                 ),
                 const SizedBox(height: 18),
                 _GoalIntro(goal: goal),
@@ -113,90 +120,17 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
   }
 
   Future<void> _showContribution(Goal goal, GoalContributionType type) async {
-    final amountController = TextEditingController(
-      text: type == GoalContributionType.adjustment
-          ? goal.currentAmount.toStringAsFixed(2)
-          : '',
-    );
-    final noteController = TextEditingController();
     final request = await showModalBottomSheet<(double, String?)>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          child: Material(
-            color: AppColors.surface,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      color: AppColors.divider,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(switch (type) {
-                    GoalContributionType.deposit => '向目标存入',
-                    GoalContributionType.withdraw => '从目标取出',
-                    GoalContributionType.adjustment => '调整当前金额',
-                  }, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: amountController,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      prefixText: '¥ ',
-                      labelText: type == GoalContributionType.adjustment
-                          ? '调整后的总金额'
-                          : '金额',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: noteController,
-                    decoration: const InputDecoration(labelText: '备注（可选）'),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () {
-                        final amount = double.tryParse(amountController.text);
-                        if (amount == null || amount < 0) return;
-                        Navigator.pop(context, (
-                          amount,
-                          noteController.text.trim().isEmpty
-                              ? null
-                              : noteController.text.trim(),
-                        ));
-                      },
-                      child: const Text('确认'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      builder: (_) => _ContributionSheet(
+        type: type,
+        initialAmount: type == GoalContributionType.adjustment
+            ? goal.currentAmount
+            : null,
       ),
     );
-    amountController.dispose();
-    noteController.dispose();
     if (request == null || !mounted) return;
     try {
       final repository = ref.read(goalRepositoryProvider);
@@ -252,53 +186,11 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
   }
 
   Future<void> _editGoal(Goal goal) async {
-    final nameController = TextEditingController(text: goal.name);
-    final targetController = TextEditingController(
-      text: goal.targetAmount.toStringAsFixed(2),
-    );
     final result = await showDialog<(String, double)>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('编辑目标'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: '目标名称'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: targetController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: '目标金额',
-                prefixText: '¥ ',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final amount = double.tryParse(targetController.text);
-              final name = nameController.text.trim();
-              if (name.isEmpty || amount == null || amount <= 0) return;
-              Navigator.pop(context, (name, amount));
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+      builder: (_) =>
+          _GoalEditDialog(name: goal.name, targetAmount: goal.targetAmount),
     );
-    nameController.dispose();
-    targetController.dispose();
     if (result == null) return;
     final updated = Goal(
       id: goal.id,
@@ -332,69 +224,298 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
         .update(updated, milestoneAmounts: milestoneAmounts);
   }
 
-  Future<void> _manageMilestones(Goal goal) async {
-    final controller = TextEditingController(
-      text: goal.milestones
-          .where((item) => item.amount < goal.targetAmount)
-          .map((item) => item.amount.toStringAsFixed(2))
-          .join(', '),
-    );
-    final result = await showDialog<List<double>>(
+  Future<void> _archiveGoal(Goal goal) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('调整阶段节点'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('用逗号分隔中间节点；最终目标节点会始终保留。'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: '20000, 40000, 60000',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '最终节点 ¥${goal.targetAmount.toStringAsFixed(2)}（不可删除）',
-              style: const TextStyle(color: AppColors.primaryDark),
-            ),
-          ],
+        title: const Text('归档这个目标？'),
+        content: const Text(
+          '归档后目标会从默认列表和首页移除，不再计入今日可用的目标预留；目标金额、阶段节点和存入记录都会保留，可在“已归档”中恢复。',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () {
-              final amounts =
-                  controller.text
-                      .split(RegExp(r'[,，]'))
-                      .map((item) => double.tryParse(item.trim()))
-                      .whereType<double>()
-                      .where(
-                        (amount) => amount > 0 && amount < goal.targetAmount,
-                      )
-                      .toSet()
-                      .toList()
-                    ..sort()
-                    ..add(goal.targetAmount);
-              Navigator.pop(context, amounts);
-            },
-            child: const Text('保存'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('归档'),
           ),
         ],
       ),
     );
-    controller.dispose();
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(goalRepositoryProvider).archive(goal.id);
+      if (mounted) context.go('/goals');
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('目标归档失败，请稍后重试')));
+    }
+  }
+
+  Future<void> _restoreGoal(Goal goal) async {
+    try {
+      await ref.read(goalRepositoryProvider).restore(goal.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('目标已恢复')));
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('目标恢复失败，请稍后重试')));
+    }
+  }
+
+  Future<void> _manageMilestones(Goal goal) async {
+    final result = await showDialog<List<double>>(
+      context: context,
+      builder: (_) => _MilestoneListDialog(
+        milestones: goal.milestones
+            .where((item) => item.amount < goal.targetAmount)
+            .map((item) => item.amount)
+            .toList(growable: false),
+        targetAmount: goal.targetAmount,
+      ),
+    );
     if (result != null) {
       await ref.read(goalRepositoryProvider).replaceMilestones(goal.id, result);
     }
   }
+}
+
+class _ContributionSheet extends StatefulWidget {
+  const _ContributionSheet({required this.type, this.initialAmount});
+
+  final GoalContributionType type;
+  final double? initialAmount;
+
+  @override
+  State<_ContributionSheet> createState() => _ContributionSheetState();
+}
+
+class _ContributionSheetState extends State<_ContributionSheet> {
+  late final TextEditingController _amountController = TextEditingController(
+    text: widget.initialAmount?.toStringAsFixed(2) ?? '',
+  );
+  final _noteController = TextEditingController();
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (widget.type) {
+      GoalContributionType.deposit => '向目标存入',
+      GoalContributionType.withdraw => '从目标取出',
+      GoalContributionType.adjustment => '调整当前金额',
+    };
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: Material(
+          color: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    color: AppColors.divider,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _amountController,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    prefixText: '¥ ',
+                    labelText: widget.type == GoalContributionType.adjustment
+                        ? '调整后的总金额'
+                        : '金额',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _noteController,
+                  decoration: const InputDecoration(labelText: '备注（可选）'),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      final amount = double.tryParse(_amountController.text);
+                      if (amount == null || amount < 0) return;
+                      Navigator.pop(context, (
+                        amount,
+                        _noteController.text.trim().isEmpty
+                            ? null
+                            : _noteController.text.trim(),
+                      ));
+                    },
+                    child: const Text('确认'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoalEditDialog extends StatefulWidget {
+  const _GoalEditDialog({required this.name, required this.targetAmount});
+
+  final String name;
+  final double targetAmount;
+
+  @override
+  State<_GoalEditDialog> createState() => _GoalEditDialogState();
+}
+
+class _GoalEditDialogState extends State<_GoalEditDialog> {
+  late final _nameController = TextEditingController(text: widget.name);
+  late final _targetController = TextEditingController(
+    text: widget.targetAmount.toStringAsFixed(2),
+  );
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _targetController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('编辑目标'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: '目标名称'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _targetController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: '目标金额',
+            prefixText: '¥ ',
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final amount = double.tryParse(_targetController.text);
+          final name = _nameController.text.trim();
+          if (name.isEmpty || amount == null || amount <= 0) return;
+          Navigator.pop(context, (name, amount));
+        },
+        child: const Text('保存'),
+      ),
+    ],
+  );
+}
+
+class _MilestoneListDialog extends StatefulWidget {
+  const _MilestoneListDialog({
+    required this.milestones,
+    required this.targetAmount,
+  });
+
+  final List<double> milestones;
+  final double targetAmount;
+
+  @override
+  State<_MilestoneListDialog> createState() => _MilestoneListDialogState();
+}
+
+class _MilestoneListDialogState extends State<_MilestoneListDialog> {
+  late final _controller = TextEditingController(
+    text: widget.milestones
+        .map((amount) => amount.toStringAsFixed(2))
+        .join(', '),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('调整阶段节点'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('用逗号分隔中间节点；最终目标节点会始终保留。'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: '20000, 40000, 60000'),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '最终节点 ¥${widget.targetAmount.toStringAsFixed(2)}（不可删除）',
+          style: const TextStyle(color: AppColors.primaryDark),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final amounts =
+              _controller.text
+                  .split(RegExp(r'[,，]'))
+                  .map((item) => double.tryParse(item.trim()))
+                  .whereType<double>()
+                  .where((amount) => amount > 0 && amount < widget.targetAmount)
+                  .toSet()
+                  .toList()
+                ..sort()
+                ..add(widget.targetAmount);
+          Navigator.pop(context, amounts);
+        },
+        child: const Text('保存'),
+      ),
+    ],
+  );
 }
 
 class _DetailHeader extends StatelessWidget {
@@ -402,11 +523,15 @@ class _DetailHeader extends StatelessWidget {
     required this.onBack,
     required this.onEdit,
     required this.onMilestones,
+    required this.onArchive,
+    required this.onRestore,
   });
 
   final VoidCallback onBack;
   final VoidCallback onEdit;
   final VoidCallback onMilestones;
+  final VoidCallback? onArchive;
+  final VoidCallback? onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -421,10 +546,25 @@ class _DetailHeader extends StatelessWidget {
           ),
         ),
         PopupMenuButton<String>(
-          onSelected: (value) => value == 'edit' ? onEdit() : onMilestones(),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('编辑目标')),
-            PopupMenuItem(value: 'milestones', child: Text('调整节点')),
+          onSelected: (value) {
+            switch (value) {
+              case 'edit':
+                onEdit();
+              case 'milestones':
+                onMilestones();
+              case 'archive':
+                onArchive?.call();
+              case 'restore':
+                onRestore?.call();
+            }
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'edit', child: Text('编辑目标')),
+            const PopupMenuItem(value: 'milestones', child: Text('调整节点')),
+            if (onArchive != null)
+              const PopupMenuItem(value: 'archive', child: Text('归档目标')),
+            if (onRestore != null)
+              const PopupMenuItem(value: 'restore', child: Text('恢复目标')),
           ],
         ),
       ],

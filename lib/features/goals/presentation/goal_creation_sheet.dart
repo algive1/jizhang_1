@@ -305,36 +305,10 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
 
   Future<void> _editMilestone({double? existing}) async {
     final target = double.tryParse(_targetController.text) ?? 0;
-    final controller = TextEditingController(
-      text: existing?.toStringAsFixed(0),
-    );
     final result = await showDialog<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(existing == null ? '新增节点' : '修改节点'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(prefixText: '¥ '),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final amount = double.tryParse(controller.text);
-              if (amount == null || amount <= 0 || amount >= target) return;
-              Navigator.pop(context, amount);
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+      builder: (_) => _MilestoneInputDialog(existing: existing, target: target),
     );
-    controller.dispose();
     if (result == null || !mounted) return;
     setState(() {
       if (existing != null) _milestones.remove(existing);
@@ -371,4 +345,51 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
       ),
     );
   }
+}
+
+class _MilestoneInputDialog extends StatefulWidget {
+  const _MilestoneInputDialog({this.existing, required this.target});
+
+  final double? existing;
+  final double target;
+
+  @override
+  State<_MilestoneInputDialog> createState() => _MilestoneInputDialogState();
+}
+
+class _MilestoneInputDialogState extends State<_MilestoneInputDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.existing?.toStringAsFixed(0),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.existing == null ? '新增节点' : '修改节点'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(prefixText: '¥ '),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final amount = double.tryParse(_controller.text);
+          if (amount == null || amount <= 0 || amount >= widget.target) return;
+          Navigator.pop(context, amount);
+        },
+        child: const Text('保存'),
+      ),
+    ],
+  );
 }
