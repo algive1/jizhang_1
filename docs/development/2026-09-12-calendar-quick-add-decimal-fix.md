@@ -22,4 +22,4 @@
 - `flutter analyze`：通过，无静态分析问题。
 - `flutter test`：通过，232 个测试全部通过。测试覆盖跨账本日历统计与筛选、记一笔账本范围、报销开关、账本选择器和小数金额字号。
 - Android release 构建：通过，产物为 `dist/jizhang_app-1.0.0+1-release.apk`，已用 `apksigner` 验证 v2 签名。
-- 已尝试在 `pixel_7` Android Emulator 安装并启动 APK。APK 安装和 `MainActivity` 启动命令成功，但模拟器系统出现 “System UI isn't responding” 对话框，无法完成可靠的手动点击验收；这是模拟器运行环境响应问题，代码和自动化测试不受影响。
+- 已在 `pixel_7` Android Emulator 成功执行过 APK 安装和 `MainActivity` 启动命令；模拟器随后出现 “System UI isn't responding” 对话框。最新 APK 的再次覆盖安装在模拟器包管理器处超时，因此无法完成可靠的手动点击验收；这是模拟器运行环境响应问题，代码和自动化测试不受影响。
