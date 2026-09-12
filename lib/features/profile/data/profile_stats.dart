@@ -40,25 +40,25 @@ class ProfileActivity {
 }
 
 // Join to live transactions so soft-deleted records never inflate the photo count.
-final profilePhotosProvider = StreamProvider<List<TransactionAttachmentEntity>>((
-  ref,
-) async* {
-  await ref.watch(databaseBootstrapProvider.future);
-  final db = ref.watch(databaseProvider);
-  final a = db.transactionAttachmentEntries;
-  final t = db.transactionEntries;
-  final query =
-      db.select(a).join([
-        innerJoin(
-          t,
-          t.id.equalsExp(a.transactionId) & t.bookId.equalsExp(a.bookId),
-        ),
-      ])..where(
-        a.deletedAt.isNull() &
-            t.deletedAt.isNull() &
-            a.mimeType.like('image/%'),
-      );
-  yield* query.watch().map(
-    (rows) => rows.map((row) => row.readTable(a)).toList(),
-  );
-});
+final profilePhotosProvider = StreamProvider<List<TransactionAttachmentEntity>>(
+  (ref) async* {
+    await ref.watch(databaseBootstrapProvider.future);
+    final db = ref.watch(databaseProvider);
+    final a = db.transactionAttachmentEntries;
+    final t = db.transactionEntries;
+    final query =
+        db.select(a).join([
+          innerJoin(
+            t,
+            t.id.equalsExp(a.transactionId) & t.bookId.equalsExp(a.bookId),
+          ),
+        ])..where(
+          a.deletedAt.isNull() &
+              t.deletedAt.isNull() &
+              a.mimeType.like('image/%'),
+        );
+    yield* query.watch().map(
+      (rows) => rows.map((row) => row.readTable(a)).toList(),
+    );
+  },
+);

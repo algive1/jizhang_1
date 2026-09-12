@@ -27,14 +27,11 @@ void main() {
   });
 
   test('profile activity counts elapsed days from the first recorded day', () {
-    final stats = ProfileActivity(
-      [
-        _transaction('first', DateTime(2024, 2, 1)),
-        _transaction('today', DateTime(2024, 2, 10, 8)),
-        _transaction('future', DateTime(2024, 2, 11)),
-      ],
-      DateTime(2024, 2, 10, 12),
-    );
+    final stats = ProfileActivity([
+      _transaction('first', DateTime(2024, 2, 1)),
+      _transaction('today', DateTime(2024, 2, 10, 8)),
+      _transaction('future', DateTime(2024, 2, 11)),
+    ], DateTime(2024, 2, 10, 12));
 
     expect(stats.recordedDays, 2);
     expect(stats.bookkeepingDays, 10);
@@ -46,7 +43,7 @@ void main() {
         home: Scaffold(
           body: Column(
             children: [
-              const ProfileHero(name: '个人账本', streak: '3', onTap: _noop),
+              const ProfileHero(name: '本地用户', days: '3', onTap: _noop),
               ProfileMenuCard(
                 items: const [
                   ProfileMenuItem(Icons.home, '共享账本', '家庭、情侣、企业账本', _noop),
@@ -130,6 +127,26 @@ void main() {
         expect(find.text('帮助与反馈'), findsOneWidget);
         await _capture(tester, boundary, 'profile-lower-$width-$scale');
         if (scale == 1.0) {
+          await tester.ensureVisible(find.text('记账照片 ›'));
+          await tester.tap(find.text('记账照片 ›'));
+          await tester.pumpAndSettle();
+          expect(find.text('记账照片 · 全部账本'), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('profile-photo-filter-all')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('profile-photo-filter-book-personal')),
+            findsOneWidget,
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('profile-photo-filter-book-personal')),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('记账照片 · 个人账'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tapAt(const Offset(2, 100));
+          await tester.pumpAndSettle();
           await tester.ensureVisible(find.text('帮助与反馈'));
           await tester.tap(find.text('帮助与反馈'));
           await tester.pumpAndSettle();

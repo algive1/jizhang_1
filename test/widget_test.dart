@@ -128,6 +128,24 @@ void main() {
 
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑目标'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('目标详情'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('调整节点'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('目标详情'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
     expect(find.text('归档目标'), findsOneWidget);
     await tester.tap(find.text('归档目标'));
     await tester.pumpAndSettle();
