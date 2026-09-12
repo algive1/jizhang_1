@@ -32,7 +32,8 @@ class PrivacyAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hidden) {
-      final amount = span == null
+      final visibleSpan = span ?? _decimalSpan(text!, style);
+      final amount = visibleSpan == null
           ? Text(
               text!,
               maxLines: fit ? 1 : null,
@@ -40,7 +41,7 @@ class PrivacyAmount extends StatelessWidget {
               style: style,
             )
           : Text.rich(
-              span!,
+              visibleSpan,
               maxLines: fit ? 1 : null,
               softWrap: fit ? false : true,
             );
@@ -55,7 +56,7 @@ class PrivacyAmount extends StatelessWidget {
 
     final resolvedStyle = DefaultTextStyle.of(context).style.merge(style);
     final metrics = TextPainter(
-      text: span ?? TextSpan(text: text, style: resolvedStyle),
+      text: span ?? _decimalSpan(text!, resolvedStyle) ?? TextSpan(text: text),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
@@ -77,6 +78,22 @@ class PrivacyAmount extends StatelessWidget {
           textScaler: TextScaler.noScaling,
         ),
       ),
+    );
+  }
+
+  InlineSpan? _decimalSpan(String value, TextStyle baseStyle) {
+    final separator = value.lastIndexOf('.');
+    if (separator < 0 || separator == value.length - 1) return null;
+    final fractionStyle = baseStyle.copyWith(
+      fontSize: (baseStyle.fontSize ?? 14) * .5,
+      height: baseStyle.height,
+    );
+    return TextSpan(
+      style: baseStyle,
+      children: [
+        TextSpan(text: value.substring(0, separator + 1)),
+        TextSpan(text: value.substring(separator + 1), style: fractionStyle),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/widgets/money_text.dart';
+import 'package:jizhang_app/core/widgets/privacy_amount.dart';
 
 void main() {
   testWidgets('money text renders cents at half the whole amount size', (
@@ -18,6 +19,28 @@ void main() {
     expect(root.toPlainText(), '¥123.45');
     expect(fraction, isNotNull);
     expect(fraction!.style?.fontSize, 10);
+  });
+
+  testWidgets('privacy amount applies the same fraction scale to raw text', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PrivacyAmount(
+            text: '¥88.00',
+            style: TextStyle(fontSize: 18),
+            hidden: false,
+          ),
+        ),
+      ),
+    );
+
+    final richText = tester.widget<RichText>(find.byType(RichText));
+    final root = richText.text as TextSpan;
+    final fraction = _findSpan(root, '00');
+    expect(root.toPlainText(), '¥88.00');
+    expect(fraction?.style?.fontSize, 9);
   });
 }
 
