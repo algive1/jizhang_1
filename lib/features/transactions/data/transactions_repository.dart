@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/models/family.dart';
+import '../../../core/models/book.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../books/data/book_repository.dart';
 
@@ -22,8 +23,15 @@ abstract interface class TransactionRepository {
 }
 
 class DriftTransactionRepository implements TransactionRepository {
-  DriftTransactionRepository(this._database, {this.bookId});
+  DriftTransactionRepository(
+    this._database, {
+    this.bookId,
+    this.accountBookId,
+    this.accountBookIdForBook,
+  });
   final String? bookId;
+  final String? accountBookId;
+  final String? Function(String bookId)? accountBookIdForBook;
 
   final AppDatabase _database;
 
@@ -128,9 +136,49 @@ class DriftTransactionRepository implements TransactionRepository {
   @override
   Future<void> softDelete(String id) async {
     await _database.transaction(() async {
-      final entity = await _database.transactionDao.findById(id);
+      final entity = await _database.transactionDao.findActiveById(
+        id,
+        bookId: bookId,
+      );
       if (entity == null || entity.deletedAt != null) return;
       final existing = await _mapEntity(entity);
+      final linkedTransactions =
+          await (_database.select(_database.transactionEntries)..where(
+                (row) =>
+                    row.deletedAt.isNull() &
+                    row.bookId.equals(existing.bookId) &
+                    (row.relatedTransactionId.equals(id) |
+                        row.originalTransactionId.equals(id)),
+              ))
+              .get();
+      if (linkedTransactions.isNotEmpty) {
+        throw StateError('该流水存在关联流水，请先撤销或处理关联退款、报销或还款');
+      }
+      final linkedInstallmentPlans =
+          await (_database.select(_database.installmentPlanEntries)..where(
+                (row) =>
+                    row.bookId.equals(existing.bookId) &
+                    row.originalTransactionId.equals(id),
+              ))
+              .get();
+      if (linkedInstallmentPlans.isNotEmpty) {
+        throw StateError('该流水存在分期计划，请先取消分期计划后再删除');
+      }
+      if (existing.type == TransactionType.repayment &&
+          existing.relatedTransactionId != null) {
+        final repaymentPlans =
+            await (_database.select(_database.installmentPlanEntries)..where(
+                  (row) =>
+                      row.bookId.equals(existing.bookId) &
+                      row.originalTransactionId.equals(
+                        existing.relatedTransactionId!,
+                      ),
+                ))
+                .get();
+        if (repaymentPlans.isNotEmpty) {
+          throw StateError('分期还款不能直接删除，请在分期计划中处理');
+        }
+      }
       await _applyBalanceEffect(existing, -1);
       final now = DateTime.now();
       await _database.transactionDao.replaceOne(
@@ -154,6 +202,14 @@ class DriftTransactionRepository implements TransactionRepository {
         );
       }
     }
+    for (final value in [
+      transaction.reimbursementAmount,
+      transaction.refundAmount,
+    ].whereType<double>()) {
+      if (!value.isFinite || value <= 0 || value > transaction.amount) {
+        throw ArgumentError('关联金额必须大于 0 且不超过原流水金额');
+      }
+    }
   }
 
   Future<void> _ensureAccountsExist(TransactionRecord transaction) async {
@@ -165,13 +221,32 @@ class DriftTransactionRepository implements TransactionRepository {
       if (category == null || category.bookId != transaction.bookId)
         throw ArgumentError('分类与流水必须属于同一账本');
     }
+    for (final relationId in [
+      transaction.originalTransactionId,
+      transaction.relatedTransactionId,
+    ].whereType<String>()) {
+      final related = await _database.transactionDao.findById(relationId);
+      if (related == null ||
+          related.bookId != transaction.bookId ||
+          related.deletedAt != null) {
+        throw ArgumentError('关联流水必须属于同一账本');
+      }
+    }
+    final resolvedAccountBookId = accountBookIdForBook?.call(
+      transaction.bookId,
+    );
+    final allowedAccountBooks = <String>{
+      transaction.bookId,
+      ?accountBookId,
+      ?resolvedAccountBookId,
+    };
     for (final id in [
       transaction.accountId,
       transaction.destinationAccountId,
     ].whereType<String>()) {
       final account = await _database.accountDao.findById(id);
       if (account == null) throw StateError('账户不存在');
-      if (account.bookId != transaction.bookId)
+      if (!allowedAccountBooks.contains(account.bookId))
         throw ArgumentError('账户与流水必须属于同一账本');
       if (account.currency.toUpperCase() !=
           transaction.currency.toUpperCase()) {
@@ -189,13 +264,26 @@ class DriftTransactionRepository implements TransactionRepository {
     switch (transaction.type) {
       case TransactionType.expense:
       case TransactionType.lend:
-      case TransactionType.repayment:
       case TransactionType.assetPurchase:
         await _database.accountDao.adjustBalance(
           transaction.accountId,
           -amountInCents,
           updatedAt,
         );
+      case TransactionType.repayment:
+        await _database.accountDao.adjustBalance(
+          transaction.accountId,
+          -amountInCents,
+          updatedAt,
+        );
+        final creditAccountId = transaction.destinationAccountId;
+        if (creditAccountId != null) {
+          await _database.accountDao.adjustBalance(
+            creditAccountId,
+            amountInCents,
+            updatedAt,
+          );
+        }
       case TransactionType.income:
       case TransactionType.refund:
       case TransactionType.reimbursement:
@@ -285,6 +373,19 @@ class DriftTransactionRepository implements TransactionRepository {
       syncStatus: SyncStatus.values.byName(entity.syncStatus),
       deviceId: entity.deviceId,
       originalTransactionId: entity.originalTransactionId,
+      relatedTransactionId: entity.relatedTransactionId,
+      reimbursementStatus: ReimbursementStatus.values.byName(
+        entity.reimbursementStatus,
+      ),
+      reimbursementAmount: entity.reimbursementAmountInCents == null
+          ? null
+          : entity.reimbursementAmountInCents! / 100,
+      reimbursementDate: entity.reimbursementDate,
+      reimbursementNote: entity.reimbursementNote,
+      refundStatus: RefundStatus.values.byName(entity.refundStatus),
+      refundAmount: entity.refundAmountInCents == null
+          ? null
+          : entity.refundAmountInCents! / 100,
       metadataJson: entity.metadataJson,
       duplicateConfidence: entity.duplicateConfidence,
       visibility: TransactionVisibility.values.byName(entity.visibility),
@@ -326,6 +427,21 @@ class DriftTransactionRepository implements TransactionRepository {
       syncStatus: Value(transaction.syncStatus.name),
       deviceId: Value(transaction.deviceId),
       originalTransactionId: Value(transaction.originalTransactionId),
+      relatedTransactionId: Value(transaction.relatedTransactionId),
+      reimbursementStatus: Value(transaction.reimbursementStatus.name),
+      reimbursementAmountInCents: Value(
+        transaction.reimbursementAmount == null
+            ? null
+            : _toCents(transaction.reimbursementAmount!),
+      ),
+      reimbursementDate: Value(transaction.reimbursementDate),
+      reimbursementNote: Value(transaction.reimbursementNote),
+      refundStatus: Value(transaction.refundStatus.name),
+      refundAmountInCents: Value(
+        transaction.refundAmount == null
+            ? null
+            : _toCents(transaction.refundAmount!),
+      ),
       metadataJson: Value(transaction.metadataJson),
       duplicateConfidence: Value(transaction.duplicateConfidence),
       visibility: Value(transaction.visibility.name),
@@ -356,8 +472,25 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return DriftTransactionRepository(
     ref.watch(databaseProvider),
     bookId: ref.watch(activeBookIdProvider),
+    accountBookId: ref.watch(activeBookProvider)?.assetBookId,
   );
 });
+
+final transactionsByBookProvider =
+    StreamProvider.family<List<TransactionRecord>, String>((
+      ref,
+      bookId,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: bookId,
+        accountBookId: (ref.watch(booksProvider).value ?? const <LedgerBook>[])
+            .where((book) => book.id == bookId)
+            .firstOrNull
+            ?.assetBookId,
+      ).watchAll();
+    });
 
 final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   ref,
@@ -367,7 +500,20 @@ final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   yield* DriftTransactionRepository(
     ref.watch(databaseProvider),
     bookId: bookId,
+    accountBookId: ref.watch(activeBookProvider)?.assetBookId,
   ).watchAll();
+});
+
+/// All active transactions visible to the current user, across every ledger.
+///
+/// Most pages intentionally scope their data to [activeBookIdProvider]. The
+/// consumption calendar is a cross-ledger view, so it uses this provider
+/// instead of changing the global active ledger.
+final allTransactionsProvider = StreamProvider<List<TransactionRecord>>((
+  ref,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchAll();
 });
 
 final transactionControllerProvider = Provider<TransactionController>((ref) {
