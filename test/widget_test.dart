@@ -7,13 +7,17 @@ import 'package:jizhang_app/app/app.dart';
 import 'package:jizhang_app/core/database/app_database.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/core/models/family.dart';
+import 'package:jizhang_app/core/models/recurring_bill.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/features/budgets/data/budget_repository.dart';
 import 'package:jizhang_app/features/budgets/domain/safe_to_spend_service.dart';
+import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/categories/data/category_repository.dart';
 import 'package:jizhang_app/features/goals/data/goal_repository.dart';
 import 'package:jizhang_app/features/intelligence/data/bill_inbox_repository.dart';
 import 'package:jizhang_app/features/membership/data/membership_repository.dart';
+import 'package:jizhang_app/features/recurring/data/recurring_bill_repository.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 import 'package:jizhang_app/features/voice/application/speech_recognition_service.dart';
 
@@ -33,7 +37,7 @@ void main() {
     try {
       await _pumpApp(tester);
       await tester.pumpAndSettle();
-      expect(find.textContaining('我的账本'), findsOneWidget);
+      expect(find.text('我的账本'), findsOneWidget);
       expect(find.text('今日可用'), findsOneWidget);
 
       await tester.tap(find.text('流水').last);
@@ -66,7 +70,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.person_outline));
       await tester.pumpAndSettle();
-      expect(find.text('Free 方案'), findsOneWidget);
+      expect(find.text('普通会员'), findsOneWidget);
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pump();
       expect(find.text('帮助与反馈'), findsOneWidget);
@@ -79,6 +83,71 @@ void main() {
       isEmpty,
       reason: errors.map((error) => error.toString()).join('\n'),
     );
+  });
+
+  testWidgets('home header follows the selected custom ledger name', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = await _pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    final family = await DriftBookRepository(
+      database,
+      LocalOnlyMembershipRepository(),
+    ).create(name: '家庭季度规划与长期旅行账本', type: BookType.family);
+    await tester.pumpAndSettle();
+
+    final title = find.byKey(const ValueKey('home-book-title'));
+    expect(tester.widget<Text>(title).data, '我的账本');
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(family.name).last);
+    await tester.pumpAndSettle();
+
+    final selectedTitle = tester.widget<Text>(title);
+    expect(selectedTitle.data, '家庭的账本');
+    expect(selectedTitle.maxLines, 1);
+    expect(selectedTitle.overflow, TextOverflow.ellipsis);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('goal can be archived and restored from its detail menu', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester, liveGoals: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.track_changes_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('买车计划').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('归档目标'), findsOneWidget);
+    await tester.tap(find.text('归档目标'));
+    await tester.pumpAndSettle();
+    expect(find.text('归档这个目标？'), findsOneWidget);
+    await tester.tap(find.text('归档'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已归档'), findsOneWidget);
+    expect(find.textContaining('买车计划'), findsOneWidget);
+    await tester.tap(find.textContaining('买车计划').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('恢复目标'), findsOneWidget);
+    await tester.tap(find.text('恢复目标'));
+    await tester.pumpAndSettle();
+    expect(find.text('目标已恢复'), findsOneWidget);
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('归档目标'), findsOneWidget);
   });
 
   testWidgets('filters and searches transaction records', (tester) async {
@@ -151,29 +220,30 @@ void main() {
     );
   });
 
-  testWidgets('transaction click opens detail and long press opens action menu', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(320, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await _pumpApp(tester);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'transaction click opens detail and long press opens action menu',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpApp(tester);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('流水').last);
-    await tester.pumpAndSettle();
-    final transaction = find.text('瑞幸咖啡').first;
+      await tester.tap(find.text('流水').last);
+      await tester.pumpAndSettle();
+      final transaction = find.text('瑞幸咖啡').first;
 
-    await tester.tap(transaction);
-    await tester.pumpAndSettle();
-    expect(find.text('交易详情'), findsOneWidget);
-    Navigator.of(tester.element(find.text('交易详情'))).pop();
-    await tester.pumpAndSettle();
+      await tester.tap(transaction);
+      await tester.pumpAndSettle();
+      expect(find.text('交易详情'), findsOneWidget);
+      Navigator.of(tester.element(find.text('交易详情'))).pop();
+      await tester.pumpAndSettle();
 
-    await tester.longPress(transaction);
-    await tester.pumpAndSettle();
-    expect(find.text('编辑流水'), findsOneWidget);
-    expect(find.text('删除流水'), findsOneWidget);
-  });
+      await tester.longPress(transaction);
+      await tester.pumpAndSettle();
+      expect(find.text('编辑流水'), findsOneWidget);
+      expect(find.text('删除流水'), findsOneWidget);
+    },
+  );
 
   testWidgets('search result can be long-pressed and deleted from the list', (
     tester,
@@ -238,6 +308,90 @@ void main() {
       hasLength(before.length + 1),
     );
     expect(find.text('已保存到本地账本'), findsOneWidget);
+  });
+
+  testWidgets('missing amount shows an inline validation prompt', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = await _pumpApp(tester);
+    await tester.pumpAndSettle();
+    final before = await database.transactionDao.getActive();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('quick-done')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('quick-amount-error')), findsOneWidget);
+    expect(await database.transactionDao.getActive(), hasLength(before.length));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'amount card is placed after categories and has a full hit area',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpApp(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      final categoryRect = tester.getRect(
+        find.byKey(const ValueKey('quick-category-section')),
+      );
+      final amountRect = tester.getRect(
+        find.byKey(const ValueKey('quick-amount-input')),
+      );
+      expect(amountRect.top, greaterThan(categoryRect.bottom));
+      expect(amountRect.height, greaterThanOrEqualTo(78));
+
+      await tester.tapAt(amountRect.topLeft + const Offset(12, 12));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('quick-keyboard-done')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('membership navigation closes the ledger drawer', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('我的账本').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('会员').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('会员与数据安全'), findsOneWidget);
+    expect(find.text('选择账本'), findsNothing);
+    expect(find.text('我的账本'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('quick add and membership share the same back-button target', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byTooltip('返回')), const Size(48, 48));
+    expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    GoRouter.of(tester.element(find.text('今日可用'))).go('/profile/membership');
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byTooltip('返回')), const Size(48, 48));
+    expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   for (final scale in [1.0, 1.6]) {
@@ -307,7 +461,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.person_outline));
     await tester.pumpAndSettle();
-    GoRouter.of(tester.element(find.text('Free 方案'))).go('/profile/accounts');
+    GoRouter.of(tester.element(find.text('普通会员'))).go('/profile/accounts');
     await tester.pumpAndSettle();
     expect(find.text('查看资产、负债与资金形式'), findsOneWidget);
 
@@ -316,6 +470,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('支出分类'), findsOneWidget);
     expect(find.text('收入分类'), findsOneWidget);
+
+    await tester.tap(find.text('新增'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('支出分类'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
     GoRouter.of(tester.element(find.text('支出分类'))).go('/profile/budgets');
     await tester.pumpAndSettle();
@@ -357,9 +518,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
-      expect(find.text('Free 方案'), findsOneWidget);
+      expect(find.text('普通会员'), findsOneWidget);
 
-      GoRouter.of(tester.element(find.text('Free 方案'))).go('/profile/budgets');
+      GoRouter.of(tester.element(find.text('普通会员'))).go('/profile/budgets');
       await tester.pumpAndSettle();
       await tester.tap(find.text('调整').first);
       await tester.pumpAndSettle();
@@ -397,12 +558,82 @@ void main() {
     expect(find.textContaining('第 1 笔'), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-confirm')), findsOneWidget);
   });
+
+  testWidgets('finance expansion routes stay usable at narrow width', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final errors = <FlutterErrorDetails>[];
+    final previousErrorHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      errors.add(details);
+      previousErrorHandler?.call(details);
+    };
+    try {
+      final database = await _pumpApp(tester);
+      await tester.pumpAndSettle();
+      final now = DateTime.now();
+      await DriftRecurringBillRepository(
+        database,
+        bookId: SeedIds.personalBook,
+      ).create(
+        RecurringBill(
+          id: 'ui-recurring-bill',
+          bookId: SeedIds.personalBook,
+          name: 'UI 订阅',
+          type: RecurringBillType.subscription,
+          amount: 15,
+          cycle: RecurringBillCycle.monthly,
+          startDate: now,
+          nextDate: now,
+          accountId: SeedIds.bankAccount,
+          categoryId: 'expense-food',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final router = GoRouter.of(tester.element(find.text('今日可用')));
+      for (final route in [
+        '/transactions/reimbursements',
+        '/transactions/calendar',
+        '/profile/recurring-bills',
+        '/profile/installments',
+        '/profile/accounts/account-bank',
+      ]) {
+        router.go(route);
+        await tester.pumpAndSettle();
+        expect(
+          errors,
+          isEmpty,
+          reason:
+              'route $route: ${errors.map((error) => error.toString()).join('\\n')}',
+        );
+        errors.clear();
+        if (route == '/profile/recurring-bills') {
+          expect(find.text('UI 订阅'), findsOneWidget);
+        }
+      }
+      expect(
+        find.byKey(const ValueKey('account-detail-title')),
+        findsOneWidget,
+      );
+    } finally {
+      FlutterError.onError = previousErrorHandler;
+    }
+    expect(
+      errors,
+      isEmpty,
+      reason: errors.map((error) => error.toString()).join('\n'),
+    );
+  });
 }
 
 Future<AppDatabase> _pumpApp(
   WidgetTester tester, {
   SpeechRecognitionService? speechService,
   bool liveTransactions = false,
+  bool liveGoals = false,
 }) async {
   final database = createMemoryDatabase();
   await DatabaseSeeder(database).seedIfNeeded(includeDemoData: true);
@@ -429,7 +660,15 @@ Future<AppDatabase> _pumpApp(
       allAccountsProvider.overrideWithValue(AsyncData(accounts)),
       categoriesProvider.overrideWithValue(AsyncData(categories)),
       allCategoriesProvider.overrideWithValue(AsyncData(categories)),
-      goalsProvider.overrideWithValue(AsyncData(goals)),
+      if (liveGoals)
+        goalsProvider.overrideWith(
+          (ref) => DriftGoalRepository(
+            database,
+            bookId: ref.watch(activeBookIdProvider),
+          ).watchAll(),
+        )
+      else
+        goalsProvider.overrideWithValue(AsyncData(goals)),
       currentMonthBudgetsProvider.overrideWithValue(AsyncData(budgets)),
       pendingInboxProvider.overrideWithValue(const AsyncData([])),
       membershipProvider.overrideWithValue(AsyncData(membership)),

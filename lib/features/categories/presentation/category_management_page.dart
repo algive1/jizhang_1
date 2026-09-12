@@ -131,81 +131,11 @@ class _CategoryManagementPageState
     required List<Category> all,
     Category? category,
   }) async {
-    final controller = TextEditingController(text: category?.name);
-    final roots = all
-        .where(
-          (item) =>
-              item.type == _type &&
-              item.parentId == null &&
-              item.id != category?.id,
-        )
-        .toList();
-    String? parentId = category?.parentId;
     final result = await showDialog<Category>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(category == null ? '新增分类' : '编辑分类'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: '分类名称'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                initialValue: parentId,
-                decoration: const InputDecoration(labelText: '上级分类'),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('无（一级分类）'),
-                  ),
-                  ...roots.map(
-                    (root) => DropdownMenuItem<String?>(
-                      value: root.id,
-                      child: Text(root.name),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setDialogState(() => parentId = value),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = controller.text.trim();
-                if (name.isEmpty) return;
-                Navigator.pop(
-                  dialogContext,
-                  Category(
-                    id: category?.id ?? 'category-${newEntityId()}',
-                    parentId: parentId,
-                    name: name,
-                    icon: category?.icon ?? 'category_outlined',
-                    type: _type,
-                    sortOrder:
-                        category?.sortOrder ??
-                        all.where((item) => item.type == _type).length,
-                    isDefault: category?.isDefault ?? false,
-                    isArchived: false,
-                  ),
-                );
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) =>
+          _CategoryEditorDialog(category: category, all: all, type: _type),
     );
-    controller.dispose();
     if (result == null) return;
     final repository = ref.read(categoryRepositoryProvider);
     if (category == null) {
@@ -240,6 +170,107 @@ class _CategoryManagementPageState
     if (confirmed == true) {
       await ref.read(categoryRepositoryProvider).archive(category.id);
     }
+  }
+}
+
+class _CategoryEditorDialog extends StatefulWidget {
+  const _CategoryEditorDialog({
+    required this.category,
+    required this.all,
+    required this.type,
+  });
+
+  final Category? category;
+  final List<Category> all;
+  final CategoryType type;
+
+  @override
+  State<_CategoryEditorDialog> createState() => _CategoryEditorDialogState();
+}
+
+class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.category?.name,
+  );
+  late String? _parentId = widget.category?.parentId;
+
+  List<Category> get _roots => widget.all
+      .where(
+        (item) =>
+            item.type == widget.type &&
+            item.parentId == null &&
+            item.id != widget.category?.id,
+      )
+      .toList(growable: false);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.category == null ? '新增分类' : '编辑分类'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '分类名称'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            initialValue: _parentId,
+            decoration: const InputDecoration(labelText: '上级分类'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('无（一级分类）'),
+              ),
+              ..._roots.map(
+                (root) => DropdownMenuItem<String?>(
+                  value: root.id,
+                  child: Text(root.name),
+                ),
+              ),
+            ],
+            onChanged: (value) => setState(() => _parentId = value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _controller.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(
+              context,
+              Category(
+                bookId: widget.category?.bookId ?? 'book-personal',
+                id: widget.category?.id ?? 'category-${newEntityId()}',
+                parentId: _parentId,
+                name: name,
+                icon: widget.category?.icon ?? 'category_outlined',
+                type: widget.type,
+                sortOrder:
+                    widget.category?.sortOrder ??
+                    widget.all.where((item) => item.type == widget.type).length,
+                isDefault: widget.category?.isDefault ?? false,
+                isArchived: false,
+              ),
+            );
+          },
+          child: const Text('保存'),
+        ),
+      ],
+    );
   }
 }
 
