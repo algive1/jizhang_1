@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -12,12 +13,17 @@ import 'package:path/path.dart' as p;
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/finance_ui.dart';
 import '../../../core/formatters/money_formatter.dart';
+import '../../../core/models/book.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/sliding_segmented_control.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/models/family.dart';
+import '../../../core/widgets/book_color_dot.dart';
 import '../../accounts/data/account_repository.dart';
+import '../../books/data/book_repository.dart';
+import '../../books/presentation/book_selector.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../application/amount_input.dart';
@@ -38,9 +44,11 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   final _merchantController = TextEditingController();
   final _noteController = TextEditingController();
   final _tagsController = TextEditingController();
+  final _reimbursementNoteController = TextEditingController();
 
   AmountInput _amount = const AmountInput();
   TransactionType _type = TransactionType.expense;
+  String? _bookId;
   String? _categoryId;
   String? _accountId;
   String? _destinationAccountId;
@@ -50,7 +58,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   bool _isRecurring = false;
   bool _isSaving = false;
   bool _showNumberPad = false;
+  bool _amountError = false;
+  ReimbursementStatus _reimbursementStatus = ReimbursementStatus.none;
   bool _attachmentsChanged = false;
+  bool _attachmentsBusy = false;
   Future<void>? _attachmentsLoad;
   final List<StoredAttachment> _attachments = [];
 
@@ -58,6 +69,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   void initState() {
     super.initState();
     final transaction = widget.initialTransaction;
+    _bookId = transaction?.bookId ?? ref.read(activeBookIdProvider);
     if (transaction == null) {
       Future<void>(() async {
         final lastAccount = await ref
@@ -80,6 +92,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _isRecurring = transaction.isRecurring;
     _merchantController.text = transaction.merchant ?? '';
     _noteController.text = transaction.note ?? '';
+    _reimbursementStatus = transaction.reimbursementStatus;
+    _reimbursementNoteController.text = transaction.reimbursementNote ?? '';
     final metadata = _decodeMetadata(transaction.metadataJson);
     final tags = metadata['tags'];
     if (tags is List) {
@@ -109,7 +123,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     setState(() {
       _attachments
         ..clear()
-        ..addAll(restored!);
+        ..addAll(restored!.take(4));
     });
   }
 
@@ -128,13 +142,26 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _merchantController.dispose();
     _noteController.dispose();
     _tagsController.dispose();
+    _reimbursementNoteController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    var accounts = ref.watch(accountsProvider).value ?? const <Account>[];
-    var categories = ref.watch(categoriesProvider).value ?? const <Category>[];
+    final activeBookId = ref.watch(activeBookIdProvider);
+    final selectedBookId = _bookId ?? activeBookId;
+    final books = ref.watch(booksProvider).value ?? const <LedgerBook>[];
+    final selectedBook = books
+        .where((book) => book.id == selectedBookId)
+        .firstOrNull;
+    var accounts = selectedBookId == activeBookId
+        ? ref.watch(accountsProvider).value ?? const <Account>[]
+        : ref.watch(accountsByBookProvider(selectedBookId)).value ??
+              const <Account>[];
+    var categories = selectedBookId == activeBookId
+        ? ref.watch(categoriesProvider).value ?? const <Category>[]
+        : ref.watch(categoriesByBookProvider(selectedBookId)).value ??
+              const <Category>[];
     final initial = widget.initialTransaction;
     if (initial != null) {
       if (!accounts.any((item) => item.id == initial.accountId)) {
@@ -192,8 +219,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ];
       }
     }
-    final transactions =
-        ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+    final transactions = selectedBookId == activeBookId
+        ? ref.watch(transactionsProvider).value ?? const <TransactionRecord>[]
+        : ref.watch(transactionsByBookProvider(selectedBookId)).value ??
+              const <TransactionRecord>[];
     final activeCategories = _sortedCategories(categories, transactions);
     final selectedCategory = _selectedCategory(activeCategories);
     final sourceAccount = _selectedAccount(accounts, _accountId);
@@ -220,10 +249,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     children: [
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        tooltip: '关闭',
+                        tooltip: '返回',
+                        constraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
+                        padding: EdgeInsets.zero,
                         icon: const Icon(
-                          Icons.chevron_left,
+                          Icons.arrow_back_rounded,
                           color: FinanceUi.ink,
+                          size: 24,
                         ),
                       ),
                       Expanded(
@@ -242,6 +277,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   ),
                 ),
                 Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                  child: _QuickBookSelection(
+                    book: selectedBook,
+                    enabled: widget.initialTransaction == null,
+                    onTap: widget.initialTransaction == null
+                        ? () => _chooseBook(books)
+                        : null,
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: _TypeSelector(
                     selected: _type,
@@ -250,55 +295,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         setState(() {
                           _type = type;
                           _categoryId = null;
+                          if (type != TransactionType.expense &&
+                              type != TransactionType.lend &&
+                              type != TransactionType.assetPurchase) {
+                            _reimbursementStatus = ReimbursementStatus.none;
+                          }
                         });
                       }
                     },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(26, 18, 20, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Semantics(
-                          button: true,
-                          label: '输入金额',
-                          child: InkWell(
-                            key: const ValueKey('quick-amount-input'),
-                            onTap: () {
-                              FocusScope.of(context).unfocus();
-                              setState(() => _showNumberPad = !_showNumberPad);
-                            },
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  '${sourceAccount == null || sourceAccount.currency == "CNY" ? "¥" : sourceAccount.currency} ${_amount.displayValue}',
-                                  key: const ValueKey('quick-amount-display'),
-                                  style: const TextStyle(
-                                    color: FinanceUi.ink,
-                                    fontSize: 52,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () =>
-                            setState(() => _amount = const AmountInput()),
-                        tooltip: '清空金额',
-                        icon: const Icon(
-                          Icons.cancel,
-                          size: 20,
-                          color: Color(0xFFBCCADB),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
                 Expanded(
@@ -323,6 +327,106 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 _chooseAccount(accounts, isDestination: false),
                             onDestinationTap: () =>
                                 _chooseAccount(accounts, isDestination: true),
+                          ),
+                        const SizedBox(height: 14),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Semantics(
+                            button: true,
+                            label: '输入金额',
+                            child: InkWell(
+                              key: const ValueKey('quick-amount-input'),
+                              onTap: () {
+                                FocusScope.of(context).unfocus();
+                                setState(
+                                  () => _showNumberPad = !_showNumberPad,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Ink(
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  13,
+                                  8,
+                                  13,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _amountError
+                                        ? FinanceUi.coral
+                                        : FinanceUi.line,
+                                    width: _amountError ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            '金额',
+                                            style: TextStyle(
+                                              color: FinanceUi.muted,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              '${sourceAccount == null || sourceAccount.currency == "CNY" ? "¥" : sourceAccount.currency} ${_amount.displayValue}',
+                                              key: const ValueKey(
+                                                'quick-amount-display',
+                                              ),
+                                              style: const TextStyle(
+                                                color: FinanceUi.ink,
+                                                fontSize: 34,
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.1,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => setState(() {
+                                        _amount = const AmountInput();
+                                        _amountError = false;
+                                      }),
+                                      tooltip: '清空金额',
+                                      icon: const Icon(
+                                        Icons.cancel,
+                                        size: 20,
+                                        color: Color(0xFFBCCADB),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_amountError)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 18, top: 6),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '请输入金额',
+                                key: ValueKey('quick-amount-error'),
+                                style: TextStyle(
+                                  color: FinanceUi.coral,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
                         const SizedBox(height: 16),
                         Container(
@@ -359,6 +463,52 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 onTap: _pickDateTime,
                               ),
                               const Divider(color: FinanceUi.line),
+                              if (_supportsReimbursement) ...[
+                                Material(
+                                  color: Colors.transparent,
+                                  child: SwitchListTile.adaptive(
+                                    key: const ValueKey(
+                                      'quick-reimbursement-toggle',
+                                    ),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('需要报销'),
+                                    subtitle:
+                                        _reimbursementStatus ==
+                                            ReimbursementStatus.none
+                                        ? const Text('这笔消费需要报销时开启')
+                                        : Text(
+                                            _reimbursementStatusLabel(
+                                              _reimbursementStatus,
+                                            ),
+                                          ),
+                                    value:
+                                        _reimbursementStatus !=
+                                        ReimbursementStatus.none,
+                                    onChanged: (value) => setState(() {
+                                      _reimbursementStatus = value
+                                          ? (_reimbursementStatus ==
+                                                    ReimbursementStatus.none
+                                                ? ReimbursementStatus.pending
+                                                : _reimbursementStatus)
+                                          : ReimbursementStatus.none;
+                                    }),
+                                  ),
+                                ),
+                                if (_reimbursementStatus !=
+                                    ReimbursementStatus.none)
+                                  TextField(
+                                    controller: _reimbursementNoteController,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      prefixIcon: Icon(
+                                        Icons.receipt_long_outlined,
+                                      ),
+                                      hintText: '报销备注（可选）',
+                                    ),
+                                  ),
+                                const Divider(color: FinanceUi.line),
+                              ],
                               TextField(
                                 controller: _noteController,
                                 onTap: () =>
@@ -379,6 +529,41 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(height: 10),
+                        _MoreOptions(
+                          merchantController: _merchantController,
+                          onTextFocus: () =>
+                              setState(() => _showNumberPad = false),
+                          isPlanned: _isPlanned,
+                          isOneTime: _isOneTime,
+                          isRecurring: _isRecurring,
+                          tagsController: _tagsController,
+                          attachments: _attachments,
+                          attachmentsBusy: _attachmentsBusy,
+                          onPlannedChanged: (value) =>
+                              setState(() => _isPlanned = value),
+                          onOneTimeChanged: (value) => setState(() {
+                            _isOneTime = value;
+                            if (value) _isRecurring = false;
+                          }),
+                          onRecurringChanged: (value) => setState(() {
+                            _isRecurring = value;
+                            if (value) _isOneTime = false;
+                          }),
+                          onAddAttachment: _pickAttachment,
+                          onReplaceAttachment: _replaceAttachment,
+                          onRetryAttachment: _retryAttachment,
+                          onRemoveAttachment: (attachment) => setState(() {
+                            _attachmentsChanged = true;
+                            _attachments.remove(attachment);
+                          }),
+                          onReorderAttachments: (attachments) => setState(() {
+                            _attachmentsChanged = true;
+                            _attachments
+                              ..clear()
+                              ..addAll(attachments);
+                          }),
                         ),
                         const SizedBox(height: 12),
                         if (widget.initialTransaction == null)
@@ -524,32 +709,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 6),
-                        _MoreOptions(
-                          merchantController: _merchantController,
-                          onTextFocus: () =>
-                              setState(() => _showNumberPad = false),
-                          isPlanned: _isPlanned,
-                          isOneTime: _isOneTime,
-                          isRecurring: _isRecurring,
-                          tagsController: _tagsController,
-                          attachments: _attachments,
-                          onPlannedChanged: (value) =>
-                              setState(() => _isPlanned = value),
-                          onOneTimeChanged: (value) => setState(() {
-                            _isOneTime = value;
-                            if (value) _isRecurring = false;
-                          }),
-                          onRecurringChanged: (value) => setState(() {
-                            _isRecurring = value;
-                            if (value) _isOneTime = false;
-                          }),
-                          onAddAttachment: _pickAttachment,
-                          onRemoveAttachment: (attachment) => setState(() {
-                            _attachmentsChanged = true;
-                            _attachments.remove(attachment);
-                          }),
-                        ),
                       ],
                     ),
                   ),
@@ -568,10 +727,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             height: 190,
                             child: _NumberPad(
                               isSaving: _isSaving,
-                              onKey: (key) =>
-                                  setState(() => _amount = _amount.enter(key)),
+                              onKey: (key) => _updateAmount(_amount.enter(key)),
                               onBackspace: () =>
-                                  setState(() => _amount = _amount.backspace()),
+                                  _updateAmount(_amount.backspace()),
                               onDone: () =>
                                   setState(() => _showNumberPad = false),
                             ),
@@ -601,6 +759,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         onPressed: _isSaving
                             ? null
                             : () => _save(
+                                bookId: selectedBookId,
                                 sourceAccount: sourceAccount,
                                 destinationAccount: destinationAccount,
                                 selectedCategory: selectedCategory,
@@ -645,7 +804,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const VoiceBookkeepingSheet(),
+      builder: (_) => VoiceBookkeepingSheet(bookId: _bookId),
     );
     if (saved == true && mounted) Navigator.pop(context);
   }
@@ -655,7 +814,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const VoiceBookkeepingSheet(textOnly: true),
+      builder: (_) => VoiceBookkeepingSheet(textOnly: true, bookId: _bookId),
     );
     if (saved == true && mounted) Navigator.pop(context);
   }
@@ -756,6 +915,21 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
   }
 
+  Future<void> _chooseBook(List<LedgerBook> books) async {
+    final selected = await showBookChoiceSheet(
+      context,
+      books: books,
+      selectedId: _bookId ?? ref.read(activeBookIdProvider),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _bookId = selected.id;
+      _categoryId = null;
+      _accountId = null;
+      _destinationAccountId = null;
+    });
+  }
+
   Future<void> _chooseAccount(
     List<Account> accounts, {
     required bool isDestination,
@@ -831,31 +1005,151 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }
 
   Future<void> _pickAttachment() async {
+    if (_attachments.length >= 4 || _attachmentsBusy) {
+      if (_attachments.length >= 4) _showMessage('一笔流水最多添加 4 个附件');
+      return;
+    }
+    final pending = const StoredAttachment(
+      name: '选择附件…',
+      path: '',
+      status: AttachmentUploadStatus.uploading,
+    );
+    setState(() => _attachments.add(pending));
+    setState(() => _attachmentsBusy = true);
     try {
       final attachment = await ref
           .read(attachmentStorageServiceProvider)
           .pickAndStore();
-      if (attachment != null && mounted) {
+      if (mounted) {
         setState(() {
-          _attachmentsChanged = true;
-          _attachments.add(attachment);
+          final index = _attachments.indexOf(pending);
+          if (index < 0) return;
+          if (attachment == null) {
+            _attachments.removeAt(index);
+          } else {
+            _attachmentsChanged = true;
+            _attachments[index] = attachment;
+          }
         });
       }
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) return;
+      setState(() {
+        _attachments.remove(pending);
+      });
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('附件读取失败，请重新选择')));
+          .showSnackBar(SnackBar(content: Text('附件读取失败，请重新选择：$error')));
+    } finally {
+      if (mounted) setState(() => _attachmentsBusy = false);
+    }
+  }
+
+  Future<void> _replaceAttachment(StoredAttachment existing) async {
+    if (_attachmentsBusy) return;
+    final index = _attachments.indexOf(existing);
+    if (index < 0) return;
+    final pending = const StoredAttachment(
+      name: '替换附件…',
+      path: '',
+      status: AttachmentUploadStatus.uploading,
+    );
+    setState(() => _attachments[index] = pending);
+    setState(() => _attachmentsBusy = true);
+    try {
+      final replacement = await ref
+          .read(attachmentStorageServiceProvider)
+          .pickAndStore();
+      if (!mounted) return;
+      setState(() {
+        final pendingIndex = _attachments.indexOf(pending);
+        if (pendingIndex < 0) return;
+        if (replacement == null) {
+          _attachments[pendingIndex] = existing;
+        } else {
+          _attachmentsChanged = true;
+          _attachments[pendingIndex] = replacement;
+        }
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        final pendingIndex = _attachments.indexOf(pending);
+        if (pendingIndex >= 0) _attachments[pendingIndex] = existing;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('附件替换失败，请重试：$error')));
+    } finally {
+      if (mounted) setState(() => _attachmentsBusy = false);
+    }
+  }
+
+  Future<void> _retryAttachment(StoredAttachment failed) async {
+    if (_attachmentsBusy) return;
+    final index = _attachments.indexOf(failed);
+    if (index < 0) return;
+    final pending = StoredAttachment(
+      name: failed.name,
+      path: '',
+      status: AttachmentUploadStatus.uploading,
+      sourceFile: failed.sourceFile,
+    );
+    setState(() => _attachments[index] = pending);
+    setState(() => _attachmentsBusy = true);
+    try {
+      final replacement = await ref
+          .read(attachmentStorageServiceProvider)
+          .retry(failed);
+      if (!mounted) return;
+      if (replacement == null) {
+        setState(() {
+          final pendingIndex = _attachments.indexOf(pending);
+          if (pendingIndex >= 0) _attachments[pendingIndex] = failed;
+        });
+        _showMessage('无法重试：原文件已不可用');
+        return;
+      }
+      setState(() {
+        final pendingIndex = _attachments.indexOf(pending);
+        if (pendingIndex < 0) return;
+        _attachmentsChanged = true;
+        _attachments[pendingIndex] = replacement;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        final pendingIndex = _attachments.indexOf(pending);
+        if (pendingIndex >= 0) _attachments[pendingIndex] = failed;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('附件重试失败，请稍后再试：$error')));
+    } finally {
+      if (mounted) setState(() => _attachmentsBusy = false);
     }
   }
 
   Future<void> _save({
+    required String bookId,
     required Account? sourceAccount,
     required Account? destinationAccount,
     required Category? selectedCategory,
   }) async {
     if (_isSaving) return;
+    if (_attachmentsBusy) {
+      _showMessage('附件仍在保存，请稍候');
+      return;
+    }
+    if (_attachments.any(
+      (item) => item.status == AttachmentUploadStatus.failed,
+    )) {
+      _showMessage('有附件保存失败，请重试或移除后再保存');
+      return;
+    }
     if (!_amount.isValid) {
-      _showMessage('请输入有效金额');
+      setState(() {
+        _amountError = true;
+        _showNumberPad = true;
+      });
+      _showMessage('请输入金额');
       return;
     }
     if (sourceAccount == null) {
@@ -881,6 +1175,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           .toSet()
           .toList();
       final request = QuickBookkeepingRequest(
+        bookId: bookId,
         type: _type,
         amount: _amount.amount!,
         currency: sourceAccount.currency,
@@ -905,6 +1200,17 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             widget.initialTransaction?.isLargeTransaction ?? false,
         tags: tags,
         attachmentPaths: _attachments.map((item) => item.path).toList(),
+        reimbursementStatus: _reimbursementStatus,
+        reimbursementAmount: _reimbursementStatus == ReimbursementStatus.none
+            ? null
+            : _amount.amount,
+        reimbursementNote: _reimbursementStatus == ReimbursementStatus.none
+            ? null
+            : _reimbursementNoteController.text,
+        clearReimbursement:
+            _reimbursementStatus == ReimbursementStatus.none &&
+            widget.initialTransaction?.reimbursementStatus !=
+                ReimbursementStatus.none,
       );
       final service = ref.read(quickBookkeepingServiceProvider);
       if (widget.initialTransaction == null) {
@@ -941,6 +1247,113 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _updateAmount(AmountInput value) {
+    setState(() {
+      _amount = value;
+      if (value.isValid) _amountError = false;
+    });
+  }
+
+  bool get _supportsReimbursement =>
+      _type == TransactionType.expense ||
+      _type == TransactionType.lend ||
+      _type == TransactionType.assetPurchase;
+
+  String _reimbursementStatusLabel(ReimbursementStatus status) {
+    return switch (status) {
+      ReimbursementStatus.pending => '待报销',
+      ReimbursementStatus.reimbursed => '已报销',
+      ReimbursementStatus.partial => '部分报销',
+      ReimbursementStatus.none => '',
+    };
+  }
+}
+
+class _QuickBookSelection extends StatelessWidget {
+  const _QuickBookSelection({
+    required this.book,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final LedgerBook? book;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: enabled,
+      label: enabled ? '选择记入账本' : '当前流水所属账本',
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          key: const ValueKey('quick-book-selector'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                const Icon(Icons.menu_book_outlined, color: FinanceUi.teal),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '记入账本',
+                        style: TextStyle(color: FinanceUi.muted, fontSize: 11),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          if (book != null) ...[
+                            BookColorDot(book: book!, size: 10),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Text(
+                              book?.name ?? '选择账本',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: FinanceUi.ink,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (book != null)
+                  Text(
+                    book!.type.label,
+                    style: const TextStyle(
+                      color: FinanceUi.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                const SizedBox(width: 6),
+                Icon(
+                  enabled
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.lock_outline_rounded,
+                  color: FinanceUi.muted,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1061,6 +1474,7 @@ class _CategorySection extends StatelessWidget {
           ),
         );
         return Wrap(
+          key: const ValueKey('quick-category-section'),
           children: [
             ...visible.map(
               (category) => item(
@@ -1233,11 +1647,15 @@ class _MoreOptions extends StatelessWidget {
     required this.isRecurring,
     required this.tagsController,
     required this.attachments,
+    required this.attachmentsBusy,
     required this.onPlannedChanged,
     required this.onOneTimeChanged,
     required this.onRecurringChanged,
     required this.onAddAttachment,
+    required this.onReplaceAttachment,
+    required this.onRetryAttachment,
     required this.onRemoveAttachment,
+    required this.onReorderAttachments,
   });
 
   final TextEditingController merchantController;
@@ -1247,17 +1665,22 @@ class _MoreOptions extends StatelessWidget {
   final bool isRecurring;
   final TextEditingController tagsController;
   final List<StoredAttachment> attachments;
+  final bool attachmentsBusy;
   final ValueChanged<bool> onPlannedChanged;
   final ValueChanged<bool> onOneTimeChanged;
   final ValueChanged<bool> onRecurringChanged;
   final VoidCallback onAddAttachment;
+  final ValueChanged<StoredAttachment> onReplaceAttachment;
+  final ValueChanged<StoredAttachment> onRetryAttachment;
   final ValueChanged<StoredAttachment> onRemoveAttachment;
+  final ValueChanged<List<StoredAttachment>> onReorderAttachments;
 
   @override
   Widget build(BuildContext context) {
     return ExpansionTile(
       tilePadding: const EdgeInsets.symmetric(horizontal: 4),
       childrenPadding: const EdgeInsets.only(bottom: 8),
+      initiallyExpanded: false,
       title: const Text('更多选项', style: TextStyle(fontSize: 14)),
       leading: const Icon(Icons.tune, color: AppColors.primary),
       children: [
@@ -1271,26 +1694,35 @@ class _MoreOptions extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        SwitchListTile.adaptive(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: const Text('计划内消费'),
-          value: isPlanned,
-          onChanged: onPlannedChanged,
+        Material(
+          color: Colors.transparent,
+          child: SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('计划内消费'),
+            value: isPlanned,
+            onChanged: onPlannedChanged,
+          ),
         ),
-        SwitchListTile.adaptive(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: const Text('一次性消费'),
-          value: isOneTime,
-          onChanged: onOneTimeChanged,
+        Material(
+          color: Colors.transparent,
+          child: SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('一次性消费'),
+            value: isOneTime,
+            onChanged: onOneTimeChanged,
+          ),
         ),
-        SwitchListTile.adaptive(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: const Text('周期消费'),
-          value: isRecurring,
-          onChanged: onRecurringChanged,
+        Material(
+          color: Colors.transparent,
+          child: SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('周期消费'),
+            value: isRecurring,
+            onChanged: onRecurringChanged,
+          ),
         ),
         TextField(
           controller: tagsController,
@@ -1305,29 +1737,181 @@ class _MoreOptions extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: onAddAttachment,
+            onPressed: attachments.length >= 4 || attachmentsBusy
+                ? null
+                : onAddAttachment,
             icon: const Icon(Icons.attach_file),
-            label: const Text('添加附件'),
+            label: Text('添加附件 ${attachments.length}/4'),
           ),
         ),
-        ...attachments.map(
-          (attachment) => ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.insert_drive_file_outlined),
-            title: Text(
-              attachment.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: IconButton(
-              onPressed: () => onRemoveAttachment(attachment),
-              icon: const Icon(Icons.close),
-              tooltip: '移除附件',
-            ),
+        if (attachmentsBusy)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(minHeight: 2),
           ),
-        ),
+        if (attachments.isNotEmpty)
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: attachments.length,
+            onReorderItem: (oldIndex, newIndex) {
+              final reordered = [...attachments];
+              final item = reordered.removeAt(oldIndex);
+              reordered.insert(newIndex, item);
+              onReorderAttachments(reordered);
+            },
+            itemBuilder: (context, index) {
+              final attachment = attachments[index];
+              return ListTile(
+                key: ValueKey('${attachment.path}-$index'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: _AttachmentThumbnail(attachment: attachment),
+                ),
+                title: Text(
+                  attachment.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  switch (attachment.status) {
+                    AttachmentUploadStatus.uploading => '保存中…',
+                    AttachmentUploadStatus.uploaded => '已保存 · 长按拖动排序',
+                    AttachmentUploadStatus.failed =>
+                      '${attachment.errorMessage ?? '保存失败'} · 可重试',
+                  },
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Wrap(
+                  spacing: 0,
+                  children: [
+                    if (attachment.status == AttachmentUploadStatus.failed)
+                      IconButton(
+                        onPressed: attachmentsBusy
+                            ? null
+                            : () => onRetryAttachment(attachment),
+                        icon: const Icon(Icons.refresh),
+                        tooltip: '重试保存',
+                      )
+                    else ...[
+                      IconButton(
+                        onPressed: attachmentsBusy
+                            ? null
+                            : () => onReplaceAttachment(attachment),
+                        icon: const Icon(Icons.refresh),
+                        tooltip: '替换附件',
+                      ),
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.drag_handle),
+                        ),
+                      ),
+                    ],
+                    IconButton(
+                      onPressed: attachmentsBusy
+                          ? null
+                          : () => onRemoveAttachment(attachment),
+                      icon: const Icon(Icons.close),
+                      tooltip: '移除附件',
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
       ],
+    );
+  }
+}
+
+class _AttachmentThumbnail extends StatelessWidget {
+  const _AttachmentThumbnail({required this.attachment});
+
+  final StoredAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (attachment.status == AttachmentUploadStatus.failed) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          color: Color(0xffffe5dc),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        child: Icon(Icons.cloud_off_outlined, color: AppColors.warning),
+      );
+    }
+    if (attachment.status == AttachmentUploadStatus.uploading) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.primarySoft,
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    final extension = p.extension(attachment.name).toLowerCase();
+    final isImage = const {
+      '.bmp',
+      '.gif',
+      '.heic',
+      '.heif',
+      '.jpeg',
+      '.jpg',
+      '.png',
+      '.webp',
+    }.contains(extension);
+    if (!isImage) {
+      return GestureDetector(
+        onTap: () => _preview(context, isImage: false),
+        child: const DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+          child: Icon(
+            Icons.insert_drive_file_outlined,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: () => _preview(context, isImage: true),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.file(
+          File(attachment.path),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => const DecoratedBox(
+            decoration: BoxDecoration(color: AppColors.primarySoft),
+            child: Icon(Icons.broken_image_outlined, color: AppColors.primary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _preview(BuildContext context, {required bool isImage}) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        child: isImage
+            ? InteractiveViewer(child: Image.file(File(attachment.path)))
+            : Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(attachment.name),
+              ),
+      ),
     );
   }
 }

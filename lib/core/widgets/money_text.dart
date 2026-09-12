@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/theme/app_colors.dart';
+import 'privacy_amount.dart';
 
 class MoneyText extends StatelessWidget {
   const MoneyText(
@@ -11,6 +12,7 @@ class MoneyText extends StatelessWidget {
     this.positive,
     this.showSign = false,
     this.currency = 'CNY',
+    this.hidden = false,
   });
 
   final double amount;
@@ -18,6 +20,7 @@ class MoneyText extends StatelessWidget {
   final bool? positive;
   final bool showSign;
   final String currency;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -31,13 +34,35 @@ class MoneyText extends StatelessWidget {
       decimalDigits: amount % 1 == 0 ? 0 : 2,
     ).format(amount.abs());
     final resolvedStyle = style ?? Theme.of(context).textTheme.bodyLarge!;
-    return Text(
-      '$sign$value',
-      style: resolvedStyle.copyWith(
-        color: positive == null
-            ? resolvedStyle.color
-            : (isPositive ? AppColors.income : AppColors.textPrimary),
-      ),
+    final amountStyle = resolvedStyle.copyWith(
+      color: positive == null
+          ? resolvedStyle.color
+          : (isPositive ? AppColors.income : AppColors.textPrimary),
+    );
+    return PrivacyAmount(
+      text: '$sign$value',
+      span: _amountSpan(sign, value, amountStyle),
+      style: amountStyle,
+      hidden: hidden,
+    );
+  }
+
+  InlineSpan _amountSpan(String sign, String value, TextStyle style) {
+    final separator = value.lastIndexOf('.');
+    if (separator < 0 || separator == value.length - 1) {
+      return TextSpan(text: '$sign$value', style: style);
+    }
+    final fractionStyle = style.copyWith(
+      fontSize: (style.fontSize ?? 14) * .5,
+      height: style.height,
+    );
+    return TextSpan(
+      style: style,
+      children: [
+        TextSpan(text: '$sign${value.substring(0, separator)}'),
+        TextSpan(text: value.substring(separator, separator + 1)),
+        TextSpan(text: value.substring(separator + 1), style: fractionStyle),
+      ],
     );
   }
 }

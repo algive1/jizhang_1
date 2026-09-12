@@ -6,10 +6,13 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
+import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/membership.dart';
+import '../../../core/widgets/membership_button.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/book_color_dot.dart';
 import '../../membership/data/membership_repository.dart';
 import '../data/book_repository.dart';
 
@@ -77,6 +80,157 @@ Future<void> showBookSelectorSheet(BuildContext context, WidgetRef ref) async {
   );
 }
 
+Future<LedgerBook?> showBookChoiceSheet(
+  BuildContext context, {
+  required List<LedgerBook> books,
+  required String selectedId,
+}) {
+  return showModalBottomSheet<LedgerBook>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: AppColors.background,
+    builder: (_) => _BookChoiceSheet(books: books, selectedId: selectedId),
+  );
+}
+
+class _BookChoiceSheet extends StatelessWidget {
+  const _BookChoiceSheet({required this.books, required this.selectedId});
+
+  final List<LedgerBook> books;
+  final String selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .72,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '选择记账账本',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '分类、账户和流水会跟随所选账本',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: books.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final book = books[index];
+                    final selected = book.id == selectedId;
+                    return _BookChoiceRow(
+                      key: ValueKey('quick-book-${book.id}'),
+                      book: book,
+                      selected: selected,
+                      onTap: () => Navigator.pop(context, book),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookChoiceRow extends StatelessWidget {
+  const _BookChoiceRow({
+    super.key,
+    required this.book,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final LedgerBook book;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (book.type) {
+      BookType.personal => Icons.person_outline,
+      BookType.family => Icons.home_outlined,
+      BookType.enterprise => Icons.business_outlined,
+    };
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${book.name}，${book.type.label}${selected ? '，当前账本' : ''}',
+      child: Material(
+        color: selected ? const Color(0xFFE4F5EF) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Icon(icon, color: AppColors.primaryDark),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          BookColorDot(book: book, size: 10),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              book.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        book.type.label,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  const Icon(Icons.check_circle, color: AppColors.primary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BookSelectorSheet extends ConsumerStatefulWidget {
   const _BookSelectorSheet();
   @override
@@ -85,6 +239,23 @@ class _BookSelectorSheet extends ConsumerStatefulWidget {
 
 class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
   bool _switching = false;
+  double _dragOffset = 0;
+
+  void _onHeaderDragUpdate(DragUpdateDetails details) {
+    final delta = details.primaryDelta ?? 0;
+    if (delta <= 0 && _dragOffset == 0) return;
+    setState(() {
+      _dragOffset = (_dragOffset + delta).clamp(0, 260).toDouble();
+    });
+  }
+
+  void _onHeaderDragEnd(DragEndDetails details) {
+    if (_dragOffset >= 72) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() => _dragOffset = 0);
+  }
 
   Widget _shelfBuild(BuildContext context) {
     final booksState = ref.watch(booksProvider);
@@ -108,310 +279,323 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
       books,
       ownerUserId: ref.read(databaseProvider).currentActor,
     );
-    return Material(
-      color: const Color(0xFFFAF7EF),
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 600,
-          maxHeight: MediaQuery.sizeOf(context).height * .72,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                height: largeText ? 132 : 56,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
-                  child: Row(
-                    children: [
-                      const UserAvatar(radius: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 0,
+    return Transform.translate(
+      offset: Offset(0, _dragOffset),
+      child: Material(
+        color: const Color(0xFFFAF7EF),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 600,
+            maxHeight: MediaQuery.sizeOf(context).height * .72,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: _onHeaderDragUpdate,
+                  onVerticalDragEnd: _onHeaderDragEnd,
+                  child: SizedBox(
+                    height: largeText ? 132 : 56,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 10, 4),
+                      child: Row(
+                        children: [
+                          const UserAvatar(radius: 19),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '我的账本',
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        formatBookTitle(active),
+                                        style: TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.keyboard_arrow_up_rounded,
+                                        size: 20,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SizedBox(width: 4),
-                                Icon(
-                                  Icons.keyboard_arrow_up_rounded,
-                                  size: 20,
-                                  color: AppColors.textPrimary,
+                                Text(
+                                  '记录生活  更好地生活',
+                                  maxLines: largeText ? 2 : 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
-                            Text(
-                              '记录生活  更好地生活',
-                              maxLines: largeText ? 2 : 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
+                          ),
+                          MembershipButton(
+                            onPressed: () =>
+                                _closeAndPush(context, '/profile/membership'),
+                          ),
+                          IconButton(
+                            tooltip: '支付通知记账',
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: () => _closeAndPush(
+                              context,
+                              '/profile/payment-notifications',
+                            ),
+                            icon: Icon(
+                              Icons.notifications_none_rounded,
+                              color: AppColors.textPrimary,
+                              size: 24,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '搜索流水',
+                            onPressed: () =>
+                                _closeAndPush(context, '/transactions/search'),
+                            style: ButtonStyle(
+                              backgroundColor: WidgetStatePropertyAll(
+                                Color(0xFFF2EEE3),
+                              ),
+                              minimumSize: const WidgetStatePropertyAll(
+                                Size(36, 36),
+                              ),
+                              maximumSize: const WidgetStatePropertyAll(
+                                Size(36, 36),
+                              ),
+                              padding: const WidgetStatePropertyAll(
+                                EdgeInsets.zero,
+                              ),
+                              shape: const WidgetStatePropertyAll(
+                                CircleBorder(),
+                              ),
+                            ),
+                            icon: Icon(
+                              Icons.search_rounded,
+                              color: AppColors.textPrimary,
+                              size: 21,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: width,
+                  height: imageHeight,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.asset(
+                          AppAssets.bookshelfEmpty,
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                      Positioned(
+                        top: imageHeight * .045,
+                        left: width * .085,
+                        right: width * .045,
+                        height: imageHeight * .105,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: const Text(
+                                        '选择账本',
+                                        maxLines: 1,
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF57351D),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '让每一份账本，都记录一段美好生活',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Color(0xFF76502C)
+                                            .withValues(alpha: .75),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
-                        tooltip: '支付通知记账',
-                        onPressed: () =>
-                            context.push('/profile/payment-notifications'),
-                        icon: Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.textPrimary,
-                          size: 24,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '搜索流水',
-                        onPressed: () => context.push('/transactions/search'),
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStatePropertyAll(
-                            Color(0xFFF2EEE3),
+                      if (booksState.isLoading)
+                        const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
                           ),
                         ),
-                        icon: Icon(
-                          Icons.search_rounded,
-                          color: AppColors.textPrimary,
-                          size: 21,
+                      if (booksState.hasError)
+                        Center(
+                          child: TextButton(
+                            onPressed: () => ref.invalidate(booksProvider),
+                            child: const Text('账本读取失败，点击重试'),
+                          ),
+                        ),
+                      ...previewBooks.asMap().entries.map((entry) {
+                        final book = entry.value;
+                        final top =
+                            imageHeight * [0.174, 0.369, 0.553][entry.key];
+                        return Positioned(
+                          left: width * .12,
+                          right: width * .12,
+                          top: top,
+                          height: imageHeight * .145,
+                          child: _ShelfBookRow(
+                            key: ValueKey('book-shelf-row-${book.id}'),
+                            book: book,
+                            selected: book.id == selectedId,
+                            onTap: _switching ? null : () => _select(book),
+                            onLongPress: () => _manageBook(context, ref, book),
+                          ),
+                        );
+                      }),
+                      Positioned(
+                        left: width * .23,
+                        right: width * .15,
+                        top: imageHeight * .72,
+                        height: imageHeight * .14,
+                        child: CustomPaint(
+                          key: const ValueKey('book-create-area'),
+                          painter: const _DashedBorderPainter(),
+                          child: InkWell(
+                            onTap: _switching
+                                ? null
+                                : (ownedCount >=
+                                          BookLimitPolicy.forPlan(
+                                            membership?.membership.plan ??
+                                                MembershipPlan.free,
+                                          )
+                                      ? () => _showLimitMessage(
+                                          context,
+                                          membership,
+                                        )
+                                      : () => _createBook(context, ref)),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: imageHeight * .06,
+                                    height: imageHeight * .06,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '新建账本',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF4A3524),
+                                            ),
+                                          ),
+                                          Text(
+                                            '创建专属账本，开始新的记账之旅',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF806B58),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Color(0xFF66503A),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: imageHeight * .035,
+                        left: 0,
+                        right: 0,
+                        child: InkWell(
+                          key: const ValueKey('book-more'),
+                          onTap: books.length > 3
+                              ? () => _showAllBooks(context, books)
+                              : null,
+                          child: Center(
+                            child: Text(
+                              books.length > 3
+                                  ? '—   查看全部账本（${books.length}）   —'
+                                  : '共 ${books.length} 个账本',
+                              style: TextStyle(
+                                color: const Color(
+                                  0xFF76502C,
+                                ).withValues(alpha: books.length > 3 ? 1 : .72),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              SizedBox(
-                width: width,
-                height: imageHeight,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        AppAssets.bookshelfEmpty,
-                        fit: BoxFit.fill,
-                      ),
-                    ),
-                    Positioned(
-                      top: imageHeight * .035,
-                      left: width * .09,
-                      right: width * .07,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '选择账本',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF57351D),
-                                ),
-                              ),
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: active == null
-                                ? null
-                                : () => _manageBook(context, ref, active),
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 36),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            icon: const Icon(
-                              Icons.settings_outlined,
-                              size: 18,
-                              color: Color(0xFF76502C),
-                            ),
-                            label: const Text(
-                              '管理',
-                              style: TextStyle(color: Color(0xFF76502C)),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: '关闭书架',
-                            onPressed: () => Navigator.pop(context),
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFF76502C),
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(28, 28),
-                              padding: EdgeInsets.zero,
-                            ),
-                            icon: const Icon(Icons.close, size: 18),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      top: imageHeight * .095,
-                      left: width * .22,
-                      right: width * .16,
-                      child: Text(
-                        '让每一份账本，都记录一段美好生活',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: const Color(0xFF76502C).withValues(alpha: .75),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    if (booksState.isLoading)
-                      const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    if (booksState.hasError)
-                      Center(
-                        child: TextButton(
-                          onPressed: () => ref.invalidate(booksProvider),
-                          child: const Text('账本读取失败，点击重试'),
-                        ),
-                      ),
-                    ...previewBooks.asMap().entries.map((entry) {
-                      final book = entry.value;
-                      final top =
-                          imageHeight * [0.174, 0.369, 0.553][entry.key];
-                      return Positioned(
-                        left: width * .17,
-                        right: width * .12,
-                        top: top,
-                        height: imageHeight * .145,
-                        child: _ShelfBookRow(
-                          key: ValueKey('book-shelf-row-${book.id}'),
-                          book: book,
-                          selected: book.id == selectedId,
-                          onTap: _switching ? null : () => _select(book),
-                          onLongPress: () => _manageBook(context, ref, book),
-                        ),
-                      );
-                    }),
-                    Positioned(
-                      left: width * .23,
-                      right: width * .15,
-                      top: imageHeight * .72,
-                      height: imageHeight * .14,
-                      child: CustomPaint(
-                        key: const ValueKey('book-create-area'),
-                        painter: const _DashedBorderPainter(),
-                        child: InkWell(
-                          onTap: _switching
-                              ? null
-                              : (ownedCount >=
-                                        BookLimitPolicy.forPlan(
-                                          membership?.membership.plan ??
-                                              MembershipPlan.free,
-                                        )
-                                    ? () =>
-                                          _showLimitMessage(context, membership)
-                                    : () => _createBook(context, ref)),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: imageHeight * .06,
-                                  height: imageHeight * .06,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.add,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.centerLeft,
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '新建账本',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF4A3524),
-                                          ),
-                                        ),
-                                        Text(
-                                          '创建专属账本，开始新的记账之旅',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFF806B58),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Color(0xFF66503A),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: imageHeight * .035,
-                      left: 0,
-                      right: 0,
-                      child: InkWell(
-                        key: const ValueKey('book-more'),
-                        onTap: books.length > 3
-                            ? () => _showAllBooks(context, books)
-                            : null,
-                        child: Center(
-                          child: Text(
-                            books.length > 3
-                                ? '—   查看全部账本（${books.length}）   —'
-                                : '共 ${books.length} 个账本',
-                            style: TextStyle(
-                              color: const Color(
-                                0xFF76502C,
-                              ).withValues(alpha: books.length > 3 ? 1 : .72),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -663,15 +847,16 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     try {
       final book = await ref
           .read(bookRepositoryProvider)
-          .create(name: draft.name, type: draft.type);
+          .create(
+            name: draft.name,
+            type: draft.type,
+            usePrimaryAssets: draft.usePrimaryAssets,
+          );
       ref.invalidate(booksProvider);
       await ref.read(activeBookIdProvider.notifier).select(book.id);
       if (context.mounted) {
-        final messenger = ScaffoldMessenger.maybeOf(context);
-        Navigator.pop(context);
-        messenger?.showSnackBar(
-          SnackBar(content: Text('已创建并切换到「${book.name}」')),
-        );
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('已创建并切换到「${book.name}」')));
       }
     } on Object catch (error) {
       if (context.mounted) _showError(context, error);
@@ -718,6 +903,30 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     );
   }
 
+  Future<void> _showBookOrder(BuildContext context, WidgetRef ref) async {
+    final books = await ref
+        .read(bookRepositoryProvider)
+        .getForUser(SeedIds.localUser);
+    if (!context.mounted || books.length < 2) return;
+    final order = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _BookOrderSheet(books: books),
+    );
+    if (order == null || !context.mounted) return;
+    try {
+      await ref.read(bookRepositoryProvider).reorder(order);
+      ref.invalidate(booksProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(const SnackBar(content: Text('账本顺序已保存')));
+      }
+    } on Object catch (error) {
+      if (context.mounted) _showError(context, error);
+    }
+  }
+
   Future<void> _manageBook(
     BuildContext context,
     WidgetRef ref,
@@ -747,6 +956,43 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                 title: Text(book.isShared ? '成员与同步' : '启用共享'),
                 onTap: () => Navigator.pop(context, _BookAction.shared),
               ),
+            if (book.id != SeedIds.personalBook)
+              ListTile(
+                enabled: book.canManage,
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('使用主账本资产'),
+                subtitle: Text(
+                  book.usesPrimaryAssets ? '已开启：共用默认账本账户' : '已关闭：使用本账本账户',
+                ),
+                trailing: Switch(
+                  value: book.usesPrimaryAssets,
+                  onChanged: book.canManage
+                      ? (_) => Navigator.pop(context, _BookAction.assets)
+                      : null,
+                ),
+                onTap: book.canManage
+                    ? () => Navigator.pop(context, _BookAction.assets)
+                    : null,
+              ),
+            ListTile(
+              leading: const Icon(Icons.swap_vert_rounded),
+              title: const Text('排序账本'),
+              onTap: () => Navigator.pop(context, _BookAction.sort),
+            ),
+            ListTile(
+              leading: Icon(
+                book.id == ref.read(activeBookIdProvider)
+                    ? Icons.star
+                    : Icons.star_border,
+                color: AppColors.primary,
+              ),
+              title: Text(
+                book.id == ref.read(activeBookIdProvider)
+                    ? '设为默认账本（当前）'
+                    : '设为默认账本',
+              ),
+              onTap: () => Navigator.pop(context, _BookAction.defaultBook),
+            ),
             if (book.id != SeedIds.personalBook &&
                 (!book.isShared || book.role == 'owner'))
               ListTile(
@@ -774,6 +1020,44 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
         } on Object catch (error) {
           if (context.mounted) _showError(context, error);
         }
+      }
+      return;
+    }
+    if (action == _BookAction.assets) {
+      try {
+        await ref
+            .read(bookRepositoryProvider)
+            .setUsePrimaryAssets(book.id, !book.usesPrimaryAssets);
+        ref.invalidate(booksProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(
+                book.usesPrimaryAssets ? '已改为使用本账本资产' : '已改为使用主账本资产',
+              ),
+            ),
+          );
+        }
+      } on Object catch (error) {
+        if (context.mounted) _showError(context, error);
+      }
+      return;
+    }
+    if (action == _BookAction.sort) {
+      await _showBookOrder(context, ref);
+      return;
+    }
+    if (action == _BookAction.defaultBook) {
+      try {
+        await ref.read(bookRepositoryProvider).setDefault(book.id);
+        await ref.read(activeBookIdProvider.notifier).select(book.id);
+        ref.invalidate(booksProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.maybeOf(context)
+              ?.showSnackBar(SnackBar(content: Text('已将「${book.name}」设为默认账本')));
+        }
+      } on Object catch (error) {
+        if (context.mounted) _showError(context, error);
       }
       return;
     }
@@ -817,10 +1101,19 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
             .read(activeBookIdProvider.notifier)
             .select(remaining.first.id);
       }
-      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('已删除「${book.name}」')));
+      }
     } on Object catch (error) {
       if (context.mounted) _showError(context, error);
     }
+  }
+
+  void _closeAndPush(BuildContext context, String location) {
+    final router = GoRouter.of(context);
+    Navigator.of(context).pop();
+    router.push(location);
   }
 
   Future<String?> _askName(
@@ -1065,10 +1358,15 @@ class _AllBookListRow extends StatelessWidget {
 }
 
 class _CreateBookDraft {
-  const _CreateBookDraft({required this.name, required this.type});
+  const _CreateBookDraft({
+    required this.name,
+    required this.type,
+    required this.usePrimaryAssets,
+  });
 
   final String name;
   final BookType type;
+  final bool usePrimaryAssets;
 }
 
 class _CreateBookSheet extends StatefulWidget {
@@ -1081,6 +1379,7 @@ class _CreateBookSheet extends StatefulWidget {
 class _CreateBookSheetState extends State<_CreateBookSheet> {
   late final TextEditingController _nameController = TextEditingController();
   BookType _type = BookType.personal;
+  bool _usePrimaryAssets = false;
   String? _errorText;
   bool _submitting = false;
 
@@ -1098,7 +1397,14 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
     }
     if (_submitting) return;
     setState(() => _submitting = true);
-    Navigator.pop(context, _CreateBookDraft(name: name, type: _type));
+    Navigator.pop(
+      context,
+      _CreateBookDraft(
+        name: name,
+        type: _type,
+        usePrimaryAssets: _usePrimaryAssets,
+      ),
+    );
   }
 
   @override
@@ -1178,6 +1484,17 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
                       label: Text(type.label),
                     ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                key: const ValueKey('book-create-use-primary-assets'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('使用主账本资产'),
+                subtitle: const Text('开启后此账本与默认账本共用账户和资产余额'),
+                value: _usePrimaryAssets,
+                onChanged: _submitting
+                    ? null
+                    : (value) => setState(() => _usePrimaryAssets = value),
               ),
               const SizedBox(height: 16),
               _BookCreatePreview(type: _type, name: name),
@@ -1272,6 +1589,18 @@ Color _bookTypeColor(BookType type) => switch (type) {
   BookType.enterprise => const Color(0xFF44677E),
 };
 
+Color _shelfCoverColor(BookType type) => switch (type) {
+  BookType.personal => const Color(0xFFE9EBCF),
+  BookType.family => const Color(0xFFF0D8C6),
+  BookType.enterprise => const Color(0xFFB9C8D6),
+};
+
+Color _shelfCoverAccent(BookType type) => switch (type) {
+  BookType.personal => const Color(0xFF789B3B),
+  BookType.family => const Color(0xFFB77E54),
+  BookType.enterprise => const Color(0xFF5A7C92),
+};
+
 class _BookNameDialog extends StatefulWidget {
   const _BookNameDialog({required this.title, this.initial});
 
@@ -1333,117 +1662,240 @@ class _ShelfBookRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _bookTypeColor(book.type);
-    final dark = Color.lerp(color, Colors.black, .24)!;
-    final light = Color.lerp(color, Colors.white, .32)!;
+    final cover = _shelfCoverColor(book.type);
+    final accent = _shelfCoverAccent(book.type);
+    final spine = Color.lerp(accent, Colors.black, .18)!;
     final subtitle = switch (book.type) {
       BookType.personal => '记录自己的精彩生活',
       BookType.family => '和家人一起打理幸福',
       BookType.enterprise => '高效管理商务收支',
     };
-    final radius = BorderRadius.circular(8);
+    final radius = BorderRadius.circular(7);
     return Semantics(
       selected: selected,
       button: true,
       label: '${book.name}，$subtitle${selected ? '，当前账本' : ''}',
       child: Material(
         color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [light, color, dark],
-              stops: const [0, .42, 1],
-            ),
-            borderRadius: radius,
-            border: Border.all(
-              color: selected ? Colors.white : dark,
-              width: selected ? 2 : 1,
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 5,
-                offset: Offset(2, 3),
-              ),
-            ],
-          ),
-          child: InkWell(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            borderRadius: radius,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 34,
-                  height: double.infinity,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [dark, color, light.withValues(alpha: .48)],
-                      ),
-                      border: Border(
-                        right: BorderSide(
-                          color: Colors.white.withValues(alpha: .28),
-                        ),
-                      ),
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: radius,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                top: 3,
+                bottom: 3,
+                width: 24,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color.lerp(spine, Colors.black, .18)!,
+                        spine,
+                        Color.lerp(spine, Colors.white, .2)!,
+                      ],
                     ),
-                    child: Icon(
-                      _bookTypeIcon(book.type),
-                      color: Colors.white.withValues(alpha: .94),
-                      size: 20,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(6),
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .28),
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x30000000),
+                        blurRadius: 3,
+                        offset: Offset(1, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 8,
+                top: 1,
+                bottom: 1,
+                width: 25,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color.lerp(spine, Colors.white, .1)!,
+                        spine,
+                        Color.lerp(spine, Colors.black, .08)!,
+                      ],
+                    ),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(6),
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .3),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              Positioned(
+                left: 17,
+                top: 0,
+                bottom: 0,
+                width: 25,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color.lerp(spine, Colors.white, .18)!,
+                        spine,
+                        Color.lerp(spine, Colors.black, .13)!,
+                      ],
+                    ),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(6),
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .34),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 25,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.lerp(cover, Colors.white, .27)!,
+                        cover,
+                        Color.lerp(cover, Colors.black, .12)!,
+                      ],
+                      stops: const [0, .54, 1],
+                    ),
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: selected
+                          ? Colors.white
+                          : Color.lerp(cover, spine, .55)!,
+                      width: selected ? 2 : 1,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x3B000000),
+                        blurRadius: 5,
+                        offset: Offset(2, 3),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: radius,
+                    child: Stack(
                       children: [
-                        Text(
-                          book.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(color: Color(0x55000000), blurRadius: 2),
-                            ],
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 32,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .75),
+                              border: Border(
+                                right: BorderSide(
+                                  color: spine.withValues(alpha: .28),
+                                ),
+                              ),
+                            ),
+                            child: Icon(
+                              _bookTypeIcon(book.type),
+                              color: accent,
+                              size: 21,
+                            ),
                           ),
                         ),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white.withValues(alpha: .86),
+                        Positioned(
+                          left: 42,
+                          right: selected ? 38 : 10,
+                          top: 0,
+                          bottom: 0,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  book.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color.lerp(
+                                      Colors.black,
+                                      accent,
+                                      .18,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color.lerp(
+                                      Colors.black,
+                                      accent,
+                                      .44,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                        Positioned(
+                          right: selected ? 29 : 14,
+                          top: 3,
+                          bottom: 3,
+                          child: Opacity(
+                            opacity: selected ? .24 : .28,
+                            child: Icon(
+                              Icons.eco_outlined,
+                              color: accent,
+                              size: 35,
+                            ),
+                          ),
+                        ),
+                        if (selected)
+                          Positioned(
+                            right: 10,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: CircleAvatar(
+                                radius: 10.5,
+                                backgroundColor: accent,
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 15,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
-                if (selected)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 6),
-                    child: CircleAvatar(
-                      radius: 11,
-                      backgroundColor: AppColors.primary,
-                      child: Icon(Icons.check, color: Colors.white, size: 15),
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1477,7 +1929,79 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) => false;
 }
 
-enum _BookAction { rename, delete, type, shared }
+enum _BookAction { rename, delete, type, shared, assets, sort, defaultBook }
+
+class _BookOrderSheet extends StatefulWidget {
+  const _BookOrderSheet({required this.books});
+
+  final List<LedgerBook> books;
+
+  @override
+  State<_BookOrderSheet> createState() => _BookOrderSheetState();
+}
+
+class _BookOrderSheetState extends State<_BookOrderSheet> {
+  late final List<LedgerBook> _books = [...widget.books];
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .72,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '排序账本',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '长按拖动，顺序会同步到书架和首页切换列表',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ReorderableListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _books.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    setState(() {
+                      final book = _books.removeAt(oldIndex);
+                      _books.insert(newIndex, book);
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final book = _books[index];
+                    return ListTile(
+                      key: ValueKey(book.id),
+                      leading: const Icon(Icons.menu),
+                      title: Text(book.name),
+                      subtitle: Text(book.type.label),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _books.map((book) => book.id).toList(growable: false),
+                ),
+                child: const Text('保存顺序'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 Future<BookType?> _askType(BuildContext context) => showDialog<BookType>(
   context: context,
