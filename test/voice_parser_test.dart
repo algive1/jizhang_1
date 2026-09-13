@@ -41,6 +41,18 @@ void main() {
     expect(lunch.usedAi, isFalse);
   });
 
+  test('voice rules and AI preserve account suffixes', () async {
+    final spoken = await rules.parse('午饭32支付宝后四位4126', now: now);
+    expect(spoken.transactions.single.identifierSuffix, '4126');
+
+    final decoded = const AiTransactionJsonDecoder().decode(
+      '[{"type":"expense","amount":38,"category":"交通",'
+      '"occurredAt":"2026-08-30T23:00:00",'
+      '"account":"银行卡-7777"}]',
+    );
+    expect(decoded.single.identifierSuffix, '7777');
+  });
+
   test('relative dates resolve to explicit occurredAt values', () async {
     expect(
       (await rules.parse(

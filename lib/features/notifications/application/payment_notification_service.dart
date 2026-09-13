@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_seeder.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/models/account.dart';
 import '../../books/data/book_repository.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../../core/models/transaction_record.dart';
@@ -98,6 +99,7 @@ class ParsedPaymentNotification {
     required this.merchant,
     required this.occurredAt,
     required this.orderId,
+    this.identifierSuffix,
   });
 
   final double amount;
@@ -105,6 +107,7 @@ class ParsedPaymentNotification {
   final String? merchant;
   final DateTime occurredAt;
   final String? orderId;
+  final String? identifierSuffix;
 }
 
 class PaymentNotificationParser {
@@ -123,6 +126,7 @@ class PaymentNotificationParser {
       merchant: _merchantFor(content),
       occurredAt: notification.postedAt,
       orderId: _orderIdFor(content),
+      identifierSuffix: _identifierSuffixFor(content),
     );
   }
 
@@ -157,6 +161,13 @@ class PaymentNotificationParser {
         .firstMatch(content);
     return match?.group(1);
   }
+
+  String? _identifierSuffixFor(String content) {
+    final match = RegExp(
+      r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,6}([0-9]{4})|(?:银行卡|信用卡|微信|支付宝)[\s_-]?([0-9]{4})',
+    ).firstMatch(content);
+    return match?.group(1) ?? match?.group(2);
+  }
 }
 
 class NotificationAutoBookkeepingSummary {
@@ -187,7 +198,10 @@ class PaymentNotificationAutoBookkeepingService {
   final TransactionRepository transactions;
   final QuickBookkeepingService bookkeeping;
   final PaymentNotificationParser parser;
-  final Future<({String bookId, String accountId})?> Function(String channel)?
+  final Future<({String bookId, String accountId})?> Function(
+    String channel,
+    String? identifierSuffix,
+  )?
   resolveTarget;
   final Future<bool> Function(
     String notificationId,
@@ -230,8 +244,10 @@ class PaymentNotificationAutoBookkeepingService {
         continue;
       }
       final target = resolveTarget == null
-          ? (bookId: SeedIds.personalBook, accountId: parsed.accountId)
-          : await resolveTarget!(parsed.accountId);
+          ? parsed.identifierSuffix == null
+                ? (bookId: SeedIds.personalBook, accountId: parsed.accountId)
+                : null
+          : await resolveTarget!(parsed.accountId, parsed.identifierSuffix);
       if (target == null) {
         waiting++;
         continue;
@@ -253,6 +269,8 @@ class PaymentNotificationAutoBookkeepingService {
           'notificationKey': notificationKey,
           'notificationOrderId': parsed.orderId,
           'paymentPackageName': notification.packageName,
+          if (parsed.identifierSuffix != null)
+            'accountIdentifierSuffix': parsed.identifierSuffix,
         },
       );
       try {
@@ -333,7 +351,7 @@ final paymentNotificationAutoBookkeepingProvider =
       final notificationTransactions = DriftTransactionRepository(database);
       final settings = ref.read(appSettingsRepositoryProvider);
       return PaymentNotificationAutoBookkeepingService(
-        resolveTarget: (channel) async {
+        resolveTarget: (channel, identifierSuffix) async {
           final database = ref.read(databaseProvider);
           final book =
               await settings.get(notificationTargetBookKey) ??
@@ -342,6 +360,17 @@ final paymentNotificationAutoBookkeepingProvider =
               .read(bookRepositoryProvider)
               .getForUser(SeedIds.localUser);
           if (!accessible.any((b) => b.id == book)) return null;
+          if (identifierSuffix != null) {
+            final candidates =
+                (await database.accountDao.getActive(bookId: book)).where(
+                  (account) =>
+                      _notificationTypes(channel)
+                          .contains(AccountType.values.byName(account.type)) &&
+                      account.identifierSuffix == identifierSuffix,
+                );
+            if (candidates.length != 1) return null;
+            return (bookId: book, accountId: candidates.single.id);
+          }
           final accountId =
               await settings.get(notificationAccountKey(book, channel)) ??
               (book == SeedIds.personalBook ? channel : null);
@@ -387,6 +416,13 @@ final paymentNotificationAutoBookkeepingProvider =
         ),
       );
     });
+
+Set<AccountType> _notificationTypes(String channel) => switch (channel) {
+  SeedIds.wechatAccount => {AccountType.wechat},
+  SeedIds.alipayAccount => {AccountType.alipay},
+  SeedIds.bankAccount => {AccountType.debitCard, AccountType.creditCard},
+  _ => const {},
+};
 
 const notificationTargetBookKey = 'notifications.target_book';
 String notificationAccountKey(String book, String channel) =>

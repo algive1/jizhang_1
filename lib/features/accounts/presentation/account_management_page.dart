@@ -20,7 +20,7 @@ class AccountManagementPage extends ConsumerWidget {
     final accounts = accountsAsync.value ?? const <Account>[];
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           _PageHeader(
             title: '账户与资产',
@@ -80,7 +80,7 @@ class AccountManagementPage extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                account.name,
+                                account.displayName,
                                 style: const TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w600,
@@ -160,7 +160,7 @@ class AccountManagementPage extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('归档账户'),
         content: Text(
-          '归档“${account.name}”后不再用于新记账，历史流水和余额仍保留并计入资产总览。可从资产总览恢复。',
+          '归档“${account.displayName}”后不再用于新记账，历史流水和余额仍保留并计入资产总览。可从资产总览恢复。',
         ),
         actions: [
           TextButton(

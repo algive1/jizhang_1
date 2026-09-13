@@ -4,8 +4,10 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
 import '../../../core/models/family.dart';
+import '../../../core/models/book.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../books/data/book_repository.dart';
 import '../../intelligence/application/transaction_intelligence_service.dart';
@@ -34,6 +36,15 @@ class QuickBookkeepingRequest {
     this.isLargeTransaction = false,
     this.tags = const [],
     this.attachmentPaths = const [],
+    this.relatedTransactionId,
+    this.reimbursementStatus = ReimbursementStatus.none,
+    this.reimbursementAmount,
+    this.reimbursementDate,
+    this.reimbursementNote,
+    this.clearReimbursement = false,
+    this.refundStatus = RefundStatus.none,
+    this.refundAmount,
+    this.clearRefund = false,
     this.source = TransactionSource.manual,
     this.userCorrected = false,
     this.metadata = const {},
@@ -58,6 +69,15 @@ class QuickBookkeepingRequest {
   final bool isLargeTransaction;
   final List<String> tags;
   final List<String> attachmentPaths;
+  final String? relatedTransactionId;
+  final ReimbursementStatus reimbursementStatus;
+  final double? reimbursementAmount;
+  final DateTime? reimbursementDate;
+  final String? reimbursementNote;
+  final bool clearReimbursement;
+  final RefundStatus refundStatus;
+  final double? refundAmount;
+  final bool clearRefund;
   final TransactionSource source;
   final bool userCorrected;
   final Map<String, Object?> metadata;
@@ -107,7 +127,36 @@ class QuickBookkeepingService {
     QuickBookkeepingRequest request,
   ) async {
     _validate(request);
-    final updated = _toRecord(request, DateTime.now(), existing: existing);
+    final linkedReimbursements = await _linkedReimbursements(existing.id);
+    if (linkedReimbursements.isNotEmpty) {
+      if (request.clearReimbursement ||
+          (request.reimbursementStatus != ReimbursementStatus.none &&
+              request.reimbursementStatus != existing.reimbursementStatus)) {
+        throw ArgumentError('已有报销回款，请在报销回款流水中编辑或撤销');
+      }
+      final paidCents = linkedReimbursements.fold<int>(
+        0,
+        (sum, item) => sum + (item.amount * 100).round(),
+      );
+      if ((request.amount * 100).round() < paidCents) {
+        throw ArgumentError('原消费金额不能低于已到账的报销金额');
+      }
+    }
+    var updated = _toRecord(request, DateTime.now(), existing: existing);
+    if (linkedReimbursements.isNotEmpty) {
+      final paidCents = linkedReimbursements.fold<int>(
+        0,
+        (sum, item) => sum + (item.amount * 100).round(),
+      );
+      updated = updated.copyWith(
+        reimbursementStatus: paidCents >= (updated.amount * 100).round()
+            ? ReimbursementStatus.reimbursed
+            : ReimbursementStatus.partial,
+        reimbursementAmount: paidCents / 100,
+        reimbursementDate: existing.reimbursementDate,
+        reimbursementNote: existing.reimbursementNote,
+      );
+    }
     final saved = await _transactions.update(updated);
     try {
       await _persistAttachments([saved], [request]);
@@ -120,6 +169,19 @@ class QuickBookkeepingService {
       );
     }
     return saved;
+  }
+
+  Future<List<TransactionRecord>> _linkedReimbursements(
+    String transactionId,
+  ) async {
+    return (await _transactions.getAll())
+        .where(
+          (item) =>
+              item.deletedAt == null &&
+              item.type == TransactionType.reimbursement &&
+              item.relatedTransactionId == transactionId,
+        )
+        .toList(growable: false);
   }
 
   Future<List<TransactionRecord>> saveAll(
@@ -202,6 +264,18 @@ class QuickBookkeepingService {
     if (request.isOneTime && request.isRecurring) {
       throw ArgumentError('A transaction cannot be one-time and recurring');
     }
+    if (request.reimbursementAmount != null &&
+        (!request.reimbursementAmount!.isFinite ||
+            request.reimbursementAmount! <= 0 ||
+            request.reimbursementAmount! > request.amount)) {
+      throw ArgumentError('报销金额必须大于 0 且不超过原流水金额');
+    }
+    if (request.refundAmount != null &&
+        (!request.refundAmount!.isFinite ||
+            request.refundAmount! <= 0 ||
+            request.refundAmount! > request.amount)) {
+      throw ArgumentError('退款金额必须大于 0 且不超过原流水金额');
+    }
   }
 
   TransactionRecord _toRecord(
@@ -228,6 +302,18 @@ class QuickBookkeepingService {
       }
       metadata.addAll(request.metadata);
     }
+    final reimbursementStatus =
+        request.reimbursementStatus == ReimbursementStatus.none &&
+            existing != null &&
+            !request.clearReimbursement
+        ? existing.reimbursementStatus
+        : request.reimbursementStatus;
+    final refundStatus =
+        request.refundStatus == RefundStatus.none &&
+            existing != null &&
+            !request.clearRefund
+        ? existing.refundStatus
+        : request.refundStatus;
     return TransactionRecord(
       id: existing?.id ?? request.transactionId ?? 'local-${newEntityId()}',
       bookId:
@@ -260,6 +346,22 @@ class QuickBookkeepingService {
       syncStatus: existing?.syncStatus ?? SyncStatus.localOnly,
       deviceId: existing?.deviceId,
       originalTransactionId: existing?.originalTransactionId,
+      relatedTransactionId:
+          request.relatedTransactionId ?? existing?.relatedTransactionId,
+      reimbursementStatus: reimbursementStatus,
+      reimbursementAmount: reimbursementStatus == ReimbursementStatus.none
+          ? null
+          : request.reimbursementAmount ?? existing?.reimbursementAmount,
+      reimbursementDate: reimbursementStatus == ReimbursementStatus.none
+          ? null
+          : request.reimbursementDate ?? existing?.reimbursementDate,
+      reimbursementNote: reimbursementStatus == ReimbursementStatus.none
+          ? null
+          : request.reimbursementNote ?? existing?.reimbursementNote,
+      refundStatus: refundStatus,
+      refundAmount: refundStatus == RefundStatus.none
+          ? null
+          : request.refundAmount ?? existing?.refundAmount,
       metadataJson: metadata.isEmpty
           ? existing?.metadataJson
           : jsonEncode(metadata),
@@ -297,7 +399,17 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
   ref,
 ) {
   return QuickBookkeepingService(
-    ref.watch(transactionRepositoryProvider),
+    // The form may explicitly target a different ledger than the global
+    // browsing ledger. The request's bookId remains validated by the
+    // transaction repository against its referenced accounts/categories.
+    DriftTransactionRepository(
+      ref.watch(databaseProvider),
+      accountBookIdForBook: (bookId) =>
+          (ref.watch(booksProvider).value ?? const <LedgerBook>[])
+              .where((book) => book.id == bookId)
+              .firstOrNull
+              ?.assetBookId,
+    ),
     ref.watch(appSettingsRepositoryProvider),
     intelligence: ref.watch(transactionIntelligenceServiceProvider),
     activeBookId: () => ref.read(activeBookIdProvider),

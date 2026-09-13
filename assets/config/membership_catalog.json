@@ -1,0 +1,95 @@
+{
+  "plans": [
+    {
+      "id": "monthly",
+      "title": "月度会员",
+      "months": 1,
+      "priceInCents": 1200,
+      "description": "灵活体验\n适合初次使用",
+      "recommended": false
+    },
+    {
+      "id": "quarterly",
+      "title": "季度会员",
+      "months": 3,
+      "priceInCents": 3000,
+      "description": "性价比之选\n大多数用户的选择",
+      "recommended": true
+    },
+    {
+      "id": "yearly",
+      "title": "年度会员",
+      "months": 12,
+      "priceInCents": 9800,
+      "description": "长期更划算\n适合深度使用",
+      "recommended": false
+    }
+  ],
+  "benefits": [
+    {
+      "id": "automatic",
+      "title": "自动记账",
+      "subtitle": "智能识别收支",
+      "detail": "自动记账的可用范围以当前设备和功能设置为准。"
+    },
+    {
+      "id": "books",
+      "title": "多账本管理",
+      "subtitle": "家庭/情侣/企业",
+      "detail": "分类管理个人、家庭与共享账本。"
+    },
+    {
+      "id": "statistics",
+      "title": "高级统计",
+      "subtitle": "多维度图表分析",
+      "detail": "查看收支趋势与资产报表。"
+    },
+    {
+      "id": "cloud",
+      "title": "云同步备份",
+      "subtitle": "多设备数据同步",
+      "detail": "云同步需配置服务并登录账号，请同时保留本地备份。"
+    },
+    {
+      "id": "assets",
+      "title": "资产管理",
+      "subtitle": "多账户统一管理",
+      "detail": "集中查看资产、负债与账户余额。"
+    },
+    {
+      "id": "export",
+      "title": "数据导出",
+      "subtitle": "CSV 数据导出",
+      "detail": "当前版本支持 CSV 导出，可使用 Excel 打开。"
+    },
+    {
+      "id": "theme",
+      "title": "主题皮肤",
+      "subtitle": "专属视觉体验",
+      "detail": "主题能力以当前版本实际开放情况为准。"
+    },
+    {
+      "id": "support",
+      "title": "专属客服",
+      "subtitle": "优先响应支持",
+      "detail": "客服服务与渠道尚待开放。"
+    }
+  ],
+  "faqs": [
+    {
+      "id": "0",
+      "question": "会员开通后可以在哪些设备使用？",
+      "answer": "登录同一账号后，可在产品支持的设备上使用已开放的会员权益。具体范围以当前版本为准。"
+    },
+    {
+      "id": "1",
+      "question": "已经购买的会员可以退款吗？",
+      "answer": "退款需遵循实际支付渠道与会员服务协议；请通过客服提交订单号和退款原因。"
+    },
+    {
+      "id": "2",
+      "question": "会员到期后，数据会丢失吗？",
+      "answer": "会员到期不会主动删除已有记账数据；会员功能按届时权益规则处理。建议定期导出备份。"
+    }
+  ]
+}

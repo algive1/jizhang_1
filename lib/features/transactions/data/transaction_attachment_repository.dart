@@ -66,6 +66,9 @@ class DriftTransactionAttachmentRepository
         normalizedPaths.add(normalized);
       }
     }
+    if (normalizedPaths.length > 4) {
+      throw ArgumentError('一笔流水最多保留 4 个附件');
+    }
 
     await _database.transaction(() async {
       final transaction = await _database.transactionDao.findActiveById(

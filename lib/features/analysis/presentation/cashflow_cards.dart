@@ -1,11 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/cashflow_trend_chart.dart';
 import '../../../core/widgets/money_text.dart';
 
 class CashflowSummaryCard extends StatelessWidget {
@@ -116,27 +115,72 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
     final points = widget.snapshot.cashflowTrend;
     final hasData =
         widget.snapshot.incomeCount + widget.snapshot.expenseCount > 0;
-    final selected = points.isEmpty
-        ? null
-        : points[_selected ?? points.length - 1];
-    final maximum = points.fold<double>(
-      0,
-      (max, p) => math.max(max, math.max(p.income, p.expense)),
-    );
-    return AppCard(
+    final selectedIndex = points.isEmpty
+        ? 0
+        : (_selected ?? points.length - 1).clamp(0, points.length - 1).toInt();
+    final selected = points.isEmpty ? null : points[selectedIndex];
+    final averageExpense = widget.snapshot.range.dayCount <= 0
+        ? 0.0
+        : widget.snapshot.totalExpense / widget.snapshot.range.dayCount;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFEFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF0EEE5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x07000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('收支趋势', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 16,
+          Row(
             children: [
-              Text('● 收入', style: TextStyle(color: AppColors.income)),
-              const Text('● 支出', style: TextStyle(color: AppColors.warning)),
+              const Expanded(
+                child: Text(
+                  '收支趋势',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
               Text(
                 '单位 ${widget.snapshot.currency}',
-                style: const TextStyle(fontSize: 12),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  '本期支出 ¥${MoneyFormatter.whole(widget.snapshot.totalExpense)}  · 日均 ¥${MoneyFormatter.whole(averageExpense)}',
+                  style: const TextStyle(
+                    color: AppColors.primaryDark,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _TrendLegend(color: AppColors.income, label: '收入'),
+                  _TrendLegend(color: AppColors.warning, label: '支出'),
+                ],
               ),
             ],
           ),
@@ -146,58 +190,35 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
               child: Text('这个周期还没有收支记录'),
             )
           else ...[
-            const SizedBox(height: 14),
-            Text(
-              '最高 ${MoneyFormatter.decimal(maximum)}',
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
+            const SizedBox(height: 8),
+            Semantics(
+              label: '每日收入支出趋势，点击图表查看当天金额',
+              child: CashflowTrendChart(
+                key: const ValueKey('cashflow-trend-plot'),
+                points: points,
+                selected: selectedIndex,
+                showIncome: true,
+                showExpense: true,
+                onSelected: (index) => setState(() => _selected = index),
+                bubbleLabel:
+                    '支 ${MoneyFormatter.whole(selected?.expense ?? 0)}',
               ),
             ),
-            const SizedBox(height: 6),
-            LayoutBuilder(
-              builder: (context, constraints) => Semantics(
-                label: '每日收入支出趋势，点击图表查看当天金额',
-                child: GestureDetector(
-                  onTapDown: (event) {
-                    final index =
-                        ((event.localPosition.dx / constraints.maxWidth) *
-                                (points.length - 1))
-                            .round()
-                            .clamp(0, points.length - 1);
-                    setState(() => _selected = index);
-                  },
-                  child: SizedBox(
-                    height: 140,
-                    width: double.infinity,
-                    child: CustomPaint(
-                      key: const ValueKey('cashflow-trend-plot'),
-                      painter: _CashflowPainter(points, maximum, _selected),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_date(points.first.date)),
-                Text(_date(points.last.date)),
-              ],
-            ),
-            const SizedBox(height: 12),
             if (selected != null)
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  Text('${_date(selected.date)} ·'),
-                  Text(
-                    '收入 ${MoneyFormatter.decimal(selected.income)}',
-                    style: TextStyle(color: AppColors.income),
-                  ),
-                  Text('支出 ${MoneyFormatter.decimal(selected.expense)}'),
-                ],
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    Text('${_date(selected.date)} ·'),
+                    Text(
+                      '收入 ${MoneyFormatter.decimal(selected.income)}',
+                      style: const TextStyle(color: AppColors.income),
+                    ),
+                    Text('支出 ${MoneyFormatter.decimal(selected.expense)}'),
+                  ],
+                ),
               ),
           ],
         ],
@@ -208,52 +229,30 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
   String _date(DateTime date) => '${date.month}月${date.day}日';
 }
 
-class _CashflowPainter extends CustomPainter {
-  _CashflowPainter(this.points, this.maximum, this.selected);
-  final List<CashflowPoint> points;
-  final double maximum;
-  final int? selected;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = AppColors.divider
-      ..strokeWidth = 1;
-    for (var row = 0; row <= 3; row++) {
-      final y = 5 + (size.height - 10) * row / 3;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-    for (var kind = 0; kind < 2; kind++) {
-      final color = kind == 0 ? AppColors.income : AppColors.warning;
-      final line = Paint()
-        ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
-      final path = Path();
-      for (var i = 0; i < points.length; i++) {
-        final value = kind == 0 ? points[i].income : points[i].expense;
-        final x = points.length == 1
-            ? size.width / 2
-            : i / (points.length - 1) * size.width;
-        final y =
-            size.height - 5 - value / math.max(1, maximum) * (size.height - 10);
-        if (i == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-        if (i == selected || points.length == 1) {
-          canvas.drawCircle(Offset(x, y), 4, Paint()..color = color);
-        }
-      }
-      canvas.drawPath(path, line);
-    }
-  }
+class _TrendLegend extends StatelessWidget {
+  const _TrendLegend({required this.color, required this.label});
+
+  final Color color;
+  final String label;
 
   @override
-  bool shouldRepaint(_CashflowPainter oldDelegate) =>
-      oldDelegate.points != points ||
-      oldDelegate.maximum != maximum ||
-      oldDelegate.selected != selected;
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+        ),
+      ],
+    );
+  }
 }
 
 class CashflowCategoriesCard extends StatefulWidget {

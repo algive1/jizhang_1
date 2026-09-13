@@ -7,6 +7,7 @@ import 'package:jizhang_app/app/app.dart';
 import 'package:jizhang_app/core/database/app_database.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/core/widgets/app_bottom_navigation.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/recurring_bill.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
@@ -53,7 +54,7 @@ void main() {
       );
       expect(find.text('周日'), findsOneWidget);
 
-      await tester.tap(find.text('流水').last);
+      GoRouter.of(tester.element(find.text('周日'))).go('/transactions');
       await tester.pumpAndSettle();
       expect(find.text('本月支出'), findsOneWidget);
 
@@ -68,6 +69,8 @@ void main() {
       await tester.pump();
       expect(find.text('最近存入'), findsOneWidget);
 
+      GoRouter.of(tester.element(find.text('最近存入'))).go('/goals');
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.person_outline));
       await tester.pumpAndSettle();
       expect(find.text('普通会员'), findsOneWidget);
@@ -306,13 +309,16 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
-    expect(find.text('记一笔'), findsOneWidget);
+    // 四个类型页签常驻首行；债务页签是本轮新增入口。
+    expect(find.byKey(const ValueKey('quick-type-expense')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-type-income')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-type-transfer')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-type-debt')), findsOneWidget);
     expect(find.text('支出'), findsWidgets);
     expect(find.text('收入'), findsWidgets);
     expect(find.text('转账'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('quick-amount-input')));
-    await tester.pumpAndSettle();
+    // 键盘常驻，进入页面即可输入，不需要先点金额框。
     await tester.tap(find.byKey(const ValueKey('amount-key-3')));
     await tester.tap(find.byKey(const ValueKey('amount-key-6')));
     await tester.pump();
@@ -364,11 +370,17 @@ void main() {
         find.byKey(const ValueKey('quick-amount-input')),
       );
       expect(amountRect.top, greaterThan(categoryRect.bottom));
-      expect(amountRect.height, greaterThanOrEqualTo(78));
+      expect(amountRect.height, greaterThanOrEqualTo(56));
 
-      await tester.tapAt(amountRect.topLeft + const Offset(12, 12));
+      // 键盘常驻：数字、运算符、「再记」和「完成」都在同一屏内。
+      expect(find.byKey(const ValueKey('amount-key-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('amount-key-+')), findsOneWidget);
+      expect(find.byKey(const ValueKey('amount-key-×')), findsOneWidget);
+      expect(find.byKey(const ValueKey('quick-repeat')), findsOneWidget);
+      expect(find.byKey(const ValueKey('quick-done')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('清空金额'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('quick-keyboard-done')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -450,15 +462,20 @@ void main() {
         expect(find.text('转出'), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('quick-type-expense')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('quick-amount-input')));
-        await tester.pumpAndSettle();
         for (var i = 0; i < 7; i++) {
           await tester.tap(find.byKey(const ValueKey('amount-key-9')));
         }
         await tester.pumpAndSettle();
         expect(find.text('¥ 9999999.00'), findsOneWidget);
         expect(tester.takeException(), isNull);
-        await tester.tap(find.byKey(const ValueKey('quick-keyboard-done')));
+        // 计算器：表达式与实时结果同屏显示。
+        await tester.tap(find.byKey(const ValueKey('amount-key-+')));
+        await tester.tap(find.byKey(const ValueKey('amount-key-1')));
+        await tester.pumpAndSettle();
+        expect(find.text('9999999+1'), findsOneWidget);
+        expect(find.text('= ¥10000000.00'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byTooltip('清空金额'));
         await tester.pumpAndSettle();
         tester.view.viewInsets = const FakeViewPadding(bottom: 250);
         await tester.pumpAndSettle();
@@ -621,6 +638,16 @@ void main() {
       ]) {
         router.go(route);
         await tester.pumpAndSettle();
+        expect(
+          find.byType(AppBottomNavigation),
+          findsNothing,
+          reason: 'secondary route $route should not show global navigation',
+        );
+        expect(
+          find.byType(FloatingActionButton),
+          findsNothing,
+          reason: 'secondary route $route should not show global add action',
+        );
         expect(
           errors,
           isEmpty,

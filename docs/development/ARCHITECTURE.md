@@ -1,10 +1,10 @@
 # 好好记账项目架构、功能与节点总览
 
-更新时间：2026-09-11
+更新时间：2026-09-12
 
 ## 1. 结论先行
 
-当前项目是一个 Flutter 移动端、本地优先的记账应用。主链路使用真实 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本通过独立 Node.js 共享服务完成本地双端联调。手动记账、账户余额联动、转账、编辑、软删除、目标、预算、收支分析、商户分类记忆和本地去重均有实际代码与测试覆盖。
+当前项目是一个 Flutter 移动端、本地优先的记账应用。主链路使用真实 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本通过独立 Node.js 共享服务完成本地双端联调。手动记账、账户余额联动、转账、编辑、软删除、目标、预算、收支分析、商户分类记忆和本地去重均有实际代码与测试覆盖。本轮又补齐统一流水关联、报销、退款、消费日历、周期账单、信用卡分期、账户详情和增强搜索。
 
 会员、支付、公网部署、云端 AI 和第三方广告仍没有生产联调；共享后端已提供真实本地服务、权限、版本和冲突契约，不能把本地联调理解为公网已上线。
 
@@ -12,16 +12,16 @@
 
 | 项目 | 当前值 |
 | --- | ---: |
-| Flutter/Dart 源文件（不含 generated） | 103 个 |
-| 业务 Dart 代码量（不含 `app_database.g.dart`） | 20,325 行 |
-| Drift 生成代码 | 21,743 行 |
-| Feature 模块 | 18 个 |
-| SQLite 表 | 20 张 |
+| Flutter/Dart 源文件（不含 generated） | 143 个 |
+| 业务 Dart 代码量（不含 `app_database.g.dart`） | 34,928 行 |
+| Drift 生成代码 | 27,069 行 |
+| Feature 模块 | 24 个 |
+| SQLite 表 | 22 张 |
 | Drift DAO | 10 个 |
-| GoRouter 路由节点 | 16 个 |
-| 本轮 `flutter test` | 165 个测试全部通过 |
+| GoRouter 路由节点 | 23 个 |
+| 本轮 `flutter test` | 230 个测试全部通过 |
 
-项目根目录当前不是 Git repository，因此不能通过提交历史确认代码演进，只能以工作区当前文件和验证结果为准。
+当前工作区包含此前多个功能切片的未提交改动；本轮未执行 reset、checkout 或批量清理，代码演进应以工作区 diff 和验证结果为准。
 
 ## 2. 技术栈与启动链路
 
@@ -41,7 +41,7 @@ main.dart
   → appRouterProvider / AppScaffold
 ```
 
-`JizhangApp` 还注册了生命周期监听：应用首次显示和从后台恢复时，会调用支付通知自动记账服务处理 Android 原生队列。通知处理失败会被后台吞掉，不阻断应用启动。
+`JizhangApp` 还注册了生命周期监听：应用首次显示和从后台恢复时，会调用支付通知自动记账服务处理 Android 原生队列，并执行已勾选 `auto_record` 的周期账单到期补齐。Android 另通过 `AlarmManager` 每日唤醒后台 Flutter isolate，处理周期账单和分期到期流水；每个发生日/分期使用稳定 ID 幂等。失败会保留到周期账单页提示，不阻断应用启动。
 
 统一视觉入口：
 
@@ -95,6 +95,8 @@ databaseProvider
 | `/transactions` | 流水 | 全部/支出/收入、分类筛选、搜索、分析入口、账单收件箱 |
 | `/transactions/search` | 流水搜索 | 商户/分类/备注搜索；复用编辑、分类修正、删除操作 |
 | `/transactions/inbox` | 账单收件箱 | 处理分类不确定、疑似重复、缺少账户 |
+| `/transactions/reimbursements` | 报销管理 | 待报销/已报销汇总、关联回款和统一流水详情 |
+| `/transactions/calendar` | 消费日历 | 月历日金额、当日流水和月份统计 |
 | `/analysis` | 收支分析 | 周期/币种切换、现金流、分类构成、消费习惯与洞察 |
 | `/goals` | 目标列表 | 进行中/已完成目标、新建目标、目标排序 |
 | `/goals/:goalId` | 目标详情 | 编辑、阶段节点、存入/取出/调整、预测、庆祝 |
@@ -104,7 +106,9 @@ databaseProvider
 | `/profile/accounts` | 账户管理 | 新增、编辑、归档/恢复、拖拽排序、余额校准 |
 | `/profile/categories` | 分类管理 | 支出/收入、一级/二级、新增、编辑、排序、隐藏 |
 | `/profile/budgets` | 预算管理 | 月度总预算、分类预算、使用率、日均可用 |
-| `/profile/membership` | 会员与数据安全 | Free/Pro/Family 说明；Pro/Family 暂未购买 |
+| `/profile/recurring-bills` | 周期账单 | 周期配置、到期自动记账、暂停/结束 |
+| `/profile/installments` | 信用卡分期 | 分期计划、详情、每期还款登记 |
+| `/profile/membership` | 会员与数据安全 | 后台 catalog 驱动的套餐/权益、微信/支付宝开通入口、订单记录和服务端会员状态 |
 | `/profile/family` | 家庭/企业共享 | 登录、启用共享、邀请、成员、同步和冲突处理 |
 | `/profile/payment-notifications` | 支付通知记账 | Android 通知权限、开关和待处理通知消费 |
 
@@ -112,7 +116,7 @@ databaseProvider
 
 ## 5. 数据库与数据结构
 
-数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 11`，连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 使用当前 isolate 的 `NativeDatabase`，桌面端使用后台连接。开启了 SQLite foreign keys，并为交易、附件、目标、智能分类、家庭、账本、同步事件和广告事件创建索引。
+数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 15`，连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 使用当前 isolate 的 `NativeDatabase`，桌面端使用后台连接。开启了 SQLite foreign keys，并为交易、附件、目标、智能分类、家庭、账本、同步事件和广告事件创建索引。
 
 ### 5.1 核心业务表
 
@@ -126,6 +130,8 @@ databaseProvider
 | `goal_milestones` | 目标阶段节点 | 目标、金额、顺序、完成时间、庆祝状态 |
 | `goal_contributions` | 目标贡献流水 | 存入/取出/调整、来源流水预留、贡献人 |
 | `budgets` | 月预算 | `bookId`、月份、可选分类、金额；唯一约束按账本生效 |
+| `recurring_bills` | 周期账单配置 | 周期、下次日期、账户/分类、自动记账、提醒和状态 |
+| `installment_plans` | 信用卡分期计划 | 原始消费、期数、本金/手续费、信用卡/还款账户、剩余本金和状态 |
 | `app_settings` | 本地偏好 | 当前账本、上次使用账户、seed 版本、首页洞察关闭状态 |
 
 ### 5.2 智能、家庭、广告表
@@ -135,7 +141,7 @@ databaseProvider
 | `merchant_rules` | 个人商户记忆、精确规则、关键词规则 |
 | `economic_events` / `economic_event_records` | 跨渠道同一经济事件候选及流水关联 |
 | `inbox_items` | 分类不确定、疑似重复、缺少账户的待确认项 |
-| `families` / `books` | 家庭协作空间与个人/家庭/企业账本模型 |
+| `families` / `books` | 家庭协作空间与个人/家庭/企业账本模型；`assetSourceBookId` 指定是否共用主账本资产 |
 | `family_members` | 家庭成员与角色 |
 | `family_invitations` | 邀请码、状态、过期时间 |
 | `family_operation_logs` | 家庭共享操作审计 |
@@ -144,7 +150,7 @@ databaseProvider
 
 ### 5.3 迁移与种子
 
-数据库迁移是 forward-only 的 1→11 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器；10→11 创建独立附件表和索引，并把旧交易 `metadata.attachments` 中可识别的路径迁移为记录，malformed 项和其他 metadata 保留。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
+数据库迁移是 forward-only 的 1→15 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器；10→11 创建独立附件表和索引，并把旧交易 `metadata.attachments` 中可识别的路径迁移为记录，malformed 项和其他 metadata 保留；11→12 为账本增加主账本资产来源字段；12→13 增加交易关联、报销和退款字段；13→14 创建周期账单表；14→15 创建分期计划表。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
 
 ## 6. 核心业务调用链
 
@@ -267,7 +273,7 @@ SessionRepository（系统安全存储会话）
 | `data_export` | 导出未删除流水 CSV，带 BOM、字段转义和公式注入保护；可校验并恢复完整 SQLite 备份，包含独立附件记录 | 恢复采用待启动替换，不含独立附件文件；备份没有加密/密码保护 |
 | `voice` | Android/iOS 语音接口抽象、设备端优先、规则解析、多笔确认保存 | 云 ASR/LLM 未接；当前生产 Provider 的 AI parser 为 `null`，AI 文本入口实际仍是规则解析 |
 | `notifications` | Android NotificationListenerService、权限设置、微信/支付宝/云闪付解析、幂等自动记账 | iOS 不支持；不识别通知保留在原生队列，没有完整人工导入修正流程 |
-| `membership` | Free/Pro/Family 模型、权益模型、会员购买记账幂等逻辑 | 真实购买、验签和权益刷新未接 |
+| `membership` | Free/Pro/Family 模型、后台 catalog、微信/支付宝 APP 支付订单、回调验签、会员状态和购买记账幂等逻辑 | 真实商户证书、公网 HTTPS 回调、移动端登记配置仍需部署联调 |
 | `family` | 真实登录、共享启用、邀请、成员角色、撤权和同步状态页 | 仅本地 Node 后端联调；公网/TLS/生产运维未接 |
 | `ads` | 内部推广位配置、受众/频控/内容安全策略、本地事件记录 | `AdProvider` 是 `UnconfiguredAdProvider`；无第三方 SDK、后台配置和真实 Rewarded/Splash |
 | `profile` | 真实汇总入口、会员/家庭/安全/通知/资产/分类/预算导航、连续记账天数 | 提醒设置没有实际能力；帮助只有本地说明弹窗 |
@@ -299,7 +305,7 @@ flutter analyze
 → No issues found
 
 flutter test --reporter compact
-→ All tests passed（165 个）
+→ All tests passed（230 个）
 
 flutter build apk --release
 → Built build/app/outputs/flutter-apk/app-release.apk（77,656,758 bytes）
@@ -320,7 +326,7 @@ server: npm run typecheck && npm test && npm run build
 
 1. **数据规模边界**：流水、分析和去重使用 `watchAll/getAll` 全量读入；新流水去重会与全部历史逐条比较，长期使用需增加 SQL 时间窗口、分页和索引查询。
 2. **AI 入口语义容易误导**：`CachedRetryingAiTransactionParser` 和严格 JSON decoder 已存在，但没有真实 `AiParsingGateway` Provider 注入；“AI 记账”当前不能调用云端模型。
-3. **外部系统范围**：共享后端只完成本地双端联调；公网部署、TLS、会员授权、订单验签、对象存储、云 ASR/LLM、第三方广告和生产埋点仍需要独立协议与测试环境。
+3. **外部系统范围**：共享后端只完成本地双端联调；公网部署、TLS、会员授权、订单验签、对象存储、云 ASR/LLM、第三方广告和生产埋点仍需要独立协议与测试环境。Android 后台任务已接入，但 iOS 后台策略和系统通知仍需平台验收。
 4. **完整备份仍有边界**：用户卸载应用可能丢失本地数据库；当前 SQLite 备份虽包含独立附件记录，但不包含文件内容，也没有加密/密码保护。
 5. **文档有历史漂移**：旧状态记录已移到 `docs/development/archive/audits/DEVELOPMENT_STATUS_legacy.md`，其中仍有旧 schema 和测试数字；后续以本文件、`CURRENT_STATUS.md` 和带日期的实施记录为准。
 6. **发布准备未完成**：Android 正式签名、隐私/通知权限说明、iOS Xcode/Team/Bundle ID、真机语音识别和通知适配仍需单独验收。

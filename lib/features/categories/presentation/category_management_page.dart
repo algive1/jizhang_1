@@ -31,7 +31,7 @@ class _CategoryManagementPageState
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           Row(
             children: [

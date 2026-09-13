@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/database/database_seeder.dart';
 import '../../books/data/book_repository.dart';
 import '../../../core/models/transaction_intelligence.dart';
 
@@ -24,27 +25,33 @@ class DriftBillInboxRepository implements BillInboxRepository {
     this._database, {
     this.bookId = 'book-personal',
   });
-  final String bookId;
+  final String? bookId;
 
   final AppDatabase _database;
 
   @override
   Stream<List<BillInboxItem>> watchPending() {
-    return (_database.select(_database.inboxItemEntries)
-          ..where((r) => r.bookId.equals(bookId) & r.status.equals('pending'))
-          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
-        .watch()
-        .map((rows) => rows.map(_fromEntity).toList(growable: false));
+    final query = _database.select(_database.inboxItemEntries)
+      ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]);
+    if (bookId == null) {
+      query.where((r) => r.status.equals('pending'));
+    } else {
+      query.where((r) => r.bookId.equals(bookId!) & r.status.equals('pending'));
+    }
+    return query.watch().map(
+      (rows) => rows.map(_fromEntity).toList(growable: false),
+    );
   }
 
   @override
   Future<List<BillInboxItem>> getPending() async {
-    return (await (_database.select(_database.inboxItemEntries)..where(
-              (r) => r.bookId.equals(bookId) & r.status.equals('pending'),
-            ))
-            .get())
-        .map(_fromEntity)
-        .toList(growable: false);
+    final query = _database.select(_database.inboxItemEntries);
+    if (bookId == null) {
+      query.where((r) => r.status.equals('pending'));
+    } else {
+      query.where((r) => r.bookId.equals(bookId!) & r.status.equals('pending'));
+    }
+    return (await query.get()).map(_fromEntity).toList(growable: false);
   }
 
   @override
@@ -61,7 +68,7 @@ class DriftBillInboxRepository implements BillInboxRepository {
         : await _database.transactionDao.findById(transactionId);
     if (transactionId != null &&
         (referencedTransaction == null ||
-            referencedTransaction.bookId != bookId)) {
+            (bookId != null && referencedTransaction.bookId != bookId))) {
       throw StateError('收件箱流水必须属于当前账本');
     }
     final item = BillInboxItem(
@@ -77,7 +84,9 @@ class DriftBillInboxRepository implements BillInboxRepository {
     await _database.intelligenceDao.upsertInboxItem(
       InboxItemEntriesCompanion.insert(
         id: item.id,
-        bookId: Value(referencedTransaction?.bookId ?? bookId),
+        bookId: Value(
+          referencedTransaction?.bookId ?? bookId ?? SeedIds.personalBook,
+        ),
         transactionId: Value(transactionId),
         candidateTransactionId: Value(candidateTransactionId),
         reason: reason.name,
@@ -95,7 +104,7 @@ class DriftBillInboxRepository implements BillInboxRepository {
       throw ArgumentError('Resolving requires accepted or dismissed status');
     }
     final existing = await _database.intelligenceDao.findInboxItem(id);
-    if (existing == null || existing.bookId != bookId)
+    if (existing == null || (bookId != null && existing.bookId != bookId))
       throw StateError('Inbox item $id does not exist');
     await _database.intelligenceDao.upsertInboxItem(
       InboxItemEntriesCompanion(
@@ -133,6 +142,10 @@ final billInboxRepositoryProvider = Provider<BillInboxRepository>((ref) {
     ref.watch(databaseProvider),
     bookId: ref.watch(activeBookIdProvider),
   );
+});
+
+final allBookBillInboxRepositoryProvider = Provider<BillInboxRepository>((ref) {
+  return DriftBillInboxRepository(ref.watch(databaseProvider), bookId: null);
 });
 
 final pendingInboxProvider = StreamProvider<List<BillInboxItem>>((ref) async* {

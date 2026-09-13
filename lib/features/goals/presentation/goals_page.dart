@@ -30,6 +30,9 @@ class GoalsPage extends ConsumerWidget {
     final completed = goals
         .where((goal) => goal.status == GoalStatus.completed)
         .toList();
+    final archived = goals
+        .where((goal) => goal.status == GoalStatus.archived)
+        .toList();
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
@@ -83,6 +86,12 @@ class GoalsPage extends ConsumerWidget {
               _SectionTitle(title: '已完成', count: completed.length),
               const SizedBox(height: 10),
               ...completed.map((goal) => _GoalItem(goal: goal)),
+            ],
+            if (archived.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _SectionTitle(title: '已归档', count: archived.length),
+              const SizedBox(height: 10),
+              ...archived.map((goal) => _GoalItem(goal: goal)),
             ],
           ],
         ],

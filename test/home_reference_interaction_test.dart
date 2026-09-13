@@ -6,20 +6,21 @@ import 'package:jizhang_app/core/models/goal.dart';
 import 'package:jizhang_app/features/home/presentation/home_cards.dart';
 
 void main() {
-  testWidgets('privacy hides every monetary figure and restores them', (
+  testWidgets('privacy hides only primary amount and restores it', (
     tester,
   ) async {
     await _pumpCard(tester);
     expect(find.text('¥5,788'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('home-hide-amount')));
     await tester.pump();
-    for (final text in tester.widgetList<Text>(find.byType(Text))) {
-      final content = text.data ?? text.textSpan?.toPlainText() ?? '';
-      expect(content, isNot(contains('5,788')));
-      expect(content, isNot(contains('9,588')));
-      expect(content, isNot(contains('68,500')));
-      expect(content, isNot(contains('160,000')));
-    }
+    final contents = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((text) => text.data ?? text.textSpan?.toPlainText() ?? '')
+        .toList();
+    expect(contents.every((content) => !content.contains('5,788')), isTrue);
+    expect(contents.any((content) => content.contains('9,588')), isTrue);
+    expect(contents.any((content) => content.contains('68,500')), isTrue);
+    expect(contents.any((content) => content.contains('160,000')), isTrue);
     await tester.tap(find.byKey(const ValueKey('home-hide-amount')));
     await tester.pump();
     expect(find.text('¥5,788'), findsOneWidget);
@@ -47,7 +48,7 @@ void main() {
       expect(find.text('¥40,000\n已完成'), findsOneWidget);
       expect(find.text('¥60,000\n已完成'), findsOneWidget);
       expect(find.text('¥80,000\n待达成'), findsOneWidget);
-      expect(find.text('¥20,000\n已完成'), findsNothing);
+      expect(find.text('¥20,000\n已完成'), findsOneWidget);
     },
   );
 }

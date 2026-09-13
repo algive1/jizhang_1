@@ -9,6 +9,7 @@ import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/books/presentation/book_selector.dart';
 import 'package:jizhang_app/features/membership/data/membership_repository.dart';
 import 'package:jizhang_app/core/models/membership.dart';
+import 'package:jizhang_app/core/widgets/membership_button.dart';
 
 void main() {
   testWidgets('drawer renders real types and confirms a successful switch', (
@@ -42,6 +43,8 @@ void main() {
     await tester.tap(find.byType(BookSelectorButton));
     await tester.pumpAndSettle();
 
+    expect(find.byType(MembershipButton), findsOneWidget);
+    expect(find.byTooltip('会员'), findsOneWidget);
     expect(find.text('记录自己的精彩生活'), findsOneWidget);
     expect(find.text('和家人一起打理幸福'), findsOneWidget);
     expect(find.text('高效管理商务收支'), findsNothing);
@@ -53,6 +56,14 @@ void main() {
     await tester.tap(find.text(family.name).last);
     await tester.pump(const Duration(milliseconds: 300));
     expect(container.read(activeBookIdProvider), family.id);
+
+    await tester.tap(find.byType(BookSelectorButton));
+    await tester.pumpAndSettle();
+    expect(find.text('管理'), findsNothing);
+    expect(find.byTooltip('关闭书架'), findsNothing);
+    await tester.drag(find.text('记录生活  更好地生活').last, const Offset(0, 96));
+    await tester.pumpAndSettle();
+    expect(find.byType(MembershipButton), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -247,6 +258,8 @@ void main() {
       await tester.tap(find.byKey(ValueKey('book-manage-${family.id}')));
       await tester.pumpAndSettle();
       expect(find.text('重命名账本'), findsOneWidget);
+      expect(find.text('排序账本'), findsOneWidget);
+      expect(find.textContaining('设为默认账本'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -364,7 +377,52 @@ void main() {
     final created = books.singleWhere((book) => book.name == '旅行账本');
     expect(container.read(activeBookIdProvider), created.id);
     expect(find.text('已创建并切换到「旅行账本」'), findsOneWidget);
-    expect(find.text('选择账本'), findsNothing);
+    expect(find.text('选择账本'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('book-shelf-row-${created.id}')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting a book keeps the drawer open', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftBookRepository(
+      database,
+      LocalOnlyMembershipRepository(),
+    );
+    final family = await repository.create(name: '家庭账本', type: BookType.family);
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: BookSelectorButton()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BookSelectorButton));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byKey(ValueKey('book-shelf-row-${family.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除账本'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择账本'), findsOneWidget);
+    expect(find.byKey(ValueKey('book-all-row-${family.id}')), findsNothing);
+    expect(find.text('已删除「家庭账本」'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

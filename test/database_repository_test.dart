@@ -93,6 +93,26 @@ void main() {
     expect(await _totalBalance(database), before);
   });
 
+  test('soft-delete is scoped to the current book', () async {
+    await repository.create(
+      _transaction(
+        id: 'scoped-expense',
+        type: TransactionType.expense,
+        amount: 10,
+        accountId: 'cash',
+      ),
+    );
+    final otherBook = DriftTransactionRepository(
+      database,
+      bookId: 'book-other',
+    );
+
+    await otherBook.softDelete('scoped-expense');
+
+    expect(await repository.getById('scoped-expense'), isNotNull);
+    expect(await _balance(database, 'cash'), 90);
+  });
+
   test('transaction currency survives create and update', () async {
     await database.accountDao.writeFields(
       'cash',
@@ -115,6 +135,39 @@ void main() {
       throwsArgumentError,
     );
     expect((await repository.getAll()).single.currency, 'USD');
+  });
+
+  test('reimbursement and refund relations persist without duplicating the source row', () async {
+    final original =
+        _transaction(
+          id: 'reimbursement-original',
+          type: TransactionType.expense,
+          amount: 500,
+          accountId: 'cash',
+        ).copyWith(
+          reimbursementStatus: ReimbursementStatus.pending,
+          reimbursementAmount: 500,
+          reimbursementNote: '出差报销',
+          refundStatus: RefundStatus.none,
+        );
+    await repository.create(original);
+
+    final reimbursement = _transaction(
+      id: 'reimbursement-payment',
+      type: TransactionType.reimbursement,
+      amount: 500,
+      accountId: 'cash',
+    ).copyWith(relatedTransactionId: original.id);
+    await repository.create(reimbursement);
+
+    final restored = await repository.getById(original.id);
+    final related = await repository.getById(reimbursement.id);
+    expect(restored?.reimbursementStatus, ReimbursementStatus.pending);
+    expect(restored?.reimbursementAmount, 500);
+    expect(related?.relatedTransactionId, original.id);
+    expect(await _balance(database, 'cash'), 100);
+    await expectLater(repository.softDelete(original.id), throwsStateError);
+    expect(await repository.getById(original.id), isNotNull);
   });
 
   test('records survive closing and reopening the SQLite file', () async {

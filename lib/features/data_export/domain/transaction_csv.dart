@@ -7,7 +7,9 @@ abstract final class TransactionCsv {
     List<TransactionRecord> transactions,
     List<Account> accounts,
   ) {
-    final names = {for (final account in accounts) account.id: account.name};
+    final names = {
+      for (final account in accounts) account.id: account.displayName,
+    };
     final rows = <List<String>>[
       [
         '流水ID',

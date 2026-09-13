@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/models/book.dart';
 import '../../books/data/book_repository.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -39,6 +40,10 @@ class DriftAccountRepository implements AccountRepository {
     return _map(await _database.accountDao.getActive(bookId: bookId));
   }
 
+  /// Read-only aggregate; callers restrict this to visible asset books.
+  Stream<List<Account>> watchAcrossBooks() =>
+      _database.accountDao.watchAll().map(_map);
+
   @override
   Stream<List<Account>> watchAll() =>
       _database.accountDao.watchAll(bookId: bookId).map(_map);
@@ -53,6 +58,7 @@ class DriftAccountRepository implements AccountRepository {
     if (account.name.trim().isEmpty) {
       throw ArgumentError('Account name cannot be empty');
     }
+    await _validateIdentifier(account);
     if (await _database.accountDao.findById(account.id) != null) {
       throw StateError('Account ${account.id} already exists');
     }
@@ -64,6 +70,7 @@ class DriftAccountRepository implements AccountRepository {
   Future<Account> update(Account account) async {
     await _requireOwned(account.id);
     if (account.name.trim().isEmpty) throw ArgumentError('账户名称不能为空');
+    await _validateIdentifier(account);
     await _database.accountDao.writeFields(
       account.id,
       AccountEntriesCompanion(
@@ -72,6 +79,7 @@ class DriftAccountRepository implements AccountRepository {
         icon: Value(account.icon),
         color: Value(account.color),
         assetForm: Value(account.assetForm.name),
+        identifierSuffix: Value(_normalizedSuffix(account)),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -123,7 +131,7 @@ class DriftAccountRepository implements AccountRepository {
           accountId: id,
           merchant: '余额校准',
           note:
-              '${account.name}：${(account.balanceInCents / 100).toStringAsFixed(2)} → ${(targetCents / 100).toStringAsFixed(2)}',
+              '${account.name}${account.identifierSuffix == null ? '' : '-${account.identifierSuffix}'}：${(account.balanceInCents / 100).toStringAsFixed(2)} → ${(targetCents / 100).toStringAsFixed(2)}',
           occurredAt: now,
           createdAt: now,
           updatedAt: now,
@@ -151,6 +159,7 @@ class DriftAccountRepository implements AccountRepository {
             openingBalance: row.openingBalanceInCents / 100,
             currency: row.currency,
             assetForm: AssetForm.values.byName(row.assetForm),
+            identifierSuffix: row.identifierSuffix,
             icon: row.icon,
             color: row.color,
             sortOrder: row.sortOrder,
@@ -174,6 +183,7 @@ class DriftAccountRepository implements AccountRepository {
       ),
       currency: Value(account.currency),
       assetForm: Value(account.assetForm.name),
+      identifierSuffix: Value(_normalizedSuffix(account)),
       icon: Value(account.icon),
       color: Value(account.color),
       sortOrder: Value(account.sortOrder),
@@ -182,13 +192,54 @@ class DriftAccountRepository implements AccountRepository {
       updatedAt: Value(account.updatedAt),
     );
   }
+
+  String? _normalizedSuffix(Account account) {
+    final suffix = account.identifierSuffix?.trim();
+    return suffix == null || suffix.isEmpty ? null : suffix;
+  }
+
+  Future<void> _validateIdentifier(Account account) async {
+    final suffix = _normalizedSuffix(account);
+    if (!account.type.requiresIdentifierSuffix) {
+      if (suffix != null) throw ArgumentError('该账户类型不需要填写识别后四位');
+      return;
+    }
+    if (suffix == null || !RegExp(r'^\d{4}$').hasMatch(suffix)) {
+      throw ArgumentError('${account.type.identifierInputLabel}必须是 4 位数字');
+    }
+    final duplicate = await _database.accountDao.findByIdentifierSuffix(
+      bookId: bookId,
+      suffix: suffix,
+      excludingId: account.id,
+    );
+    if (duplicate != null) {
+      throw ArgumentError('当前账本已有账户使用后四位 $suffix，请填写其他后四位');
+    }
+  }
 }
 
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   return DriftAccountRepository(
     ref.watch(databaseProvider),
-    bookId: ref.watch(activeBookIdProvider),
+    bookId:
+        ref.watch(activeBookProvider)?.assetBookId ??
+        ref.watch(activeBookIdProvider),
   );
+});
+
+final accountsByBookProvider = StreamProvider.family<List<Account>, String>((
+  ref,
+  bookId,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final books = ref.watch(booksProvider).value ?? const <LedgerBook>[];
+  final assetBookId =
+      books.where((book) => book.id == bookId).firstOrNull?.assetBookId ??
+      bookId;
+  yield* DriftAccountRepository(
+    ref.watch(databaseProvider),
+    bookId: assetBookId,
+  ).watchActive();
 });
 
 final accountsProvider = StreamProvider<List<Account>>((ref) async* {
@@ -199,4 +250,19 @@ final accountsProvider = StreamProvider<List<Account>>((ref) async* {
 final allAccountsProvider = StreamProvider<List<Account>>((ref) async* {
   await ref.watch(databaseBootstrapProvider.future);
   yield* ref.watch(accountRepositoryProvider).watchAll();
+});
+
+/// Deduplicated accounts for the asset dashboard, including archived accounts.
+final assetDashboardAccountsProvider = StreamProvider<List<Account>>((
+  ref,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final books = await ref.watch(booksProvider.future);
+  final assetBookIds = books.map((book) => book.assetBookId).toSet();
+  yield* DriftAccountRepository(ref.watch(databaseProvider))
+      .watchAcrossBooks()
+      .map(
+        (accounts) =>
+            accounts.where((a) => assetBookIds.contains(a.bookId)).toList(),
+      );
 });

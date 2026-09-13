@@ -51,3 +51,17 @@ test('批量原子性、校准版本、负余额、邀请过期、共享额度',
  const inv=store.invite(book,'owner');store.db.prepare('UPDATE invitations SET expires_at=? WHERE id=?').run(now-1,inv.id);assert.throws(()=>store.accept(inv.code,'guest'),/过期/);
  store.create('owner','enterprise','企业','enterprise',[]);store.create('owner','third','第三本','family',[]);assert.throws(()=>store.create('owner','fourth','第四本','family',[]),/上限/);
 });
+
+test('服务端拒绝已删除原流水继续被关联',async(t)=>{
+ const {app,store}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
+ store.db.prepare('INSERT INTO users VALUES(?,?,?,?)').run('owner','owner','unused',now);
+ const book='relation-book';store.create('owner',book,'家庭','family',[{kind:'accounts',id:'cash',data:account(book)}]);
+ const original=tx(book,'original',500);
+ store.mutate(book,'owner',[op('transactions',original)]);
+ const refund={...tx(book,'refund',100),type:'refund',related_transaction_id:'original'};
+ store.mutate(book,'owner',[op('transactions',refund)]);
+ assert.throws(()=>store.mutate(book,'owner',[op('transactions',{...original,deleted_at:now+1,updated_at:now+1},1)]),/不存在或已删除/);
+ store.mutate(book,'owner',[op('transactions',{...refund,deleted_at:now+2,updated_at:now+2},1)]);
+ store.mutate(book,'owner',[op('transactions',{...original,deleted_at:now+3,updated_at:now+3},1)]);
+ assert.equal(store.get(book,'transactions','original')?.data.deleted_at,now+3);
+});

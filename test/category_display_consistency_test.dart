@@ -7,6 +7,7 @@ import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 import 'package:jizhang_app/core/widgets/category_icon.dart';
+import 'package:jizhang_app/core/widgets/transaction_tile.dart';
 
 void main() {
   testWidgets('vivid and list category icons use the same glyph', (
@@ -73,6 +74,71 @@ void main() {
     expect(changed.categoryIcon, isNull);
     expect(original.copyWith(categoryName: '新名称').categoryName, '新名称');
   });
+
+  test('transaction display title uses note, merchant, then category', () {
+    final now = DateTime(2026, 9, 11);
+    final transaction = TransactionRecord(
+      id: 'display-title',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: 18,
+      accountId: 'account-cash',
+      categoryId: 'expense-food',
+      categoryName: '餐饮',
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    expect(transaction.displayCategoryLabel, '餐饮');
+    expect(transaction.displayTitle, '餐饮');
+    expect(transaction.copyWith(merchant: '午餐店').displayTitle, '午餐店');
+    expect(
+      transaction.copyWith(merchant: '午餐店', note: '和同事一起').displayTitle,
+      '和同事一起',
+    );
+    expect(
+      transaction.copyWith(categoryName: '  ').displayCategoryLabel,
+      '未分类',
+    );
+  });
+
+  testWidgets(
+    'transaction tile shows category without note and note when set',
+    (tester) async {
+      final now = DateTime(2026, 9, 11);
+      final transaction = TransactionRecord(
+        id: 'tile-display-title',
+        bookId: 'book-personal',
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: 'account-cash',
+        categoryId: 'expense-food',
+        categoryName: '餐饮',
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      Future<void> pump(TransactionRecord value) => tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: SizedBox(
+              width: 393,
+              child: TransactionTile(transaction: value, homeStyle: true),
+            ),
+          ),
+        ),
+      );
+
+      await pump(transaction);
+      expect(find.text('餐饮'), findsOneWidget);
+
+      await pump(transaction.copyWith(note: '和同事一起'));
+      expect(find.text('和同事一起'), findsOneWidget);
+      expect(find.text('餐饮'), findsNothing);
+    },
+  );
 
   test('transaction category lookup stays scoped to its ledger', () async {
     final db = createMemoryDatabase();

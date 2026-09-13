@@ -6,7 +6,146 @@ import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../analysis/domain/statistical_analysis_service.dart';
+import '../../settings/data/app_settings_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+
+const _homeAmountHiddenSettingPrefix = 'home.amountsHidden.';
+
+enum HomeAmountSection { today, goal, assets }
+
+class HomeCardVisibility {
+  const HomeCardVisibility({
+    this.today = false,
+    this.goal = false,
+    this.assets = false,
+  });
+
+  final bool today;
+  final bool goal;
+  final bool assets;
+
+  HomeCardVisibility set(HomeAmountSection section, bool hidden) {
+    return switch (section) {
+      HomeAmountSection.today => HomeCardVisibility(
+        today: hidden,
+        goal: goal,
+        assets: assets,
+      ),
+      HomeAmountSection.goal => HomeCardVisibility(
+        today: today,
+        goal: hidden,
+        assets: assets,
+      ),
+      HomeAmountSection.assets => HomeCardVisibility(
+        today: today,
+        goal: goal,
+        assets: hidden,
+      ),
+    };
+  }
+
+  bool valueFor(HomeAmountSection section) => switch (section) {
+    HomeAmountSection.today => today,
+    HomeAmountSection.goal => goal,
+    HomeAmountSection.assets => assets,
+  };
+}
+
+class HomeCardVisibilityController
+    extends Notifier<Map<String, HomeCardVisibility>> {
+  final _loading = <String>{};
+
+  @override
+  Map<String, HomeCardVisibility> build() => const {};
+
+  String _key(String bookId, HomeAmountSection section) =>
+      'home.amountsHidden.${section.name}.$bookId';
+
+  Future<void> ensureLoaded(String bookId) async {
+    if (state.containsKey(bookId) || !_loading.add(bookId)) return;
+    try {
+      final settings = ref.read(appSettingsRepositoryProvider);
+      final values = await Future.wait([
+        settings.get(_key(bookId, HomeAmountSection.today)),
+        settings.get(_key(bookId, HomeAmountSection.goal)),
+        settings.get(_key(bookId, HomeAmountSection.assets)),
+        settings.get('$_homeAmountHiddenSettingPrefix$bookId'),
+      ]);
+      if (state.containsKey(bookId)) return;
+      final legacy = values[3] == '1';
+      state = {
+        ...state,
+        bookId: HomeCardVisibility(
+          today: values[0] == null ? legacy : values[0] == '1',
+          goal: values[1] == null ? legacy : values[1] == '1',
+          assets: values[2] == null ? legacy : values[2] == '1',
+        ),
+      };
+    } finally {
+      _loading.remove(bookId);
+    }
+  }
+
+  Future<void> setHidden(
+    String bookId,
+    HomeAmountSection section,
+    bool hidden,
+  ) async {
+    final previous = state[bookId] ?? const HomeCardVisibility();
+    state = {...state, bookId: previous.set(section, hidden)};
+    try {
+      await ref
+          .read(appSettingsRepositoryProvider)
+          .set(_key(bookId, section), hidden ? '1' : '0');
+    } on Object {
+      state = {...state, bookId: previous};
+    }
+  }
+}
+
+final homeCardVisibilityProvider =
+    NotifierProvider<
+      HomeCardVisibilityController,
+      Map<String, HomeCardVisibility>
+    >(HomeCardVisibilityController.new);
+
+class HomeAmountVisibilityController extends Notifier<Map<String, bool>> {
+  final _loading = <String>{};
+
+  @override
+  Map<String, bool> build() => const {};
+
+  Future<void> ensureLoaded(String bookId) async {
+    if (state.containsKey(bookId) || !_loading.add(bookId)) return;
+    try {
+      final value = await ref
+          .read(appSettingsRepositoryProvider)
+          .get('$_homeAmountHiddenSettingPrefix$bookId');
+      if (!state.containsKey(bookId)) {
+        state = {...state, bookId: value == '1'};
+      }
+    } finally {
+      _loading.remove(bookId);
+    }
+  }
+
+  Future<void> setHidden(String bookId, bool hidden) async {
+    final previous = state[bookId] ?? false;
+    state = {...state, bookId: hidden};
+    try {
+      await ref
+          .read(appSettingsRepositoryProvider)
+          .set('$_homeAmountHiddenSettingPrefix$bookId', hidden ? '1' : '0');
+    } on Object {
+      state = {...state, bookId: previous};
+    }
+  }
+}
+
+final homeAmountVisibilityProvider =
+    NotifierProvider<HomeAmountVisibilityController, Map<String, bool>>(
+      HomeAmountVisibilityController.new,
+    );
 
 final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
   final transactions = ref.watch(transactionsProvider).value ?? const [];
@@ -27,7 +166,10 @@ final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
   final spending =
       monthTransactions
           .where((item) => item.isExpense)
-          .fold<int>(0, (total, item) => total + (item.amount * 100).round()) /
+          .fold<int>(
+            0,
+            (total, item) => total + (item.netExpenseAmount * 100).round(),
+          ) /
       100;
   final forecastBalance = income - spending;
   final budgetOverview = ref.watch(budgetOverviewProvider);
@@ -54,26 +196,26 @@ final homeInsightProvider = Provider<FinancialInsight>((ref) {
     period: AnalysisPeriod.currentMonth,
     now: now,
   );
-  final lateNightAmount = analysis.segmentAmounts[TimeSegment.lateNight] ?? 0;
-  final previous = analysisService.analyze(
-    transactions,
-    now: analysis.previousRange.endExclusive.subtract(
-      const Duration(microseconds: 1),
-    ),
-  );
-  final previousAmount = previous.segmentAmounts[TimeSegment.lateNight] ?? 0;
-  final increasePercent = previousAmount <= 0 || previous.transactionCount < 3
-      ? null
-      : ((lateNightAmount - previousAmount) / previousAmount * 100).round();
+  final insight = analysis.insights.firstOrNull;
+  if (insight == null) {
+    return const FinancialInsight(
+      timeLabel: '值得关注',
+      amount: 0,
+      increasePercent: null,
+      description: '',
+    );
+  }
+  final suggestion = switch (insight.type) {
+    AnalysisInsightType.categoryIncrease => '建议查看该分类明细，确认是否需要调整本月预算。',
+    AnalysisInsightType.deliveryIncrease => '建议检查外卖频次，给接下来几天留出更清晰的餐饮额度。',
+    AnalysisInsightType.lateNightIncrease => '建议查看深夜消费明细，提前规划夜间支出。',
+    AnalysisInsightType.weekendIncrease => '建议查看周末消费明细，提前安排周末可用额度。',
+  };
   return FinancialInsight(
-    timeLabel: '22:00后消费',
-    amount: lateNightAmount,
-    increasePercent: increasePercent,
-    description: increasePercent == null
-        ? (lateNightAmount == 0
-              ? '本月暂时没有深夜消费记录，保持从容的节奏。'
-              : '上月同期样本不足，暂不显示消费增幅。')
-        : '对比上月相同日期，点击查看消费时间分布。',
+    timeLabel: insight.title,
+    amount: insight.amount,
+    increasePercent: insight.deltaPercent.round(),
+    description: '${insight.description} $suggestion',
   );
 });
 
@@ -117,7 +259,7 @@ MonthlyLedgerSummary monthlySummary(
         item.occurredAt.month != month.month)
       continue;
     if (item.isIncome) income += (item.amount * 100).round();
-    if (item.isExpense) expense += (item.amount * 100).round();
+    if (item.isExpense) expense += (item.netExpenseAmount * 100).round();
   }
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),

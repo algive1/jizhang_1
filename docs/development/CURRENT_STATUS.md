@@ -1,10 +1,10 @@
 # 当前开发状态
 
-更新时间：2026-09-11
+更新时间：2026-09-13
 
 ## 项目定位
 
-当前产品是 Flutter 本地优先记账应用。核心账务使用 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本已支持本地 Node.js 共享后端联调。公网部署、会员支付、短信、附件云存储和企业报税仍不在本轮范围。
+当前产品是 Flutter 本地优先记账应用。核心账务使用 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本已支持本地 Node.js 共享后端联调。会员 catalog、订单和微信/支付宝支付协议已接入本地服务端，生产公网部署、短信、附件云存储和企业报税仍需后续配置与验收。
 
 ## 已完成的本地能力
 
@@ -38,23 +38,28 @@
 - 2026-09-11 阶段二附件切片已将 schema 从 10 升到 11：新增独立 `transaction_attachments` 记录、按账本和交易隔离查询、顺序维护及软删除；旧 `metadata.attachments` 会在升级时迁移，其他 metadata 和 malformed 项保留。
 - 2026-09-11 阶段二附件切片已接入新建/编辑记账和交易详情；保存会等待附件加载，附件后处理失败会明确提示“流水已入账”，不隐式重复记账。
 - 2026-09-11 阶段二附件切片已通过全量 165 个 Flutter tests、analyze、Drift code generation 和 Release APK 构建；本次 `adb devices` 无连接设备，未安装本次 APK，未虚报 UI 验收。
+- 2026-09-12 财务扩展已完成统一流水关联、报销、退款、消费日历、周期账单、信用卡分期、账户详情和增强搜索；schema 12→15 migration、共享协议、230 个 Flutter tests、analyze 与 Debug APK 均通过。周期账单 `auto_record` 会在应用启动/回到前台时幂等补齐到期流水。
+- 2026-09-12 收尾补充：退款回款支持编辑/撤销并同步恢复原消费状态；分期页可按还款日批量执行到期期间；附件保存状态支持保存中、失败保留和重试，失败附件阻止流水提交。
+- 2026-09-12 后台调度补充：Android 已接入每日 `AlarmManager`、开机重排和后台 Flutter isolate，用于周期账单与分期到期流水；iOS/桌面继续使用启动或回前台补齐策略。
+- 2026-09-12 完整性收尾：通用流水软删除现在强制当前账本作用域，并阻止删除仍有退款/报销/还款或分期计划的流水；共享同步 ID 映射补齐退款、报销、分期账户引用。
 
 ## 当前未完成或未联调
 
 - OCR 账单识别和独立账单导入入口。
 - 云端 ASR/LLM；当前“AI 记账”实际仍以本地规则解析为主。
-- 账号体系、会员购买、支付验签、订单服务和权益刷新。
+- 会员支付的真实商户证书、公网 HTTPS 回调、沙箱/小额真实订单验收；本地订单、支付签名适配、回调验签和权益刷新代码已完成。
 - 公网云部署、对象存储、家庭短信邀请和企业报税。
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
 - iOS 真机、签名和发布验收；当前 `flutter build ios --no-codesign` 被既有 `Application not configured for iOS` 配置问题阻断。
 - 账本抽屉计划中的阶段二仅完成独立附件记录和旧 metadata 迁移；版本化数据库＋附件文件备份、押金/结算、模板以及阶段三同步能力尚未完成。
+- 微信无障碍自动记账 MVP 目前只完成识别、目录查询和后台保存适配；悬浮层只展示识别结果并可关闭，完整的前台确认卡片和真实微信版本联调仍未完成。
 
 ## 当前架构风险
 
 1. 流水、分析和去重仍存在全量加载/内存计算，长期大数据量需要分页和 SQL 聚合。
 2. Android Release 未配置正式 keystore，当前产物只能作为本地验收包。
 3. 共享服务已完成本地真实联调，尚未进行公网部署、TLS 证书、监控和生产备份验收。
-4. 提醒设置仍只有未启用的菜单项；支付、短信、附件云存储和企业报税未接入。
+4. 提醒设置仍只有未启用的菜单项；支付代码已接入，但真实商户配置、回调公网可达性和生产风控仍未验收，短信、附件云存储和企业报税未接入。
 5. Release 构建仍收到 `speech_to_text` 使用 Kotlin Gradle Plugin 的未来兼容性 warning；当前构建成功，后续需等待插件迁移到 Built-in Kotlin。
 6. 当前账本创建顺序的兼容排序使用 SQLite `rowid` 作为同时间戳的 tie-breaker；后续若需要跨导入/跨设备保持业务创建序号，应在账本模型中增加显式稳定序号并纳入同步协议。
 7. 交易详情的系统文件打开依赖 Android/iOS 系统处理器；iOS 尚未完成可编译项目配置和真机验证。独立附件记录已完成，但附件文件内容尚未纳入备份/同步。
@@ -66,20 +71,28 @@ flutter analyze
 → No issues found
 
 flutter test --reporter compact
-→ All tests passed（165 个）
+→ All tests passed（230 个）
 
 flutter build apk --debug
 → Built build/app/outputs/flutter-apk/app-debug.apk
+
+android: `./gradlew :app:testDebugUnitTest`
+→ BUILD SUCCESSFUL
+
+android: `./gradlew :app:lintDebug`
+→ BUILD SUCCESSFUL（应用模块 lint 通过）
+
+android: `./gradlew test lint`
+→ lint 被 `speech_to_text` 和 `flutter_secure_storage` 依赖源码的既有 MissingPermission 错误阻断；应用模块单测和 APK 编译均通过，未修改依赖源码。
 
 flutter build apk --release
 → Built build/app/outputs/flutter-apk/app-release.apk（77,656,758 bytes）
 
 server: npm run typecheck && npm test && npm run build
-→ typecheck、2 个真实 HTTP 测试、TypeScript build 全部通过
+→ typecheck、2 个真实 HTTP 测试及 1 个关联完整性测试、TypeScript build 全部通过
 ```
 
-当前 APK：`build/app/outputs/flutter-apk/app-release.apk`，77,656,758 bytes，SHA-256：
-`ea3a57599c3b5d1d52598bb93ce2eae304d89130676d31b77fdce80b54464de1`。
+本轮 APK：`build/app/outputs/flutter-apk/app-debug.apk`；Debug 构建包含 Android `AlarmManager` 后台周期账单/分期处理入口。本轮未连接 Android 物理设备，未虚报安装验收。
 
 此前交易详情切片的历史 Release APK 曾在 Pixel 7 Android emulator 安装并打开首页、流水列表和交易详情页；本次阶段二 Release APK 未安装：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。
@@ -91,6 +104,6 @@ server: npm run typecheck && npm test && npm run build
 
 ## 推荐后续顺序
 
-1. 为共享后端补充部署环境的 TLS、数据库备份、监控和限流验收，再决定公网开放范围。
+1. 为共享后端补充部署环境的 TLS、数据库备份、监控和限流验收，再配置支付回调并用沙箱/小额订单完成真实链路验收。
 2. 优化流水和分析的查询边界，再扩展筛选能力。
-3. 提供支付、短信、附件存储和企业报税的真实服务端协议后分别接入，继续保持个人账本默认不上云。
+3. 继续补充短信、附件存储和企业报税服务，同时保持个人账本默认不上云。

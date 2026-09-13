@@ -51,7 +51,7 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _DetailHeader(

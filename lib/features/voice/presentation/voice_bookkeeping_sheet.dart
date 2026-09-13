@@ -9,6 +9,7 @@ import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/models/voice_bookkeeping.dart';
 import '../../accounts/data/account_repository.dart';
+import '../../books/data/book_repository.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../categories/data/category_repository.dart';
 import '../../intelligence/data/merchant_rule_repository.dart';
@@ -19,10 +20,12 @@ class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
     super.key,
     this.textOnly = false,
     this.initialText,
+    this.bookId,
   });
 
   final bool textOnly;
   final String? initialText;
+  final String? bookId;
 
   @override
   ConsumerState<VoiceBookkeepingSheet> createState() =>
@@ -119,9 +122,16 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
-    final categories =
-        ref.watch(categoriesProvider).value ?? const <Category>[];
+    final activeBookId = ref.watch(activeBookIdProvider);
+    final selectedBookId = widget.bookId ?? activeBookId;
+    final accounts = widget.bookId == null
+        ? ref.watch(accountsProvider).value ?? const <Account>[]
+        : ref.watch(accountsByBookProvider(selectedBookId)).value ??
+              const <Account>[];
+    final categories = widget.bookId == null
+        ? ref.watch(categoriesProvider).value ?? const <Category>[]
+        : ref.watch(categoriesByBookProvider(selectedBookId)).value ??
+              const <Category>[];
     return SafeArea(
       child: FractionallySizedBox(
         heightFactor: .92,
@@ -307,7 +317,10 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       setState(() => _error = '仍有未解析内容，请先修改原文并重新解析');
       return;
     }
-    if (_transactions.any(
+    final resolvedTransactions = _transactions
+        .map((item) => _resolveAccount(item, accounts))
+        .toList(growable: false);
+    if (resolvedTransactions.any(
       (item) =>
           item.amount <= 0 || item.accountId == null || item.categoryId == null,
     )) {
@@ -318,25 +331,28 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     var committedCount = 0;
     try {
       final saved = await ref.read(quickBookkeepingServiceProvider).saveAll([
-        for (var index = 0; index < _transactions.length; index++)
+        for (var index = 0; index < resolvedTransactions.length; index++)
           QuickBookkeepingRequest(
-            type: _transactions[index].type,
-            amount: _transactions[index].amount,
+            bookId: widget.bookId,
+            type: resolvedTransactions[index].type,
+            amount: resolvedTransactions[index].amount,
             currency: accounts
-                .firstWhere((a) => a.id == _transactions[index].accountId)
+                .firstWhere(
+                  (a) => a.id == resolvedTransactions[index].accountId,
+                )
                 .currency,
-            accountId: _transactions[index].accountId!,
-            occurredAt: _transactions[index].occurredAt,
-            categoryId: _transactions[index].categoryId,
-            categoryName: _transactions[index].categoryName,
-            merchant: _transactions[index].merchant,
+            accountId: resolvedTransactions[index].accountId!,
+            occurredAt: resolvedTransactions[index].occurredAt,
+            categoryId: resolvedTransactions[index].categoryId,
+            categoryName: resolvedTransactions[index].categoryName,
+            merchant: resolvedTransactions[index].merchant,
             source: TransactionSource.voice,
             userCorrected: _categoryCorrections.contains(index),
           ),
       ]);
       committedCount = saved.length;
       for (final index in _categoryCorrections) {
-        final item = _transactions[index];
+        final item = resolvedTransactions[index];
         if ((item.merchant ?? '').trim().isNotEmpty) {
           await ref
               .read(merchantRuleRepositoryProvider)
@@ -380,6 +396,43 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  ParsedVoiceTransaction _resolveAccount(
+    ParsedVoiceTransaction item,
+    List<Account> accounts,
+  ) {
+    if (item.identifierSuffix != null) {
+      final suffixMatches = accounts
+          .where((account) => account.identifierSuffix == item.identifierSuffix)
+          .toList();
+      return suffixMatches.length == 1
+          ? item.copyWith(
+              accountId: suffixMatches.single.id,
+              accountName: suffixMatches.single.displayName,
+            )
+          : item;
+    }
+    if (item.accountId != null && accounts.any((a) => a.id == item.accountId)) {
+      final account = accounts.firstWhere((a) => a.id == item.accountId);
+      return item.copyWith(accountName: account.displayName);
+    }
+    final matches = accounts.where((account) {
+      if (item.identifierSuffix != null &&
+          account.identifierSuffix == item.identifierSuffix) {
+        return true;
+      }
+      final name = item.accountName?.trim();
+      return name != null &&
+          name.isNotEmpty &&
+          (account.displayName == name || account.name == name);
+    }).toList();
+    return matches.length == 1
+        ? item.copyWith(
+            accountId: matches.single.id,
+            accountName: matches.single.displayName,
+          )
+        : item;
+  }
 }
 
 class _TransactionEditor extends StatelessWidget {
@@ -410,9 +463,31 @@ class _TransactionEditor extends StatelessWidget {
         categoryOptions.any((item) => item.id == transaction.categoryId)
         ? transaction.categoryId
         : null;
+    final suffixMatch = transaction.identifierSuffix == null
+        ? const <Account>[]
+        : accounts
+              .where(
+                (item) => item.identifierSuffix == transaction.identifierSuffix,
+              )
+              .toList();
+    final nameMatch = transaction.accountName == null
+        ? const <Account>[]
+        : accounts
+              .where(
+                (item) =>
+                    item.displayName == transaction.accountName ||
+                    item.name == transaction.accountName,
+              )
+              .toList();
     final accountValue =
-        accounts.any((item) => item.id == transaction.accountId)
+        transaction.identifierSuffix != null && suffixMatch.length == 1
+        ? suffixMatch.single.id
+        : accounts.any((item) => item.id == transaction.accountId)
         ? transaction.accountId
+        : suffixMatch.length == 1
+        ? suffixMatch.single.id
+        : nameMatch.length == 1
+        ? nameMatch.single.id
         : null;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -469,13 +544,14 @@ class _TransactionEditor extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue: accountValue,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: '账户'),
                   items: accounts
                       .map(
                         (item) => DropdownMenuItem(
                           value: item.id,
                           child: Text(
-                            item.name,
+                            item.displayName,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -489,7 +565,7 @@ class _TransactionEditor extends StatelessWidget {
                       onChanged(
                         transaction.copyWith(
                           accountId: account.id,
-                          accountName: account.name,
+                          accountName: account.displayName,
                         ),
                         false,
                       );

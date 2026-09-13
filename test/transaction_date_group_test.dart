@@ -35,4 +35,56 @@ void main() {
       expect(find.text('收入 ¥0.00'), findsOneWidget);
     },
   );
+
+  testWidgets('date-group income totals use the income amount', (tester) async {
+    final now = DateTime(2026, 9, 1, 12);
+    final income = TransactionRecord(
+      id: 'income',
+      bookId: 'book',
+      type: TransactionType.income,
+      amount: 88,
+      accountId: 'cash',
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionDateGroup(dateLabel: '今天', transactions: [income]),
+        ),
+      ),
+    );
+
+    expect(find.text('收入 ¥88.00'), findsOneWidget);
+  });
+
+  testWidgets('date-group spending totals use net refund amount', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 9, 1, 12);
+    final refunded = TransactionRecord(
+      id: 'refunded',
+      bookId: 'book',
+      type: TransactionType.expense,
+      amount: 500,
+      accountId: 'cash',
+      refundStatus: RefundStatus.partial,
+      refundAmount: 200,
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionDateGroup(dateLabel: '今天', transactions: [refunded]),
+        ),
+      ),
+    );
+
+    expect(find.text('支出 ¥300.00'), findsOneWidget);
+  });
 }

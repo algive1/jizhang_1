@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import 'goal_flow_track.dart';
+
 import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/family.dart';
+import '../../../core/widgets/privacy_amount.dart';
+import '../../goals/domain/goal_milestone_service.dart';
 import '../../../core/constants/app_assets.dart';
 
 class HomeSurface extends StatelessWidget {
@@ -181,12 +185,24 @@ class HomeSpendingGoalCard extends StatefulWidget {
     required this.onCalculation,
     this.bookType = BookType.personal,
     this.onWeekBudget,
+    this.amountHidden,
+    this.onAmountHiddenChanged,
+    this.todayAmountHidden,
+    this.goalAmountHidden,
+    this.onTodayAmountHiddenChanged,
+    this.onGoalAmountHiddenChanged,
   });
   final DashboardSnapshot snapshot;
   final Goal? goal;
   final VoidCallback onBudget, onGoal, onCalculation;
   final BookType bookType;
   final VoidCallback? onWeekBudget;
+  final bool? amountHidden;
+  final ValueChanged<bool>? onAmountHiddenChanged;
+  final bool? todayAmountHidden;
+  final bool? goalAmountHidden;
+  final ValueChanged<bool>? onTodayAmountHiddenChanged;
+  final ValueChanged<bool>? onGoalAmountHiddenChanged;
 
   @override
   State<HomeSpendingGoalCard> createState() => _HomeSpendingGoalCardState();
@@ -202,21 +218,31 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 340;
         final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
+        final isAmountHidden = widget.amountHidden ?? _amountHidden;
+        final todayAmountHidden = widget.todayAmountHidden ?? isAmountHidden;
+        final goalAmountHidden = widget.goalAmountHidden ?? false;
+        final realAmountText = widget.snapshot.hasBudget
+            ? '¥${MoneyFormatter.whole(widget.snapshot.safeToSpend)}'
+            : '未设置预算';
+        // Keep the illustration for normal amounts. Once the amount becomes
+        // long enough to compete with it, remove the decoration and give the
+        // number the full line so it stays readable and cannot overlap.
+        final showDecoration = !largeText && realAmountText.runes.length <= 8;
         return Container(
           key: const ValueKey('home-spending-card'),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFFFEFA), Color(0xFFF1F5E4)],
+              colors: [Color(0xFFFFFFFD), Color(0xFFF1F5E4)],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE6E5CE)),
+            border: Border.all(color: const Color(0x80E3E5D2)),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x12000000),
-                blurRadius: 9,
+                color: Color(0x0C65713F),
+                blurRadius: 12,
                 offset: Offset(0, 3),
               ),
             ],
@@ -233,41 +259,42 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                 // line at compact widths and enlarged accessibility text.
                 // The reference layout is single-column at phone widths, so
                 // the extra room only applies below the 340dp breakpoint.
-                height: largeText ? null : (narrow ? 220 : 148),
+                height: largeText ? null : (narrow ? 134 : 118),
                 child: Stack(
                   fit: largeText ? StackFit.loose : StackFit.expand,
                   children: [
-                    if (!largeText)
+                    if (showDecoration)
                       Positioned(
-                        right: -12,
+                        right: -4,
                         top: 0,
-                        width: 158,
-                        height: 190,
+                        width: 142,
+                        height: 112,
                         child: Opacity(
                           opacity: .88,
                           child: Image.asset(
                             AppAssets.homeLivingScene,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.bottomRight,
                           ),
                         ),
                       ),
-                    if (!largeText)
+                    if (showDecoration)
                       const Positioned(
-                        right: 110,
-                        top: 62,
+                        right: 102,
+                        top: 45,
                         child: Text(
                           '好好花钱\n也好好生活',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF709A34),
-                            fontSize: 11,
+                            fontSize: 10,
                             height: 1.35,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
                       ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 15, 18, 10),
+                      padding: const EdgeInsets.fromLTRB(18, 9, 18, 5),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +327,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             color: AppColors.textPrimary,
-                                            fontSize: 18,
+                                            fontSize: 17,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -310,22 +337,32 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                   const SizedBox(width: 6),
                                   IconButton(
                                     key: const ValueKey('home-hide-amount'),
-                                    tooltip: _amountHidden ? '显示金额' : '隐藏金额',
+                                    tooltip: todayAmountHidden
+                                        ? '显示金额'
+                                        : '隐藏金额',
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints.tightFor(
-                                      width: 28,
-                                      height: 28,
+                                      width: 26,
+                                      height: 26,
                                     ),
-                                    onPressed: () => setState(
-                                      () => _amountHidden = !_amountHidden,
-                                    ),
+                                    onPressed: () {
+                                      final next = !todayAmountHidden;
+                                      final callback =
+                                          widget.onTodayAmountHiddenChanged ??
+                                          widget.onAmountHiddenChanged;
+                                      if (callback != null) {
+                                        callback(next);
+                                      } else {
+                                        setState(() => _amountHidden = next);
+                                      }
+                                    },
                                     icon: Icon(
-                                      _amountHidden
+                                      todayAmountHidden
                                           ? Icons.visibility_off_outlined
                                           : Icons.visibility_outlined,
                                       color: AppColors.textSecondary,
-                                      size: 21,
+                                      size: 20,
                                     ),
                                   ),
                                 ],
@@ -349,33 +386,42 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                           const SizedBox(height: 1),
                           SizedBox(
                             height: MediaQuery.textScalerOf(context)
-                                .scale(widget.snapshot.hasBudget ? 48 : 23),
+                                .scale(widget.snapshot.hasBudget ? 39 : 22),
                             width: double.infinity,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _amountHidden
-                                    ? '¥ ••••••'
-                                    : widget.snapshot.hasBudget
-                                    ? '¥${MoneyFormatter.whole(widget.snapshot.safeToSpend)}'
-                                    : '未设置预算',
-                                maxLines: 1,
-                                softWrap: false,
-                                style: TextStyle(
-                                  color: widget.snapshot.availableAmount < 0
-                                      ? AppColors.warning
-                                      : const Color(0xFF709A34),
-                                  fontSize: widget.snapshot.hasBudget ? 48 : 23,
-                                  height: 1,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
+                            child: Padding(
+                              // The living-room illustration and its caption
+                              // occupy the right side of the card. Reserve
+                              // that space so long amounts never paint over
+                              // the decoration.
+                              padding: EdgeInsets.only(
+                                right: showDecoration ? 112 : 0,
+                              ),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: PrivacyAmount(
+                                  text: realAmountText,
+                                  hidden:
+                                      todayAmountHidden &&
+                                      widget.snapshot.hasBudget,
+                                  fit: true,
+                                  alignment: Alignment.centerLeft,
+                                  style: TextStyle(
+                                    color: widget.snapshot.availableAmount < 0
+                                        ? AppColors.warning
+                                        : const Color(0xFF709A34),
+                                    fontSize: widget.snapshot.hasBudget
+                                        ? 39
+                                        : 23,
+                                    height: 1,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                           if (largeText)
-                            const SizedBox(height: 18)
+                            const SizedBox(height: 12)
                           else
                             const Spacer(),
                           InkWell(
@@ -405,9 +451,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                             fit: BoxFit.scaleDown,
                                             alignment: Alignment.centerLeft,
                                             child: Text(
-                                              _amountHidden
-                                                  ? '••••••  |  还有 ${widget.snapshot.remainingDays} 天'
-                                                  : widget.snapshot.hasBudget
+                                              widget.snapshot.hasBudget
                                                   ? '¥${MoneyFormatter.whole(widget.snapshot.forecastBalance)}  |  还有 ${widget.snapshot.remainingDays} 天'
                                                   : '设置本月预算后计算 ›',
                                               maxLines: 1,
@@ -434,9 +478,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                           ),
                                         ),
                                         Text(
-                                          _amountHidden
-                                              ? '••••••  |  还有 ${widget.snapshot.remainingDays} 天'
-                                              : widget.snapshot.hasBudget
+                                          widget.snapshot.hasBudget
                                               ? '¥${MoneyFormatter.whole(widget.snapshot.forecastBalance)}  |  还有 ${widget.snapshot.remainingDays} 天'
                                               : '设置本月预算后计算 ›',
                                           style: const TextStyle(
@@ -455,11 +497,22 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                 ),
               ),
               Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3F6E4),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                margin: const EdgeInsets.fromLTRB(1, 0, 1, 0),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFF0F6DF),
+                      Color(0xFFF7FAED),
+                      Color(0xFFFCFCF4),
+                    ],
+                    stops: [0, .55, 1],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xCCFFFFFF)),
                 ),
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 11),
+                padding: const EdgeInsets.fromLTRB(15, 6, 15, 5),
                 child: goal == null
                     ? InkWell(
                         key: const ValueKey('home-goal-area'),
@@ -475,7 +528,9 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                           borderRadius: BorderRadius.circular(12),
                           child: _HomeGoalTimeline(
                             goal: goal,
-                            amountHidden: _amountHidden,
+                            amountHidden: goalAmountHidden,
+                            onAmountHiddenChanged:
+                                widget.onGoalAmountHiddenChanged,
                           ),
                         ),
                       ),
@@ -545,38 +600,21 @@ class _EmptyGoalLabel extends StatelessWidget {
 }
 
 class _HomeGoalTimeline extends StatelessWidget {
-  const _HomeGoalTimeline({required this.goal, required this.amountHidden});
+  const _HomeGoalTimeline({
+    required this.goal,
+    required this.amountHidden,
+    required this.onAmountHiddenChanged,
+  });
   final Goal goal;
   final bool amountHidden;
+  final ValueChanged<bool>? onAmountHiddenChanged;
   @override
   Widget build(BuildContext context) {
-    final completed =
-        goal.milestones
-            .map((item) => item.amount)
-            .where((value) => value >= 0 && value < goal.currentAmount)
-            .toList()
-          ..sort();
-    final pending =
-        goal.milestones
-            .map((item) => item.amount)
-            .where(
-              (value) =>
-                  value > goal.currentAmount && value < goal.targetAmount,
-            )
-            .toList()
-          ..sort();
-    final visible = <double>{
-      ...completed.skip(completed.length > 2 ? completed.length - 2 : 0),
-      goal.currentAmount,
-      if (pending.isNotEmpty) pending.first,
-      goal.targetAmount,
-    }.where((value) => value >= 0).toList()..sort();
+    final visible = const GoalMilestoneService().visibleAmounts(goal);
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final currentIndex = visible.indexWhere(
       (value) => value == goal.currentAmount,
     );
-    final progress = visible.length < 2 || currentIndex < 0
-        ? 0.0
-        : currentIndex / (visible.length - 1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -589,15 +627,42 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(
-                goal.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      goal.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (onAmountHiddenChanged != null)
+                    IconButton(
+                      key: const ValueKey('home-goal-hide-amount'),
+                      tooltip: amountHidden ? '显示目标金额' : '隐藏目标金额',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 26,
+                        height: 26,
+                      ),
+                      onPressed: () {
+                        onAmountHiddenChanged!(!amountHidden);
+                      },
+                      icon: Icon(
+                        amountHidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppColors.textSecondary,
+                        size: 18,
+                      ),
+                    ),
+                ],
               ),
             ),
             DecoratedBox(
@@ -619,9 +684,9 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 1),
         SizedBox(
-          height: MediaQuery.textScalerOf(context).scale(32),
+          height: MediaQuery.textScalerOf(context).scale(27),
           width: double.infinity,
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -631,21 +696,21 @@ class _HomeGoalTimeline extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: amountHidden
-                        ? '¥••••••'
+                        ? '¥••••'
                         : '¥${MoneyFormatter.whole(goal.currentAmount)}',
                     style: const TextStyle(
                       color: Color(0xFF709A34),
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   TextSpan(
                     text: amountHidden
-                        ? ' / ¥••••••'
+                        ? ' / ¥••••'
                         : ' / ¥${MoneyFormatter.whole(goal.targetAmount)}',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -655,23 +720,18 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 2),
         SizedBox(
-          height: 64,
+          height: largeText ? 64 : 52,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final inset = constraints.maxWidth / visible.length / 2;
               return Stack(
                 children: [
-                  Positioned(
-                    left: inset,
-                    right: inset,
-                    top: 10,
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 3,
-                      color: AppColors.primary,
-                      backgroundColor: const Color(0xFFDDE7C8),
+                  Positioned.fill(
+                    child: GoalFlowTrack(
+                      count: visible.length,
+                      currentIndex: currentIndex,
+                      enabled: goal.status == GoalStatus.active,
                     ),
                   ),
                   Row(
@@ -680,7 +740,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                       final current = amount == goal.currentAmount;
                       return Expanded(
                         child: SizedBox(
-                          height: 60,
+                          height: largeText ? 64 : 52,
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: [
@@ -688,49 +748,58 @@ class _HomeGoalTimeline extends StatelessWidget {
                                 width: 26,
                                 height: 26,
                                 child: Center(
-                                  child: Container(
-                                    width: current ? 20 : 16,
-                                    height: current ? 20 : 16,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: done
-                                          ? AppColors.primary
-                                          : const Color(0xFFF8FAF0),
-                                      border: Border.all(
-                                        color: done || current
-                                            ? AppColors.primary
-                                            : const Color(0xFFD7DCCB),
-                                        width: current ? 3 : 2,
-                                      ),
-                                    ),
-                                    child: done
-                                        ? const Icon(
-                                            Icons.check,
-                                            size: 14,
-                                            color: Colors.white,
-                                          )
-                                        : current
-                                        ? const Center(
-                                            child: Icon(
-                                              Icons.circle,
-                                              size: 7,
-                                              color: AppColors.primary,
+                                  child: amount == goal.targetAmount
+                                      ? const SizedBox(width: 16, height: 16)
+                                      : Container(
+                                          width: current ? 20 : 16,
+                                          height: current ? 20 : 16,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: done
+                                                ? AppColors.primary
+                                                : const Color(0xFFF8FAF0),
+                                            border: Border.all(
+                                              color: done || current
+                                                  ? AppColors.primary
+                                                  : const Color(0xFFD7DCCB),
+                                              width: current ? 3 : 2,
                                             ),
-                                          )
-                                        : amount == goal.targetAmount
-                                        ? Icon(
-                                            _goalIconForHome(goal),
-                                            size: 12,
-                                            color: AppColors.textSecondary,
-                                          )
-                                        : null,
-                                  ),
+                                          ),
+                                          child: done
+                                              ? const Icon(
+                                                  Icons.check,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                )
+                                              : current
+                                              ? const Center(
+                                                  child: Icon(
+                                                    Icons.circle,
+                                                    size: 7,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                )
+                                              : amount == goal.targetAmount
+                                              ? Icon(
+                                                  _goalIconForHome(goal),
+                                                  size: 12,
+                                                  color:
+                                                      AppColors.textSecondary,
+                                                )
+                                              : null,
+                                        ),
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 amountHidden
-                                    ? '••••••'
+                                    ? '¥••••\n${amount == goal.currentAmount
+                                          ? '当前'
+                                          : amount == goal.targetAmount
+                                          ? '目标'
+                                          : done
+                                          ? '已完成'
+                                          : '待达成'}'
                                     : amount == goal.currentAmount
                                     ? '¥${MoneyFormatter.whole(amount)}\n当前'
                                     : amount == goal.targetAmount

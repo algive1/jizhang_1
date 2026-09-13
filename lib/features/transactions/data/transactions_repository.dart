@@ -6,6 +6,7 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/models/account_balance_effect.dart';
 import '../../books/data/book_repository.dart';
 
 abstract interface class TransactionRepository {
@@ -259,52 +260,12 @@ class DriftTransactionRepository implements TransactionRepository {
     TransactionRecord transaction,
     int direction,
   ) async {
-    final amountInCents = _toCents(transaction.amount) * direction;
-    final updatedAt = transaction.updatedAt;
-    switch (transaction.type) {
-      case TransactionType.expense:
-      case TransactionType.lend:
-      case TransactionType.assetPurchase:
-        await _database.accountDao.adjustBalance(
-          transaction.accountId,
-          -amountInCents,
-          updatedAt,
-        );
-      case TransactionType.repayment:
-        await _database.accountDao.adjustBalance(
-          transaction.accountId,
-          -amountInCents,
-          updatedAt,
-        );
-        final creditAccountId = transaction.destinationAccountId;
-        if (creditAccountId != null) {
-          await _database.accountDao.adjustBalance(
-            creditAccountId,
-            amountInCents,
-            updatedAt,
-          );
-        }
-      case TransactionType.income:
-      case TransactionType.refund:
-      case TransactionType.reimbursement:
-      case TransactionType.borrow:
-      case TransactionType.adjustment:
-        await _database.accountDao.adjustBalance(
-          transaction.accountId,
-          amountInCents,
-          updatedAt,
-        );
-      case TransactionType.transfer:
-        await _database.accountDao.adjustBalance(
-          transaction.accountId,
-          -amountInCents,
-          updatedAt,
-        );
-        await _database.accountDao.adjustBalance(
-          transaction.destinationAccountId!,
-          amountInCents,
-          updatedAt,
-        );
+    for (final entry in accountBalanceEffect(transaction).entries) {
+      await _database.accountDao.adjustBalance(
+        entry.key,
+        entry.value * direction,
+        transaction.updatedAt,
+      );
     }
   }
 

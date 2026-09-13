@@ -12,57 +12,64 @@ class AppBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: SizedBox(
-        height: 78,
-        child: BottomAppBar(
-          color: const Color(0xFFFFFEFB),
-          elevation: 0,
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          child: Row(
-            children: [
-              Expanded(
-                child: _item(
-                  context,
-                  0,
-                  Icons.home_outlined,
-                  Icons.home,
-                  '首页',
-                  '/',
-                ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: SizedBox(
+            height: 64,
+            child: BottomAppBar(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              color: const Color(0xFFFFFEFB),
+              elevation: 0,
+              shape: const CircularNotchedRectangle(),
+              notchMargin: 8,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _item(
+                      context,
+                      0,
+                      Icons.home_outlined,
+                      Icons.home,
+                      '首页',
+                      '/',
+                    ),
+                  ),
+                  Expanded(
+                    child: _item(
+                      context,
+                      1,
+                      Icons.receipt_long_outlined,
+                      Icons.receipt_long,
+                      '流水',
+                      '/transactions',
+                    ),
+                  ),
+                  const SizedBox(width: 72),
+                  Expanded(
+                    child: _item(
+                      context,
+                      2,
+                      Icons.track_changes_outlined,
+                      Icons.track_changes,
+                      '目标',
+                      '/goals',
+                    ),
+                  ),
+                  Expanded(
+                    child: _item(
+                      context,
+                      3,
+                      Icons.person_outline,
+                      Icons.person,
+                      '我的',
+                      '/profile',
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: _item(
-                  context,
-                  1,
-                  Icons.receipt_long_outlined,
-                  Icons.receipt_long,
-                  '流水',
-                  '/transactions',
-                ),
-              ),
-              const SizedBox(width: 72),
-              Expanded(
-                child: _item(
-                  context,
-                  2,
-                  Icons.track_changes_outlined,
-                  Icons.track_changes,
-                  '目标',
-                  '/goals',
-                ),
-              ),
-              Expanded(
-                child: _item(
-                  context,
-                  3,
-                  Icons.person_outline,
-                  Icons.person,
-                  '我的',
-                  '/profile',
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -100,10 +107,11 @@ class AppBottomNavigation extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(selected ? activeIcon : icon, color: color, size: 22),
+            Icon(selected ? activeIcon : icon, color: color, size: 24),
             const SizedBox(height: 1),
             Text(
               label,
+              textScaler: TextScaler.noScaling,
               style: TextStyle(
                 color: color,
                 fontSize: 11,

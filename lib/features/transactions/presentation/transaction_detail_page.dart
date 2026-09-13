@@ -218,7 +218,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
 
     final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
     final accountNames = {
-      for (final account in accounts) account.id: account.name,
+      for (final account in accounts) account.id: account.displayName,
     };
     final legacyMetadata = TransactionAttachmentMetadata.fromJson(
       transaction.metadataJson,
@@ -226,22 +226,20 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     final attachments = _attachments.isNotEmpty
         ? _attachments
         : legacyMetadata.attachments;
-    final category = transaction.type == TransactionType.adjustment
-        ? '余额校准'
-        : transaction.type == TransactionType.transfer
-        ? '转账'
-        : (transaction.categoryName ?? '未分类');
+    final category = transaction.displayCategoryLabel;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('交易详情'),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
         actions: [
-          IconButton(
-            tooltip: '编辑流水',
-            onPressed: () => _editTransaction(transaction),
-            icon: const Icon(Icons.edit_outlined),
-          ),
+          if (transaction.type != TransactionType.refund &&
+              transaction.type != TransactionType.reimbursement)
+            IconButton(
+              tooltip: '编辑流水',
+              onPressed: () => _editTransaction(transaction),
+              icon: const Icon(Icons.edit_outlined),
+            ),
           IconButton(
             tooltip: '更多操作',
             onPressed: () => _showActions(transaction),
@@ -264,7 +262,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  transaction.merchant ?? transaction.note ?? '未命名交易',
+                  transaction.displayTitle,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -307,6 +305,18 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                     ),
                   ),
                 _DetailRow(label: '分类', value: category),
+                if (transaction.reimbursementStatus != ReimbursementStatus.none)
+                  _DetailRow(
+                    label: '报销状态',
+                    value: _reimbursementLabel(transaction),
+                  ),
+                if (transaction.refundStatus != RefundStatus.none)
+                  _DetailRow(label: '退款状态', value: _refundLabel(transaction)),
+                if (transaction.relatedTransactionId != null)
+                  _DetailRow(
+                    label: '关联流水',
+                    value: transaction.relatedTransactionId!,
+                  ),
                 if ((transaction.note ?? '').trim().isNotEmpty)
                   _DetailRow(label: '备注', value: transaction.note!.trim()),
                 if ((transaction.createdBy ?? '').trim().isNotEmpty)
@@ -388,6 +398,27 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   }
 
   String _actorLabel(String value) => value == 'user-local' ? '我' : value;
+
+  String _reimbursementLabel(TransactionRecord value) {
+    final status = switch (value.reimbursementStatus) {
+      ReimbursementStatus.pending => '待报销',
+      ReimbursementStatus.reimbursed => '已报销',
+      ReimbursementStatus.partial => '部分报销',
+      ReimbursementStatus.none => '无需报销',
+    };
+    final amount = value.reimbursementAmount;
+    return amount == null ? status : '$status · ¥${amount.toStringAsFixed(2)}';
+  }
+
+  String _refundLabel(TransactionRecord value) {
+    final status = switch (value.refundStatus) {
+      RefundStatus.partial => '部分退款',
+      RefundStatus.refunded => '已退款',
+      RefundStatus.none => '无退款',
+    };
+    final amount = value.refundAmount;
+    return amount == null ? status : '$status · ¥${amount.toStringAsFixed(2)}';
+  }
 }
 
 class _DetailRow extends StatelessWidget {

@@ -238,6 +238,11 @@ void main() {
         );
         old.execute('DROP TABLE scoped_rules');
       } else {
+        if (table == 'accounts') {
+          old.execute(
+            'DROP INDEX IF EXISTS idx_accounts_book_identifier_suffix',
+          );
+        }
         old.execute('ALTER TABLE $table DROP COLUMN book_id');
       }
     }

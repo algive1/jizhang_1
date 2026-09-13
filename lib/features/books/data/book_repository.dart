@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../core/utils/entity_id.dart';
 
 import 'package:drift/drift.dart';
@@ -36,9 +38,16 @@ abstract final class BookLimitPolicy {
 abstract interface class BookRepository {
   Stream<List<LedgerBook>> watchForUser(String userId);
   Future<List<LedgerBook>> getForUser(String userId);
-  Future<LedgerBook> create({required String name, required BookType type});
+  Future<LedgerBook> create({
+    required String name,
+    required BookType type,
+    bool usePrimaryAssets = false,
+  });
   Future<void> rename(String id, String name);
   Future<void> changeType(String id, BookType type);
+  Future<void> setUsePrimaryAssets(String id, bool usePrimaryAssets);
+  Future<void> reorder(List<String> bookIds);
+  Future<void> setDefault(String id);
   Future<void> archive(String id);
 }
 
@@ -66,15 +75,18 @@ class DriftBookRepository implements BookRepository {
 
   @override
   Stream<List<LedgerBook>> watchForUser(String userId) =>
-      _visible(userId).watch().map((rows) => rows.map(_fromRow).toList());
+      _visible(userId)
+          .watch()
+          .asyncMap((rows) => _sortBooks(rows.map(_fromRow).toList()));
   @override
   Future<List<LedgerBook>> getForUser(String userId) async =>
-      (await _visible(userId).get()).map(_fromRow).toList();
+      _sortBooks((await _visible(userId).get()).map(_fromRow).toList());
 
   @override
   Future<LedgerBook> create({
     required String name,
     required BookType type,
+    bool usePrimaryAssets = false,
   }) async {
     final normalizedName = _validateName(name);
     final membership = await _membership.getCurrent();
@@ -96,6 +108,7 @@ class DriftBookRepository implements BookRepository {
       createdAt: now,
       updatedAt: now,
       isArchived: false,
+      assetSourceBookId: usePrimaryAssets ? SeedIds.personalBook : null,
     );
     await _database.transaction(() async {
       await _database.familyDao.upsertBook(_toCompanion(book));
@@ -137,6 +150,52 @@ class DriftBookRepository implements BookRepository {
   }
 
   @override
+  Future<void> setUsePrimaryAssets(String id, bool usePrimaryAssets) async {
+    final book = await _database.familyDao.findBook(id);
+    if (book == null || book.isArchived) throw StateError('账本不存在');
+    if (id == SeedIds.personalBook) {
+      throw StateError('默认账本始终使用自己的主资产');
+    }
+    await (_database.update(
+      _database.bookEntries,
+    )..where((b) => b.id.equals(id))).write(
+      BookEntriesCompanion(
+        assetSourceBookId: Value(
+          usePrimaryAssets ? SeedIds.personalBook : null,
+        ),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  @override
+  Future<void> reorder(List<String> bookIds) async {
+    final books = await getForUser(SeedIds.localUser);
+    final visibleIds = books.map((book) => book.id).toSet();
+    if (bookIds.length != visibleIds.length ||
+        bookIds.toSet().length != bookIds.length ||
+        !bookIds.every(visibleIds.contains)) {
+      throw ArgumentError('账本排序列表与当前账本不一致');
+    }
+    await _database.appSettingsDao.setValue(
+      bookOrderSettingKey,
+      jsonEncode(bookIds),
+      DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> setDefault(String id) async {
+    final books = await getForUser(SeedIds.localUser);
+    if (!books.any((book) => book.id == id)) throw StateError('账本不可用');
+    await _database.appSettingsDao.setValue(
+      defaultBookIdSettingKey,
+      id,
+      DateTime.now(),
+    );
+  }
+
+  @override
   Future<void> archive(String id) async {
     final book = await _database.familyDao.findBook(id);
     if (book == null || book.isArchived) return;
@@ -146,6 +205,38 @@ class DriftBookRepository implements BookRepository {
     final books = await getForUser(SeedIds.localUser);
     if (books.length <= 1) throw StateError('至少保留一个账本');
     await _database.familyDao.archiveBook(id, DateTime.now());
+    if (await _database.appSettingsDao.getValue(defaultBookIdSettingKey) ==
+        id) {
+      await setDefault(books.firstWhere((book) => book.id != id).id);
+    }
+  }
+
+  Future<List<LedgerBook>> _sortBooks(List<LedgerBook> books) async {
+    final raw = await _database.appSettingsDao.getValue(bookOrderSettingKey);
+    if (raw == null || raw.trim().isEmpty) return books;
+    List<String> order;
+    try {
+      final decoded = jsonDecode(raw);
+      order = decoded is List
+          ? decoded.whereType<String>().toList(growable: false)
+          : const [];
+    } on FormatException {
+      return books;
+    }
+    final rank = {
+      for (var index = 0; index < order.length; index++) order[index]: index,
+    };
+    final sorted = [...books];
+    sorted.sort((a, b) {
+      final rankA = rank[a.id];
+      final rankB = rank[b.id];
+      if (rankA != null && rankB != null) return rankA.compareTo(rankB);
+      if (rankA != null) return -1;
+      if (rankB != null) return 1;
+      final created = a.createdAt.compareTo(b.createdAt);
+      return created != 0 ? created : a.id.compareTo(b.id);
+    });
+    return sorted;
   }
 
   String _validateName(String name) {
@@ -165,6 +256,7 @@ class DriftBookRepository implements BookRepository {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       isArchived: row.isArchived,
+      assetSourceBookId: row.assetSourceBookId,
       sharedId: row.familyId,
       role: role,
       sharedPhase: phase,
@@ -180,6 +272,7 @@ class DriftBookRepository implements BookRepository {
       createdAt: Value(book.createdAt),
       updatedAt: Value(book.updatedAt),
       isArchived: Value(book.isArchived),
+      assetSourceBookId: Value(book.assetSourceBookId),
     );
   }
 }
@@ -194,6 +287,8 @@ class BookLimitReachedException implements Exception {
 }
 
 const activeBookIdSettingKey = 'active_book_id';
+const defaultBookIdSettingKey = 'default_book_id';
+const bookOrderSettingKey = 'book_order';
 
 final bookRepositoryProvider = Provider<BookRepository>((ref) {
   return DriftBookRepository(
@@ -205,14 +300,18 @@ final bookRepositoryProvider = Provider<BookRepository>((ref) {
 final booksProvider = StreamProvider<List<LedgerBook>>((ref) async* {
   await ref.watch(databaseBootstrapProvider.future);
   final repository = ref.watch(bookRepositoryProvider);
-  final saved = await ref
-      .read(appSettingsRepositoryProvider)
-      .get(activeBookIdSettingKey);
+  final settings = ref.read(appSettingsRepositoryProvider);
+  final saved = await settings.get(activeBookIdSettingKey);
+  final defaultBook = await settings.get(defaultBookIdSettingKey);
+  final preferred = defaultBook ?? saved;
   var first = true;
   await for (final books in repository.watchForUser(SeedIds.localUser)) {
     final controller = ref.read(activeBookIdProvider.notifier);
-    if (first && saved != null && books.any((book) => book.id == saved))
-      controller.restore(saved);
+    if (first &&
+        preferred != null &&
+        books.any((book) => book.id == preferred)) {
+      controller.restore(preferred);
+    }
     first = false;
     if (books.isNotEmpty &&
         !books.any((book) => book.id == ref.read(activeBookIdProvider)))

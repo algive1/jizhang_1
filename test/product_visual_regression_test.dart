@@ -52,6 +52,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('cashflow-trend-plot')),
+          findsOneWidget,
+        );
         final heading = find.text('7×24 消费热力图');
         await tester.scrollUntilVisible(
           heading,

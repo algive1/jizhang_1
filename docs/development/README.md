@@ -1,6 +1,6 @@
 # 好好记账开发文档入口
 
-更新时间：2026-09-09
+更新时间：2026-09-12
 
 这里是本项目唯一的当前开发文档目录。后续开发、审查和交接先阅读本文件，再按任务进入对应文档。
 
@@ -11,6 +11,7 @@
 3. [PRODUCT_LOGIC.md](PRODUCT_LOGIC.md)：账本、自动记账、智能分类和语音记账的产品口径。
 4. [UI_HOME_SPEC.md](UI_HOME_SPEC.md)：首页与快速记账的当前 UI 约束。
 5. [release/ANDROID_RELEASE.md](release/ANDROID_RELEASE.md)：Android 构建、安装和签名说明。
+6. [ANDROID_LOCAL_RUN.md](ANDROID_LOCAL_RUN.md)：本地 Android 模拟器一键启动、构建、安装和运行。
 
 `archive/` 下的文件只用于追溯历史需求、审计过程和旧方案，不代表当前源码状态；如果历史文档与当前代码冲突，以当前源码、测试结果和 `CURRENT_STATUS.md` 为准。
 
@@ -23,6 +24,7 @@ docs/development/
 ├── ARCHITECTURE.md           # 架构与功能全景
 ├── PRODUCT_LOGIC.md          # 当前产品逻辑
 ├── UI_HOME_SPEC.md           # 当前首页设计约束
+├── ANDROID_LOCAL_RUN.md      # 本地模拟器一键运行
 ├── release/                  # 发布与安装
 └── archive/                  # 历史资料，不作为当前依据
     ├── requirements/         # 阶段 1—13 原始需求
@@ -43,4 +45,4 @@ docs/development/
 
 ## 当前验证基线
 
-截至 2026-09-09，`flutter analyze --no-pub` 无问题，`flutter test --no-pub` 为 120 个测试全部通过，`flutter build apk --release` 通过；`server/` 的 typecheck、真实 HTTP test 和 build 也通过。最新 Android APK 为 72,799,794 bytes，SHA-256 为 `ea4762b9b8964bb6ebb015e4f1e79a6c9bad53747059e2dae878bf17d924d81c`。iOS 因当前机器没有完整 Xcode 未完成可重复构建验证；Android 截图来自 Pixel 7 模拟器，不是物理手机。
+截至 2026-09-12，`flutter analyze --no-pub` 无问题，`flutter test --no-pub --reporter compact` 为 230 个测试全部通过，`flutter build apk --debug` 通过；`server/` 的 typecheck、真实 HTTP test 和 build 也通过。iOS 因当前机器没有完整 Xcode 未完成可重复构建验证；Android 本轮未连接物理设备。

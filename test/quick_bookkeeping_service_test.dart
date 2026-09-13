@@ -96,6 +96,45 @@ void main() {
     );
   });
 
+  test('saved records reload with category title and note title', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+
+    final withoutNote = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: SeedIds.cashAccount,
+        categoryId: 'expense-food',
+        occurredAt: DateTime(2026, 9, 11, 12),
+      ),
+    );
+    final reloadedWithoutNote = await transactions.getById(withoutNote.id);
+    expect(reloadedWithoutNote, isNotNull);
+    expect(reloadedWithoutNote!.categoryName, '餐饮');
+    expect(reloadedWithoutNote.displayTitle, '餐饮');
+
+    final withNote = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 20,
+        accountId: SeedIds.cashAccount,
+        categoryId: 'expense-food',
+        note: '和同事一起',
+        occurredAt: DateTime(2026, 9, 11, 13),
+      ),
+    );
+    final reloadedWithNote = await transactions.getById(withNote.id);
+    expect(reloadedWithNote!.categoryName, '餐饮');
+    expect(reloadedWithNote.displayTitle, '和同事一起');
+  });
+
   test(
     'editing a saved transaction updates its fields and balance effect',
     () async {

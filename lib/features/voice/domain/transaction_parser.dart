@@ -58,6 +58,7 @@ class RuleBasedTransactionParser implements TransactionParser {
           subcategoryName: category?.$3,
           accountId: account?.$1,
           accountName: account?.$2,
+          identifierSuffix: account?.$3,
           merchant: merchant,
           occurredAt: contextTime,
           confidence: category == null ? .58 : (account == null ? .76 : .94),
@@ -103,14 +104,22 @@ class RuleBasedTransactionParser implements TransactionParser {
     return null;
   }
 
-  (String, String)? _accountFor(String text) {
-    if (text.contains('微信')) return (SeedIds.wechatAccount, '微信');
-    if (text.contains('支付宝')) return (SeedIds.alipayAccount, '支付宝');
-    if (text.contains('现金')) return (SeedIds.cashAccount, '现金');
+  (String, String, String?)? _accountFor(String text) {
+    final suffix = _identifierSuffixFor(text);
+    if (text.contains('微信')) return (SeedIds.wechatAccount, '微信', suffix);
+    if (text.contains('支付宝')) return (SeedIds.alipayAccount, '支付宝', suffix);
+    if (text.contains('现金')) return (SeedIds.cashAccount, '现金', null);
     if (RegExp(r'银行卡|储蓄卡|信用卡').hasMatch(text)) {
-      return (SeedIds.bankAccount, '银行卡');
+      return (SeedIds.bankAccount, '银行卡', suffix);
     }
     return null;
+  }
+
+  String? _identifierSuffixFor(String text) {
+    final match = RegExp(
+      r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,6}([0-9]{4})|(?:银行卡|信用卡|微信|支付宝)[\s_-]?([0-9]{4})',
+    ).firstMatch(text);
+    return match?.group(1) ?? match?.group(2);
   }
 
   DateTime _resolveDateTime(String clause, DateTime context, DateTime now) {
@@ -201,6 +210,13 @@ abstract interface class AiParsingGateway {
 class AiTransactionJsonDecoder {
   const AiTransactionJsonDecoder();
 
+  String? _identifierSuffixFor(String text) {
+    final match = RegExp(
+      r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,6}([0-9]{4})|(?:银行卡|信用卡|微信|支付宝)[\s_-]?([0-9]{4})',
+    ).firstMatch(text);
+    return match?.group(1) ?? match?.group(2);
+  }
+
   List<ParsedVoiceTransaction> decode(String raw) {
     final value = jsonDecode(raw);
     if (value is! List) {
@@ -241,6 +257,7 @@ class AiTransactionJsonDecoder {
             categoryName: category,
             subcategoryName: item['subcategory'] as String?,
             accountName: account,
+            identifierSuffix: _identifierSuffixFor(account),
             merchant: item['merchant'] as String?,
             occurredAt: parsedTime,
             confidence: (item['confidence'] as num?)?.toDouble() ?? .7,

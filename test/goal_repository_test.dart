@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -51,8 +52,51 @@ void main() {
 
   test('milestone suggestions are dynamic and always end at the target', () {
     final milestones = const GoalMilestoneService().suggest(160000);
-    expect(milestones, [20000, 40000, 60000, 100000, 160000]);
+    expect(milestones, [
+      16000,
+      32000,
+      48000,
+      64000,
+      80000,
+      96000,
+      120000,
+      140000,
+      160000,
+    ]);
     expect(const GoalMilestoneService().suggest(8500).last, 8500);
+  });
+
+  test('visible milestone nodes stay detailed around the current amount', () {
+    final goal = Goal(
+      id: 'visible-nodes',
+      name: '买车计划',
+      icon: 'car',
+      targetAmount: 160000,
+      currentAmount: 68500,
+      targetDate: DateTime(2027),
+      status: GoalStatus.active,
+      createdAt: DateTime(2026),
+      milestones: [
+        for (var i = 1; i <= 8; i++)
+          GoalMilestone(
+            id: '$i',
+            goalId: 'visible-nodes',
+            amount: i * 20000,
+            title: '节点$i',
+            order: i,
+            isCompleted: i <= 3,
+          ),
+      ],
+    );
+    expect(const GoalMilestoneService().visibleAmounts(goal), [
+      20000,
+      40000,
+      60000,
+      68500,
+      80000,
+      100000,
+      160000,
+    ]);
   });
 
   test(
@@ -138,6 +182,116 @@ void main() {
       );
     },
   );
+
+  test(
+    'archiving preserves goal history and restoring recalculates status',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final repository = DriftGoalRepository(database);
+      final now = DateTime.now();
+
+      final active = await repository.create(
+        goal: Goal(
+          id: 'archive-active',
+          name: '待恢复目标',
+          icon: 'savings',
+          targetAmount: 100,
+          currentAmount: 20,
+          targetDate: DateTime(now.year + 1),
+          status: GoalStatus.active,
+          createdAt: now,
+          milestones: const [],
+        ),
+        milestoneAmounts: const [50, 100],
+        initialAmount: 20,
+      );
+      await repository.setMonthlyReservation(active.id, 15);
+      await repository.archive(active.id);
+
+      final archived = (await repository.getById(active.id))!;
+      expect(archived.status, GoalStatus.archived);
+      expect(archived.currentAmount, 20);
+      expect(archived.monthlyReservation, 15);
+      expect(archived.milestones, hasLength(2));
+      expect(archived.contributions, hasLength(1));
+      await repository.restore(active.id);
+      expect((await repository.getById(active.id))!.status, GoalStatus.active);
+
+      final completed = await repository.create(
+        goal: Goal(
+          id: 'archive-completed',
+          name: '已完成目标',
+          icon: 'savings',
+          targetAmount: 100,
+          currentAmount: 0,
+          targetDate: DateTime(now.year + 1),
+          status: GoalStatus.active,
+          createdAt: now,
+          milestones: const [],
+        ),
+        milestoneAmounts: const [100],
+        initialAmount: 0,
+      );
+      await repository.contribute(
+        goalId: completed.id,
+        amount: 100,
+        type: GoalContributionType.deposit,
+      );
+      await repository.archive(completed.id);
+      expect(
+        (await repository.getById(completed.id))!.status,
+        GoalStatus.archived,
+      );
+      await repository.restore(completed.id);
+      expect(
+        (await repository.getById(completed.id))!.status,
+        GoalStatus.completed,
+      );
+    },
+  );
+
+  test('goal watch stream reports archive changes', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftGoalRepository(database);
+    await repository.create(
+      goal: Goal(
+        id: 'stream-archive',
+        name: '流式归档目标',
+        icon: 'savings',
+        targetAmount: 100,
+        currentAmount: 0,
+        targetDate: DateTime(2027),
+        status: GoalStatus.active,
+        createdAt: DateTime(2026),
+        milestones: const [],
+      ),
+      milestoneAmounts: const [100],
+      initialAmount: 0,
+    );
+    final stream = repository.watchAll();
+    final firstEvent = Completer<void>();
+    final archivedEvent = Completer<void>();
+    final statuses = <GoalStatus>[];
+    final subscription = stream.listen((goals) {
+      statuses.add(
+        goals.firstWhere((goal) => goal.id == 'stream-archive').status,
+      );
+      if (statuses.length == 1) firstEvent.complete();
+      if (statuses.length > 1 && statuses.last == GoalStatus.archived) {
+        archivedEvent.complete();
+      }
+    });
+    addTearDown(subscription.cancel);
+    await firstEvent.future;
+    expect(statuses.single, GoalStatus.active);
+    await repository.archive('stream-archive');
+    await archivedEvent.future;
+    expect(statuses.last, GoalStatus.archived);
+  });
 
   test('goal forecast uses 30, 60 and 90 day contribution windows', () {
     final now = DateTime(2026, 8, 31);

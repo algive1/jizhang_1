@@ -8,6 +8,8 @@ import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
+import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -30,6 +32,8 @@ class MainActivity : FlutterActivity() {
                         notificationPreferences().edit()
                             .putBoolean(KEY_ENABLED, enabled)
                             .apply()
+                        AutoBookkeepingSettings.setEnabled(this, enabled)
+                        if (enabled) startService(Intent(this, AutoBillOverlayService::class.java))
                         result.success(null)
                     }
                     "getPending" -> result.success(PaymentNotificationStore.read(this))
@@ -86,6 +90,20 @@ class MainActivity : FlutterActivity() {
                     result.error("NO_HANDLER", "No application can open this file", null)
                 } catch (error: SecurityException) {
                     result.error("NO_HANDLER", "No application can open this file", null)
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/finance_scheduler")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "schedule" -> {
+                        FinanceScheduler.schedule(applicationContext)
+                        result.success(null)
+                    }
+                    "cancel" -> {
+                        FinanceScheduler.cancel(applicationContext)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
             }
     }

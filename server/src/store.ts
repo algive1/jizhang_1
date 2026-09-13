@@ -2,20 +2,20 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { ApiError, requireCondition as check, schemas, type Kind, type Data, type Entity, type Mutation } from './contract.js';
 export type Role = 'owner' | 'admin' | 'member';
-export interface Book { id: string; name: string; type: string; owner_user_id: string; created_at: number; updated_at: number; is_archived: number; version: number }
+export interface Book { id: string; name: string; type: string; owner_user_id: string; created_at: number; updated_at: number; is_archived: number; version: number; asset_source_book_id: string | null }
 export class Store {
   readonly db: Database.Database;
   constructor(path: string) {
     this.db = new Database(path);
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
-    const version = this.db.pragma('user_version', { simple: true }) as number;
-    check(version <= 1, '服务端数据库版本过新', 500);
+    let version = this.db.pragma('user_version', { simple: true }) as number;
+    check(version <= 2, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {
       this.db.exec(`
         CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
         CREATE TABLE sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL);
-        CREATE TABLE books(id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, owner_user_id TEXT NOT NULL REFERENCES users(id), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, is_archived INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1);
+        CREATE TABLE books(id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, owner_user_id TEXT NOT NULL REFERENCES users(id), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, is_archived INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, asset_source_book_id TEXT);
         CREATE TABLE members(book_id TEXT NOT NULL REFERENCES books(id), user_id TEXT NOT NULL REFERENCES users(id), role TEXT NOT NULL, joined_at INTEGER NOT NULL, PRIMARY KEY(book_id,user_id));
         CREATE TABLE invitations(id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id), code TEXT UNIQUE NOT NULL, invited_by TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, status TEXT NOT NULL);
         CREATE TABLE entities(book_id TEXT NOT NULL REFERENCES books(id),kind TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NULL,data_json TEXT NOT NULL,deleted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(book_id,kind,id));
@@ -24,7 +24,15 @@ export class Store {
         CREATE TABLE operations(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,book_id TEXT NOT NULL,result_json TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
         PRAGMA user_version=1;
       `);
+      version = 1;
     })();
+    if (version < 2) {
+      const columns = this.db.prepare('PRAGMA table_info(books)').all() as Array<{name: string}>;
+      if (!columns.some((column) => column.name === 'asset_source_book_id')) {
+        this.db.exec('ALTER TABLE books ADD COLUMN asset_source_book_id TEXT');
+      }
+      this.db.pragma('user_version = 2');
+    }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
   }
   now() { return Math.floor(Date.now()/1000); }
@@ -62,26 +70,33 @@ export class Store {
   }
   write(book: string, kind: Kind, id: string, data: Data, actor: string, deleted = false): Entity {
     const version = (kind === 'books' ? this.book(book).version : this.get(book,kind,id)?.version ?? 0) + 1;
-    if (kind === 'books') this.db.prepare('UPDATE books SET name=?,is_archived=?,updated_at=?,version=? WHERE id=?').run(data.name,data.is_archived,this.now(),version,book);
+    if (kind === 'books') {
+      const current = this.book(book);
+      const assetSource = Object.prototype.hasOwnProperty.call(data, 'asset_source_book_id')
+        ? (data.asset_source_book_id as string | null)
+        : current.asset_source_book_id;
+      this.db.prepare('UPDATE books SET name=?,asset_source_book_id=?,is_archived=?,updated_at=?,version=? WHERE id=?').run(data.name,assetSource,data.is_archived,this.now(),version,book);
+    }
     else this.db.prepare('INSERT INTO entities VALUES(?,?,?,?,?,?) ON CONFLICT(book_id,kind,id) DO UPDATE SET version=excluded.version,data_json=excluded.data_json,deleted=excluded.deleted').run(book,kind,id,version,JSON.stringify(data),Number(deleted));
     const canonical = kind === 'books' ? {...this.book(book),family_id:book} : data;
     this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,kind,id,version,Number(deleted),JSON.stringify(canonical),actor,this.now());
     return {kind,id,version,deleted,data:canonical};
   }
-  create(user: string, id: string, name: string, type: string, entities: Array<{kind:Kind;id:string;data:Data}>) {
+  create(user: string, id: string, name: string, type: string, entities: Array<{kind:Kind;id:string;data:Data}>, assetSourceBookId: string | null = null) {
     return this.db.transaction(() => {
       const existing = this.db.prepare('SELECT * FROM books WHERE id=?').get(id) as Book | undefined;
       if (existing) { check(existing.owner_user_id===user,'账本标识已被使用',409); return this.importSnapshot(id,user); }
       const owned = (this.db.prepare('SELECT COUNT(*) n FROM books WHERE owner_user_id=? AND is_archived=0').get(user) as {n:number}).n;
       check(owned<3,'已达到三个自建共享账本上限',409);
-      this.db.prepare('INSERT INTO books VALUES(?,?,?,?,?,?,0,1)').run(id,name,type,user,this.now(),this.now());
+      this.db.prepare('INSERT INTO books(id,name,type,owner_user_id,created_at,updated_at,is_archived,version,asset_source_book_id) VALUES(?,?,?,?,?,?,0,1,?)').run(id,name,type,user,this.now(),this.now(),assetSourceBookId);
       this.db.prepare('INSERT INTO members VALUES(?,?,?,?)').run(id,user,'owner',this.now());
-      const rank: Record<Kind,number> = {books:0,accounts:1,categories:2,goals:3,goal_milestones:4,transactions:5,goal_contributions:6,budgets:7};
+      const rank: Record<Kind,number> = {books:0,accounts:1,categories:2,goals:3,goal_milestones:4,transactions:5,goal_contributions:6,budgets:7,recurring_bills:8,installment_plans:9};
       const sorted = [...entities].sort((a,b)=>rank[a.kind]-rank[b.kind] || Number(a.data.parent_id!=null)-Number(b.data.parent_id!=null));
       for (const e of sorted) {
         check(e.kind!=='books','快照不能包含其他账本');
         const data = schemas[e.kind].parse(e.data);
         check(data.id===e.id && (!('book_id' in data) || data.book_id===id),'数据不属于目标账本');
+        if (e.kind==='accounts') this.validateAccountIdentity(id, data, e.id);
         if (e.kind==='transactions') this.validateMetadata(data);
         if (e.kind==='transactions') Object.assign(data,{created_by:user,updated_by:user,user_id:user,visibility:'shared',sync_status:'synced'});
         if (e.kind==='goals') Object.assign(data,{created_by:user,updated_by:user});
@@ -120,6 +135,7 @@ export class Store {
         }
         const data=op.action==='delete' ? {...previous!.data} : schemas[op.kind].parse(op.data);
         check(data.id===op.id && (!('book_id' in data) || data.book_id===book),'记录与账本不匹配');
+        if (op.kind==='accounts') this.validateAccountIdentity(book, data, op.id);
         if (op.kind==='transactions') {
           if (!previous) {for(const field of ['account_id','destination_account_id']) if(data[field]) check(this.get(book,'accounts',String(data[field]))?.data.is_archived===0,'新流水不能使用已归档或不存在的账户');}
           if (previous) check(data.created_at===previous.data.created_at,'不能修改创建时间');
@@ -157,12 +173,25 @@ export class Store {
     check(typeof metadata==='object' && metadata!==null && !Array.isArray(metadata) && Object.keys(metadata).every(k=>k==='tags'),'共享流水不能包含通知原文或附件路径');
     if ('tags' in metadata) check(Array.isArray(metadata.tags) && metadata.tags.length<=100 && metadata.tags.every(t=>typeof t==='string' && t.length<=200),'标签格式无效');
   }
+  validateAccountIdentity(book: string, data: Data, excludingId?: string) {
+    const required = new Set(['wechat','alipay','debitCard','creditCard','other']);
+    const type = String(data.type);
+    const suffix = data.identifier_suffix == null ? null : String(data.identifier_suffix);
+    if (required.has(type)) check(suffix !== null && /^\d{4}$/.test(suffix), '账户识别后四位必须是 4 位数字');
+    else check(suffix === null, '该账户类型不需要填写识别后四位');
+    if (suffix === null) return;
+    for (const account of this.all(book,'accounts')) {
+      if (account.deleted || account.id === excludingId) continue;
+      if (account.data.identifier_suffix === suffix) throw new ApiError(400, `当前账本已有账户使用后四位 ${suffix}，请填写其他后四位`);
+    }
+  }
   validateAndRecalculate(book: string, actor: string) {
     const live=(kind:Kind)=>this.all(book,kind).filter(e=>!e.deleted);
     const accounts=new Map(live('accounts').map(e=>[e.id,e]));
     const categories=new Map(live('categories').map(e=>[e.id,e]));
     const goals=new Map(live('goals').map(e=>[e.id,e]));
     const balances=new Map([...accounts].map(([id,e])=>[id,Number(e.data.opening_balance_in_cents)]));
+    for (const account of accounts.values()) this.validateAccountIdentity(book, account.data, account.id);
     for (const c of categories.values()) if(c.data.parent_id) {const p=categories.get(String(c.data.parent_id));check(p && !p.data.parent_id && p.data.type===c.data.type && p.id!==c.id,'分类父级必须属于同一本账且仅支持两级');}
     for (const e of live('transactions')) {
       const d=e.data; const account=accounts.get(String(d.account_id));
@@ -170,15 +199,66 @@ export class Store {
       for(const key of ['category_id','subcategory_id']) if(d[key]) check(categories.has(String(d[key])),'流水分类不属于本账本');
       if(d.subcategory_id) check(categories.get(String(d.subcategory_id))!.data.parent_id===d.category_id,'子分类与主分类不匹配');
       const amount=Number(d.amount_in_cents);check(Number.isSafeInteger(amount) && (d.type==='adjustment' ? amount!==0 : amount>0),'流水金额无效');
-      if(d.original_transaction_id) check(this.get(book,'transactions',String(d.original_transaction_id)),'关联原流水不属于本账本');
-      if(d.type==='transfer') {const destination=accounts.get(String(d.destination_account_id));check(destination && destination.id!==account.id && destination.data.currency===d.currency,'转账需使用本账本的两个同币种账户');}
       if(d.deleted_at!=null) continue;
+      for (const relation of ['original_transaction_id', 'related_transaction_id']) {
+        if (d[relation]) {
+          const related = this.get(book, 'transactions', String(d[relation]));
+          check(related && !related.deleted && related.data.deleted_at == null, '关联原流水不存在或已删除');
+        }
+      }
+      if (d.type === 'refund' || d.type === 'reimbursement') {
+        const relatedId = d.related_transaction_id ?? d.original_transaction_id;
+        check(relatedId, '退款或报销必须关联原流水');
+        const related = this.get(book, 'transactions', String(relatedId));
+        check(related && !related.deleted && related.data.deleted_at == null, '退款或报销的原流水不存在或已删除');
+        check(['expense', 'lend', 'assetPurchase'].includes(String(related.data.type)), '退款或报销只能关联消费流水');
+        check(related.data.currency === d.currency, '退款或报销与原流水币种不一致');
+        check(Number(d.amount_in_cents) <= Number(related.data.amount_in_cents), '退款或报销金额不能超过原流水金额');
+      }
+      const reimbursementStatus = String(d.reimbursement_status ?? 'none');
+      check(['none', 'pending', 'reimbursed', 'partial'].includes(reimbursementStatus), '报销状态无效');
+      if (d.reimbursement_amount_in_cents != null) {
+        const reimbursementAmount = Number(d.reimbursement_amount_in_cents);
+        check(Number.isSafeInteger(reimbursementAmount) && reimbursementAmount > 0 && reimbursementAmount <= amount, '报销金额无效');
+      }
+      const refundStatus = String(d.refund_status ?? 'none');
+      check(['none', 'partial', 'refunded'].includes(refundStatus), '退款状态无效');
+      if (d.refund_amount_in_cents != null) {
+        const refundAmount = Number(d.refund_amount_in_cents);
+        check(Number.isSafeInteger(refundAmount) && refundAmount > 0 && refundAmount <= amount, '退款金额无效');
+      }
+      if(d.type==='transfer' || d.type==='repayment') {const destination=accounts.get(String(d.destination_account_id));check(destination && destination.id!==account.id && destination.data.currency===d.currency,'转账或还款需使用本账本的两个同币种账户');}
       const outgoing=['expense','lend','repayment','assetPurchase','transfer'].includes(String(d.type));
       balances.set(account.id,balances.get(account.id)!+(outgoing?-amount:amount));
-      if(d.type==='transfer') {
+      if(d.type==='transfer' || d.type==='repayment') {
         const destination=accounts.get(String(d.destination_account_id));check(destination && destination.id!==account.id && destination.data.currency===d.currency,'转账需使用本账本的两个同币种账户');
         balances.set(destination.id,balances.get(destination.id)!+amount);
       }
+    }
+    for (const e of live('recurring_bills')) {
+      const d = e.data;
+      if (d.account_id) {
+        const account = accounts.get(String(d.account_id));
+        check(account && account.data.is_archived === 0, '周期账单账户不存在或已归档');
+      }
+      if (d.category_id) check(categories.has(String(d.category_id)), '周期账单分类不属于本账本');
+      check(Number.isSafeInteger(Number(d.amount_in_cents)) && Number(d.amount_in_cents) > 0, '周期账单金额无效');
+      if (d.cycle === 'custom') check(Number.isSafeInteger(Number(d.custom_interval_days)) && Number(d.custom_interval_days) > 0, '自定义周期无效');
+    }
+    for (const e of live('installment_plans')) {
+      const d = e.data;
+      const original = this.get(book, 'transactions', String(d.original_transaction_id));
+      check(original && !original.deleted && original.data.deleted_at == null, '分期原始消费不存在或已删除');
+      check(['expense', 'lend', 'assetPurchase'].includes(String(original.data.type)), '分期只能关联消费流水');
+      check(Number(original.data.amount_in_cents) === Number(d.total_amount_in_cents), '分期总金额必须等于原流水金额');
+      const credit = accounts.get(String(d.credit_account_id));
+      const repayment = accounts.get(String(d.repayment_account_id));
+      check(credit && repayment && credit.id !== repayment.id, '分期账户不存在或不能相同');
+      check(credit.data.currency === repayment.data.currency, '分期账户币种必须一致');
+      check(original.data.currency === credit.data.currency, '分期账户与原流水币种必须一致');
+      check(credit.data.is_archived === 0 && repayment.data.is_archived === 0, '分期账户已归档');
+      check(Number(d.current_period) <= Number(d.total_periods), '分期期数无效');
+      check(Number(d.due_day) >= 1 && Number(d.due_day) <= 31, '还款日无效');
     }
     for(const [id,balance] of balances) {check(Number.isSafeInteger(balance),'余额超出范围');const account=accounts.get(id)!;if(account.data.balance_in_cents!==balance)this.write(book,'accounts',id,{...account.data,balance_in_cents:balance},actor);}
     const budgetKeys=new Set<string>();

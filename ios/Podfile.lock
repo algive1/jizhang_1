@@ -1,0 +1,72 @@
+PODS:
+  - alipay_kit_ios (6.0.1):
+    - alipay_kit_ios/utdid (= 6.0.1)
+    - alipay_kit_ios/vendor (= 6.0.1)
+    - Flutter
+  - alipay_kit_ios/utdid (6.0.1):
+    - Flutter
+  - alipay_kit_ios/vendor (6.0.1):
+    - Flutter
+  - CwlCatchException (2.2.1):
+    - CwlCatchExceptionSupport (~> 2.2.1)
+  - CwlCatchExceptionSupport (2.2.1)
+  - file_picker_darwin (1.0.0):
+    - Flutter
+    - FlutterMacOS
+  - Flutter (1.0.0)
+  - flutter_secure_storage_darwin (10.0.0):
+    - Flutter
+    - FlutterMacOS
+  - speech_to_text (7.2.0):
+    - CwlCatchException
+    - Flutter
+    - FlutterMacOS
+  - wechat_kit (6.0.2):
+    - Flutter
+    - wechat_kit/pay (= 6.0.2)
+    - wechat_kit/vendor (= 6.0.2)
+  - wechat_kit/pay (6.0.2):
+    - Flutter
+  - wechat_kit/vendor (6.0.2):
+    - Flutter
+
+DEPENDENCIES:
+  - alipay_kit_ios (from `.symlinks/plugins/alipay_kit_ios/ios`)
+  - file_picker_darwin (from `.symlinks/plugins/file_picker_darwin/darwin`)
+  - Flutter (from `Flutter`)
+  - flutter_secure_storage_darwin (from `.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
+  - speech_to_text (from `.symlinks/plugins/speech_to_text/darwin`)
+  - wechat_kit (from `.symlinks/plugins/wechat_kit/ios`)
+
+SPEC REPOS:
+  trunk:
+    - CwlCatchException
+    - CwlCatchExceptionSupport
+
+EXTERNAL SOURCES:
+  alipay_kit_ios:
+    :path: ".symlinks/plugins/alipay_kit_ios/ios"
+  file_picker_darwin:
+    :path: ".symlinks/plugins/file_picker_darwin/darwin"
+  Flutter:
+    :path: Flutter
+  flutter_secure_storage_darwin:
+    :path: ".symlinks/plugins/flutter_secure_storage_darwin/darwin"
+  speech_to_text:
+    :path: ".symlinks/plugins/speech_to_text/darwin"
+  wechat_kit:
+    :path: ".symlinks/plugins/wechat_kit/ios"
+
+SPEC CHECKSUMS:
+  alipay_kit_ios: ac6e2599c02148214f82e22a9c55ca3962f72912
+  CwlCatchException: 7acc161b299a6de7f0a46a6ed741eae2c8b4d75a
+  CwlCatchExceptionSupport: 54ccab8d8c78907b57f99717fb19d4cc3bce02dc
+  file_picker_darwin: 4c2b9a50ea44cb3b071381ea0cf48591bdd80251
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
+  speech_to_text: 3b313d98516d3d0406cea424782ec25470c59d19
+  wechat_kit: a2e39552cffaece4d470a83821bb3c9eaa3fcaed
+
+PODFILE CHECKSUM: b01a035c8753d9ff144453eccc88e506807f87d7
+
+COCOAPODS: 1.17.0

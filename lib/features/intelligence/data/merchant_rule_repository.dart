@@ -67,7 +67,9 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
       TransactionType.refund ||
       TransactionType.reimbursement ||
       TransactionType.borrow => seeded('income-other'),
-      TransactionType.transfer || TransactionType.adjustment => null,
+      TransactionType.transfer ||
+      TransactionType.repayment ||
+      TransactionType.adjustment => null,
       _ => seeded('expense-other'),
     };
     final categoryExists = defaultCategory == null
@@ -170,7 +172,7 @@ final merchantClassificationServiceProvider = Provider(
 final merchantRuleRepositoryProvider = Provider<MerchantRuleRepository>((ref) {
   return DriftMerchantRuleRepository(
     ref.watch(databaseProvider),
-    ref.watch(transactionRepositoryProvider),
+    DriftTransactionRepository(ref.watch(databaseProvider)),
     ref.watch(merchantClassificationServiceProvider),
   );
 });

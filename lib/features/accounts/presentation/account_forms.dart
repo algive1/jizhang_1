@@ -1,6 +1,7 @@
 import '../../../core/utils/entity_id.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/formatters/money_formatter.dart';
@@ -27,6 +28,9 @@ class _AccountEditor extends ConsumerStatefulWidget {
 class _AccountEditorState extends ConsumerState<_AccountEditor> {
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.account?.name);
+  late final _identifierSuffix = TextEditingController(
+    text: widget.account?.identifierSuffix ?? '',
+  );
   final _balance = TextEditingController(text: '0.00');
   late AccountType _type = widget.account?.type ?? AccountType.debitCard;
   late AssetForm _assetForm =
@@ -39,6 +43,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
   @override
   void dispose() {
     _name.dispose();
+    _identifierSuffix.dispose();
     _balance.dispose();
     super.dispose();
   }
@@ -71,8 +76,35 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
                 for (final t in AccountType.values)
                   DropdownMenuItem(value: t, child: Text(t.label)),
               ],
-              onChanged: _saving ? null : (v) => setState(() => _type = v!),
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() {
+                      _type = v!;
+                      if (!_type.requiresIdentifierSuffix) {
+                        _identifierSuffix.clear();
+                      }
+                    }),
             ),
+            if (_type.requiresIdentifierSuffix) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _identifierSuffix,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: _type.identifierInputLabel,
+                  hintText: '请输入 4 位数字',
+                  counterText: '',
+                ),
+                validator: (value) {
+                  final suffix = value?.trim() ?? '';
+                  return RegExp(r'^\d{4}$').hasMatch(suffix)
+                      ? null
+                      : '${_type.identifierInputLabel}必须是 4 位数字';
+                },
+              ),
+            ],
             if (!_type.isDebt) ...[
               const SizedBox(height: 12),
               DropdownButtonFormField<AssetForm>(
@@ -182,6 +214,9 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
       balance: old?.balance ?? (_type.isDebt && _debt ? -entered : entered),
       currency: _currency,
       assetForm: _type.isDebt ? AssetForm.unspecified : _assetForm,
+      identifierSuffix: _type.requiresIdentifierSuffix
+          ? _identifierSuffix.text.trim()
+          : null,
       icon: old?.icon ?? 'account_balance_wallet_outlined',
       color: old?.color ?? 0xff73963b,
       sortOrder: old?.sortOrder ?? widget.sortOrder,
@@ -242,7 +277,7 @@ class _BalanceCalibrationState extends ConsumerState<_BalanceCalibration> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('校准余额 · ${widget.account.name}'),
+    title: Text('校准余额 · ${widget.account.displayName}'),
     content: SingleChildScrollView(
       child: Form(
         key: _form,

@@ -6,6 +6,9 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/transaction_tile.dart';
+import '../../accounts/data/account_repository.dart';
+import '../../recurring/data/recurring_bill_repository.dart';
+import '../../../core/models/recurring_bill.dart';
 import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
 
@@ -31,24 +34,29 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   @override
   Widget build(BuildContext context) {
     final all = ref.watch(transactionsProvider).value ?? const [];
+    final accounts = ref.watch(allAccountsProvider).value ?? const [];
+    final recurringBills =
+        ref.watch(recurringBillsAllProvider).value ?? const <RecurringBill>[];
+    final accountNames = {
+      for (final account in accounts) account.id: account.displayName,
+    };
     final results = all.where((transaction) {
       if (widget.month != null &&
           (transaction.occurredAt.year != widget.month!.year ||
               transaction.occurredAt.month != widget.month!.month ||
               transaction.occurredAt.isAfter(DateTime.now())))
         return false;
-      final query = _query.trim();
-      return query.isEmpty ||
-          (transaction.merchant?.contains(query) ?? false) ||
-          (transaction.categoryName?.contains(query) ?? false) ||
-          (transaction.note?.contains(query) ?? false);
+      return _matchesSearch(transaction, accountNames);
     }).toList();
+    final recurringResults = recurringBills
+        .where((bill) => _matchesRecurring(bill, accountNames))
+        .toList();
 
     return SafeArea(
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 120),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 Row(
@@ -121,6 +129,10 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                           .map(
                             (entry) => TransactionTile(
                               transaction: entry.value,
+                              accountName: _accountLabel(
+                                entry.value,
+                                accountNames,
+                              ),
                               showDivider: entry.key != results.length - 1,
                               showDate: true,
                               onTap: () =>
@@ -132,6 +144,37 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                           .toList(),
                     ),
                   ),
+                if (_query.trim().isNotEmpty &&
+                    recurringResults.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  const Text(
+                    '匹配的周期账单',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AppCard(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      children: recurringResults
+                          .map(
+                            (bill) => ListTile(
+                              leading: const Icon(Icons.event_repeat_outlined),
+                              title: Text(bill.name),
+                              subtitle: Text(
+                                '${bill.amount.toStringAsFixed(2)} · ${_recurringCycleLabel(bill)}',
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () =>
+                                  context.push('/profile/recurring-bills'),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ],
               ]),
             ),
           ),
@@ -139,6 +182,102 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
       ),
     );
   }
+
+  bool _matchesSearch(
+    TransactionRecord transaction,
+    Map<String, String> accountNames,
+  ) {
+    final query = _query.trim();
+    if (query.isEmpty) return true;
+    final amountMatch = RegExp(
+      r'^(>=|>|<=|<)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|块)?(?:以上|以下)?$',
+    ).firstMatch(query);
+    if (amountMatch != null) {
+      final amount = double.tryParse(amountMatch.group(2)!);
+      if (amount == null) return false;
+      final value = transaction.isExpense
+          ? transaction.netExpenseAmount
+          : transaction.amount;
+      final operator = amountMatch.group(1);
+      if (query.contains('以上')) return value >= amount;
+      if (query.contains('以下')) return value <= amount;
+      return switch (operator) {
+        '>=' => value >= amount,
+        '>' => value > amount,
+        '<=' => value <= amount,
+        '<' => value < amount,
+        _ => value == amount,
+      };
+    }
+    final date =
+        '${transaction.occurredAt.year}-${transaction.occurredAt.month.toString().padLeft(2, '0')}-${transaction.occurredAt.day.toString().padLeft(2, '0')}';
+    final metadata = transaction.metadataJson ?? '';
+    return (transaction.merchant?.contains(query) ?? false) ||
+        (transaction.categoryName?.contains(query) ?? false) ||
+        (transaction.note?.contains(query) ?? false) ||
+        (accountNames[transaction.accountId]?.contains(query) ?? false) ||
+        (transaction.destinationAccountId != null &&
+            (accountNames[transaction.destinationAccountId]?.contains(query) ??
+                false)) ||
+        date.contains(query) ||
+        metadata.contains(query) ||
+        _statusLabel(transaction).contains(query);
+  }
+
+  String? _accountLabel(
+    TransactionRecord transaction,
+    Map<String, String> accountNames,
+  ) {
+    final source = accountNames[transaction.accountId];
+    final destination = transaction.destinationAccountId == null
+        ? null
+        : accountNames[transaction.destinationAccountId!];
+    if (source == null) return null;
+    return destination == null ? source : '$source → $destination';
+  }
+
+  bool _matchesRecurring(RecurringBill bill, Map<String, String> accountNames) {
+    final query = _query.trim();
+    if (query.isEmpty) return false;
+    final amountMatch = RegExp(
+      r'^(>=|>|<=|<)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|块)?(?:以上|以下)?$',
+    ).firstMatch(query);
+    if (amountMatch != null) {
+      final amount = double.tryParse(amountMatch.group(2)!);
+      if (amount == null) return false;
+      final operator = amountMatch.group(1);
+      if (query.contains('以上')) return bill.amount >= amount;
+      if (query.contains('以下')) return bill.amount <= amount;
+      return switch (operator) {
+        '>=' => bill.amount >= amount,
+        '>' => bill.amount > amount,
+        '<=' => bill.amount <= amount,
+        '<' => bill.amount < amount,
+        _ => bill.amount == amount,
+      };
+    }
+    return bill.name.contains(query) ||
+        _recurringCycleLabel(bill).contains(query) ||
+        (bill.accountId != null &&
+            (accountNames[bill.accountId]?.contains(query) ?? false));
+  }
+
+  String _recurringCycleLabel(RecurringBill bill) => switch (bill.cycle) {
+    RecurringBillCycle.weekly => '每周',
+    RecurringBillCycle.monthly => '每月',
+    RecurringBillCycle.quarterly => '每季度',
+    RecurringBillCycle.halfYear => '每半年',
+    RecurringBillCycle.yearly => '每年',
+    RecurringBillCycle.custom => '自定义',
+  };
+
+  String _statusLabel(TransactionRecord value) =>
+      switch (value.reimbursementStatus) {
+        ReimbursementStatus.none => '无需报销',
+        ReimbursementStatus.pending => '待报销',
+        ReimbursementStatus.partial => '部分报销',
+        ReimbursementStatus.reimbursed => '已报销',
+      };
 
   Future<void> _showTransactionActions(TransactionRecord transaction) {
     return showTransactionActions(

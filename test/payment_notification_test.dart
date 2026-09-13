@@ -30,6 +30,50 @@ void main() {
     expect(parsed.orderId, '202609080001');
   });
 
+  test('parser extracts payment account suffix and resolver receives it', () async {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'n-suffix',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
+        postedAt: DateTime(2026, 9, 8, 9),
+      ),
+    );
+    expect(parsed?.identifierSuffix, '3316');
+
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'n-suffix-service',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
+        postedAt: DateTime(2026, 9, 8, 9),
+      ),
+    ]);
+    final transactions = DriftTransactionRepository(database);
+    String? resolvedSuffix;
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      resolveTarget: (channel, suffix) async {
+        resolvedSuffix = suffix;
+        return suffix == '3316'
+            ? (bookId: SeedIds.personalBook, accountId: SeedIds.wechatAccount)
+            : null;
+      },
+    ).processPending();
+    expect(resolvedSuffix, '3316');
+    expect(result.created, 1);
+  });
+
   test(
     'notification processing is idempotent and acknowledges only handled items',
     () async {
@@ -107,7 +151,7 @@ void main() {
         transactions,
         DriftAppSettingsRepository(database),
       ),
-      resolveTarget: (_) async => (bookId: family.id, accountId: account.id),
+      resolveTarget: (_, _) async => (bookId: family.id, accountId: account.id),
     ).processPending();
     expect(result.created, 1);
     expect(

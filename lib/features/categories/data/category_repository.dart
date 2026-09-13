@@ -168,6 +168,17 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   );
 });
 
+final categoriesByBookProvider = StreamProvider.family<List<Category>, String>((
+  ref,
+  bookId,
+) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* DriftCategoryRepository(
+    ref.watch(databaseProvider),
+    bookId: bookId,
+  ).watchActive();
+});
+
 final categoriesProvider = StreamProvider<List<Category>>((ref) async* {
   await ref.watch(databaseBootstrapProvider.future);
   yield* ref.watch(categoryRepositoryProvider).watchActive();

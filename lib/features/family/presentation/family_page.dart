@@ -106,7 +106,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     }
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
         children: [
           Row(
             children: [

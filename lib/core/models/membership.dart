@@ -6,12 +6,19 @@ extension MembershipPlanLabel on MembershipPlan {
     MembershipPlan.pro => 'Pro',
     MembershipPlan.family => 'Family',
   };
+
+  int get level => switch (this) {
+    MembershipPlan.free => 0,
+    MembershipPlan.pro => 1,
+    MembershipPlan.family => 2,
+  };
 }
 
 enum MembershipStatus { active, gracePeriod, expired, canceled }
 
 enum EntitlementKey {
   localBookkeeping,
+  automaticBookkeeping,
   dataExport,
   basicBackup,
   cloudSync,
@@ -22,6 +29,97 @@ enum EntitlementKey {
   advancedReport,
   familyBook,
   adFree,
+}
+
+/// Business capabilities whose availability can be switched by the server.
+///
+/// Keep this list at the product level instead of coupling feature entry
+/// points directly to a plan name. The remote membership response can later
+/// provide a policy for each key without changing those entry points.
+enum MembershipFeature {
+  automaticBookkeeping,
+  ledgerSync,
+  assetReports,
+  dataExport,
+  sharedAssets,
+}
+
+extension MembershipFeatureInfo on MembershipFeature {
+  String get apiKey => switch (this) {
+    MembershipFeature.automaticBookkeeping => 'automatic_bookkeeping',
+    MembershipFeature.ledgerSync => 'ledger_sync',
+    MembershipFeature.assetReports => 'asset_reports',
+    MembershipFeature.dataExport => 'data_export',
+    MembershipFeature.sharedAssets => 'shared_assets',
+  };
+
+  String get label => switch (this) {
+    MembershipFeature.automaticBookkeeping => '自动记账',
+    MembershipFeature.ledgerSync => '账本同步',
+    MembershipFeature.assetReports => '资产报表',
+    MembershipFeature.dataExport => '数据导出',
+    MembershipFeature.sharedAssets => '共享资产',
+  };
+
+  EntitlementKey get defaultEntitlement => switch (this) {
+    MembershipFeature.automaticBookkeeping =>
+      EntitlementKey.automaticBookkeeping,
+    MembershipFeature.ledgerSync => EntitlementKey.cloudSync,
+    MembershipFeature.assetReports => EntitlementKey.advancedReport,
+    MembershipFeature.dataExport => EntitlementKey.dataExport,
+    MembershipFeature.sharedAssets => EntitlementKey.familyBook,
+  };
+}
+
+/// A server-controlled feature switch and the entitlement needed when it is
+/// enabled for members. An absent policy is intentionally treated as a local
+/// pass-through so unfinished backend rollout cannot break existing features.
+class MembershipFeaturePolicy {
+  const MembershipFeaturePolicy({
+    required this.enabled,
+    required this.requiresMembership,
+    this.entitlement,
+    this.minimumPlan,
+    this.source = 'server',
+  });
+
+  const MembershipFeaturePolicy.passthrough()
+    : enabled = true,
+      requiresMembership = false,
+      entitlement = null,
+      minimumPlan = null,
+      source = 'local_default';
+
+  factory MembershipFeaturePolicy.membershipOnly(
+    MembershipFeature feature, {
+    bool enabled = true,
+    String source = 'server',
+  }) {
+    return MembershipFeaturePolicy(
+      enabled: enabled,
+      requiresMembership: true,
+      entitlement: feature.defaultEntitlement,
+      source: source,
+    );
+  }
+
+  final bool enabled;
+  final bool requiresMembership;
+  final EntitlementKey? entitlement;
+  final MembershipPlan? minimumPlan;
+  final String source;
+
+  bool canUse(MembershipSnapshot snapshot, {DateTime? now}) {
+    if (!enabled) return false;
+    if (!requiresMembership) return true;
+    if (!snapshot.membership.canUseGrantedEntitlements) return false;
+    if (entitlement != null) {
+      return snapshot.has(entitlement!, now: now);
+    }
+    final requiredPlan = minimumPlan;
+    if (requiredPlan == null) return false;
+    return snapshot.membership.plan.level >= requiredPlan.level;
+  }
 }
 
 class Membership {
@@ -42,7 +140,7 @@ class Membership {
       status == MembershipStatus.gracePeriod;
 }
 
-enum SubscriptionProvider { apple, wechat, manualGrant }
+enum SubscriptionProvider { apple, wechat, alipay, manualGrant }
 
 class Subscription {
   const Subscription({
@@ -111,12 +209,23 @@ class MembershipSnapshot {
     required this.entitlements,
     required this.quotas,
     this.subscription,
+    this.featurePolicies = const {},
   });
 
   final Membership membership;
   final Subscription? subscription;
   final List<EntitlementGrant> entitlements;
   final List<UsageQuota> quotas;
+  final Map<MembershipFeature, MembershipFeaturePolicy> featurePolicies;
+
+  MembershipFeaturePolicy policyFor(MembershipFeature feature) {
+    return featurePolicies[feature] ??
+        const MembershipFeaturePolicy.passthrough();
+  }
+
+  bool canUseFeature(MembershipFeature feature, {DateTime? now}) {
+    return policyFor(feature).canUse(this, now: now);
+  }
 
   bool has(EntitlementKey key, {DateTime? now}) {
     final clock = now ?? DateTime.now();

@@ -9,6 +9,7 @@ class LedgerBook {
     required this.createdAt,
     required this.updatedAt,
     required this.isArchived,
+    this.assetSourceBookId,
     this.sharedId,
     this.role,
     this.sharedPhase,
@@ -22,6 +23,10 @@ class LedgerBook {
   final DateTime updatedAt;
   final bool isArchived;
 
+  /// Null means this book owns its asset accounts. A non-null value points to
+  /// the primary asset book shared by this ledger.
+  final String? assetSourceBookId;
+
   final String? sharedId;
   final String? role;
   final String? sharedPhase;
@@ -29,4 +34,6 @@ class LedgerBook {
   bool get canManage => !isShared || role == 'owner' || role == 'admin';
 
   bool get isPersonal => type == BookType.personal;
+  String get assetBookId => assetSourceBookId ?? id;
+  bool get usesPrimaryAssets => assetSourceBookId != null;
 }

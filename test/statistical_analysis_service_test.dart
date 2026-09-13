@@ -146,6 +146,26 @@ void main() {
     expect(snapshot.regularExpense, 600);
     expect(snapshot.excludedLargeExpense, 800);
   });
+
+  test(
+    'refunds reduce consumption and repayments stay out of consumption totals',
+    () {
+      final refunded = _expense(
+        'refunded',
+        500,
+        DateTime(2026, 8, 12, 12),
+      ).copyWith(refundStatus: RefundStatus.partial, refundAmount: 200);
+      final repayment = _expense(
+        'repayment',
+        1000,
+        DateTime(2026, 8, 13, 12),
+        type: TransactionType.repayment,
+      );
+      final snapshot = service.analyze([refunded, repayment], now: now);
+      expect(snapshot.totalExpense, 300);
+      expect(snapshot.expenseCount, 1);
+    },
+  );
 }
 
 TransactionRecord _expense(

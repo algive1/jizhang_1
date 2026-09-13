@@ -1,10 +1,15 @@
+import { registerAssistantPolicy } from './assistant_policy.js';
 import Fastify from 'fastify';
+import { registerMembershipCatalog } from './membership_catalog.js';
+import { registerPaymentRoutes } from './payment.js';
 import rateLimit from '@fastify/rate-limit';
+import rawBody from 'fastify-raw-body';
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { ApiError, identifier, kinds, mutationSchema, requireCondition as check } from './contract.js';
+import { ApiError, identifier, kinds, mutationSchema, nullableId, requireCondition as check } from './contract.js';
 import { Store } from './store.js';
+import type { AssistantModelProvider } from './assistant_ai.js';
 const scrypt = promisify(scryptCallback);
 const credentials = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(10).max(128) });
 const hashToken = (token:string) => createHash('sha256').update(token).digest('hex');
@@ -12,9 +17,11 @@ async function passwordHash(password:string, salt=randomBytes(16).toString('hex'
   const digest = await scrypt(password,salt,64) as Buffer;
   return `${salt}:${digest.toString('hex')}`;
 }
-export async function createApp(path:string) {
+export async function createApp(path:string, modelProvider?: AssistantModelProvider) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
+  await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, body));
   await app.register(rateLimit,{max:300,timeWindow:'1 minute'});
   app.addHook('onClose',async()=>{store.db.close();});
   app.setErrorHandler((error,_req,reply)=>{
@@ -35,6 +42,9 @@ export async function createApp(path:string) {
     store.db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hashToken(token),user.id,expiresAt);
     return {user,token,expiresAt};
   };
+  registerMembershipCatalog(app,store);
+  registerPaymentRoutes(app,store,authenticate);
+  registerAssistantPolicy(app,store,authenticate,modelProvider);
   app.get('/health',async()=>({status:'ok',schemaVersion:1}));
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password}=credentials.parse(req.body);
@@ -65,8 +75,8 @@ export async function createApp(path:string) {
   app.get('/api/v1/books',async(req)=>({books:store.list(authenticate(req.headers.authorization).id)}));
   app.post('/api/v1/books',async(req)=>{
     const user=authenticate(req.headers.authorization);
-    const body=z.strictObject({id:identifier,name:z.string().trim().min(1).max(40),type:z.enum(['family','enterprise']),entities:z.array(z.strictObject({kind:z.enum(kinds),id:identifier,data:z.record(z.string(),z.unknown())})).max(100000)}).parse(req.body);
-    return store.create(user.id,body.id,body.name,body.type,body.entities);
+    const body=z.strictObject({id:identifier,name:z.string().trim().min(1).max(40),type:z.enum(['family','enterprise']),asset_source_book_id:nullableId,entities:z.array(z.strictObject({kind:z.enum(kinds),id:identifier,data:z.record(z.string(),z.unknown())})).max(100000)}).parse(req.body);
+    return store.create(user.id,body.id,body.name,body.type,body.entities,body.asset_source_book_id ?? null);
   });
   const bookId=(params:unknown)=>z.object({id:identifier}).parse(params).id;
   app.get('/api/v1/books/:id/snapshot',async(req)=>store.snapshot(bookId(req.params),authenticate(req.headers.authorization).id));

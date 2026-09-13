@@ -66,6 +66,7 @@ void main() {
         for (final asset in [
           'assets/images/user_avatar.png',
           'assets/images/home_living_scene.png',
+          AppAssets.homeAssetScene,
           'assets/images/pro_cloud_reference_v1.png',
           'assets/images/leaves_reference_v1.png',
           AppAssets.bookshelfEmpty,
@@ -78,6 +79,17 @@ void main() {
       debugPrint('QA images settled');
       expect(tester.takeException(), isNull);
       await captureReference(tester, find.byKey(boundaryKey), 'home-upper');
+      await tester.binding.setSurfaceSize(const Size(393, 698));
+      tester.view.physicalSize = const Size(393, 698);
+      await tester.pumpAndSettle();
+      await captureReference(
+        tester,
+        find.byKey(boundaryKey),
+        'home-prototype-393x698',
+      );
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      tester.view.physicalSize = const Size(393, 844);
+      await tester.pumpAndSettle();
       await tester.drag(find.byType(ListView).first, const Offset(0, -600));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

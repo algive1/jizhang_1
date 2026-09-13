@@ -75,4 +75,33 @@ void main() {
       expect(() => repository.archive(SeedIds.personalBook), throwsStateError);
     },
   );
+
+  test('book order and default book preference persist locally', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftBookRepository(
+      database,
+      LocalOnlyMembershipRepository(),
+    );
+    final family = await repository.create(name: '家庭账本', type: BookType.family);
+    final work = await repository.create(
+      name: '工作账本',
+      type: BookType.enterprise,
+    );
+
+    await repository.reorder([family.id, SeedIds.personalBook, work.id]);
+    expect(
+      (await repository.getForUser(SeedIds.localUser))
+          .map((book) => book.id)
+          .toList(),
+      [family.id, SeedIds.personalBook, work.id],
+    );
+
+    await repository.setDefault(family.id);
+    expect(
+      await database.appSettingsDao.getValue(defaultBookIdSettingKey),
+      family.id,
+    );
+  });
 }

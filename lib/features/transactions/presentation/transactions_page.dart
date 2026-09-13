@@ -10,6 +10,7 @@ import '../../../core/widgets/transaction_date_group.dart';
 import '../../../core/widgets/transaction_summary_card.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../categories/data/category_repository.dart';
+import '../../accounts/data/account_repository.dart';
 import '../../intelligence/data/bill_inbox_repository.dart';
 import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
@@ -39,6 +40,10 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
             )
             .toList();
     final categories = ref.watch(categoriesProvider).value ?? const [];
+    final accounts = ref.watch(allAccountsProvider).value ?? const [];
+    final accountNames = {
+      for (final account in accounts) account.id: account.displayName,
+    };
     final inboxCount = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final typedTransactions = switch (_typeFilter) {
       1 => all.where((item) => item.isExpense),
@@ -133,7 +138,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                     ),
                   )
                 else
-                  ..._buildGroups(transactions),
+                  ..._buildGroups(transactions, accountNames),
               ]),
             ),
           ),
@@ -142,7 +147,10 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     );
   }
 
-  List<Widget> _buildGroups(List<TransactionRecord> transactions) {
+  List<Widget> _buildGroups(
+    List<TransactionRecord> transactions,
+    Map<String, String> accountNames,
+  ) {
     final groups = <DateTime, List<TransactionRecord>>{};
     for (final transaction in transactions) {
       final date = DateUtils.dateOnly(transaction.occurredAt);
@@ -155,6 +163,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         child: TransactionDateGroup(
           dateLabel: label,
           transactions: entry.value,
+          accountNames: accountNames,
           onTransactionTap: (transaction) =>
               openTransactionDetail(context, transaction),
           onTransactionLongPress: _showTransactionActions,
@@ -256,7 +265,10 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
             )
             .fold<int>(
               0,
-              (total, item) => total + (item.amount * 100).round(),
+              (total, item) =>
+                  total +
+                  ((expense ? item.netExpenseAmount : item.amount) * 100)
+                      .round(),
             ) /
         100;
   }
@@ -296,6 +308,11 @@ class _TransactionsHeader extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+        IconButton(
+          onPressed: () => context.push('/transactions/reimbursements'),
+          icon: const Icon(Icons.receipt_long_outlined, size: 27),
+          tooltip: '报销管理',
         ),
         const SizedBox(width: 16),
         const UserAvatar(radius: 24),

@@ -15,6 +15,7 @@ class ParsedVoiceTransaction {
     this.subcategoryName,
     this.accountId,
     this.accountName,
+    this.identifierSuffix,
     this.merchant,
   });
 
@@ -25,6 +26,7 @@ class ParsedVoiceTransaction {
   final String? subcategoryName;
   final String? accountId;
   final String? accountName;
+  final String? identifierSuffix;
   final String? merchant;
   final DateTime occurredAt;
   final double confidence;
@@ -40,6 +42,7 @@ class ParsedVoiceTransaction {
     String? categoryName,
     String? accountId,
     String? accountName,
+    String? identifierSuffix,
     String? merchant,
     DateTime? occurredAt,
   }) {
@@ -51,6 +54,7 @@ class ParsedVoiceTransaction {
       subcategoryName: subcategoryName,
       accountId: accountId ?? this.accountId,
       accountName: accountName ?? this.accountName,
+      identifierSuffix: identifierSuffix ?? this.identifierSuffix,
       merchant: merchant ?? this.merchant,
       occurredAt: occurredAt ?? this.occurredAt,
       confidence: confidence,

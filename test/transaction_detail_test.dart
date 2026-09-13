@@ -167,8 +167,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('交易详情'), findsOneWidget);
-    expect(find.text('午餐'), findsOneWidget);
-    expect(find.text('和同事一起'), findsOneWidget);
+    expect(find.text('和同事一起'), findsNWidgets(2));
     expect(find.text('待同步'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -900));
     await tester.pump();

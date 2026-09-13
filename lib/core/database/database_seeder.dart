@@ -243,6 +243,7 @@ class DatabaseSeeder {
         120000,
         'chat_bubble_outline',
         0xFF63A867,
+        '3316',
       ),
       (
         SeedIds.alipayAccount,
@@ -251,6 +252,7 @@ class DatabaseSeeder {
         200000,
         'account_balance_wallet_outlined',
         0xFF4A90E2,
+        '4126',
       ),
       (
         SeedIds.bankAccount,
@@ -259,6 +261,7 @@ class DatabaseSeeder {
         800000,
         'account_balance_outlined',
         0xFF73963B,
+        '7777',
       ),
       (
         SeedIds.cashAccount,
@@ -267,6 +270,7 @@ class DatabaseSeeder {
         50000,
         'payments_outlined',
         0xFFB68A55,
+        null,
       ),
     ];
     for (var index = 0; index < accounts.length; index++) {
@@ -277,6 +281,7 @@ class DatabaseSeeder {
           name: account.$2,
           type: account.$3,
           balanceInCents: Value(includeDemoData ? account.$4 : 0),
+          identifierSuffix: Value(account.$7),
           icon: account.$5,
           color: account.$6,
           sortOrder: Value(index),

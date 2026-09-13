@@ -377,6 +377,7 @@ class SharedBookSyncService {
           'id': remote,
           'name': book.name,
           'type': book.type,
+          'asset_source_book_id': book.assetSourceBookId,
           'entities': entities,
         };
         await database.customStatement(
@@ -530,6 +531,8 @@ class SharedBookSyncService {
       'goal_milestones': 4,
       'goal_contributions': 5,
       'budgets': 6,
+      'recurring_bills': 7,
+      'installment_plans': 8,
     };
     entities.sort((a, b) {
       final order = rank[a['kind']]!.compareTo(rank[b['kind']]!);
@@ -592,13 +595,15 @@ class SharedBookSyncService {
     }
     final localRows = await _bookRows(local);
     const deleteOrder = {
-      'goal_contributions': 0,
-      'goal_milestones': 1,
-      'budgets': 2,
-      'transactions': 3,
-      'goals': 4,
-      'categories': 5,
-      'accounts': 6,
+      'installment_plans': 0,
+      'recurring_bills': 1,
+      'goal_contributions': 2,
+      'goal_milestones': 3,
+      'budgets': 4,
+      'transactions': 5,
+      'goals': 6,
+      'categories': 7,
+      'accounts': 8,
     };
     localRows.sort((a, b) {
       final order = deleteOrder[a['kind']]!.compareTo(deleteOrder[b['kind']]!);
@@ -631,7 +636,7 @@ class SharedBookSyncService {
   });
   Future<void> _recalculate(String book) async {
     await database.customStatement(
-      "UPDATE accounts SET balance_in_cents=opening_balance_in_cents+COALESCE((SELECT SUM(CASE WHEN type IN ('expense','lend','repayment','assetPurchase','transfer') THEN -amount_in_cents ELSE amount_in_cents END) FROM transactions WHERE account_id=accounts.id AND deleted_at IS NULL),0)+COALESCE((SELECT SUM(amount_in_cents) FROM transactions WHERE destination_account_id=accounts.id AND type='transfer' AND deleted_at IS NULL),0) WHERE book_id=?",
+      "UPDATE accounts SET balance_in_cents=opening_balance_in_cents+COALESCE((SELECT SUM(CASE WHEN type IN ('expense','lend','repayment','assetPurchase','transfer') THEN -amount_in_cents ELSE amount_in_cents END) FROM transactions WHERE account_id=accounts.id AND deleted_at IS NULL),0)+COALESCE((SELECT SUM(amount_in_cents) FROM transactions WHERE destination_account_id=accounts.id AND type IN ('transfer','repayment') AND deleted_at IS NULL),0) WHERE book_id=?",
       [book],
     );
     await database.customStatement(
@@ -674,6 +679,10 @@ class SharedBookSyncService {
           'parent_id': 'categories',
           'goal_id': 'goals',
           'source_transaction_id': 'transactions',
+          'original_transaction_id': 'transactions',
+          'related_transaction_id': 'transactions',
+          'credit_account_id': 'accounts',
+          'repayment_account_id': 'accounts',
         };
         bool exists(String kind, String id) => entities.any(
           (e) => e['kind'] == kind && e['id'] == map.encode(kind, id),

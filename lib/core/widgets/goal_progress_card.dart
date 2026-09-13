@@ -4,6 +4,7 @@ import '../../app/theme/app_colors.dart';
 import '../formatters/money_formatter.dart';
 import '../models/goal.dart';
 import 'app_card.dart';
+import '../../features/goals/domain/goal_milestone_service.dart';
 
 class GoalProgressCard extends StatelessWidget {
   const GoalProgressCard({required this.goal, super.key, this.onTap});
@@ -13,20 +14,10 @@ class GoalProgressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final milestones = [...goal.milestones]
       ..sort((a, b) => a.amount.compareTo(b.amount));
-    final completed = milestones
-        .where((m) => m.amount < goal.currentAmount)
-        .toList();
     final next = milestones
         .where((m) => m.amount > goal.currentAmount)
         .firstOrNull;
-    final amounts = <double>{
-      ...completed
-          .skip(completed.length > 2 ? completed.length - 2 : 0)
-          .map((m) => m.amount),
-      goal.currentAmount,
-      if (next != null) next.amount,
-      goal.targetAmount,
-    }.toList()..sort();
+    final amounts = const GoalMilestoneService().visibleAmounts(goal);
     final currentIndex = amounts.indexOf(goal.currentAmount);
     final lineProgress = amounts.length < 2
         ? 1.0

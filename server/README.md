@@ -15,6 +15,8 @@ npm run dev
 
 默认监听 `127.0.0.1:8787`，SQLite 文件为 `server/data/shared-ledger.sqlite`。可以用 `PORT` 和 `LEDGER_DB_PATH` 指定端口与数据库路径；服务启动时会创建/迁移本地数据库表。Android 模拟器联调前执行 `adb reverse tcp:8787 tcp:8787`。
 
+会员支付启用前，将微信商户号/证书和支付宝应用私钥、公钥通过运行时环境变量或受限文件注入；完整变量清单见 [会员中心支付审计记录](../docs/development/2026-09-13-membership-visual-payment-audit.md)。密钥不应写入仓库或 App，两个支付回调地址必须是公网 HTTPS。
+
 ## API 概览
 
 除注册/登录外的接口使用 `Authorization: Bearer <session>`。金额统一使用整数分，成员身份由会话取得，服务端不接受客户端传入操作者身份。
@@ -33,5 +35,12 @@ npm run dev
 | GET | `/api/v1/books/:id/changes?cursor=N` | 按游标拉取版本变化 |
 | POST | `/api/v1/books/:id/mutations` | 提交幂等操作，版本冲突返回 `409` |
 | GET | `/api/v1/books/:id/logs` | 查看共享操作日志 |
+| GET | `/api/v1/membership/catalog` | 获取可编辑的套餐、权益和 FAQ 配置 |
+| PUT | `/api/v1/admin/membership/catalog` | 使用 `MEMBERSHIP_ADMIN_TOKEN` 更新会员配置 |
+| POST/GET | `/api/v1/membership/orders` | 按服务端 catalog 创建或查询会员支付订单 |
+| GET | `/api/v1/membership/orders/:id` | 查询单笔会员订单状态 |
+| GET | `/api/v1/membership/current` | 查询服务端确认后的会员有效期与权益 |
+| POST | `/api/v1/payments/wechat/notify` | 微信支付回调验签、解密和入账 |
+| POST | `/api/v1/payments/alipay/notify` | 支付宝异步通知验签和入账 |
 
-服务端在同一 SQLite 事务内执行权限检查、`operationId` 幂等判断、账务变更、余额/目标重算、版本递增和变更日志。共享创建限制所有者自建活跃账本数量；受邀加入不占该额度。公网 TLS、生产数据库备份、监控、支付、短信、附件存储和企业报税不在本轮范围。
+服务端在同一 SQLite 事务内执行权限检查、`operationId` 幂等判断、账务变更、余额/目标重算、版本递增和变更日志。支付订单金额只从 `assets/config/membership_catalog.json` 或后台 catalog 读取；必须配置真实商户证书和公网 HTTPS 回调后才会向支付平台下单。公网 TLS、生产数据库备份、监控、短信、附件存储和企业报税仍需按部署环境配置。

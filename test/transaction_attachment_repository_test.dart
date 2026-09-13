@@ -69,6 +69,20 @@ void main() {
         ),
         isEmpty,
       );
+      await expectLater(
+        attachments.replaceForTransaction(
+          transactionId: transaction.id,
+          bookId: transaction.bookId,
+          paths: const [
+            '/documents/1.jpg',
+            '/documents/2.jpg',
+            '/documents/3.jpg',
+            '/documents/4.jpg',
+            '/documents/5.jpg',
+          ],
+        ),
+        throwsArgumentError,
+      );
     },
   );
 
@@ -120,7 +134,7 @@ void main() {
     expect(migratedTransaction, isNotNull);
     expect(migratedTransaction!.metadataJson, contains('午餐'));
     expect(migratedTransaction.metadataJson, contains('attachments'));
-    expect(upgraded.schemaVersion, 11);
+    expect(upgraded.schemaVersion, 16);
 
     await upgraded.close();
     final reopened = AppDatabase.forTesting(NativeDatabase(file));

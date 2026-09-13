@@ -11,6 +11,8 @@ extension SharedSyncSchema on AppDatabase {
     'goal_milestones',
     'goal_contributions',
     'budgets',
+    'recurring_bills',
+    'installment_plans',
     'books',
   ];
 

@@ -17,6 +17,12 @@ enum TransactionSource { manual, voice, ocr, auto, import }
 
 enum SyncStatus { localOnly, pending, synced, conflict }
 
+/// Lifecycle of a reimbursement attached to an original expense.
+enum ReimbursementStatus { none, pending, reimbursed, partial }
+
+/// Refund lifecycle for an original expense.
+enum RefundStatus { none, partial, refunded }
+
 class TransactionRecord {
   static const Object _copyWithUnset = Object();
 
@@ -49,6 +55,13 @@ class TransactionRecord {
     this.syncStatus = SyncStatus.localOnly,
     this.deviceId,
     this.originalTransactionId,
+    this.relatedTransactionId,
+    this.reimbursementStatus = ReimbursementStatus.none,
+    this.reimbursementAmount,
+    this.reimbursementDate,
+    this.reimbursementNote,
+    this.refundStatus = RefundStatus.none,
+    this.refundAmount,
     this.metadataJson,
     this.duplicateConfidence,
     this.visibility = TransactionVisibility.private,
@@ -89,6 +102,13 @@ class TransactionRecord {
   final SyncStatus syncStatus;
   final String? deviceId;
   final String? originalTransactionId;
+  final String? relatedTransactionId;
+  final ReimbursementStatus reimbursementStatus;
+  final double? reimbursementAmount;
+  final DateTime? reimbursementDate;
+  final String? reimbursementNote;
+  final RefundStatus refundStatus;
+  final double? refundAmount;
   final String? metadataJson;
   final double? duplicateConfidence;
   final TransactionVisibility visibility;
@@ -107,10 +127,42 @@ class TransactionRecord {
   bool get isExpense => switch (type) {
     TransactionType.expense ||
     TransactionType.lend ||
-    TransactionType.repayment ||
     TransactionType.assetPurchase => true,
     _ => false,
   };
+
+  /// Debt repayments reduce cash or a liability but do not represent a new
+  /// consumption. They remain transaction rows for auditability.
+  bool get isDebtRepayment => type == TransactionType.repayment;
+
+  /// Amount used by consumption reports after a partial or full refund.
+  double get netExpenseAmount => isExpense
+      ? (amount - (refundAmount ?? 0)).clamp(0, amount).toDouble()
+      : 0;
+
+  /// The category label shown in transaction lists and details.
+  ///
+  /// Category names are resolved from the persisted category ID when a
+  /// record is read from the database. Keep the special transaction types
+  /// readable even though they do not have a category.
+  String get displayCategoryLabel => switch (type) {
+    TransactionType.adjustment => '余额校准',
+    TransactionType.transfer => '转账',
+    _ => categoryName?.trim().isNotEmpty == true ? categoryName!.trim() : '未分类',
+  };
+
+  /// The primary text for a transaction row.
+  ///
+  /// A user-entered note is the most specific label. Merchant is retained as
+  /// the next fallback for records created through the expanded bookkeeping
+  /// options; when both are empty, the selected category is the useful label.
+  String get displayTitle {
+    final noteValue = note?.trim();
+    if (noteValue != null && noteValue.isNotEmpty) return noteValue;
+    final merchantValue = merchant?.trim();
+    if (merchantValue != null && merchantValue.isNotEmpty) return merchantValue;
+    return displayCategoryLabel;
+  }
 
   TransactionRecord copyWith({
     TransactionType? type,
@@ -136,6 +188,14 @@ class TransactionRecord {
     TransactionVisibility? visibility,
     String? updatedBy,
     int? version,
+    String? relatedTransactionId,
+    ReimbursementStatus? reimbursementStatus,
+    Object? reimbursementAmount = _copyWithUnset,
+    Object? reimbursementDate = _copyWithUnset,
+    Object? reimbursementNote = _copyWithUnset,
+    RefundStatus? refundStatus,
+    Object? refundAmount = _copyWithUnset,
+    bool clearRefundAmount = false,
   }) {
     return TransactionRecord(
       id: id,
@@ -172,6 +232,23 @@ class TransactionRecord {
       syncStatus: syncStatus,
       deviceId: deviceId,
       originalTransactionId: originalTransactionId,
+      relatedTransactionId: relatedTransactionId ?? this.relatedTransactionId,
+      reimbursementStatus: reimbursementStatus ?? this.reimbursementStatus,
+      reimbursementAmount: identical(reimbursementAmount, _copyWithUnset)
+          ? this.reimbursementAmount
+          : (reimbursementAmount as num?)?.toDouble(),
+      reimbursementDate: identical(reimbursementDate, _copyWithUnset)
+          ? this.reimbursementDate
+          : reimbursementDate as DateTime?,
+      reimbursementNote: identical(reimbursementNote, _copyWithUnset)
+          ? this.reimbursementNote
+          : reimbursementNote as String?,
+      refundStatus: refundStatus ?? this.refundStatus,
+      refundAmount: clearRefundAmount
+          ? null
+          : (identical(refundAmount, _copyWithUnset)
+                ? this.refundAmount
+                : (refundAmount as num?)?.toDouble()),
       metadataJson: metadataJson,
       duplicateConfidence: duplicateConfidence ?? this.duplicateConfidence,
       visibility: visibility ?? this.visibility,

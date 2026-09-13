@@ -72,6 +72,8 @@ void main() {
           color: existing.color,
           sortOrder: existing.sortOrder,
           isArchived: false,
+          identifierSuffix: existing.identifierSuffix,
+          assetForm: existing.assetForm,
           createdAt: existing.createdAt,
           updatedAt: DateTime.now(),
         ),

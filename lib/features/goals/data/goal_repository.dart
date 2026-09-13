@@ -34,6 +34,8 @@ abstract interface class GoalRepository {
     required double initialAmount,
   });
   Future<Goal> update(Goal goal, {List<double>? milestoneAmounts});
+  Future<void> archive(String goalId);
+  Future<void> restore(String goalId);
   Future<GoalContributionResult> contribute({
     required String goalId,
     required double amount,
@@ -243,6 +245,54 @@ class DriftGoalRepository implements GoalRepository {
       }
     });
     return (await getById(goal.id))!;
+  }
+
+  @override
+  Future<void> archive(String goalId) =>
+      _setStatus(goalId, GoalStatus.archived);
+
+  @override
+  Future<void> restore(String goalId) async {
+    final goal = await getById(goalId);
+    if (goal == null) throw StateError('Goal $goalId not found');
+    if (goal.status != GoalStatus.archived) return;
+    final status = goal.currentAmount >= goal.targetAmount
+        ? GoalStatus.completed
+        : GoalStatus.active;
+    await _setStatus(goalId, status);
+  }
+
+  Future<void> _setStatus(String goalId, GoalStatus status) async {
+    await _database.transaction(() async {
+      final existing = await _requireGoal(goalId);
+      if (existing.status == status.name) return;
+      final currentAmount = await _currentAmount(goalId);
+      await _database.goalDao.upsertGoal(
+        GoalEntriesCompanion(
+          id: Value(existing.id),
+          name: Value(existing.name),
+          goalType: Value(existing.goalType),
+          icon: Value(existing.icon),
+          targetAmountInCents: Value(existing.targetAmountInCents),
+          currentAmountInCents: Value(_toCents(currentAmount)),
+          targetDate: Value(existing.targetDate),
+          status: Value(status.name),
+          createdAt: Value(existing.createdAt),
+          updatedAt: Value(DateTime.now()),
+          description: Value(existing.description),
+          coverPath: Value(existing.coverPath),
+          completionCelebrationShown: Value(
+            existing.completionCelebrationShown,
+          ),
+          bookId: Value(existing.bookId),
+          createdBy: Value(existing.createdBy),
+          updatedBy: Value(_database.currentActor),
+          version: Value(existing.version + 1),
+          sortOrder: Value(existing.sortOrder),
+          monthlyReservationInCents: Value(existing.monthlyReservationInCents),
+        ),
+      );
+    });
   }
 
   @override

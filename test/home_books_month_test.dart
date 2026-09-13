@@ -147,7 +147,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.byType(BookSelectorButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('关闭书架'));
+      await tester.drag(find.text('记录生活  更好地生活').last, const Offset(0, 96));
       await tester.pump(const Duration(milliseconds: 120));
       expect(tester.takeException(), isNull);
       await tester.pumpAndSettle();

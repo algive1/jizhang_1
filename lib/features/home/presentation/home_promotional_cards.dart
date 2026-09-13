@@ -10,46 +10,18 @@ class HomeCrownIcon extends StatelessWidget {
   final Color color;
   @override
   Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(22, 18), painter: _CrownPainter(color));
-}
-
-class _CrownPainter extends CustomPainter {
-  const _CrownPainter(this.color);
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path()
-      ..moveTo(2, 3)
-      ..lineTo(7, 8)
-      ..lineTo(11, 1)
-      ..lineTo(15, 8)
-      ..lineTo(20, 3)
-      ..lineTo(18, 14)
-      ..lineTo(4, 14)
-      ..close();
-    canvas.drawPath(path, paint);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(4, 14, 14, 3),
-        const Radius.circular(1),
-      ),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _CrownPainter oldDelegate) =>
-      oldDelegate.color != color;
+      Icon(Icons.workspace_premium_outlined, color: color, size: 22);
 }
 
 class HomeInsightCard extends StatelessWidget {
   const HomeInsightCard({
     required this.insight,
+    this.amountHidden = false,
     required this.onTap,
     super.key,
   });
   final FinancialInsight insight;
+  final bool amountHidden;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
@@ -106,7 +78,9 @@ class HomeInsightCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${insight.timeLabel}  ¥${MoneyFormatter.whole(insight.amount)}，较平时 ${insight.increasePercent == null ? '样本不足' : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent}%'}',
+                              amountHidden
+                                  ? '${insight.timeLabel}  金额已隐藏'
+                                  : '${insight.timeLabel}  ¥${MoneyFormatter.whole(insight.amount)}，较平时 ${insight.increasePercent == null ? '样本不足' : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent}%'}',
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,

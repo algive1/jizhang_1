@@ -13,12 +13,14 @@ class TransactionDateGroup extends StatelessWidget {
     super.key,
     this.onTransactionTap,
     this.onTransactionLongPress,
+    this.accountNames = const {},
   });
 
   final String dateLabel;
   final List<TransactionRecord> transactions;
   final ValueChanged<TransactionRecord>? onTransactionTap;
   final ValueChanged<TransactionRecord>? onTransactionLongPress;
+  final Map<String, String> accountNames;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +35,12 @@ class TransactionDateGroup extends StatelessWidget {
                   t.currency.toUpperCase() == currency &&
                   (expense ? t.isExpense : t.isIncome),
             )
-            .fold<int>(0, (sum, t) => sum + (t.amount * 100).round()) /
+            .fold<int>(
+              0,
+              (sum, t) =>
+                  sum +
+                  ((expense ? t.netExpenseAmount : t.amount) * 100).round(),
+            ) /
         100;
     return AppCard(
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 5),
@@ -68,17 +75,27 @@ class TransactionDateGroup extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 6),
-          ...transactions.map(
-            (transaction) => TransactionTile(
+          ...transactions.map((transaction) {
+            final source = accountNames[transaction.accountId];
+            final destination = transaction.destinationAccountId == null
+                ? null
+                : accountNames[transaction.destinationAccountId!];
+            final accountLabel = source == null
+                ? null
+                : destination == null
+                ? source
+                : '$source → $destination';
+            return TransactionTile(
               transaction: transaction,
+              accountName: accountLabel,
               onTap: onTransactionTap == null
                   ? null
                   : () => onTransactionTap!(transaction),
               onLongPress: onTransactionLongPress == null
                   ? null
                   : () => onTransactionLongPress!(transaction),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );

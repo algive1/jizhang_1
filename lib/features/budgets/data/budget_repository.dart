@@ -122,7 +122,7 @@ class DriftBudgetRepository implements BudgetRepository {
     final totalUsed =
         monthTransactions.fold<int>(
           0,
-          (total, item) => total + (item.amount * 100).round(),
+          (total, item) => total + (item.netExpenseAmount * 100).round(),
         ) /
         100;
     final totalBudget = budgets
@@ -142,7 +142,7 @@ class DriftBudgetRepository implements BudgetRepository {
                 (item) =>
                     _belongsToCategory(item, budget.categoryId!, categoryMap),
               )
-              .fold<double>(0, (sum, item) => sum + item.amount);
+              .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
           return _progress(budget, used, now, categoryMap[budget.categoryId]);
         })
         .toList(growable: false);

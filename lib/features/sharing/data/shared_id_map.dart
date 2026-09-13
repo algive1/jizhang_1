@@ -47,6 +47,9 @@ class SharedIdMap {
       'goal_id': 'goals',
       'source_transaction_id': 'transactions',
       'original_transaction_id': 'transactions',
+      'related_transaction_id': 'transactions',
+      'credit_account_id': 'accounts',
+      'repayment_account_id': 'accounts',
     };
     for (final entry in refs.entries) {
       if (data[entry.key] != null)

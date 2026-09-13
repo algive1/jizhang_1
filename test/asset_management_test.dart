@@ -113,7 +113,7 @@ void main() {
       final account = (await DriftAccountRepository(migrated).getAll()).single;
       expect(account.balance, -123.45);
       expect(account.assetForm, AssetForm.unspecified);
-      expect(migrated.schemaVersion, 11);
+      expect(migrated.schemaVersion, 16);
     },
   );
 }
@@ -135,6 +135,11 @@ Account _account(
   sortOrder: 0,
   isArchived: false,
   assetForm: form,
+  identifierSuffix: type.requiresIdentifierSuffix
+      ? (id.runes.fold<int>(0, (sum, rune) => sum + rune) % 10000)
+            .toString()
+            .padLeft(4, '0')
+      : null,
   createdAt: DateTime(2026),
   updatedAt: DateTime(2026),
 );

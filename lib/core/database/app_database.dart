@@ -30,6 +30,7 @@ class AccountEntries extends Table {
   TextColumn get currency => text().withDefault(const Constant('CNY'))();
   TextColumn get assetForm =>
       text().withDefault(const Constant('unspecified'))();
+  TextColumn get identifierSuffix => text().nullable()();
   TextColumn get icon => text()();
   IntColumn get color => integer()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -103,6 +104,14 @@ class TransactionEntries extends Table {
       text().withDefault(const Constant('localOnly'))();
   TextColumn get deviceId => text().nullable()();
   TextColumn get originalTransactionId => text().nullable()();
+  TextColumn get relatedTransactionId => text().nullable()();
+  TextColumn get reimbursementStatus =>
+      text().withDefault(const Constant('none'))();
+  IntColumn get reimbursementAmountInCents => integer().nullable()();
+  DateTimeColumn get reimbursementDate => dateTime().nullable()();
+  TextColumn get reimbursementNote => text().nullable()();
+  TextColumn get refundStatus => text().withDefault(const Constant('none'))();
+  IntColumn get refundAmountInCents => integer().nullable()();
   TextColumn get metadataJson => text().nullable()();
   RealColumn get duplicateConfidence => real().nullable()();
   TextColumn get visibility => text().withDefault(const Constant('private'))();
@@ -244,6 +253,60 @@ class BudgetEntries extends Table {
   ];
 }
 
+@DataClassName('RecurringBillEntity')
+class RecurringBillEntries extends Table {
+  @override
+  String get tableName => 'recurring_bills';
+
+  TextColumn get id => text()();
+  TextColumn get bookId => text()();
+  TextColumn get name => text()();
+  TextColumn get type => text()();
+  IntColumn get amountInCents => integer()();
+  TextColumn get cycle => text()();
+  DateTimeColumn get startDate => dateTime()();
+  DateTimeColumn get endDate => dateTime().nullable()();
+  DateTimeColumn get nextDate => dateTime()();
+  TextColumn get accountId => text().nullable()();
+  TextColumn get categoryId => text().nullable()();
+  IntColumn get customIntervalDays => integer().nullable()();
+  BoolColumn get autoRecord => boolean().withDefault(const Constant(false))();
+  BoolColumn get reminder => boolean().withDefault(const Constant(true))();
+  TextColumn get status => text().withDefault(const Constant('active'))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DataClassName('InstallmentPlanEntity')
+class InstallmentPlanEntries extends Table {
+  @override
+  String get tableName => 'installment_plans';
+
+  TextColumn get id => text()();
+  TextColumn get bookId => text()();
+  TextColumn get name => text()();
+  TextColumn get originalTransactionId => text()();
+  IntColumn get totalAmountInCents => integer()();
+  IntColumn get totalPeriods => integer()();
+  IntColumn get currentPeriod => integer()();
+  IntColumn get principalPerPeriodInCents => integer()();
+  IntColumn get feePerPeriodInCents => integer()();
+  DateTimeColumn get startDate => dateTime()();
+  IntColumn get dueDay => integer()();
+  TextColumn get creditAccountId => text()();
+  TextColumn get repaymentAccountId => text()();
+  IntColumn get remainingPrincipalInCents => integer()();
+  TextColumn get status => text().withDefault(const Constant('active'))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DataClassName('MerchantRuleEntity')
 class MerchantRuleEntries extends Table {
   @override
@@ -368,6 +431,7 @@ class BookEntries extends Table {
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  TextColumn get assetSourceBookId => text().nullable()();
   IntColumn get version => integer().withDefault(const Constant(1))();
 
   @override
@@ -483,6 +547,8 @@ class AdEventEntries extends Table {
     GoalContributionEntries,
     AppSettingEntries,
     BudgetEntries,
+    RecurringBillEntries,
+    InstallmentPlanEntries,
     MerchantRuleEntries,
     EconomicEventEntries,
     EconomicEventRecordEntries,
@@ -503,6 +569,8 @@ class AdEventEntries extends Table {
     GoalDao,
     AppSettingsDao,
     BudgetDao,
+    RecurringBillDao,
+    InstallmentPlanDao,
     IntelligenceDao,
     FamilyDao,
     AdEventDao,
@@ -547,7 +615,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 16;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -649,6 +717,76 @@ class AppDatabase extends _$AppDatabase {
           await _migrateLegacyTransactionAttachments();
           await _createAttachmentIndexes();
         }
+        if (from < 12) {
+          if (!await _hasColumn('books', 'asset_source_book_id')) {
+            await migrator.addColumn(
+              bookEntries,
+              bookEntries.assetSourceBookId,
+            );
+          }
+        }
+        if (from < 13) {
+          if (!await _hasColumn('transactions', 'related_transaction_id')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.relatedTransactionId,
+            );
+          }
+          if (!await _hasColumn('transactions', 'reimbursement_status')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.reimbursementStatus,
+            );
+          }
+          if (!await _hasColumn(
+            'transactions',
+            'reimbursement_amount_in_cents',
+          )) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.reimbursementAmountInCents,
+            );
+          }
+          if (!await _hasColumn('transactions', 'reimbursement_date')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.reimbursementDate,
+            );
+          }
+          if (!await _hasColumn('transactions', 'reimbursement_note')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.reimbursementNote,
+            );
+          }
+          if (!await _hasColumn('transactions', 'refund_status')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.refundStatus,
+            );
+          }
+          if (!await _hasColumn('transactions', 'refund_amount_in_cents')) {
+            await migrator.addColumn(
+              transactionEntries,
+              transactionEntries.refundAmountInCents,
+            );
+          }
+        }
+        if (from < 14) {
+          await migrator.createTable(recurringBillEntries);
+        }
+        if (from < 15) {
+          await migrator.createTable(installmentPlanEntries);
+        }
+        if (from < 16) {
+          if (!await _hasColumn('accounts', 'identifier_suffix')) {
+            await migrator.addColumn(
+              accountEntries,
+              accountEntries.identifierSuffix,
+            );
+          }
+          await _createAccountIdentifierIndex();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -684,6 +822,15 @@ class AppDatabase extends _$AppDatabase {
     await _createBookIndexes();
     await _createAdIndexes();
     await _createAttachmentIndexes();
+    await _createAccountIdentifierIndex();
+  }
+
+  Future<void> _createAccountIdentifierIndex() async {
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_book_identifier_suffix '
+      'ON accounts(book_id, identifier_suffix) '
+      'WHERE identifier_suffix IS NOT NULL',
+    );
   }
 
   Future<void> _createAttachmentIndexes() async {
@@ -975,6 +1122,22 @@ class AccountDao extends DatabaseAccessor<AppDatabase> with _$AccountDaoMixin {
     return (select(
       accountEntries,
     )..where((row) => row.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<AccountEntity?> findByIdentifierSuffix({
+    required String bookId,
+    required String suffix,
+    String? excludingId,
+  }) {
+    return (select(accountEntries)..where(
+          (row) =>
+              row.bookId.equals(bookId) &
+              row.identifierSuffix.equals(suffix) &
+              (excludingId == null
+                  ? const Constant(true)
+                  : row.id.isNotIn([excludingId])),
+        ))
+        .getSingleOrNull();
   }
 
   Future<void> insertOne(AccountEntriesCompanion account) async {
@@ -1405,6 +1568,80 @@ class BudgetDao extends DatabaseAccessor<AppDatabase> with _$BudgetDaoMixin {
 
   Future<void> deleteById(String id) async {
     await (delete(budgetEntries)..where((row) => row.id.equals(id))).go();
+  }
+}
+
+@DriftAccessor(tables: [RecurringBillEntries])
+class RecurringBillDao extends DatabaseAccessor<AppDatabase>
+    with _$RecurringBillDaoMixin {
+  RecurringBillDao(super.attachedDatabase);
+
+  Stream<List<RecurringBillEntity>> watchActive({required String bookId}) {
+    return (select(recurringBillEntries)
+          ..where(
+            (row) => row.bookId.equals(bookId) & row.status.equals('active'),
+          )
+          ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
+        .watch();
+  }
+
+  Future<List<RecurringBillEntity>> getAll({required String bookId}) {
+    return (select(recurringBillEntries)
+          ..where((row) => row.bookId.equals(bookId))
+          ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
+        .get();
+  }
+
+  Future<void> insertOne(RecurringBillEntriesCompanion bill) async {
+    await into(recurringBillEntries).insert(bill);
+  }
+
+  Future<void> replaceOne(RecurringBillEntriesCompanion bill) async {
+    await into(recurringBillEntries).insertOnConflictUpdate(bill);
+  }
+
+  Future<RecurringBillEntity?> findById(String id) {
+    return (select(
+      recurringBillEntries,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+  }
+}
+
+@DriftAccessor(tables: [InstallmentPlanEntries])
+class InstallmentPlanDao extends DatabaseAccessor<AppDatabase>
+    with _$InstallmentPlanDaoMixin {
+  InstallmentPlanDao(super.attachedDatabase);
+
+  Stream<List<InstallmentPlanEntity>> watchActive({required String bookId}) {
+    return (select(installmentPlanEntries)
+          ..where(
+            (row) => row.bookId.equals(bookId) & row.status.equals('active'),
+          )
+          ..orderBy([(row) => OrderingTerm.asc(row.startDate)]))
+        .watch();
+  }
+
+  Future<List<InstallmentPlanEntity>> getActive({required String bookId}) {
+    return (select(installmentPlanEntries)
+          ..where(
+            (row) => row.bookId.equals(bookId) & row.status.equals('active'),
+          )
+          ..orderBy([(row) => OrderingTerm.asc(row.startDate)]))
+        .get();
+  }
+
+  Future<InstallmentPlanEntity?> findById(String id) {
+    return (select(
+      installmentPlanEntries,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<void> insertOne(InstallmentPlanEntriesCompanion plan) async {
+    await into(installmentPlanEntries).insert(plan);
+  }
+
+  Future<void> replaceOne(InstallmentPlanEntriesCompanion plan) async {
+    await into(installmentPlanEntries).insertOnConflictUpdate(plan);
   }
 }
 

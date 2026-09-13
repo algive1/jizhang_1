@@ -24,6 +24,14 @@ flutter build apk --debug
 flutter build apk --release
 ```
 
+Android 模拟器一键构建、安装并启动：
+
+```bash
+./scripts/build_install_android.sh
+```
+
+默认启动可用 AVD、构建 release APK、覆盖安装并打开应用，同时把可直接安装的 APK 输出到 `dist/`；只打包手机安装包时执行 `./scripts/build_install_android.sh --package-only`。需要单独启动模拟器时执行 `./scripts/open_android_emulator.sh`。更多选项见 [`docs/development/ANDROID_LOCAL_RUN.md`](docs/development/ANDROID_LOCAL_RUN.md)。
+
 开发文档统一从 [`docs/development/README.md`](docs/development/README.md) 进入；当前状态见 [`docs/development/CURRENT_STATUS.md`](docs/development/CURRENT_STATUS.md)，架构全景见 [`docs/development/ARCHITECTURE.md`](docs/development/ARCHITECTURE.md)。原型资源位于 `docs/design_refs/`。
 
 最终 Android Release APK 位于 `build/app/outputs/flutter-apk/app-release.apk`。未提供正式 keystore 时会使用 debug key 生成仅供本地验收的 Release APK；上架前必须配置 `android/key.properties`。构建说明见 [`docs/development/release/ANDROID_RELEASE.md`](docs/development/release/ANDROID_RELEASE.md)。

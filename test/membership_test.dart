@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/membership.dart';
+import 'package:jizhang_app/features/membership/data/membership_repository.dart';
 import 'package:jizhang_app/features/membership/domain/commercial_service_contracts.dart';
 
 void main() {
@@ -60,6 +61,53 @@ void main() {
     expect(quota.remaining, 0);
   });
 
+  test('unconfigured feature policies preserve existing local behavior', () {
+    final snapshot = MembershipSnapshot(
+      membership: Membership(
+        userId: 'user',
+        plan: MembershipPlan.free,
+        status: MembershipStatus.active,
+        updatedAt: now,
+      ),
+      entitlements: const [],
+      quotas: const [],
+    );
+
+    expect(snapshot.canUseFeature(MembershipFeature.assetReports), isTrue);
+    expect(
+      snapshot.policyFor(MembershipFeature.assetReports).source,
+      'local_default',
+    );
+  });
+
+  test('feature access honors a server membership policy', () async {
+    final snapshot = MembershipSnapshot(
+      membership: Membership(
+        userId: 'user',
+        plan: MembershipPlan.free,
+        status: MembershipStatus.active,
+        updatedAt: now,
+      ),
+      entitlements: const [],
+      quotas: const [],
+      featurePolicies: {
+        MembershipFeature.assetReports: MembershipFeaturePolicy.membershipOnly(
+          MembershipFeature.assetReports,
+        ),
+      },
+    );
+    final service = SnapshotMembershipFeatureAccessService(
+      _StaticMembershipRepository(snapshot),
+    );
+
+    final access = await service.accessFor(MembershipFeature.assetReports);
+
+    expect(access.enabled, isTrue);
+    expect(access.allowed, isFalse);
+    expect(access.requiresUpgrade, isTrue);
+    expect(access.policy.source, 'server');
+  });
+
   test(
     'unconfigured cloud sync reports unavailable instead of success',
     () async {
@@ -68,4 +116,16 @@ void main() {
       expect(state.lastSuccessfulSyncAt, isNull);
     },
   );
+}
+
+class _StaticMembershipRepository implements MembershipRepository {
+  const _StaticMembershipRepository(this.snapshot);
+
+  final MembershipSnapshot snapshot;
+
+  @override
+  Future<MembershipSnapshot> getCurrent() async => snapshot;
+
+  @override
+  Stream<MembershipSnapshot> watchCurrent() => Stream.value(snapshot);
 }

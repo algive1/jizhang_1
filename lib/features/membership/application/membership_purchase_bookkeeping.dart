@@ -8,6 +8,8 @@ import '../../../core/models/transaction_record.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../recurring/data/recurring_bill_repository.dart';
+import '../../../core/models/recurring_bill.dart';
 
 class VerifiedMembershipPurchase {
   const VerifiedMembershipPurchase({
@@ -18,6 +20,8 @@ class VerifiedMembershipPurchase {
     required this.accountId,
     required this.paidAt,
     required this.provider,
+    this.autoRenew = false,
+    this.isPermanent = false,
   });
 
   final String orderId;
@@ -27,6 +31,8 @@ class VerifiedMembershipPurchase {
   final String accountId;
   final DateTime paidAt;
   final String provider;
+  final bool autoRenew;
+  final bool isPermanent;
 }
 
 class MembershipPurchaseBookkeepingResult {
@@ -43,10 +49,12 @@ class MembershipPurchaseBookkeepingService {
   const MembershipPurchaseBookkeepingService({
     required this.transactions,
     required this.bookkeeping,
+    this.recurringBills,
   });
 
   final TransactionRepository transactions;
   final QuickBookkeepingService bookkeeping;
+  final RecurringBillRepository? recurringBills;
 
   Future<MembershipPurchaseBookkeepingResult> record(
     VerifiedMembershipPurchase purchase,
@@ -58,6 +66,7 @@ class MembershipPurchaseBookkeepingService {
     }
     final alreadyRecorded = await _findByOrderId(orderId);
     if (alreadyRecorded != null) {
+      await _ensureRecurring(purchase);
       return MembershipPurchaseBookkeepingResult(
         transaction: alreadyRecorded,
         created: false,
@@ -83,10 +92,13 @@ class MembershipPurchaseBookkeepingService {
         'membershipOrderId': orderId,
         'membershipProductId': purchase.productId,
         'paymentProvider': purchase.provider,
+        'autoRenew': purchase.autoRenew,
+        'isPermanent': purchase.isPermanent,
       },
     );
     try {
       final created = await bookkeeping.save(request);
+      await _ensureRecurring(purchase);
       return MembershipPurchaseBookkeepingResult(
         transaction: created,
         created: true,
@@ -103,6 +115,81 @@ class MembershipPurchaseBookkeepingService {
       }
       rethrow;
     }
+  }
+
+  /// Hook for a verified store callback that says auto-renew was cancelled.
+  ///
+  /// The callback is intentionally separate from [record]: a local purchase
+  /// record must remain auditable, while the future recurring occurrences
+  /// should stop at the store's cancellation boundary.
+  Future<bool> stopAutoRenewForProduct(String productId) async {
+    final repository = recurringBills;
+    if (repository == null) return false;
+    final recurringId =
+        'membership-recurring-${stableAutoKey(productId.trim())}';
+    final bill = (await repository.getAll())
+        .where((item) => item.id == recurringId)
+        .firstOrNull;
+    if (bill == null || bill.status == RecurringBillStatus.ended) return false;
+    await repository.archive(bill.id);
+    return true;
+  }
+
+  Future<void> _ensureRecurring(VerifiedMembershipPurchase purchase) async {
+    if (!purchase.autoRenew || purchase.isPermanent || recurringBills == null) {
+      return;
+    }
+    final cycle = _cycleForProduct(purchase.productId);
+    final now = purchase.paidAt;
+    final id = 'membership-recurring-${stableAutoKey(purchase.productId)}';
+    try {
+      await recurringBills!.create(
+        RecurringBill(
+          id: id,
+          bookId: SeedIds.personalBook,
+          name: '好好记账会员',
+          type: RecurringBillType.membership,
+          amount: purchase.amount,
+          cycle: cycle,
+          startDate: now,
+          nextDate: _nextDate(now, cycle),
+          accountId: purchase.accountId,
+          categoryId: 'expense-digital',
+          autoRecord: true,
+          reminder: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    } on StateError {
+      // A retried payment callback may already have created this deterministic
+      // recurring row. The original transaction remains the idempotency key.
+    }
+  }
+
+  RecurringBillCycle _cycleForProduct(String productId) {
+    final value = productId.toLowerCase();
+    if (value.contains('year') || value.contains('annual')) {
+      return RecurringBillCycle.yearly;
+    }
+    if (value.contains('quarter') || value.contains('quarterly')) {
+      return RecurringBillCycle.quarterly;
+    }
+    return RecurringBillCycle.monthly;
+  }
+
+  DateTime _nextDate(DateTime date, RecurringBillCycle cycle) {
+    return switch (cycle) {
+      RecurringBillCycle.yearly => _addMonths(date, 12),
+      RecurringBillCycle.quarterly => _addMonths(date, 3),
+      _ => _addMonths(date, 1),
+    };
+  }
+
+  DateTime _addMonths(DateTime date, int months) {
+    final target = DateTime(date.year, date.month + months, 1);
+    final lastDay = DateTime(target.year, target.month + 1, 0).day;
+    return DateTime(target.year, target.month, date.day.clamp(1, lastDay));
   }
 
   Future<TransactionRecord?> _findByOrderId(String orderId) async {
@@ -141,6 +228,10 @@ final membershipPurchaseBookkeepingProvider =
         bookkeeping: QuickBookkeepingService(
           transactions,
           ref.watch(appSettingsRepositoryProvider),
+        ),
+        recurringBills: DriftRecurringBillRepository(
+          database,
+          bookId: SeedIds.personalBook,
         ),
       );
     });

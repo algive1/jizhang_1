@@ -13,6 +13,7 @@ class TransactionTile extends StatelessWidget {
     this.showDivider = true,
     this.showDate = false,
     this.homeStyle = false,
+    this.amountHidden = false,
     this.accountName,
     this.onTap,
     this.onLongPress,
@@ -22,6 +23,7 @@ class TransactionTile extends StatelessWidget {
   final bool showDivider;
   final bool showDate;
   final bool homeStyle;
+  final bool amountHidden;
   final String? accountName;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -35,12 +37,8 @@ class TransactionTile extends StatelessWidget {
     final isIncome = transaction.type == TransactionType.adjustment
         ? transaction.amount > 0
         : transaction.isIncome;
-    final category = transaction.type == TransactionType.adjustment
-        ? '余额校准'
-        : isTransfer
-        ? '转账'
-        : (transaction.categoryName ?? '未分类');
-    final merchant = transaction.merchant ?? transaction.note ?? '未命名交易';
+    final category = transaction.displayCategoryLabel;
+    final merchant = transaction.displayTitle;
     return Semantics(
       button: true,
       label: '$merchant，$category，交易详情',
@@ -62,6 +60,7 @@ class TransactionTile extends StatelessWidget {
                       transaction: transaction,
                       accountName: accountName,
                       showDate: showDate,
+                      amountHidden: amountHidden,
                     );
                   }
                   if (constraints.maxWidth < 300) {
@@ -70,6 +69,7 @@ class TransactionTile extends StatelessWidget {
                       time: time,
                       vivid: homeStyle,
                       accountName: accountName,
+                      amountHidden: amountHidden,
                     );
                   }
                   return Row(
@@ -81,11 +81,24 @@ class TransactionTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          merchant,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              merchant,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            if (accountName != null)
+                              Text(
+                                accountName!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
                         ),
                       ),
                       SizedBox(
@@ -108,6 +121,7 @@ class TransactionTile extends StatelessWidget {
                         positive: isTransfer ? null : isIncome,
                         showSign: !isTransfer,
                         style: Theme.of(context).textTheme.titleMedium!,
+                        hidden: amountHidden,
                       ),
                     ],
                   );
@@ -129,22 +143,20 @@ class _CompactTransactionRow extends StatelessWidget {
     required this.time,
     this.vivid = false,
     this.accountName,
+    this.amountHidden = false,
   });
 
   final TransactionRecord transaction;
   final String time;
   final bool vivid;
   final String? accountName;
+  final bool amountHidden;
 
   @override
   Widget build(BuildContext context) {
     final isTransfer = transaction.type == TransactionType.transfer;
-    final category = transaction.type == TransactionType.adjustment
-        ? '余额校准'
-        : isTransfer
-        ? '转账'
-        : (transaction.categoryName ?? '未分类');
-    final merchant = transaction.merchant ?? transaction.note ?? '未命名交易';
+    final category = transaction.displayCategoryLabel;
+    final merchant = transaction.displayTitle;
     return Row(
       children: [
         CategoryIcon(
@@ -191,6 +203,7 @@ class _CompactTransactionRow extends StatelessWidget {
                         : transaction.isIncome),
               showSign: !isTransfer,
               style: Theme.of(context).textTheme.titleMedium!,
+              hidden: amountHidden,
             ),
           ),
         ),
@@ -204,10 +217,12 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
     required this.transaction,
     this.accountName,
     this.showDate = true,
+    this.amountHidden = false,
   });
   final TransactionRecord transaction;
   final String? accountName;
   final bool showDate;
+  final bool amountHidden;
 
   @override
   Widget build(BuildContext context) {
@@ -215,11 +230,7 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
     final isIncome = transaction.type == TransactionType.adjustment
         ? transaction.amount > 0
         : transaction.isIncome;
-    final category = transaction.type == TransactionType.adjustment
-        ? '余额校准'
-        : isTransfer
-        ? '转账'
-        : (transaction.categoryName ?? '未分类');
+    final category = transaction.displayCategoryLabel;
     final now = DateTime.now();
     final occurredAt = transaction.occurredAt.toLocal();
     final date = DateUtils.dateOnly(occurredAt);
@@ -229,7 +240,7 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
         : date == today.subtract(const Duration(days: 1))
         ? '昨天'
         : '${occurredAt.month}月${occurredAt.day}日';
-    final merchant = transaction.merchant ?? transaction.note ?? '未命名交易';
+    final merchant = transaction.displayTitle;
     final clock =
         '${occurredAt.hour.toString().padLeft(2, '0')}:${occurredAt.minute.toString().padLeft(2, '0')}';
     final time = showDate ? '$dayLabel $clock' : clock;
@@ -292,6 +303,7 @@ class _HomeReferenceTransactionRow extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
+              hidden: amountHidden,
             ),
           ),
         ),

@@ -45,7 +45,7 @@ class LargeTransactionDetector {
               (item) =>
                   item.isExpense && item.type != TransactionType.assetPurchase,
             )
-            .map((item) => item.amount)
+            .map((item) => item.netExpenseAmount)
             .where((amount) => amount > 0)
             .toList()
           ..sort();
@@ -65,8 +65,8 @@ class LargeTransactionDetector {
     if (item.type == TransactionType.assetPurchase || item.isLargeTransaction) {
       return true;
     }
-    return item.amount >= fixedThreshold ||
-        item.amount >= (threshold ?? distributionThreshold(history));
+    return item.netExpenseAmount >= fixedThreshold ||
+        item.netExpenseAmount >= (threshold ?? distributionThreshold(history));
   }
 }
 
@@ -244,8 +244,8 @@ class StatisticalAnalysisService {
           item.occurredAt.month,
           item.occurredAt.day,
         );
-        values.putIfAbsent(date, () => [0, 0])[kind] += (item.amount * 100)
-            .round();
+        values.putIfAbsent(date, () => [0, 0])[kind] +=
+            ((kind == 1 ? item.netExpenseAmount : item.amount) * 100).round();
       }
     }
     return [
@@ -301,7 +301,8 @@ class StatisticalAnalysisService {
   List<List<double>> _heatmap(List<TransactionRecord> items) {
     final values = List.generate(7, (_) => List<double>.filled(24, 0));
     for (final item in items) {
-      values[item.occurredAt.weekday - 1][item.occurredAt.hour] += item.amount;
+      values[item.occurredAt.weekday - 1][item.occurredAt.hour] +=
+          item.netExpenseAmount;
     }
     return values;
   }
@@ -310,7 +311,7 @@ class StatisticalAnalysisService {
     final result = {for (final segment in TimeSegment.values) segment: 0.0};
     for (final item in items) {
       final segment = features.segmentFor(item.occurredAt);
-      result[segment] = result[segment]! + item.amount;
+      result[segment] = result[segment]! + item.netExpenseAmount;
     }
     return result;
   }
@@ -530,7 +531,13 @@ class StatisticalAnalysisService {
   }
 
   double _sum(Iterable<TransactionRecord> items) =>
-      items.fold<int>(0, (total, item) => total + (item.amount * 100).round()) /
+      items.fold<int>(
+        0,
+        (total, item) =>
+            total +
+            ((item.isExpense ? item.netExpenseAmount : item.amount) * 100)
+                .round(),
+      ) /
       100;
 
   double _percentChange(double current, double previous) => previous == 0

@@ -1,3 +1,5 @@
+import '../../assistant/presentation/assistant_entry_button.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../books/data/book_repository.dart';
@@ -15,6 +18,7 @@ import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/category_icon.dart';
+import '../../../core/widgets/membership_button.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../analysis/data/analysis_repository.dart';
@@ -26,6 +30,8 @@ import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/home_data.dart';
 import 'home_cards.dart';
+import 'home_asset_card.dart';
+import 'home_insight_drawer.dart';
 import 'home_expense_trend.dart';
 import 'home_promotional_cards.dart';
 
@@ -94,6 +100,13 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     final book = ref.watch(activeBookProvider);
+    final cardVisibility = ref.watch(homeCardVisibilityProvider);
+    if (book != null) {
+      ref.read(homeCardVisibilityProvider.notifier).ensureLoaded(book.id);
+    }
+    final visibility = book == null
+        ? const HomeCardVisibility()
+        : cardVisibility[book.id] ?? const HomeCardVisibility();
     final sharedState = ref.watch(activeSharedStateProvider).value;
     final goalsState = ref.watch(goalsProvider);
     final goal = (goalsState.value ?? const <Goal>[])
@@ -108,9 +121,10 @@ class _HomePageState extends ConsumerState<HomePage>
     final insight = ref.watch(homeInsightProvider);
     final recentState = ref.watch(homeRecentTransactionsProvider);
     final recent = recentState.value ?? const <TransactionRecord>[];
-    final accounts = ref.watch(allAccountsProvider).value ?? const [];
+    final accountsState = ref.watch(allAccountsProvider);
+    final accounts = accountsState.value ?? const [];
     final accountNames = {
-      for (final account in accounts) account.id: account.name,
+      for (final account in accounts) account.id: account.displayName,
     };
     final dataReady =
         book != null && !transactions.isLoading && !transactions.hasError;
@@ -123,9 +137,17 @@ class _HomePageState extends ConsumerState<HomePage>
             _HomeHeader(
               onSearch: () => context.push('/transactions/search'),
               onProfile: () => context.go('/profile'),
-              onMembership: () => context.push('/profile/membership'),
-              onNotifications: () =>
-                  context.push('/profile/payment-notifications'),
+              onMembership: _showMembership,
+              onNotifications: () => context.push('/assistant'),
+              onCalendar: () => context.push('/transactions/calendar'),
+            ),
+            HomeInsightDrawer(
+              key: ValueKey('insight-${book?.id}-${_day.toIso8601String()}'),
+              bookId: book?.id ?? '',
+              day: _day,
+              insight: insight,
+              available: dataReady,
+              onTap: _analysis,
             ),
             if (book?.isShared == true)
               InkWell(
@@ -181,12 +203,32 @@ class _HomePageState extends ConsumerState<HomePage>
                 onCalculation: () => _showCalculation(snapshot),
                 onGoal: () =>
                     context.push(goal == null ? '/goals' : '/goals/${goal.id}'),
+                todayAmountHidden: visibility.today,
+                goalAmountHidden: visibility.goal,
+                onTodayAmountHiddenChanged: (hidden) => ref
+                    .read(homeCardVisibilityProvider.notifier)
+                    .setHidden(book.id, HomeAmountSection.today, hidden),
+                onGoalAmountHiddenChanged: (hidden) => ref
+                    .read(homeCardVisibilityProvider.notifier)
+                    .setHidden(book.id, HomeAmountSection.goal, hidden),
               ),
             if (dataReady) ...[
               const SizedBox(height: 12),
-              HomeInsightCard(insight: insight, onTap: _analysis),
-              const SizedBox(height: 12),
-              HomeProCard(onTap: () => context.push('/profile/membership')),
+              if (accountsState.hasError)
+                HomeAssetCard.error(
+                  onRetry: () => ref.invalidate(allAccountsProvider),
+                )
+              else if (accountsState.isLoading && !accountsState.hasValue)
+                const HomeAssetCard.loading()
+              else
+                HomeAssetCard(
+                  accounts: accounts,
+                  amountHidden: visibility.assets,
+                  onAmountHiddenChanged: (hidden) => ref
+                      .read(homeCardVisibilityProvider.notifier)
+                      .setHidden(book.id, HomeAmountSection.assets, hidden),
+                  onTap: () => context.push('/profile/assets'),
+                ),
               const SizedBox(height: 12),
               const HomeExpenseTrend(),
               const SizedBox(height: 12),
@@ -305,6 +347,24 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
+  Future<void> _showMembership() async {
+    final openMembership = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: HomeProCard(onTap: () => Navigator.pop(sheetContext, true)),
+        ),
+      ),
+    );
+    if (openMembership == true && mounted) {
+      context.push('/profile/membership');
+    }
+  }
+
   List<Widget> _buildRecentGroups(
     List<TransactionRecord> transactions,
     Map<String, String> accountNames,
@@ -341,25 +401,30 @@ class _HomePageState extends ConsumerState<HomePage>
                 itemIndex < entries[groupIndex].value.length;
                 itemIndex++
               )
-                TransactionTile(
-                  transaction: entries[groupIndex].value[itemIndex],
-                  homeStyle: true,
-                  accountName:
-                      accountNames[entries[groupIndex]
-                          .value[itemIndex]
-                          .accountId],
-                  showDivider:
-                      !(groupIndex == entries.length - 1 &&
-                          itemIndex == entries[groupIndex].value.length - 1),
-                  onTap: () => openTransactionDetail(
-                    context,
-                    entries[groupIndex].value[itemIndex],
-                  ),
-                  onLongPress: () => showTransactionActions(
-                    context,
-                    ref,
-                    entries[groupIndex].value[itemIndex],
-                  ),
+                Builder(
+                  builder: (context) {
+                    final record = entries[groupIndex].value[itemIndex];
+                    final source = accountNames[record.accountId];
+                    final destination = record.destinationAccountId == null
+                        ? null
+                        : accountNames[record.destinationAccountId!];
+                    return TransactionTile(
+                      transaction: record,
+                      homeStyle: true,
+                      accountName: source == null
+                          ? null
+                          : destination == null
+                          ? source
+                          : '$source → $destination',
+                      showDivider:
+                          !(groupIndex == entries.length - 1 &&
+                              itemIndex ==
+                                  entries[groupIndex].value.length - 1),
+                      onTap: () => openTransactionDetail(context, record),
+                      onLongPress: () =>
+                          showTransactionActions(context, ref, record),
+                    );
+                  },
                 ),
             ],
           ),
@@ -500,13 +565,17 @@ class _HomeHeader extends ConsumerWidget {
     required this.onProfile,
     required this.onMembership,
     required this.onNotifications,
+    required this.onCalendar,
   });
   final VoidCallback onSearch;
   final VoidCallback onProfile;
   final VoidCallback onMembership;
   final VoidCallback onNotifications;
+  final VoidCallback onCalendar;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final book = ref.watch(activeBookProvider);
+    final bookTitle = formatBookTitle(book);
     return Row(
       children: [
         Semantics(
@@ -526,24 +595,30 @@ class _HomeHeader extends ConsumerWidget {
               InkWell(
                 onTap: () => showBookSelectorSheet(context, ref),
                 borderRadius: BorderRadius.circular(10),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 2),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '我的账本',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
+                        Flexible(
+                          child: Tooltip(
+                            message: book?.name ?? bookTitle,
+                            child: Text(
+                              key: const ValueKey('home-book-title'),
+                              bookTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
-                        SizedBox(width: 5),
-                        Icon(
+                        const SizedBox(width: 5),
+                        const Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 20,
                           color: AppColors.textPrimary,
@@ -561,22 +636,17 @@ class _HomeHeader extends ConsumerWidget {
             ],
           ),
         ),
+        MembershipButton(onPressed: onMembership),
+        AssistantEntryButton(onPressed: onNotifications),
         IconButton(
-          onPressed: onMembership,
-          tooltip: '会员',
-          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-          padding: EdgeInsets.zero,
-          icon: const HomeCrownIcon(),
-        ),
-        IconButton(
-          onPressed: onNotifications,
-          tooltip: '支付通知记账',
-          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+          onPressed: onCalendar,
+          tooltip: '消费日历',
+          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
           padding: EdgeInsets.zero,
           icon: const Icon(
-            Icons.notifications_none_rounded,
+            Icons.calendar_month_outlined,
             color: AppColors.textPrimary,
-            size: 25,
+            size: 23,
           ),
         ),
         IconButton(
@@ -584,8 +654,10 @@ class _HomeHeader extends ConsumerWidget {
           tooltip: '搜索流水',
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFFF2EEE3),
-            minimumSize: const Size(34, 34),
+            minimumSize: const Size(36, 36),
+            maximumSize: const Size(36, 36),
             padding: EdgeInsets.zero,
+            shape: const CircleBorder(),
           ),
           icon: const Icon(
             Icons.search_rounded,

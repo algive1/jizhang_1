@@ -103,7 +103,7 @@ class NotificationTargetCard extends ConsumerWidget {
                                       DropdownMenuItem(
                                         value: a.id,
                                         child: Text(
-                                          a.name,
+                                          '${a.name}${a.identifierSuffix == null ? '' : '-${a.identifierSuffix}'}',
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),

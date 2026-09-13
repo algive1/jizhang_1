@@ -71,7 +71,10 @@ class TransactionIntelligenceService {
   Future<DuplicateDecision> inspectExisting(String transactionId) async {
     var transaction = await _find(transactionId);
     final existing = (await transactions.getAll())
-        .where((item) => item.id != transactionId)
+        .where(
+          (item) =>
+              item.id != transactionId && item.bookId == transaction.bookId,
+        )
         .toList(growable: false);
     var best = const DuplicateDecision(
       type: DuplicateDecisionType.unrelated,
@@ -142,9 +145,9 @@ final economicEventRepositoryProvider = Provider((ref) {
 
 final transactionIntelligenceServiceProvider = Provider((ref) {
   return TransactionIntelligenceService(
-    transactions: ref.watch(transactionRepositoryProvider),
+    transactions: DriftTransactionRepository(ref.watch(databaseProvider)),
     merchantRules: ref.watch(merchantRuleRepositoryProvider),
-    inbox: ref.watch(billInboxRepositoryProvider),
+    inbox: ref.watch(allBookBillInboxRepositoryProvider),
     economicEvents: ref.watch(economicEventRepositoryProvider),
     fingerprints: ref.watch(transactionFingerprintServiceProvider),
   );
