@@ -43,6 +43,42 @@ class MainActivity : FlutterActivity() {
             "jizhang/navigation",
         )
         dispatchPendingRoute()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/app_update")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "appInfo" -> {
+                        val info = packageManager.getPackageInfo(packageName, 0)
+                        val build = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            info.longVersionCode
+                        } else {
+                            @Suppress("DEPRECATION")
+                            info.versionCode.toLong()
+                        }
+                        result.success(
+                            mapOf(
+                                "platform" to "android",
+                                "version" to (info.versionName ?: "0.0.0"),
+                                "build" to build,
+                            ),
+                        )
+                    }
+                    "openStore" -> {
+                        val url = call.argument<String>("url")
+                        val uri = url?.let(Uri::parse)
+                        if (uri == null || uri.scheme != "https") {
+                            result.error("INVALID_STORE_URL", "更新地址必须使用 HTTPS", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            result.success(true)
+                        } catch (error: ActivityNotFoundException) {
+                            result.error("NO_HANDLER", "没有可打开更新地址的应用", null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
