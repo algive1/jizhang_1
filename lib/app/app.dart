@@ -18,6 +18,7 @@ import '../features/scheduling/finance_scheduler_bridge.dart';
 import '../core/diagnostics/operation_log.dart';
 import '../features/sharing/data/session_repository.dart';
 import '../features/account/application/personal_cloud_auto_backup_service.dart';
+import '../features/account/application/personal_cloud_remote_change_service.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -58,7 +59,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
-      _autoBackupPersonalCloud();
+      _syncPersonalCloudForeground();
       unawaited(const FinanceSchedulerBridge().scheduleDaily());
       final sync = ref.read(sharedBookSyncProvider);
       unawaited(
@@ -132,30 +133,38 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
-      _autoBackupPersonalCloud();
+      _syncPersonalCloudForeground();
     }
     ref
         .read(sharedBookSyncProvider)
         .setForeground(state == AppLifecycleState.resumed);
   }
 
-  void _autoBackupPersonalCloud() {
-    unawaited(
-      ref
+  void _syncPersonalCloudForeground() {
+    unawaited(() async {
+      final remote = await ref
+          .read(personalCloudRemoteChangeServiceProvider)
+          .checkIfDue();
+      if (remote == PersonalCloudRemoteCheckResult.updateAvailable ||
+          remote == PersonalCloudRemoteCheckResult.datasetConflict) {
+        await _diagnostics.record(
+          kind: 'personal_cloud_remote_check',
+          data: {'result': remote.name},
+        );
+        return;
+      }
+
+      final backup = await ref
           .read(personalCloudAutoBackupServiceProvider)
-          .backupIfDue()
-          .then((result) {
-            if (result == PersonalCloudAutoBackupResult.backedUp ||
-                result == PersonalCloudAutoBackupResult.conflict) {
-              unawaited(
-                _diagnostics.record(
-                  kind: 'personal_cloud_auto_backup',
-                  data: {'result': result.name},
-                ),
-              );
-            }
-          }),
-    );
+          .backupIfDue();
+      if (backup == PersonalCloudAutoBackupResult.backedUp ||
+          backup == PersonalCloudAutoBackupResult.conflict) {
+        await _diagnostics.record(
+          kind: 'personal_cloud_auto_backup',
+          data: {'result': backup.name},
+        );
+      }
+    }());
   }
 
   void _processRecurringAutoRecords() {

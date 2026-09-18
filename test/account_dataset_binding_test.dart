@@ -14,6 +14,8 @@ void main() {
     expect(initial.boundUserId, isNull);
     expect(initial.cloudSyncEnabled, isFalse);
     expect(initial.lastCloudRevision, 0);
+    expect(initial.lastSeenRemoteRevision, 0);
+    expect(initial.hasRemoteUpdate, isFalse);
 
     final ownerBefore = await database
         .customSelect(
@@ -30,12 +32,21 @@ void main() {
       userId: 'server-user-a',
       enabled: true,
     );
+    final remote = await database.setDatasetRemoteRevision(
+      userId: 'server-user-a',
+      revision: 4,
+    );
+    expect(remote.lastSeenRemoteRevision, 4);
+    expect(remote.hasRemoteUpdate, isTrue);
+
     final checkpoint = await database.setDatasetCloudCheckpoint(
       userId: 'server-user-a',
-      revision: 3,
+      revision: 4,
       at: DateTime.fromMillisecondsSinceEpoch(1700000000000),
     );
-    expect(checkpoint.lastCloudRevision, 3);
+    expect(checkpoint.lastCloudRevision, 4);
+    expect(checkpoint.lastSeenRemoteRevision, 4);
+    expect(checkpoint.hasRemoteUpdate, isFalse);
     expect(
       checkpoint.lastSyncAt,
       DateTime.fromMillisecondsSinceEpoch(1700000000000),
