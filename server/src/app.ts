@@ -12,7 +12,7 @@ import { ApiError, identifier, kinds, mutationSchema, nullableId, requireConditi
 import { Store } from './store.js';
 import type { AssistantModelProvider } from './assistant_ai.js';
 const scrypt = promisify(scryptCallback);
-const credentials = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(10).max(128) });
+const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);\nconst credentials = z.strictObject({ username: usernameField, password: z.string().min(10).max(128) });\nconst registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional() });\ntype AuthUser = { id:string; username:string; displayName:string|null };
 const hashToken = (token:string) => createHash('sha256').update(token).digest('hex');
 async function passwordHash(password:string, salt=randomBytes(16).toString('hex')) {
   const digest = await scrypt(password,salt,64) as Buffer;
@@ -34,10 +34,10 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   });
   const authenticate = (header:string|undefined) => {
     check(header?.startsWith('Bearer '),'请先登录',401);
-    const row=store.db.prepare('SELECT u.id,u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(hashToken(header!.slice(7)),store.now()) as {id:string;username:string}|undefined;
+    const row=store.db.prepare('SELECT u.id,u.username,u.display_name AS displayName FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(hashToken(header!.slice(7)),store.now()) as AuthUser|undefined;
     check(row,'登录已失效，请重新登录',401);return row;
   };
-  const session=(user:{id:string;username:string})=>{
+  const session=(user:AuthUser)=>{
     const token=randomBytes(32).toString('base64url');
     const expiresAt=store.now()+30*86400;
     store.db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hashToken(token),user.id,expiresAt);
@@ -62,11 +62,11 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   });
   app.post('/api/v1/auth/login',{config:{rateLimit:{max:15,timeWindow:'1 minute'}}},async(req)=>{
     const {username,password}=credentials.parse(req.body);
-    const user=store.db.prepare('SELECT * FROM users WHERE username=?').get(username) as {id:string;username:string;password_hash:string}|undefined;
+    const user=store.db.prepare('SELECT id,username,password_hash,display_name AS displayName FROM users WHERE username=?').get(username) as (AuthUser & {password_hash:string})|undefined;
     const salt=user?.password_hash.split(':')[0]??'00000000000000000000000000000000';
     const actual=await passwordHash(password,salt);
     check(user && actual.length===user.password_hash.length && timingSafeEqual(Buffer.from(actual),Buffer.from(user.password_hash)),'用户名或密码错误',401);
-    return session({id:user.id,username:user.username});
+    return session({id:user.id,username:user.username,displayName:user.displayName});
   });
   app.get('/api/v1/auth/me',async(req)=>({user:authenticate(req.headers.authorization)}));
   app.post('/api/v1/auth/logout',async(req)=>{
@@ -92,7 +92,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   });
   app.get('/api/v1/books/:id/members',async(req)=>{
     const id=bookId(req.params);store.role(id,authenticate(req.headers.authorization).id);
-    return {members:store.db.prepare('SELECT u.id AS user_id,u.username,m.role,m.joined_at FROM members m JOIN users u ON u.id=m.user_id WHERE m.book_id=? ORDER BY u.username').all(id)};
+    return {members:store.db.prepare('SELECT u.id AS user_id,u.username,u.display_name,m.role,m.joined_at FROM members m JOIN users u ON u.id=m.user_id WHERE m.book_id=? ORDER BY COALESCE(NULLIF(TRIM(u.display_name),\'\'),u.username)').all(id)};
   });
   app.patch('/api/v1/books/:id/members/:userId',async(req)=>{
     const p=z.object({id:identifier,userId:identifier}).parse(req.params);
