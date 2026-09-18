@@ -84,3 +84,36 @@ test('账户昵称随注册、登录和 me 返回，旧注册请求仍兼容',as
  assert.equal(legacy.statusCode,201);
  assert.equal((legacy.json() as any).user.displayName,null);
 });
+
+
+test('账号安全：恢复密钥、改密与设备会话',async(t)=>{
+ const {app}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
+ const registered=await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username:'security_user',password:'local-test-password',displayName:'安全用户',deviceName:'测试设备'}});
+ assert.equal(registered.statusCode,201);
+ const first=registered.json() as any;
+ const auth={authorization:`Bearer ${first.token}`};
+
+ const rotated=await app.inject({method:'POST',url:'/api/v1/auth/recovery-key/rotate',headers:auth,payload:{}});
+ assert.equal(rotated.statusCode,200);
+ const recoveryKey=(rotated.json() as any).recoveryKey as string;
+ assert.ok(recoveryKey.length>=20);
+
+ const sessions=await app.inject({method:'GET',url:'/api/v1/auth/sessions',headers:auth});
+ assert.equal(sessions.statusCode,200);
+ assert.equal((sessions.json() as any).sessions.length,1);
+ assert.equal((sessions.json() as any).sessions[0].current,true);
+
+ const changed=await app.inject({method:'POST',url:'/api/v1/auth/change-password',headers:auth,payload:{currentPassword:'local-test-password',newPassword:'local-test-password-2'}});
+ assert.equal(changed.statusCode,200);
+ assert.equal((await app.inject({method:'POST',url:'/api/v1/auth/login',payload:{username:'security_user',password:'local-test-password'}})).statusCode,401);
+
+ const recovered=await app.inject({method:'POST',url:'/api/v1/auth/recover',payload:{username:'security_user',recoveryKey,newPassword:'local-test-password-3',deviceName:'恢复设备'}});
+ assert.equal(recovered.statusCode,200);
+ const recoveredBody=recovered.json() as any;
+ assert.ok(recoveredBody.recoveryKey);
+ assert.notEqual(recoveredBody.recoveryKey,recoveryKey);
+
+ const logoutAll=await app.inject({method:'POST',url:'/api/v1/auth/logout-all',headers:{authorization:`Bearer ${recoveredBody.token}`},payload:{}});
+ assert.equal(logoutAll.statusCode,200);
+ assert.equal((await app.inject({method:'GET',url:'/api/v1/auth/me',headers:{authorization:`Bearer ${recoveredBody.token}`}})).statusCode,401);
+});
