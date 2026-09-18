@@ -16,6 +16,7 @@ import '../features/recurring/application/recurring_bill_notification_service.da
 import '../features/recurring/data/recurring_bill_repository.dart';
 import '../features/scheduling/finance_scheduler_bridge.dart';
 import '../core/diagnostics/operation_log.dart';
+import '../core/installation/installation_age_repository.dart';
 import '../core/analytics/product_analytics.dart';
 import '../features/sharing/data/session_repository.dart';
 import '../features/account/application/personal_cloud_auto_backup_service.dart';
@@ -60,6 +61,11 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
           })
           ..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        ref.read(installationAgeRepositoryProvider).createdAt().catchError(
+          (Object _) => DateTime.now(),
+        ),
+      );
       unawaited(ref.read(productAnalyticsProvider).track('app_open'));
       _processNotifications();
       _processRecurringAutoRecords();
