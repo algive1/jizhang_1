@@ -11,6 +11,18 @@ import '../../../core/database/database_provider.dart';
 
 typedef DocumentsDirectoryResolver = Future<Directory> Function();
 
+class PendingRestoreAttachment {
+  const PendingRestoreAttachment({
+    required this.id,
+    required this.name,
+    required this.bytes,
+  });
+
+  final String id;
+  final String name;
+  final Uint8List? bytes;
+}
+
 class LocalBackupService {
   LocalBackupService(
     this._database, {
@@ -63,6 +75,67 @@ class LocalBackupService {
     }
   }
 
+  Future<void> preparePendingRestoreAttachments(
+    List<PendingRestoreAttachment> attachments,
+  ) async {
+    final databaseFile = await _databaseFile();
+    final pendingFile = File('${databaseFile.path}$pendingRestoreSuffix');
+    if (!await pendingFile.exists()) {
+      throw StateError('待恢复数据库不存在');
+    }
+
+    final documents = await _documentsDirectory();
+    final attachmentDirectory = Directory(
+      p.join(documents.path, 'bookkeeping_attachments'),
+    );
+    await attachmentDirectory.create(recursive: true);
+
+    Database? pending;
+    try {
+      pending = sqlite3.open(pendingFile.path);
+      final tables = pending
+          .select(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='transaction_attachments'",
+          );
+      if (tables.isEmpty) return;
+
+      // Cloud package v2 owns the active attachment paths. Clear source-device
+      // absolute paths first so a restored database never points at another
+      // device's documents directory.
+      pending.execute(
+        "UPDATE transaction_attachments SET path='' WHERE deleted_at IS NULL",
+      );
+
+      for (final attachment in attachments) {
+        final bytes = attachment.bytes;
+        if (bytes == null) continue;
+        final baseName = p.basename(attachment.name).trim();
+        final safeName = (baseName.isEmpty ? 'attachment' : baseName).replaceAll(
+          RegExp(r'[^\w.\-\u4e00-\u9fa5]'),
+          '_',
+        );
+        final file = File(
+          p.join(attachmentDirectory.path, '${attachment.id}-$safeName'),
+        );
+        await file.writeAsBytes(bytes, flush: true);
+        pending.execute(
+          'UPDATE transaction_attachments '
+          'SET path=?,size_in_bytes=?,updated_at=? '
+          'WHERE id=? AND deleted_at IS NULL',
+          [
+            file.path,
+            bytes.length,
+            DateTime.now().millisecondsSinceEpoch,
+            attachment.id,
+          ],
+        );
+      }
+    } finally {
+      pending?.close();
+    }
+  }
+
   Future<void> stampPendingCloudRestore({
     required String datasetId,
     required String userId,
@@ -90,6 +163,7 @@ class LocalBackupService {
             bound_at INTEGER,
             last_sync_at INTEGER,
             last_cloud_revision INTEGER NOT NULL DEFAULT 0,
+            last_seen_remote_revision INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )
@@ -105,22 +179,29 @@ class LocalBackupService {
             'ADD COLUMN last_cloud_revision INTEGER NOT NULL DEFAULT 0',
           );
         }
+        if (!columns.contains('last_seen_remote_revision')) {
+          pending.execute(
+            'ALTER TABLE device_data_binding '
+            'ADD COLUMN last_seen_remote_revision INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       }
 
       final synced = syncedAt.millisecondsSinceEpoch;
       final now = DateTime.now().millisecondsSinceEpoch;
       pending.execute(
         'INSERT INTO device_data_binding('
-        'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at'
-        ') VALUES(1,?,?,1,?,?,?, ?,?) '
+        'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,last_seen_remote_revision,created_at,updated_at'
+        ') VALUES(1,?,?,1,?,?,?,?, ?,?) '
         'ON CONFLICT(id) DO UPDATE SET '
         'dataset_id=excluded.dataset_id,'
         'bound_user_id=excluded.bound_user_id,'
         'cloud_sync_enabled=1,'
         'last_sync_at=excluded.last_sync_at,'
         'last_cloud_revision=excluded.last_cloud_revision,'
+        'last_seen_remote_revision=excluded.last_seen_remote_revision,'
         'updated_at=excluded.updated_at',
-        [datasetId, userId, now, synced, revision, now, now],
+        [datasetId, userId, now, synced, revision, revision, now, now],
       );
     } finally {
       pending?.close();
