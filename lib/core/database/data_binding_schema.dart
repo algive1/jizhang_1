@@ -9,6 +9,7 @@ class DeviceDataBinding {
     required this.updatedAt,
     this.boundAt,
     this.lastSyncAt,
+    this.lastCloudRevision = 0,
   });
 
   final String datasetId;
@@ -16,6 +17,7 @@ class DeviceDataBinding {
   final bool cloudSyncEnabled;
   final DateTime? boundAt;
   final DateTime? lastSyncAt;
+  final int lastCloudRevision;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -40,15 +42,25 @@ extension DeviceDataBindingStore on AppDatabase {
         cloud_sync_enabled INTEGER NOT NULL DEFAULT 0,
         bound_at INTEGER,
         last_sync_at INTEGER,
+        last_cloud_revision INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
     ''');
+    final columns = await customSelect(
+      'PRAGMA table_info(device_data_binding)',
+    ).get();
+    if (!columns.any((row) => row.read<String>('name') == 'last_cloud_revision')) {
+      await customStatement(
+        'ALTER TABLE device_data_binding '
+        'ADD COLUMN last_cloud_revision INTEGER NOT NULL DEFAULT 0',
+      );
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     await customStatement(
       'INSERT OR IGNORE INTO device_data_binding('
-      'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,created_at,updated_at'
-      ') VALUES(1,?,NULL,0,NULL,NULL,?,?)',
+      'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at'
+      ') VALUES(1,?,NULL,0,NULL,NULL,0,?,?)',
       [newEntityId(), now, now],
     );
   }
@@ -56,7 +68,7 @@ extension DeviceDataBindingStore on AppDatabase {
   Future<DeviceDataBinding> getDeviceDataBinding() async {
     await ensureDataBindingSchema();
     final row = await customSelect(
-      'SELECT dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,created_at,updated_at '
+      'SELECT dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at '
       'FROM device_data_binding WHERE id=1',
     ).getSingle();
 
@@ -70,6 +82,7 @@ extension DeviceDataBindingStore on AppDatabase {
       cloudSyncEnabled: row.read<int>('cloud_sync_enabled') == 1,
       boundAt: date(row.data['bound_at']),
       lastSyncAt: date(row.data['last_sync_at']),
+      lastCloudRevision: row.read<int>('last_cloud_revision'),
       createdAt: date(row.data['created_at'])!,
       updatedAt: date(row.data['updated_at'])!,
     );
@@ -94,8 +107,9 @@ extension DeviceDataBindingStore on AppDatabase {
     });
   }
 
-  Future<DeviceDataBinding> setDatasetLastSyncAt({
+  Future<DeviceDataBinding> setDatasetCloudCheckpoint({
     required String userId,
+    required int revision,
     DateTime? at,
   }) {
     return transaction(() async {
@@ -105,8 +119,9 @@ extension DeviceDataBindingStore on AppDatabase {
       }
       final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
       await customStatement(
-        'UPDATE device_data_binding SET last_sync_at=?,updated_at=? WHERE id=1',
-        [now, now],
+        'UPDATE device_data_binding '
+        'SET last_sync_at=?,last_cloud_revision=?,updated_at=? WHERE id=1',
+        [now, revision, now],
       );
       return getDeviceDataBinding();
     });
