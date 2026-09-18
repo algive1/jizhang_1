@@ -2,6 +2,10 @@
 
 更新时间：2026-09-18
 
+## 最新任务交接（2026-09-18 全工程 Git 跟踪）
+
+把此前游离在工作区外的整份工程纳入版本管理：一次性提交 120 个未跟踪文件与 130 个修改文件（投资管理、循环账单、自动记账与诊断日志、会员法律文档、服务端诊断接口、QA 截图归档、`scripts/package_source.sh`），工作区提交后干净无遗漏。`.gitignore` 仅保留生成物忽略规则：`build/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/`、`dist/*-debug.apk`、`dist/*-release-<时间戳>.apk`、`jizhang_app/`、`jizhang_app_source_*.zip`、签名材料；`dist/jizhang_app-<版本>-release.apk` 仍随仓库分发。跟踪范围与远端说明见根目录 [`README.md`](../../README.md) 的「版本管理（Git）」。遗留：远端 `origin/main` 只有一个无关的 `Initial commit`（LICENSE + 单行 README），本地 23 个提交从未推送，推送策略需人工确认后再执行。
+
 ## 最新任务交接（2026-09-18 Android 自动记账与诊断日志）
 
 [Android 自动记账与诊断日志收尾](2026-09-18-android-autobookkeeping-diagnostics.md)：修复首页长按编辑流水时底部导航栏透出、备注行撑开卡片、编辑周期流水无法打开规则页三个问题；并把通知/无障碍自动记账统一为“保守识别 → 本地待确认 → 悬浮层或系统通知 → 用户确认后入账”。已覆盖微信、支付宝、云闪付和美团包名，过滤收款/到账/退款通知，金额歧义和重复指纹不入账；新增本地脱敏诊断环形队列与登录后可手动上传的服务端批量幂等接口。Flutter 全量 408 项、Android 单测/lint、服务端 11 项测试和 build 已通过。遗留：没有连接实体 Android 设备，支付 App 版本差异、无障碍节点、浮窗和后台存活尚未做真机验收。

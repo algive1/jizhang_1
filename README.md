@@ -47,3 +47,26 @@ Android 模拟器一键构建、安装并启动：
 ```
 
 构建产物（`build/`、`dist/`、APK）、依赖缓存（`.dart_tool/`、`node_modules/`、`ios/Pods/`）、服务端运行时数据库和 QA 截图归档默认不入包；需要截图归档时加 `--with-qa-docs`。范围和验证记录见 [`docs/development/2026-09-18-source-package-delivery.md`](docs/development/2026-09-18-source-package-delivery.md)。
+
+## 版本管理（Git）
+
+工程根目录是唯一的 Git 工作区，分支 `main`，远端 `origin` 指向 <https://github.com/algive1/jizhang_1.git>。整套工程（Flutter 源码、Android/iOS 原生工程、Node 共享账本服务、测试、开发文档与 QA 截图归档）都随源码跟踪，不依赖 `git submodule`。
+
+```bash
+git status                      # 应保持干净：项目内容全部已跟踪
+git add -A && git commit -m "..."   # 纳入新增源码/文档/资源
+git push origin main            # 备份到远端
+```
+
+跟踪规则（详见 [`.gitignore`](.gitignore)）：
+
+| 类别 | 是否跟踪 | 说明 |
+| --- | --- | --- |
+| `lib/`、`test/`、`android/`、`ios/`、`server/src`、`server/test`、`scripts/`、`assets/`、`docs/` | 跟踪 | 源码、测试、文档、设计与验收资源 |
+| `dist/jizhang_app-<版本>-release.apk` | 跟踪 | 唯一随仓库分发的正式安装包 |
+| `build/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/` | 忽略 | 可重建的构建/依赖产物 |
+| `dist/*-debug.apk`、`dist/*-release-<时间戳>.apk` | 忽略 | 本地调试与历史构建包，避免仓库膨胀 |
+| `jizhang_app/`、`jizhang_app_source_*.zip` | 忽略 | `scripts/package_source.sh` 产出的源码快照，可随时重建 |
+| `android/key.properties`、`*.jks`、`*.keystore` | 忽略 | 签名材料不入库 |
+
+`haohaojizhangœ/` 是另一个独立仓库（`algive1/haohaojizhang-.`），与本 App 无关，历史提交中以 gitlink 记录、不参与本工程构建。
