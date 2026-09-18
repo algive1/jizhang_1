@@ -110,7 +110,7 @@ StubResponse Function(StubRequest request) accountRoutes({
     'user': {
       'id': userId,
       'username': username,
-      if (displayName != null) 'displayName': displayName,
+      'displayName': displayName,
     },
   }),
   '/api/v1/auth/logout' => const StubResponse(200),
