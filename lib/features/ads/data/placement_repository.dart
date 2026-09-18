@@ -141,6 +141,9 @@ class RemotePlacementConfigRepository implements PlacementConfigRepository {
     if (dailyLimit.toInt() <= 0 || dailyLimit.toInt() > 20) {
       throw const FormatException('广告位频控无效');
     }
+    if (surface == PlacementSurface.splash && dailyLimit.toInt() != 1) {
+      throw const FormatException('开屏广告每天最多一次');
+    }
 
     return PlacementConfig(
       id: id,
