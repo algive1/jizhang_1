@@ -12,6 +12,7 @@ import { ApiError, identifier, kinds, mutationSchema, nullableId, requireConditi
 import { Store } from './store.js';
 import type { AssistantModelProvider } from './assistant_ai.js';
 import { registerPersonalCloudRoutes } from './personal_cloud.js';
+import { registerAppUpdateRoutes } from './app_update.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
 const deviceNameField = z.string().trim().min(1).max(80).optional();
@@ -62,6 +63,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
     ).run(tokenHash,user.id,expiresAt,sessionId,deviceName??'当前设备',now,now);
     return {user,token,expiresAt};
   };
+  registerAppUpdateRoutes(app);
   registerMembershipCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
   registerPersonalCloudRoutes(app,store,authenticate);
