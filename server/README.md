@@ -96,3 +96,16 @@ Each device token is bound to the login session that registered it. The database
 The Flutter client reads future provider tokens through MethodChannel `jizhang/push`. Until a native provider implementation is configured, the bridge returns unavailable and the app continues normally without requesting remote-notification permissions.
 
 When a delivery provider is added, senders must only target rows whose linked session is still active.
+
+
+## Ad placement configuration
+
+The public endpoint `GET /api/v1/ads/placements` is intentionally safe when no remote configuration is present.
+
+- `ADS_PLACEMENTS_JSON`: JSON array of validated Placement objects.
+- `ADS_CONFIG_VERSION`: optional operator-visible version string.
+- When `ADS_PLACEMENTS_JSON` is absent, the endpoint returns `configured=false` and the client uses bundled internal promotions.
+- When it is configured, the remote list is authoritative, including an empty array.
+- Invalid provider/content combinations, unsafe content categories, mismatched surface/format pairs, duplicate IDs, and splash limits above one per day are rejected.
+- Third-party Native placements remain non-renderable until an official network Native renderer is integrated.
+- Rewarded placements must not grant server AI quota until a server-verified reward receipt flow exists.
