@@ -10,7 +10,7 @@ export class Store {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
     let version = this.db.pragma('user_version', { simple: true }) as number;
-    check(version <= 4, '服务端数据库版本过新', 500);
+    check(version <= 5, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {
       this.db.exec(`
         CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -58,6 +58,43 @@ export class Store {
         this.db.exec('ALTER TABLE users ADD COLUMN display_name TEXT');
       }
       this.db.pragma('user_version = 4');
+    }
+    if (version < 5) {
+      const userColumns = this.db.prepare('PRAGMA table_info(users)').all() as Array<{name: string}>;
+      if (!userColumns.some((column) => column.name === 'recovery_key_hash')) {
+        this.db.exec('ALTER TABLE users ADD COLUMN recovery_key_hash TEXT');
+      }
+      if (!userColumns.some((column) => column.name === 'password_changed_at')) {
+        this.db.exec('ALTER TABLE users ADD COLUMN password_changed_at INTEGER');
+      }
+
+      const sessionColumns = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{name: string}>;
+      if (!sessionColumns.some((column) => column.name === 'session_id')) {
+        this.db.exec('ALTER TABLE sessions ADD COLUMN session_id TEXT');
+      }
+      if (!sessionColumns.some((column) => column.name === 'device_name')) {
+        this.db.exec('ALTER TABLE sessions ADD COLUMN device_name TEXT');
+      }
+      if (!sessionColumns.some((column) => column.name === 'created_at')) {
+        this.db.exec('ALTER TABLE sessions ADD COLUMN created_at INTEGER');
+      }
+      if (!sessionColumns.some((column) => column.name === 'last_seen_at')) {
+        this.db.exec('ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER');
+      }
+      this.db.exec(`
+        UPDATE sessions
+        SET session_id = lower(hex(randomblob(16)))
+        WHERE session_id IS NULL OR session_id = '';
+        UPDATE sessions
+        SET created_at = MAX(0, expires_at - 2592000)
+        WHERE created_at IS NULL;
+        UPDATE sessions
+        SET last_seen_at = created_at
+        WHERE last_seen_at IS NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_session_id
+          ON sessions(session_id);
+      `);
+      this.db.pragma('user_version = 5');
     }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
   }
