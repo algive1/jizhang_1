@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -36,3 +37,8 @@ class InstallationAgeRepository {
     return now;
   }
 }
+
+
+final installationAgeRepositoryProvider = Provider<InstallationAgeRepository>(
+  (ref) => InstallationAgeRepository(),
+);
