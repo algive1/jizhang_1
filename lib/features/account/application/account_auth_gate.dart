@@ -24,13 +24,14 @@ class AccountAuthGate {
     required AccountAuthReason reason,
     required AccountPendingIntent intent,
   }) async {
+    final pending = ref.read(accountPendingIntentProvider);
+    pending.set(intent);
     final session = ref.read(sessionRepositoryProvider);
     await session.initialize();
     if (session.accountStatus == AccountSessionStatus.authenticated &&
         session.accountUser != null) {
       return true;
     }
-    ref.read(accountPendingIntentProvider).set(intent);
     if (!context.mounted) return false;
 
     final choice = await showModalBottomSheet<_AuthChoice>(
@@ -40,7 +41,7 @@ class AccountAuthGate {
       builder: (sheetContext) => _AuthGateSheet(reason: reason),
     );
     if (!context.mounted || choice == null) {
-      ref.read(accountPendingIntentProvider).clear(intent.id);
+      pending.clear(intent.id)
       return false;
     }
 
