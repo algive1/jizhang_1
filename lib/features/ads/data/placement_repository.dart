@@ -6,11 +6,133 @@ import '../../../core/database/database_provider.dart';
 import '../../../core/models/membership.dart';
 import '../../../core/models/placement.dart';
 import '../../membership/data/membership_repository.dart';
+import '../../settings/data/app_settings_repository.dart';
+import '../../sharing/data/session_repository.dart';
+import '../../sharing/data/shared_api.dart';
 import '../domain/ad_provider.dart';
 import '../domain/placement_policy.dart';
 
 abstract interface class PlacementConfigRepository {
   Future<List<PlacementConfig>> getActiveConfigs();
+}
+
+class InstallationAgeRepository {
+  InstallationAgeRepository(
+    this.settings, {
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
+
+  static const createdAtKey = 'app.installation_created_at.v1';
+
+  final AppSettingsRepository settings;
+  final DateTime Function() _clock;
+
+  Future<DateTime> createdAt() async {
+    final now = _clock();
+    final raw = (await settings.get(createdAtKey))?.trim();
+    final parsed = raw == null ? null : DateTime.tryParse(raw);
+    if (parsed != null && !parsed.isAfter(now)) return parsed;
+
+    await settings.set(createdAtKey, now.toIso8601String());
+    return now;
+  }
+}
+
+class RemotePlacementConfigRepository implements PlacementConfigRepository {
+  const RemotePlacementConfigRepository({
+    required this.api,
+    required this.fallback,
+  });
+
+  final SharedApi api;
+  final PlacementConfigRepository fallback;
+
+  @override
+  Future<List<PlacementConfig>> getActiveConfigs() async {
+    final bundled = await fallback.getActiveConfigs();
+    try {
+      final response = await api.request('/ads/placements');
+      final raw = response['placements'];
+      if (raw is! List || raw.isEmpty) return bundled;
+
+      final remote = raw
+          .whereType<Map>()
+          .map((item) => _placementFromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      final merged = <String, PlacementConfig>{
+        for (final placement in bundled) placement.id: placement,
+        for (final placement in remote) placement.id: placement,
+      };
+      return merged.values.toList(growable: false);
+    } on Object {
+      return bundled;
+    }
+  }
+
+  PlacementConfig _placementFromJson(Map<String, dynamic> json) {
+    T enumValue<T extends Enum>(List<T> values, Object? raw) {
+      final name = raw?.toString();
+      return values.firstWhere(
+        (value) => value.name == name,
+        orElse: () => throw const FormatException('广告位枚举配置无效'),
+      );
+    }
+
+    DateTime? date(Object? raw) {
+      if (raw == null) return null;
+      if (raw is! num) throw const FormatException('广告位时间配置无效');
+      return DateTime.fromMillisecondsSinceEpoch(raw.toInt() * 1000);
+    }
+
+    final contentType = enumValue(
+      PlacementContentType.values,
+      json['contentType'],
+    );
+    final provider = json['provider'];
+    final actionRoute = json['actionRoute'];
+    if (provider is! String || provider.trim().isEmpty) {
+      throw const FormatException('广告 provider 配置无效');
+    }
+    if (contentType == PlacementContentType.thirdParty) {
+      if (provider == 'internal' || actionRoute != null) {
+        throw const FormatException('第三方广告配置不安全');
+      }
+    } else if (provider != 'internal') {
+      throw const FormatException('内部推广位 provider 配置无效');
+    }
+
+    final category = enumValue(
+      AdContentCategory.values,
+      json['contentCategory'],
+    );
+    if (category == AdContentCategory.highRiskLoan ||
+        category == AdContentCategory.gambling ||
+        category == AdContentCategory.untrustedInvestment) {
+      throw const FormatException('广告内容类别不允许');
+    }
+
+    return PlacementConfig(
+      id: json['id'] as String,
+      surface: enumValue(PlacementSurface.values, json['surface']),
+      format: enumValue(AdFormat.values, json['format']),
+      contentType: contentType,
+      title: json['title'] as String,
+      description: json['description'] as String,
+      actionLabel: json['actionLabel'] as String?,
+      actionRoute: actionRoute as String?,
+      enabled: json['enabled'] as bool,
+      targetAudience: enumValue(
+        PlacementAudience.values,
+        json['targetAudience'],
+      ),
+      startAt: date(json['startAt']),
+      endAt: date(json['endAt']),
+      dailyLimit: (json['dailyLimit'] as num).toInt(),
+      priority: (json['priority'] as num).toInt(),
+      provider: provider,
+      contentCategory: category,
+    );
+  }
 }
 
 class BundledPlacementConfigRepository implements PlacementConfigRepository {
@@ -108,11 +230,13 @@ class PlacementResolver {
     required this.configs,
     required this.events,
     required this.policy,
+    required this.provider,
   });
 
   final PlacementConfigRepository configs;
   final AdEventRepository events;
   final PlacementPolicy policy;
+  final AdProvider provider;
 
   Future<PlacementConfig?> resolve({
     required PlacementSurface surface,
@@ -128,6 +252,10 @@ class PlacementResolver {
             .toList()
           ..sort((a, b) => b.priority.compareTo(a.priority));
     for (final placement in candidates) {
+      if (placement.contentType == PlacementContentType.thirdParty) {
+        if (placement.provider != provider.id) continue;
+        if (!await provider.isAvailable(placement.format)) continue;
+      }
       final count = await events.impressionsToday(placement.id, clock);
       if (policy.isEligible(
         placement: placement,
@@ -171,7 +299,16 @@ class RewardedAdService {
 }
 
 final placementConfigRepositoryProvider = Provider<PlacementConfigRepository>(
-  (ref) => const BundledPlacementConfigRepository(),
+  (ref) => RemotePlacementConfigRepository(
+    api: ref.watch(sharedApiProvider),
+    fallback: const BundledPlacementConfigRepository(),
+  ),
+);
+
+final installationAgeRepositoryProvider = Provider<InstallationAgeRepository>(
+  (ref) => InstallationAgeRepository(
+    ref.watch(appSettingsRepositoryProvider),
+  ),
 );
 
 final adEventRepositoryProvider = Provider((ref) {
@@ -183,6 +320,7 @@ final placementResolverProvider = Provider((ref) {
     configs: ref.watch(placementConfigRepositoryProvider),
     events: ref.watch(adEventRepositoryProvider),
     policy: const PlacementPolicy(),
+    provider: ref.watch(adProviderProvider),
   );
 });
 
@@ -198,6 +336,9 @@ final eligiblePlacementProvider =
       final membership = await ref
           .watch(membershipRepositoryProvider)
           .getCurrent();
+      final installedAt = await ref
+          .watch(installationAgeRepositoryProvider)
+          .createdAt();
       return ref
           .watch(placementResolverProvider)
           .resolve(
@@ -210,6 +351,6 @@ final eligiblePlacementProvider =
               PlacementSurface.splash => '/splash',
               PlacementSurface.aiReward => '/analysis/reward',
             },
-            userCreatedAt: DateTime(2020),
+            userCreatedAt: installedAt,
           );
     });
