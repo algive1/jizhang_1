@@ -12,6 +12,8 @@ import 'package:jizhang_app/core/widgets/app_bottom_navigation.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/recurring_bill.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
+import 'package:jizhang_app/features/account/application/account_session_controller.dart';
+import 'package:jizhang_app/features/account/domain/account_session.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/features/budgets/data/budget_repository.dart';
 import 'package:jizhang_app/features/budgets/domain/safe_to_spend_service.dart';
@@ -769,6 +771,9 @@ Future<AppDatabase> _pumpApp(
       currentMonthBudgetsProvider.overrideWithValue(AsyncData(budgets)),
       pendingInboxProvider.overrideWithValue(const AsyncData([])),
       membershipProvider.overrideWithValue(AsyncData(membership)),
+      accountSessionProvider.overrideWithValue(
+        AsyncData(AccountSession.guest(baseUrl: 'http://127.0.0.1:8787')),
+      ),
       if (speechService != null)
         speechRecognitionServiceProvider.overrideWithValue(speechService),
     ],
