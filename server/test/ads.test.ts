@@ -136,6 +136,22 @@ test('ad placement config rejects unsafe or structurally invalid placements', as
     ],
     [
       {
+        id: 'too-frequent-splash',
+        surface: 'splash',
+        format: 'splash',
+        contentType: 'thirdParty',
+        title: '过度开屏',
+        description: '',
+        enabled: true,
+        targetAudience: 'free',
+        dailyLimit: 2,
+        priority: 1,
+        provider: 'vendor',
+        contentCategory: 'consumerCampaign',
+      },
+    ],
+    [
+      {
         id: 'unsafe-category',
         surface: 'goalPromo',
         format: 'native',
