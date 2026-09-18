@@ -2036,10 +2036,20 @@ class _NoteRow extends StatelessWidget {
       iconColor: AppColors.primaryDark,
       selected: true,
       onTap: onAi,
-      // Keep voice bookkeeping available without adding the separate mic
-      // button that widened this row. Long-press preserves the capability
-      // while the visible layout matches the compact reference card.
-      onLongPress: onVoice,
+    );
+    final voiceAction = _NoteIconAction(
+      key: const ValueKey('quick-voice-entry'),
+      icon: Icons.mic_none_rounded,
+      tooltip: '语音记账',
+      onTap: onVoice,
+    );
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        aiAction,
+        const SizedBox(width: 6),
+        voiceAction,
+      ],
     );
 
     if (stacks) {
@@ -2048,7 +2058,7 @@ class _NoteRow extends StatelessWidget {
         children: [
           field,
           const SizedBox(height: 8),
-          Align(alignment: Alignment.centerRight, child: aiAction),
+          Align(alignment: Alignment.centerRight, child: actions),
         ],
       );
     }
@@ -2057,8 +2067,45 @@ class _NoteRow extends StatelessWidget {
       children: [
         Expanded(child: field),
         const SizedBox(width: 8),
-        aiAction,
+        actions,
       ],
+    );
+  }
+}
+
+class _NoteIconAction extends StatelessWidget {
+  const _NoteIconAction({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.textSecondary),
+          ),
+        ),
+      ),
     );
   }
 }
