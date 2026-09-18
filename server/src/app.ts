@@ -12,7 +12,10 @@ import { ApiError, identifier, kinds, mutationSchema, nullableId, requireConditi
 import { Store } from './store.js';
 import type { AssistantModelProvider } from './assistant_ai.js';
 const scrypt = promisify(scryptCallback);
-const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);\nconst credentials = z.strictObject({ username: usernameField, password: z.string().min(10).max(128) });\nconst registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional() });\ntype AuthUser = { id:string; username:string; displayName:string|null };
+const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
+const credentials = z.strictObject({ username: usernameField, password: z.string().min(10).max(128) });
+const registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional() });
+type AuthUser = { id:string; username:string; displayName:string|null };
 const hashToken = (token:string) => createHash('sha256').update(token).digest('hex');
 async function passwordHash(password:string, salt=randomBytes(16).toString('hex')) {
   const digest = await scrypt(password,salt,64) as Buffer;
@@ -49,14 +52,14 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   app.get('/health',async()=>({status:'ok',schemaVersion:1}));
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
-    const {username,password}=credentials.parse(req.body);
+    const {username,password,displayName}=registration.parse(req.body);
     check(!store.db.prepare('SELECT 1 FROM users WHERE username=?').get(username),'用户名已被使用',409);
     const password_hash=await passwordHash(password);
     // Hashing is asynchronous: recheck inside the insertion transaction.
     const user=store.db.transaction(()=>{
       check(!store.db.prepare('SELECT 1 FROM users WHERE username=?').get(username),'用户名已被使用',409);
-      const user={id:randomUUID(),username};
-      store.db.prepare('INSERT INTO users VALUES(?,?,?,?)').run(user.id,username,password_hash,store.now());return user;
+      const user:AuthUser={id:randomUUID(),username,displayName:displayName ?? null};
+      store.db.prepare('INSERT INTO users(id,username,password_hash,created_at,display_name) VALUES(?,?,?,?,?)').run(user.id,username,password_hash,store.now(),user.displayName);return user;
     })();
     return reply.code(201).send(session(user));
   });
