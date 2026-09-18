@@ -16,6 +16,7 @@ import '../features/recurring/application/recurring_bill_notification_service.da
 import '../features/recurring/data/recurring_bill_repository.dart';
 import '../features/scheduling/finance_scheduler_bridge.dart';
 import '../core/diagnostics/operation_log.dart';
+import '../core/analytics/product_analytics.dart';
 import '../features/sharing/data/session_repository.dart';
 import '../features/account/application/personal_cloud_auto_backup_service.dart';
 import '../features/account/application/personal_cloud_remote_change_service.dart';
@@ -58,6 +59,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
           })
           ..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ref.read(productAnalyticsProvider).track('app_open'));
       _processNotifications();
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
@@ -132,6 +134,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _diagnostics.record(kind: 'app_lifecycle', data: {'state': state.name}),
     );
     if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(productAnalyticsProvider).track('app_foreground'));
       _processNotifications();
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
