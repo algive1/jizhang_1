@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../account/application/account_auth_gate.dart';
+import '../../account/application/account_pending_intent.dart';
 import '../../account/application/account_session_controller.dart';
 import '../../account/domain/account_session_status.dart';
 import '../../../core/models/family.dart';
@@ -50,6 +52,40 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _joinInvitationWithGate() async {
+    final code = _code.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = '请输入邀请码');
+      return;
+    }
+    final intent = AccountPendingIntent(
+      id: 'join-shared:${DateTime.now().microsecondsSinceEpoch}',
+      action: AccountPendingAction.joinSharedLedger,
+      returnLocation: '/profile/family',
+    );
+    final allowed = await AccountAuthGate.requireLogin(
+      context,
+      ref,
+      reason: AccountAuthReason.sharedLedger,
+      intent: intent,
+    );
+    if (!mounted || !allowed) return;
+    final pending = ref.read(accountPendingIntentProvider).consume(intent.id);
+    if (pending == null) return;
+
+    await _run(() async {
+      final member = await ref
+          .read(familyServiceProvider)
+          .acceptInvitation(code);
+      _code.clear();
+      final joined =
+          (await ref.read(bookRepositoryProvider).getForUser('user-local'))
+              .firstWhere((b) => b.sharedId == member.familyId);
+      await ref.read(activeBookIdProvider.notifier).select(joined.id);
+      _loadedBook = null;
+    });
   }
 
   Future<void> _loadMembers() async {
@@ -209,8 +245,35 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                     ),
                 ],
               ),
-            )
-          else ...[
+            ),
+          if (user == null &&
+              accountStatus != AccountSessionStatus.initializing) ...[
+            const SizedBox(height: 12),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    '有邀请码？',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('输入邀请码后继续。需要账号时会先登录，成功后自动完成加入。'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _code,
+                    decoration: const InputDecoration(labelText: '邀请码'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _busy ? null : _joinInvitationWithGate,
+                    child: const Text('加入共享账本'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (user != null) ...[
             AppCard(
               child: Row(
                 children: [
@@ -533,25 +596,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _run(() async {
-                            final member = await ref
-                                .read(familyServiceProvider)
-                                .acceptInvitation(_code.text);
-                            _code.clear();
-                            final joined =
-                                (await ref
-                                        .read(bookRepositoryProvider)
-                                        .getForUser('user-local'))
-                                    .firstWhere(
-                                      (b) => b.sharedId == member.familyId,
-                                    );
-                            await ref
-                                .read(activeBookIdProvider.notifier)
-                                .select(joined.id);
-                            _loadedBook = null;
-                          }),
+                    onPressed: _busy ? null : _joinInvitationWithGate,
                     child: const Text('接受邀请'),
                   ),
                 ],
