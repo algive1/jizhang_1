@@ -61,11 +61,14 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
           })
           ..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(
-        ref.read(installationAgeRepositoryProvider).createdAt().catchError(
-          (Object _) => DateTime.now(),
-        ),
-      );
+      unawaited(() async {
+        try {
+          await ref.read(installationAgeRepositoryProvider).createdAt();
+        } on Object {
+          // Install-age tracking is conservative metadata and must never
+          // block startup when local storage is unavailable.
+        }
+      }());
       unawaited(ref.read(productAnalyticsProvider).track('app_open'));
       _processNotifications();
       _processRecurringAutoRecords();
