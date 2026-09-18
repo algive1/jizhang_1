@@ -88,7 +88,7 @@ class PersonalCloudBackupService {
     return result;
   }
   Future<PersonalCloudRestoreResult> downloadAndPrepareRestore() async {
-    final context = await _context(requireEnabled: false);
+    await _context(requireEnabled: false);
     final response = await api.request('/sync/snapshot/download');
     if (response['encoding'] != 'gzip+base64') {
       throw const FormatException('云端备份编码不受支持');
