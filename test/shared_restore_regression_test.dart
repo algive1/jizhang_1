@@ -31,7 +31,7 @@ void main() {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     final temp = await Directory.systemTemp.createTemp('shared-restore-');
     final server = await Process.start(
-      '/Users/algive/.local/node/node-v22.14.0-darwin-x64/bin/node',
+      Platform.environment['NODE_BINARY'] ?? 'node',
       ['server/node_modules/tsx/dist/cli.mjs', 'server/src/main.ts'],
       environment: {
         'PORT': '0',
