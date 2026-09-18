@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../analytics/product_analytics.dart';
 
 import '../../features/bookkeeping/presentation/quick_add_sheet.dart';
 import '../../features/voice/presentation/voice_bookkeeping_sheet.dart';
@@ -9,18 +12,45 @@ const _primaryAppRoutes = {'/', '/transactions', '/goals', '/profile'};
 
 bool isPrimaryAppRoute(String location) => _primaryAppRoutes.contains(location);
 
-class AppScaffold extends StatelessWidget {
+class AppScaffold extends ConsumerStatefulWidget {
   const AppScaffold({required this.location, required this.child, super.key});
 
   final String location;
   final Widget child;
 
   @override
+  ConsumerState<AppScaffold> createState() => _AppScaffoldState();
+}
+
+class _AppScaffoldState extends ConsumerState<AppScaffold> {
+  @override
+  void initState() {
+    super.initState();
+    _trackScreen();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location != widget.location) _trackScreen();
+  }
+
+  void _trackScreen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(productAnalyticsProvider).track(
+        'screen_view',
+        screen: widget.location,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final showGlobalEntryActions = isPrimaryAppRoute(location);
+    final showGlobalEntryActions = isPrimaryAppRoute(widget.location);
     return Scaffold(
       extendBody: true,
-      body: child,
+      body: widget.child,
       floatingActionButton: showGlobalEntryActions
           ? QuickAddButton(
               onPressed: () => showQuickAddSheet(context),
@@ -36,7 +66,7 @@ class AppScaffold extends StatelessWidget {
           ? const _CenteredDockedFabLocation(offsetY: 10)
           : null,
       bottomNavigationBar: showGlobalEntryActions
-          ? AppBottomNavigation(location: location)
+          ? AppBottomNavigation(location: widget.location)
           : null,
     );
   }
