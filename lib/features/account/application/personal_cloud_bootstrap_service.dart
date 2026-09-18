@@ -29,6 +29,8 @@ class PersonalCloudStatus {
     required this.hasSnapshot,
     required this.revision,
     required this.updatedAt,
+    required this.snapshotSize,
+    required this.snapshotSha256,
   });
 
   final bool exists;
@@ -37,6 +39,8 @@ class PersonalCloudStatus {
   final bool hasSnapshot;
   final int revision;
   final DateTime? updatedAt;
+  final int? snapshotSize;
+  final String? snapshotSha256;
 
   static PersonalCloudStatus fromJson(Map<String, dynamic> json) {
     final rawUpdated = json['updatedAt'];
@@ -49,6 +53,8 @@ class PersonalCloudStatus {
       updatedAt: rawUpdated is int
           ? DateTime.fromMillisecondsSinceEpoch(rawUpdated * 1000)
           : null,
+      snapshotSize: json['snapshotSize'] as int?,
+      snapshotSha256: json['snapshotSha256'] as String?,
     );
   }
 }
