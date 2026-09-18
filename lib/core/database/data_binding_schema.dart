@@ -66,7 +66,7 @@ extension DeviceDataBindingStore on AppDatabase {
 
     return DeviceDataBinding(
       datasetId: row.read<String>('dataset_id'),
-      boundUserId: row.readNullable<String>('bound_user_id'),
+      boundUserId: row.data['bound_user_id'] as String?,
       cloudSyncEnabled: row.read<int>('cloud_sync_enabled') == 1,
       boundAt: date(row.data['bound_at']),
       lastSyncAt: date(row.data['last_sync_at']),
