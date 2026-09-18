@@ -1,6 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+function formatMatchesSurface(
+  surface: 'splash' | 'homePromo' | 'profilePromo' | 'goalPromo' | 'aiReward',
+  format: 'splash' | 'native' | 'rewarded',
+) {
+  if (surface === 'splash') return format === 'splash';
+  if (surface === 'aiReward') return format === 'rewarded';
+  return format === 'native';
+}
+
 const placementSchema = z
   .strictObject({
     id: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,63}$/),
@@ -37,6 +46,13 @@ const placementSchema = z
     ]),
   })
   .superRefine((placement, ctx) => {
+    if (!formatMatchesSurface(placement.surface, placement.format)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['format'],
+        message: '广告类型与 Placement 位置不匹配',
+      });
+    }
     if (
       placement.startAt != null &&
       placement.endAt != null &&
@@ -90,22 +106,31 @@ const configSchema = z
 
 function configuredPlacements() {
   const raw = (process.env.ADS_PLACEMENTS_JSON ?? '').trim();
-  if (!raw) return [];
+  if (!raw) {
+    return {
+      configured: false,
+      placements: [] as z.infer<typeof placementSchema>[],
+    };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error('ADS_PLACEMENTS_JSON 不是有效 JSON');
   }
-  return configSchema.parse(parsed);
+  return {
+    configured: true,
+    placements: configSchema.parse(parsed),
+  };
 }
 
 export function registerAdConfigRoutes(app: FastifyInstance) {
   app.get('/api/v1/ads/placements', async () => {
-    const placements = configuredPlacements();
+    const config = configuredPlacements();
     return {
+      configured: config.configured,
       configVersion: process.env.ADS_CONFIG_VERSION?.trim() || 'local',
-      placements,
+      placements: config.placements,
     };
   });
 }
