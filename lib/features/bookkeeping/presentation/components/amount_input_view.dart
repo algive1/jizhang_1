@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../application/amount_input.dart';
+import 'bookkeeping_card_style.dart';
 
 class AmountInputView extends StatelessWidget {
   const AmountInputView({
@@ -15,11 +16,13 @@ class AmountInputView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     key: const ValueKey('quick-amount-input'),
-    height: 58,
-    padding: const EdgeInsets.symmetric(horizontal: 14),
+    height: BookkeepingCardStyle.amountHeight,
+    padding: const EdgeInsets.symmetric(
+      horizontal: BookkeepingCardStyle.amountHorizontalPadding,
+    ),
     decoration: BoxDecoration(
-      color: const Color(0xFFF3F3F3),
-      borderRadius: BorderRadius.circular(20),
+      color: BookkeepingCardStyle.amountBackground,
+      borderRadius: BorderRadius.circular(BookkeepingCardStyle.amountRadius),
     ),
     child: Row(
       children: [
