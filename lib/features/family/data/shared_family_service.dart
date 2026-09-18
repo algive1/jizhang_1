@@ -9,6 +9,15 @@ class SharedFamilyService implements FamilyService {
   final SharedBookSyncService sync;
   @override
   Future<void> enableSharing(String bookId) => sync.enableSharing(bookId);
+  Future<Json> _request(
+    String path, {
+    String method = 'GET',
+    Object? body,
+  }) async {
+    await sync.session.initialize();
+    return sync.api.request(path, method: method, body: body);
+  }
+
   FamilyInvitation _invitation(Json data) => FamilyInvitation(
     id: data['id'] as String,
     familyId: data['book_id'] as String,
@@ -34,7 +43,7 @@ class SharedFamilyService implements FamilyService {
   }) async {
     if (validFor != const Duration(days: 7)) throw ArgumentError('本轮邀请统一为七天有效');
     return _invitation(
-      await sync.api.request(
+      await _request(
         '/books/$familyId/invitations',
         method: 'POST',
         body: {},
@@ -44,7 +53,7 @@ class SharedFamilyService implements FamilyService {
 
   @override
   Future<FamilyMember> acceptInvitation(String code) async {
-    final snapshot = await sync.api.request(
+    final snapshot = await _request(
       '/invitations/accept',
       method: 'POST',
       body: {'code': code.trim()},
@@ -75,19 +84,19 @@ class SharedFamilyService implements FamilyService {
           )
           .toList();
   Future<List<Json>> memberDetails(String familyId) async =>
-      (await sync.api.request(
+      (await _request(
         '/books/$familyId/members',
       ))['members'].cast<Json>();
   @override
   Future<List<FamilyInvitation>> invitations(String familyId) async =>
-      ((await sync.api.request('/books/$familyId/invitations'))['invitations']
+      ((await _request('/books/$familyId/invitations'))['invitations']
               as List)
           .cast<Json>()
           .map(_invitation)
           .toList();
   @override
   Future<void> revokeInvitation(String familyId, String invitationId) async {
-    await sync.api.request(
+    await _request(
       '/books/$familyId/invitations/$invitationId',
       method: 'DELETE',
     );
@@ -100,7 +109,7 @@ class SharedFamilyService implements FamilyService {
     FamilyRole role,
   ) async {
     if (role == FamilyRole.owner) throw ArgumentError('当前不支持所有权转让');
-    await sync.api.request(
+    await _request(
       '/books/$familyId/members/$userId',
       method: 'PATCH',
       body: {'role': role.name},
@@ -110,7 +119,7 @@ class SharedFamilyService implements FamilyService {
 
   @override
   Future<void> removeMember(String familyId, String userId) async {
-    await sync.api.request(
+    await _request(
       '/books/$familyId/members/$userId',
       method: 'DELETE',
     );
