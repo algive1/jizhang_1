@@ -150,6 +150,58 @@ test('personal cloud bootstrap keeps one canonical dataset per account', async (
   });
   assert.equal(stale.statusCode, 409);
 
+  const attachmentBytes = Buffer.from('receipt-image-bytes');
+  const packageV2 = gzipSync(
+    Buffer.from(
+      JSON.stringify({
+        format: 'haohao-cloud-v2',
+        database: sqlite.toString('base64'),
+        attachments: [
+          {
+            id: 'attachment-cloud-test',
+            name: 'receipt.jpg',
+            content: attachmentBytes.toString('base64'),
+          },
+        ],
+      }),
+      'utf8',
+    ),
+  ).toString('base64');
+
+  const uploadedV2 = await app.inject({
+    method: 'POST',
+    url: '/api/v1/sync/snapshot',
+    headers: authA,
+    payload: {
+      datasetId: datasetA,
+      baseRevision: 1,
+      encoding: 'gzip+base64+json-v2',
+      snapshot: packageV2,
+    },
+  });
+  assert.equal(uploadedV2.statusCode, 200);
+  const uploadedV2Body = uploadedV2.json() as any;
+  assert.equal(uploadedV2Body.revision, 2);
+  assert.equal(uploadedV2Body.snapshotSize, sqlite.length + attachmentBytes.length);
+
+  const downloadedV2 = await app.inject({
+    method: 'GET',
+    url: '/api/v1/sync/snapshot/download',
+    headers: authA,
+  });
+  assert.equal(downloadedV2.statusCode, 200);
+  const downloadedV2Body = downloadedV2.json() as any;
+  assert.equal(downloadedV2Body.encoding, 'gzip+base64+json-v2');
+  const restoredPackage = JSON.parse(
+    gunzipSync(Buffer.from(downloadedV2Body.snapshot, 'base64')).toString('utf8'),
+  );
+  assert.equal(restoredPackage.format, 'haohao-cloud-v2');
+  assert.deepEqual(Buffer.from(restoredPackage.database, 'base64'), sqlite);
+  assert.deepEqual(
+    Buffer.from(restoredPackage.attachments[0].content, 'base64'),
+    attachmentBytes,
+  );
+
   const secondDevice = await app.inject({
     method: 'POST',
     url: '/api/v1/sync/bootstrap',

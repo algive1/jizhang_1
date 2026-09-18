@@ -22,6 +22,75 @@ type DatasetRow = {
 };
 
 const datasetId = z.string().regex(/^[a-f0-9]{32}$/);
+const snapshotEncoding = z.enum(['gzip+base64', 'gzip+base64+json-v2']);
+const snapshotPackageV2 = z.strictObject({
+  format: z.literal('haohao-cloud-v2'),
+  database: z.string().min(1),
+  attachments: z.array(
+    z.strictObject({
+      id: z.string().min(1).max(200),
+      name: z.string().max(255),
+      content: z.string().nullable(),
+    }),
+  ).max(2000),
+});
+
+function unpackSnapshot(compressed: Buffer, encoding: z.infer<typeof snapshotEncoding>) {
+  let unpacked: Buffer;
+  try {
+    unpacked = gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 });
+  } catch {
+    check(false, '云端备份内容无效', 400);
+    throw new Error('unreachable');
+  }
+
+  if (encoding === 'gzip+base64') {
+    check(
+      unpacked.subarray(0, 16).toString('binary') === 'SQLite format 3\u0000',
+      '云端备份不是有效的好好记账数据库',
+      400,
+    );
+    return { sqlite: unpacked, totalSize: unpacked.length };
+  }
+
+  let rawPackage: unknown;
+  try {
+    rawPackage = JSON.parse(unpacked.toString('utf8'));
+  } catch {
+    check(false, '云端附件备份格式无效', 400);
+    throw new Error('unreachable');
+  }
+  const packageV2 = snapshotPackageV2.parse(rawPackage);
+  const sqlite = Buffer.from(packageV2.database, 'base64');
+  check(
+    sqlite.subarray(0, 16).toString('binary') === 'SQLite format 3\u0000',
+    '云端备份不是有效的好好记账数据库',
+    400,
+  );
+  let totalSize = sqlite.length;
+  for (const attachment of packageV2.attachments) {
+    if (attachment.content != null) {
+      totalSize += Buffer.from(attachment.content, 'base64').length;
+    }
+  }
+  check(totalSize <= 48 * 1024 * 1024, '账务与附件备份解压后过大', 413);
+  return { sqlite, totalSize };
+}
+
+function detectSnapshotEncoding(compressed: Buffer): z.infer<typeof snapshotEncoding> {
+  try {
+    const unpacked = gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 });
+    if (unpacked.subarray(0, 16).toString('binary') === 'SQLite format 3\u0000') {
+      return 'gzip+base64';
+    }
+    const value = JSON.parse(unpacked.toString('utf8')) as { format?: unknown };
+    if (value?.format === 'haohao-cloud-v2') return 'gzip+base64+json-v2';
+  } catch {
+    // Existing corrupt data is rejected below with a stable API message.
+  }
+  check(false, '云端备份内容无效', 500);
+  throw new Error('unreachable');
+}
 
 function hasCloudEntitlement(store: Store, userId: string) {
   const row = store.db
@@ -82,7 +151,7 @@ export function registerPersonalCloudRoutes(
     return {
       datasetId: row.dataset_id,
       revision: row.revision,
-      encoding: 'gzip+base64',
+      encoding: detectSnapshotEncoding(row.snapshot_blob),
       snapshot: row.snapshot_blob.toString('base64'),
       snapshotSize: row.snapshot_size,
       snapshotSha256: row.snapshot_sha256,
@@ -96,7 +165,7 @@ export function registerPersonalCloudRoutes(
     const input = z.strictObject({
       datasetId,
       baseRevision: z.number().int().nonnegative(),
-      encoding: z.literal('gzip+base64'),
+      encoding: snapshotEncoding,
       snapshot: z.string().min(1).max(14_000_000),
     }).parse(req.body);
 
@@ -109,25 +178,13 @@ export function registerPersonalCloudRoutes(
 
     const compressed = Buffer.from(input.snapshot, 'base64');
     check(compressed.length <= 10 * 1024 * 1024, '云端备份暂时不能超过 10MB（压缩后）', 413);
-    let sqlite: Buffer;
-    try {
-      sqlite = gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 });
-    } catch {
-      check(false, '云端备份内容无效', 400);
-      return;
-    }
-    check(
-      sqlite.subarray(0, 16).toString('binary') === 'SQLite format 3\u0000',
-      '云端备份不是有效的好好记账数据库',
-      400,
-    );
-
-    const sha256 = createHash('sha256').update(sqlite).digest('hex');
+    const unpacked = unpackSnapshot(compressed, input.encoding);
+    const sha256 = createHash('sha256').update(unpacked.sqlite).digest('hex');
     const revision = row.revision + 1;
     const now = store.now();
     store.db.prepare(
       'UPDATE cloud_datasets SET revision=?,has_snapshot=1,snapshot_blob=?,snapshot_sha256=?,snapshot_size=?,updated_at=? WHERE user_id=?',
-    ).run(revision, compressed, sha256, sqlite.length, now, user.id);
+    ).run(revision, compressed, sha256, unpacked.totalSize, now, user.id);
 
     const updated = store.db
       .prepare('SELECT * FROM cloud_datasets WHERE user_id=?')
