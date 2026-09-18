@@ -108,12 +108,23 @@ abstract final class SecureSessionStorageKeys {
 /// 会员、支付、助手和诊断代码全部无需修改。
 class SessionRepository {
   SessionRepository(
-    this.api,
-    this.database, {
+    SharedApi api,
+    AppDatabase database, {
     SessionStorage? storage,
     AccountSessionController? controller,
-  }) : storage = storage ?? const SecureSessionStorage(),
-       _controller = controller;
+  }) : this._(
+         api,
+         database,
+         storage ?? const SecureSessionStorage(),
+         controller,
+       );
+
+  SessionRepository._(
+    this.api,
+    this.database,
+    this.storage,
+    this._controller,
+  );
 
   final SharedApi api;
   final AppDatabase database;
