@@ -12,6 +12,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 part 'app_database.g.dart';
 part 'book_scope_migration.dart';
+part 'data_binding_schema.dart';
 part 'shared_sync_schema.dart';
 
 @DataClassName('AccountEntity')
@@ -734,7 +735,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -924,11 +925,15 @@ class AppDatabase extends _$AppDatabase {
           await migrator.createTable(investmentSnapshotEntries);
           await _createInvestmentIndexes();
         }
+        if (from < 19) {
+          await ensureDataBindingSchema();
+        }
       });
     },
     beforeOpen: (details) async {
       await _createScopeIndexes();
       await installSyncSchema();
+      await ensureDataBindingSchema();
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
