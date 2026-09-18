@@ -39,6 +39,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   late final OperationLogService _diagnostics;
   late final SessionRepository _sessionRepository;
   bool _updateDialogVisible = false;
+  bool _initialUpdateCheckScheduled = false;
 
   @override
   void initState() {
@@ -62,7 +63,6 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
-      _checkForAppUpdate();
       unawaited(const FinanceSchedulerBridge().scheduleDaily());
       final sync = ref.read(sharedBookSyncProvider);
       unawaited(
@@ -337,6 +337,13 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         debugShowCheckedModeBanner: false,
         home: StartupPoster(),
       );
+    }
+
+    if (!_initialUpdateCheckScheduled) {
+      _initialUpdateCheckScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _checkForAppUpdate();
+      });
     }
 
     return MaterialApp.router(
