@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +19,43 @@ import 'shared_api.dart';
 ///
 /// 字段保持不变，避免个人中心、共享账本、会员与支付页面为了账户体系改动 UI。
 /// 新代码应优先使用 `AccountUser`。
+class AccountDeviceSession {
+  const AccountDeviceSession({
+    required this.id,
+    required this.deviceName,
+    required this.expiresAt,
+    required this.current,
+    this.createdAt,
+    this.lastSeenAt,
+  });
+
+  final String id;
+  final String deviceName;
+  final DateTime? createdAt;
+  final DateTime? lastSeenAt;
+  final DateTime expiresAt;
+  final bool current;
+
+  static AccountDeviceSession? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final json = value.cast<String, dynamic>();
+    final id = json['id'];
+    final expires = json['expiresAt'];
+    if (id is! String || expires is! int) return null;
+    DateTime? seconds(Object? raw) => raw is int
+        ? DateTime.fromMillisecondsSinceEpoch(raw * 1000)
+        : null;
+    return AccountDeviceSession(
+      id: id,
+      deviceName: json['deviceName'] as String? ?? '设备',
+      createdAt: seconds(json['createdAt']),
+      lastSeenAt: seconds(json['lastSeenAt']),
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(expires * 1000),
+      current: json['current'] == true,
+    );
+  }
+}
+
 class SessionUser {
   const SessionUser(this.id, this.username);
   final String id;
@@ -209,6 +247,11 @@ class SessionRepository {
         'username': username,
         'password': password,
         if (register && displayName != null) 'displayName': displayName,
+        'deviceName': Platform.isIOS
+            ? 'iPhone / iPad'
+            : Platform.isAndroid
+            ? 'Android 设备'
+            : '好好记账客户端',
       },
     );
     final token = data['token'];
@@ -227,6 +270,117 @@ class SessionRepository {
     );
     api.sessionToken = token;
     await database.setSyncActor(account.id);
+  }
+
+  Future<AccountUser> updateDisplayName(String displayName) async {
+    await initialize();
+    final data = await api.request(
+      '/account/profile',
+      method: 'PATCH',
+      body: {'displayName': displayName.trim()},
+    );
+    final account = AccountUser.fromJson(data['user']);
+    if (account == null) {
+      throw const SharedApiException(0, '账号资料响应无效');
+    }
+    await _resolveController().replaceUser(account);
+    return account;
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await initialize();
+    await api.request(
+      '/auth/change-password',
+      method: 'POST',
+      body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
+  }
+
+  Future<String> rotateRecoveryKey() async {
+    await initialize();
+    final data = await api.request(
+      '/auth/recovery-key/rotate',
+      method: 'POST',
+      body: {},
+    );
+    final key = data['recoveryKey'];
+    if (key is! String || key.isEmpty) {
+      throw const SharedApiException(0, '恢复密钥生成失败');
+    }
+    return key;
+  }
+
+  Future<List<AccountDeviceSession>> deviceSessions() async {
+    await initialize();
+    final data = await api.request('/auth/sessions');
+    final rows = (data['sessions'] as List? ?? const []);
+    return rows
+        .map(AccountDeviceSession.fromJson)
+        .whereType<AccountDeviceSession>()
+        .toList(growable: false);
+  }
+
+  Future<void> revokeDeviceSession(AccountDeviceSession session) async {
+    await initialize();
+    await api.request(
+      '/auth/sessions/${session.id}',
+      method: 'DELETE',
+    );
+    if (session.current) await invalidate();
+  }
+
+  Future<void> logoutAll() async {
+    await initialize();
+    try {
+      await api.request('/auth/logout-all', method: 'POST', body: {});
+    } finally {
+      await invalidate();
+    }
+  }
+
+  Future<String> recoverAccount({
+    required String username,
+    required String recoveryKey,
+    required String newPassword,
+  }) async {
+    final data = await api.request(
+      '/auth/recover',
+      method: 'POST',
+      body: {
+        'username': username.trim().toLowerCase(),
+        'recoveryKey': recoveryKey.trim(),
+        'newPassword': newPassword,
+        'deviceName': Platform.isIOS
+            ? 'iPhone / iPad'
+            : Platform.isAndroid
+            ? 'Android 设备'
+            : '好好记账客户端',
+      },
+    );
+    final token = data['token'];
+    final expiresAt = data['expiresAt'];
+    final account = AccountUser.fromJson(data['user']);
+    final nextRecoveryKey = data['recoveryKey'];
+    if (token is! String ||
+        expiresAt is! int ||
+        account == null ||
+        nextRecoveryKey is! String) {
+      throw const SharedApiException(0, '账号恢复响应无效');
+    }
+    await _resolveController().signIn(
+      user: account,
+      token: token,
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000),
+    );
+    api.sessionToken = token;
+    await database.setSyncActor(account.id);
+    return nextRecoveryKey;
   }
 
   /// 服务端登出，并清理本地会话。
