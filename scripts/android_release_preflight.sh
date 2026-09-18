@@ -86,6 +86,7 @@ TRACKED_KEYS="$(git ls-files '*.jks' '*.keystore' || true)"
 API_BASE_URL="${SHARED_API_BASE_URL:-}"
 [ -n "$API_BASE_URL" ] || fail "正式发布必须设置 SHARED_API_BASE_URL"
 [[ "$API_BASE_URL" == https://* ]] || fail "SHARED_API_BASE_URL 正式环境必须使用 HTTPS"
+[[ "$API_BASE_URL" != */ ]] || fail "SHARED_API_BASE_URL 末尾不能带 /，避免生成双斜杠 API 路径"
 case "$API_BASE_URL" in
   *127.0.0.1*|*localhost*|*10.0.2.2*)
     fail "SHARED_API_BASE_URL 不能指向本机或 Android 模拟器"
