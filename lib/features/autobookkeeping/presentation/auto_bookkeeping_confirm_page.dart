@@ -11,12 +11,12 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
-import '../../../core/widgets/app_card.dart';
 import '../../../core/platform/bookkeeping_feedback.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
+import '../../bookkeeping/presentation/components/bookkeeping_card_style.dart';
 import '../auto_bookkeeping_pending.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
@@ -177,157 +177,296 @@ class _AutoBookkeepingConfirmPageState
     final selectedAccountId = _validAccountId(accounts);
     final selectedCategoryId = _validCategoryId(expenseCategories);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+    return Stack(
+      key: const ValueKey('auto-confirm-stage'),
+      fit: StackFit.expand,
       children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: _close,
-              tooltip: '忽略这笔账单',
-              icon: const Icon(Icons.close),
-            ),
-            const SizedBox(width: 4),
-            Text('确认记一笔', style: Theme.of(context).textTheme.headlineSmall),
-          ],
-        ),
-        const SizedBox(height: 12),
-        AppCard(
-          color: AppColors.primarySoft,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '已识别支付结果',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '¥${(candidate.amountInCents / 100).toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: AppColors.expense,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
+        const ColoredBox(color: Color(0x1A000000)),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: FractionallySizedBox(
+            key: const ValueKey('auto-confirm-sheet'),
+            heightFactor: BookkeepingCardStyle.autoConfirmHeightFactor,
+            widthFactor: 1,
+            child: Material(
+              color: AppColors.background,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(BookkeepingCardStyle.sheetRadius),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                candidate.merchant,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${_sourceLabel(candidate.sourceApp)} · ${DateFormat('yyyy-MM-dd HH:mm').format(candidate.timestamp)}',
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        AppCard(
-          child: Material(
-            color: Colors.transparent,
-            child: Column(
-              children: [
-                AppSelect<String>(
-                  initialValue: selectedBookId,
-                  decoration: const InputDecoration(labelText: '账本'),
-                  items: [
-                    for (final book in books)
-                      DropdownMenuItem(value: book.id, child: Text(book.name)),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (value) => setState(() {
-                          _bookId = value;
-                          _accountId = null;
-                          _categoryId = null;
-                        }),
-                ),
-                const SizedBox(height: 12),
-                AppSelect<String>(
-                  initialValue: selectedAccountId,
-                  decoration: const InputDecoration(labelText: '支付账户'),
-                  items: [
-                    for (final account in accounts)
-                      DropdownMenuItem(
-                        value: account.id,
-                        child: Text(account.displayName),
-                      ),
-                  ],
-                  onChanged: _saving || selectedBook == null
-                      ? null
-                      : (value) => setState(() => _accountId = value),
-                ),
-                const SizedBox(height: 12),
-                AppSelect<String>(
-                  initialValue: selectedCategoryId,
-                  decoration: const InputDecoration(labelText: '支出分类'),
-                  items: [
-                    for (final category in expenseCategories)
-                      DropdownMenuItem(
-                        value: category.id,
-                        child: Text(category.name),
-                      ),
-                  ],
-                  onChanged: _saving || selectedBook == null
-                      ? null
-                      : (value) => setState(() => _categoryId = value),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_message != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(
-              _message!,
-              style: const TextStyle(color: AppColors.warning),
-            ),
-          ),
-        const SizedBox(height: 14),
-        FilledButton.icon(
-          onPressed: _saving || selectedBook == null
-              ? null
-              : () {
-                  final account = accounts
-                      .where((item) => item.id == selectedAccountId)
-                      .firstOrNull;
-                  final category = expenseCategories
-                      .where((item) => item.id == selectedCategoryId)
-                      .firstOrNull;
-                  if (account == null || category == null) {
-                    setState(() => _message = '请选择支付账户和支出分类');
-                    return;
-                  }
-                  unawaited(
-                    _save(
-                      bookId: selectedBookId,
-                      account: account,
-                      category: category,
+              child: SafeArea(
+                top: false,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: _saving ? null : _close,
+                          tooltip: '忽略这笔账单',
+                          constraints: const BoxConstraints.tightFor(
+                            width: 44,
+                            height: 44,
+                          ),
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '确认记一笔',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        const Text(
+                          '自动识别',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                },
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.check),
-          label: Text(_saving ? '保存中…' : '确认并完成'),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _saving ? null : _close,
-          child: const Text('忽略这笔识别结果'),
+                    const SizedBox(height: 8),
+                    Container(
+                      key: const ValueKey('auto-confirm-entry-card'),
+                      padding: BookkeepingCardStyle.outerPadding,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(
+                          BookkeepingCardStyle.outerRadius,
+                        ),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.receipt_long_outlined,
+                                size: 18,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  candidate.merchant,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _sourceLabel(candidate.sourceApp),
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(
+                            height: BookkeepingCardStyle.sectionGap,
+                          ),
+                          Container(
+                            key: const ValueKey('auto-confirm-amount'),
+                            height: BookkeepingCardStyle.amountHeight,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal:
+                                  BookkeepingCardStyle.amountHorizontalPadding,
+                            ),
+                            decoration: BoxDecoration(
+                              color: BookkeepingCardStyle.amountBackground,
+                              borderRadius: BorderRadius.circular(
+                                BookkeepingCardStyle.amountRadius,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '¥${(candidate.amountInCents / 100).toStringAsFixed(2)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.fade,
+                                    softWrap: false,
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  DateFormat('HH:mm').format(
+                                    candidate.timestamp,
+                                  ),
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(
+                            height: BookkeepingCardStyle.sectionGap,
+                          ),
+                          AppSelect<String>(
+                            initialValue: selectedBookId,
+                            decoration: const InputDecoration(
+                              labelText: '账本',
+                              isDense: true,
+                            ),
+                            items: [
+                              for (final book in books)
+                                DropdownMenuItem(
+                                  value: book.id,
+                                  child: Text(book.name),
+                                ),
+                            ],
+                            onChanged: _saving
+                                ? null
+                                : (value) => setState(() {
+                                    _bookId = value;
+                                    _accountId = null;
+                                    _categoryId = null;
+                                  }),
+                          ),
+                          const SizedBox(
+                            height: BookkeepingCardStyle.rowGap,
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AppSelect<String>(
+                                  initialValue: selectedAccountId,
+                                  decoration: const InputDecoration(
+                                    labelText: '支付账户',
+                                    isDense: true,
+                                  ),
+                                  items: [
+                                    for (final account in accounts)
+                                      DropdownMenuItem(
+                                        value: account.id,
+                                        child: Text(account.displayName),
+                                      ),
+                                  ],
+                                  onChanged:
+                                      _saving || selectedBook == null
+                                      ? null
+                                      : (value) => setState(
+                                          () => _accountId = value,
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(
+                                width: BookkeepingCardStyle.rowGap,
+                              ),
+                              Expanded(
+                                child: AppSelect<String>(
+                                  initialValue: selectedCategoryId,
+                                  decoration: const InputDecoration(
+                                    labelText: '支出分类',
+                                    isDense: true,
+                                  ),
+                                  items: [
+                                    for (final category
+                                        in expenseCategories)
+                                      DropdownMenuItem(
+                                        value: category.id,
+                                        child: Text(category.name),
+                                      ),
+                                  ],
+                                  onChanged:
+                                      _saving || selectedBook == null
+                                      ? null
+                                      : (value) => setState(
+                                          () => _categoryId = value,
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_message != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _message!,
+                          style: const TextStyle(
+                            color: AppColors.warning,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 46,
+                      child: FilledButton.icon(
+                        onPressed: _saving || selectedBook == null
+                            ? null
+                            : () {
+                                final account = accounts
+                                    .where(
+                                      (item) =>
+                                          item.id == selectedAccountId,
+                                    )
+                                    .firstOrNull;
+                                final category = expenseCategories
+                                    .where(
+                                      (item) =>
+                                          item.id == selectedCategoryId,
+                                    )
+                                    .firstOrNull;
+                                if (account == null || category == null) {
+                                  setState(
+                                    () => _message = '请选择支付账户和支出分类',
+                                  );
+                                  return;
+                                }
+                                unawaited(
+                                  _save(
+                                    bookId: selectedBookId,
+                                    account: account,
+                                    category: category,
+                                  ),
+                                );
+                              },
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.check_rounded),
+                        label: Text(_saving ? '保存中…' : '确认并完成'),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 38,
+                      child: TextButton(
+                        onPressed: _saving ? null : _close,
+                        child: const Text('忽略这笔识别结果'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
-  }
 
   String? _validAccountId(List<Account> accounts) {
     if (accounts.any((item) => item.id == _accountId)) return _accountId;
