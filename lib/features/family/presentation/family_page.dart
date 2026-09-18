@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../account/application/account_session_controller.dart';
+import '../../account/domain/account_session_status.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../books/data/book_repository.dart';
@@ -23,18 +25,14 @@ class FamilyPage extends ConsumerStatefulWidget {
 }
 
 class _FamilyPageState extends ConsumerState<FamilyPage> {
-  final _username = TextEditingController(),
-      _password = TextEditingController(),
-      _code = TextEditingController();
-  bool _register = false, _busy = false;
+  final _code = TextEditingController();
+  bool _busy = false;
   String? _error;
   List<Json> _members = [];
   List<FamilyInvitation> _invitations = [];
   String? _loadedBook;
   @override
   void dispose() {
-    _username.dispose();
-    _password.dispose();
     _code.dispose();
     super.dispose();
   }
@@ -90,7 +88,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
       false;
   @override
   Widget build(BuildContext context) {
-    final userState = ref.watch(sessionProvider), user = userState.value;
+    final accountState = ref.watch(accountSessionProvider);
+    final session = accountState.value;
+    final user = session?.user;
+    final accountStatus = session?.status ?? AccountSessionStatus.initializing;
     final book = ref.watch(activeBookProvider);
     final sync = ref.watch(activeSharedStateProvider).value;
     final pending = (sync?['pending'] as List? ?? []).cast<Json>();
@@ -146,7 +147,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
           ),
           const SizedBox(height: 12),
           if (_busy) const LinearProgressIndicator(),
-          if (_error != null || userState.hasError)
+          if (_error != null || accountState.hasError)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
@@ -154,60 +155,58 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                 style: const TextStyle(color: AppColors.warning),
               ),
             ),
-          if (user == null)
+          if (accountStatus == AccountSessionStatus.initializing)
+            const AppCard(
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('正在读取账户状态…')),
+                ],
+              ),
+            )
+          else if (user == null)
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    '登录后即可共享',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  Text(
+                    accountStatus == AccountSessionStatus.expired
+                        ? '登录状态已失效'
+                        : accountStatus == AccountSessionStatus.error
+                        ? '账户状态暂不可用'
+                        : '登录后即可共享',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('家庭和企业账本支持整本共享，不需要购买会员。个人账本继续保存在本机。'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _username,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: '用户名',
-                      helperText: '3–40 位小写字母、数字或下划线',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: '密码',
-                      helperText: '10–128 个字符',
-                    ),
+                  Text(
+                    accountStatus == AccountSessionStatus.expired
+                        ? '重新登录后可继续使用共享账本。本地个人账务数据不会受到影响。'
+                        : '家庭和企业账本支持整本共享。登录只建立服务器身份，不会自动上传或认领本地个人账务数据。',
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _run(() async {
-                            await ref
-                                .read(sessionRepositoryProvider)
-                                .authenticate(
-                                  username: _username.text,
-                                  password: _password.text,
-                                  register: _register,
-                                );
-                            _password.clear();
-                            await ref.read(sharedBookSyncProvider).sync();
-                          }),
-                    child: Text(_register ? '注册并登录' : '登录'),
+                    onPressed: _busy ? null : () => context.push('/account/login'),
+                    child: Text(
+                      accountStatus == AccountSessionStatus.expired
+                          ? '重新登录'
+                          : '登录',
+                    ),
                   ),
-                  TextButton(
-                    onPressed: _busy
-                        ? null
-                        : () => setState(() => _register = !_register),
-                    child: Text(_register ? '已有账号，去登录' : '创建新账号'),
-                  ),
+                  if (accountStatus != AccountSessionStatus.expired)
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => context.push('/account/register'),
+                      child: const Text('创建新账号'),
+                    ),
                 ],
               ),
             )
@@ -217,7 +216,22 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                 children: [
                   const Icon(Icons.account_circle_outlined),
                   const SizedBox(width: 10),
-                  Expanded(child: Text(user.username)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user.preferredName),
+                        if (user.preferredName != user.username)
+                          Text(
+                            '@${user.username}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   TextButton(
                     onPressed: _busy
                         ? null
@@ -390,7 +404,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                       for (final member in _members)
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(member['username'] as String),
+                          title: Text((member['display_name'] as String?)?.trim().isNotEmpty == true ? member['display_name'] as String : member['username'] as String),
                           subtitle: Text(switch (member['role']) {
                             'owner' => '所有者',
                             'admin' => '管理员',
