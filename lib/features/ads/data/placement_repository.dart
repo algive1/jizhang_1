@@ -357,10 +357,6 @@ final placementConfigRepositoryProvider = Provider<PlacementConfigRepository>(
   },
 );
 
-final installationAgeRepositoryProvider = Provider<InstallationAgeRepository>(
-  (ref) => InstallationAgeRepository(),
-);
-
 final adEventRepositoryProvider = Provider((ref) {
   return AdEventRepository(ref.watch(databaseProvider));
 });
