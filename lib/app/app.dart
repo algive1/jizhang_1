@@ -153,7 +153,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
             .checkIfDue();
         if (!mounted || decision == null) return;
         final dialogContext = rootNavigatorKey.currentContext;
-        if (dialogContext == null) return;
+        if (dialogContext == null || !dialogContext.mounted) return;
 
         _updateDialogVisible = true;
         await showDialog<void>(
