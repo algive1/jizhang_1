@@ -122,6 +122,12 @@ class DatasetBindingPage extends ConsumerWidget {
                     icon: const Icon(Icons.cloud_done_outlined),
                     label: const Text('检查云端状态'),
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _restoreCloudBackup(context, ref),
+                    icon: const Icon(Icons.restore_outlined),
+                    label: const Text('从云端恢复'),
+                  ),
                 ],
               ]
               else
@@ -169,21 +175,29 @@ class DatasetBindingPage extends ConsumerWidget {
           .bootstrap();
       if (!context.mounted) return;
       if (!result.datasetMatches) {
-        await showDialog<void>(
+        final restore = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('云端已有个人数据'),
             content: const Text(
-              '这个账号已经有另一份云端数据。当前本地数据不会被上传或覆盖；后续需要选择恢复或合并。',
+              '这个账号已经有另一份云端数据。当前本地数据不会上传。你可以从云端恢复；当前阶段不会自动合并两份数据。',
             ),
             actions: [
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('知道了'),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('暂不处理'),
               ),
+              if (result.hasSnapshot)
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('从云端恢复'),
+                ),
             ],
           ),
         );
+        if (restore == true && context.mounted) {
+          await _restoreCloudBackup(context, ref);
+        }
         return;
       }
       ref.invalidate(datasetBindingProvider);
@@ -256,6 +270,59 @@ class DatasetBindingPage extends ConsumerWidget {
           : '，${(result.snapshotSize! / 1024).toStringAsFixed(0)} KB';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('云端备份完成 · 版本 ${result.revision}$size')),
+      );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
+
+  static Future<void> _restoreCloudBackup(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('用云端备份恢复本机？'),
+        content: const Text(
+          '恢复后，当前本机账本会在下次启动时替换为云端备份。应用会先保留恢复前的数据库安全副本；当前本地未合并的数据不会自动合并到云端版本。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final result = await ref
+          .read(personalCloudBackupServiceProvider)
+          .downloadAndPrepareRestore();
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('云端恢复已准备'),
+          content: Text(
+            '已下载云端版本 ${result.revision}。请完全关闭并重新打开应用后生效。',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
       );
     } catch (error) {
       if (context.mounted) {
