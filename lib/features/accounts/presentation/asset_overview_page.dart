@@ -535,7 +535,7 @@ class _ChartPair extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      if (box.maxWidth < 300)
+      if (box.maxWidth < 380)
         return Column(
           children: [
             AssetDistribution(overview: selected, onTap: onDistribution),
