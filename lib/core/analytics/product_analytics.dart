@@ -9,7 +9,11 @@ import '../../features/sharing/data/session_repository.dart';
 import '../../features/sharing/data/shared_api.dart';
 
 class ProductAnalytics {
-  ProductAnalytics(this._api, this._settings);
+  ProductAnalytics(
+    this._api,
+    this._settings, {
+    this.autoFlush = true,
+  });
 
   static const enabledKey = 'analytics.enabled.v1';
   static const installationIdKey = 'analytics.installation_id.v1';
@@ -28,6 +32,7 @@ class ProductAnalytics {
 
   final SharedApi _api;
   final AppSettingsRepository _settings;
+  final bool autoFlush;
   bool _flushing = false;
 
   Future<bool> isEnabled() async {
@@ -63,11 +68,13 @@ class ProductAnalytics {
     }
     await _writeQueue(queue);
 
-    unawaited(
-      flush().catchError((Object _) {
-        // Product analytics is always best effort and must never block app use.
-      }),
-    );
+    if (autoFlush) {
+      unawaited(
+        flush().catchError((Object _) {
+          // Product analytics is always best effort and must never block app use.
+        }),
+      );
+    }
   }
 
   Future<void> flush() async {
