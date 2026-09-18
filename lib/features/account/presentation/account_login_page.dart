@@ -132,7 +132,7 @@ class _AccountLoginPageState extends ConsumerState<AccountLoginPage> {
                         final registered = await context.push<bool>(
                           '/account/register?gate=1',
                         );
-                        if (!mounted || registered != true) return;
+                        if (!context.mounted || registered != true) return;
                         if (context.canPop()) {
                           context.pop(true);
                         } else {
