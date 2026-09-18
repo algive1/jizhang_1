@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/analysis/presentation/analysis_page.dart';
+import '../../features/account/presentation/account_center_page.dart';
 import '../../features/account/presentation/account_login_page.dart';
+import '../../features/account/presentation/account_recovery_page.dart';
 import '../../features/account/presentation/account_register_page.dart';
 import '../../features/accounts/presentation/account_management_page.dart';
 import '../../features/accounts/presentation/asset_overview_page.dart';
@@ -51,6 +53,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/account/register',
         builder: (context, state) => const AccountRegisterPage(),
+      ),
+      GoRoute(
+        path: '/account/recover',
+        builder: (context, state) => const AccountRecoveryPage(),
       ),
       ShellRoute(
         builder: (context, state, child) =>
@@ -114,6 +120,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/profile',
             builder: (context, state) => const ProfilePage(),
             routes: [
+              GoRoute(
+                path: 'account',
+                builder: (context, state) => const AccountCenterPage(),
+              ),
               GoRoute(
                 path: 'data',
                 builder: (context, state) => const DataExportPage(),

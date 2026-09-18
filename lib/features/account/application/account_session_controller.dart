@@ -141,6 +141,14 @@ class AccountSessionController {
     _emit(session);
   }
 
+  Future<void> replaceUser(AccountUser user) async {
+    final current = _state;
+    if (!current.isAuthenticated || current.token == null) return;
+    final next = current.copyWith(user: user);
+    await _storage.write(next);
+    _emit(next);
+  }
+
   /// 服务器明确返回 401：标记失效，但保留身份信息用于展示“需要重新登录”。
   ///
   /// **被拒绝的 Token 必须同时从安全存储中删除**，只让 `expired` 存活在内存里：
