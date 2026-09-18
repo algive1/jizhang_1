@@ -9,6 +9,10 @@ plugins {
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.isFile
+val allowDebugReleaseSigning =
+    (System.getenv("ALLOW_DEBUG_RELEASE_SIGNING") ?: "")
+        .lowercase()
+        .let { it == "true" || it == "1" }
 
 if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use(keystoreProperties::load)
@@ -56,14 +60,13 @@ android {
 
     buildTypes {
         release {
-            // Local release builds remain installable before a private production
-            // keystore is supplied; publishing must use android/key.properties.
-            signingConfig =
-                if (hasReleaseKeystore) {
-                    signingConfigs.getByName("release")
-                } else {
-                    signingConfigs.getByName("debug")
-                }
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            } else if (allowDebugReleaseSigning) {
+                // Explicit local acceptance mode only. Production release tasks
+                // fail below when no private keystore is configured.
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }
@@ -82,3 +85,14 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }
+    .configureEach {
+        doFirst {
+            check(hasReleaseKeystore || allowDebugReleaseSigning) {
+                "Production Android Release requires android/key.properties and a private keystore. " +
+                    "For local performance/acceptance testing only, set ALLOW_DEBUG_RELEASE_SIGNING=true explicitly."
+            }
+        }
+    }
