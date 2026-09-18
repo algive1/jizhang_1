@@ -41,7 +41,7 @@ class AccountAuthGate {
       builder: (sheetContext) => _AuthGateSheet(reason: reason),
     );
     if (!context.mounted || choice == null) {
-      pending.clear(intent.id)
+      pending.clear(intent.id);
       return false;
     }
 
@@ -50,7 +50,7 @@ class AccountAuthGate {
         : '/account/login?gate=1';
     final signedIn = await context.push<bool>(path);
     if (!context.mounted || signedIn != true) {
-      ref.read(accountPendingIntentProvider).clear(intent.id);
+      pending.clear(intent.id);
       return false;
     }
 
@@ -59,7 +59,7 @@ class AccountAuthGate {
         session.accountStatus == AccountSessionStatus.authenticated &&
         session.accountUser != null;
     if (!allowed) {
-      ref.read(accountPendingIntentProvider).clear(intent.id);
+      pending.clear(intent.id);
     }
     return allowed;
   }
