@@ -2159,7 +2159,6 @@ class _QuickChip extends StatelessWidget {
     this.iconGap = 6,
     this.fontSize = 12.5,
     this.onTap,
-    this.onLongPress,
   });
 
   final String label;
@@ -2173,7 +2172,6 @@ class _QuickChip extends StatelessWidget {
   final double iconGap;
   final double fontSize;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2182,7 +2180,6 @@ class _QuickChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: height,
