@@ -53,6 +53,13 @@ const placementSchema = z
         message: '广告类型与 Placement 位置不匹配',
       });
     }
+    if (placement.surface === 'splash' && placement.dailyLimit !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['dailyLimit'],
+        message: '开屏广告每天最多一次',
+      });
+    }
     if (
       placement.startAt != null &&
       placement.endAt != null &&
