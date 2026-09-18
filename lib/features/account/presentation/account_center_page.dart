@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/database/app_database.dart';
 import '../../sharing/data/session_repository.dart';
 import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
@@ -163,7 +164,7 @@ class AccountCenterPage extends ConsumerWidget {
     );
   }
 
-  static IconData _cloudIcon(AsyncValue binding) {
+  static IconData _cloudIcon(AsyncValue<DeviceDataBinding> binding) {
     final value = binding.value;
     if (value == null) return Icons.cloud_outlined;
     if (value.hasRemoteUpdate) return Icons.cloud_download_outlined;
@@ -171,7 +172,7 @@ class AccountCenterPage extends ConsumerWidget {
     return Icons.cloud_off_outlined;
   }
 
-  static String _cloudSubtitle(AsyncValue binding) {
+  static String _cloudSubtitle(AsyncValue<DeviceDataBinding> binding) {
     if (binding.isLoading) return '正在读取同步状态…';
     if (binding.hasError) return '同步状态暂不可用';
     final value = binding.value;
