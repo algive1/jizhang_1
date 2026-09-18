@@ -51,6 +51,8 @@ jobs:
           test/app_update_service_test.dart
           test/product_analytics_test.dart
           test/push_registration_service_test.dart
+          test/ad_placement_test.dart
+          test/ad_placement_readiness_test.dart
 
   server-core:
     name: Server core checks
