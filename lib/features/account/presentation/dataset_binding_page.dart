@@ -366,6 +366,7 @@ class DatasetBindingPage extends ConsumerWidget {
       final status = await ref
           .read(personalCloudBootstrapServiceProvider)
           .status();
+      final localBinding = await ref.read(datasetBindingProvider.future);
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
@@ -374,7 +375,7 @@ class DatasetBindingPage extends ConsumerWidget {
           content: Text(
             status.datasetMatches
                 ? '云端版本 ${status.revision}，'
-                    '本机基线版本 ${(await ref.read(datasetBindingProvider.future)).lastCloudRevision}。'
+                    '本机基线版本 ${localBinding.lastCloudRevision}。'
                     '${status.hasSnapshot ? '已有云端备份。' : '尚未上传首份账务备份。'}'
                 : '账号云端存在另一份数据集，当前设备需要先恢复或合并。',
           ),
