@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 /// The full manual-entry page and the automatic-bookkeeping confirmation card
 /// intentionally share these values so later visual tuning stays in sync.
 abstract final class BookkeepingCardStyle {
+  static const double autoConfirmHeightFactor = .60;
+  static const double sheetRadius = 28;
   static const double outerRadius = 20;
   static const EdgeInsets outerPadding = EdgeInsets.fromLTRB(12, 10, 12, 12);
 
