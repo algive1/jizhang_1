@@ -1,5 +1,7 @@
 import '../../features/assistant/presentation/assistant_page.dart';
 
+import 'package:flutter/material.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,8 +45,11 @@ import '../../features/installments/presentation/installment_plans_page.dart';
 import '../../features/installments/presentation/installment_plan_detail_page.dart';
 import '../../core/widgets/app_scaffold.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     routes: [
       GoRoute(
