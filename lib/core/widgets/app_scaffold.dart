@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,9 +40,11 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
   void _trackScreen() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(productAnalyticsProvider).track(
-        'screen_view',
-        screen: widget.location,
+      unawaited(
+        ref.read(productAnalyticsProvider).track(
+          'screen_view',
+          screen: widget.location,
+        ),
       );
     });
   }
