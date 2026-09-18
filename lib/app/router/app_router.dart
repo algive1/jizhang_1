@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/analysis/presentation/analysis_page.dart';
+import '../../features/account/presentation/account_login_page.dart';
+import '../../features/account/presentation/account_register_page.dart';
 import '../../features/accounts/presentation/account_management_page.dart';
 import '../../features/accounts/presentation/asset_overview_page.dart';
 import '../../features/accounts/presentation/account_detail_page.dart';
@@ -42,6 +44,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     routes: [
+      GoRoute(
+        path: '/account/login',
+        builder: (context, state) => const AccountLoginPage(),
+      ),
+      GoRoute(
+        path: '/account/register',
+        builder: (context, state) => const AccountRegisterPage(),
+      ),
       ShellRoute(
         builder: (context, state, child) =>
             AppScaffold(location: state.uri.path, child: child),

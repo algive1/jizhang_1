@@ -9,6 +9,9 @@ import '../../../core/database/app_database.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/membership.dart';
+import '../../account/application/account_session_controller.dart';
+import '../../account/domain/account_session.dart';
+import '../../account/domain/account_session_status.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
@@ -33,7 +36,7 @@ class ProfilePage extends ConsumerWidget {
     final recurring = ref.watch(recurringBillsProvider);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider);
-    final user = ref.watch(sessionProvider);
+    final accountSession = ref.watch(accountSessionProvider);
     final activity = ProfileActivity(transactions.value ?? [], DateTime.now());
     void push(String route) => context.push(route);
     void calendar() => push('/transactions/calendar');
@@ -50,7 +53,7 @@ class ProfilePage extends ConsumerWidget {
       photos,
       recurring,
       membership,
-      user,
+      accountSession,
     ].where((s) => s.hasError);
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -92,9 +95,9 @@ class ProfilePage extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             ProfileHero(
-              name: user.value?.username ?? '本地用户',
+              name: _profileName(accountSession.value),
               days: transactions.hasValue ? '${activity.bookkeepingDays}' : '—',
-              onTap: () => _profile(context, user.value),
+              onTap: () => _profile(context, ref, accountSession.value),
             ),
             ProfileMembershipCard(
               snapshot: membership.value,
@@ -271,39 +274,106 @@ class ProfilePage extends ConsumerWidget {
         ),
       );
 
-  static void _profile(BuildContext context, SessionUser? user) =>
-      showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+  static String _profileName(AccountSession? session) {
+    final user = session?.user;
+    if (user != null) return user.preferredName;
+    return session?.status == AccountSessionStatus.initializing ? '正在读取账号…' : '本地使用中';
+  }
+
+  static void _profile(
+    BuildContext context,
+    WidgetRef ref,
+    AccountSession? session,
+  ) {
+    final status = session?.status ?? AccountSessionStatus.initializing;
+    final user = session?.user;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user?.preferredName ??
+                    (status == AccountSessionStatus.initializing
+                        ? '正在读取账号…'
+                        : '本地使用中'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              if (user != null) ...[
+                const SizedBox(height: 4),
                 Text(
-                  user?.username ?? '本地用户',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  user == null
-                      ? '当前使用本地记账。登录后可使用共享账本。'
-                      : '已登录共享账本账号。头像为应用默认头像。',
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    context.push('/profile/family');
-                  },
-                  child: Text(user == null ? '登录 / 注册' : '管理共享账本'),
+                  '@${user.username}',
+                  style: const TextStyle(color: AppColors.textSecondary),
                 ),
               ],
-            ),
+              const SizedBox(height: 12),
+              Text(
+                switch (status) {
+                  AccountSessionStatus.authenticated =>
+                    '已登录好好记账账号。退出登录不会删除本机的个人账务数据。',
+                  AccountSessionStatus.expired =>
+                    '登录状态已失效。重新登录后可继续使用会员和共享功能，本地记账不受影响。',
+                  AccountSessionStatus.error =>
+                    '暂时无法读取账户状态。本地记账仍可继续使用。',
+                  AccountSessionStatus.initializing => '正在读取账户状态…',
+                  AccountSessionStatus.guest =>
+                    '当前使用本地记账。登录后可使用会员、共享账本与后续云同步能力。',
+                },
+              ),
+              const SizedBox(height: 16),
+              if (status == AccountSessionStatus.authenticated) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      context.push('/profile/family');
+                    },
+                    child: const Text('管理共享账本'),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(sheetContext);
+                    await ref.read(sessionRepositoryProvider).logout();
+                  },
+                  child: const Text('退出登录'),
+                ),
+              ] else if (status == AccountSessionStatus.initializing)
+                const Center(child: CircularProgressIndicator())
+              else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      context.push('/account/login');
+                    },
+                    child: Text(
+                      status == AccountSessionStatus.expired ? '重新登录' : '登录',
+                    ),
+                  ),
+                ),
+                if (status != AccountSessionStatus.expired)
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      context.push('/account/register');
+                    },
+                    child: const Text('创建账号'),
+                  ),
+              ],
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 
   static void _settings(BuildContext context) => showModalBottomSheet<void>(
     context: context,

@@ -107,8 +107,24 @@ abstract final class SecureSessionStorageKeys {
 /// 网络交互（登录/注册/登出）与数据库 actor 同步，因此共享账本、
 /// 会员、支付、助手和诊断代码全部无需修改。
 class SessionRepository {
-  SessionRepository(this.api, this.database, {SessionStorage? storage})
-    : storage = storage ?? const SecureSessionStorage();
+  SessionRepository(
+    SharedApi api,
+    AppDatabase database, {
+    SessionStorage? storage,
+    AccountSessionController? controller,
+  }) : this._(
+         api,
+         database,
+         storage ?? const SecureSessionStorage(),
+         controller,
+       );
+
+  SessionRepository._(
+    this.api,
+    this.database,
+    this.storage,
+    this._controller,
+  );
 
   final SharedApi api;
   final AppDatabase database;
@@ -149,6 +165,9 @@ class SessionRepository {
     );
   }
 
+  /// 统一账户身份。新页面应读取它，而不是继续扩展旧 SessionUser。
+  AccountUser? get accountUser => _resolveController().user;
+
   /// 服务器 user_id，供会员、支付、共享与云同步统一使用。
   String? get userId => _resolveController().currentUserId;
 
@@ -180,12 +199,17 @@ class SessionRepository {
     required String username,
     required String password,
     bool register = false,
+    String? displayName,
   }) async {
     await initialize();
     final data = await api.request(
       '/auth/${register ? 'register' : 'login'}',
       method: 'POST',
-      body: {'username': username, 'password': password},
+      body: {
+        'username': username,
+        'password': password,
+        if (register && displayName != null) 'displayName': displayName,
+      },
     );
     final token = data['token'];
     final expiresAt = data['expiresAt'];
@@ -259,6 +283,7 @@ final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
   final repository = SessionRepository(
     ref.watch(sharedApiProvider),
     ref.watch(databaseProvider),
+    controller: ref.watch(accountSessionControllerProvider),
   );
   ref.onDispose(repository.dispose);
   return repository;

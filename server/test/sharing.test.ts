@@ -41,7 +41,7 @@ test('真实 HTTP 两客户端：重试、冲突、权限、隔离',async(t)=>{
 });
 test('批量原子性、校准版本、负余额、邀请过期、共享额度',async(t)=>{
  const {app,store}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
- for(const id of ['owner','guest'])store.db.prepare('INSERT INTO users VALUES(?,?,?,?)').run(id,id,'unused',now);
+ for(const id of ['owner','guest'])store.db.prepare('INSERT INTO users(id,username,password_hash,created_at) VALUES(?,?,?,?)').run(id,id,'unused',now);
  const book='family';store.create('owner',book,'家庭','family',[{kind:'accounts',id:'cash',data:account(book)}]);
  assert.throws(()=>store.mutate(book,'owner',[op('transactions',tx(book,'good')),op('transactions',{...tx(book,'bad'),account_id:'missing'})]));
  assert.equal(store.all(book,'transactions').length,0);assert.equal((store.db.prepare('SELECT COUNT(*) n FROM operations').get() as {n:number}).n,0);
@@ -54,7 +54,7 @@ test('批量原子性、校准版本、负余额、邀请过期、共享额度',
 
 test('服务端拒绝已删除原流水继续被关联',async(t)=>{
  const {app,store}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
- store.db.prepare('INSERT INTO users VALUES(?,?,?,?)').run('owner','owner','unused',now);
+ store.db.prepare('INSERT INTO users(id,username,password_hash,created_at) VALUES(?,?,?,?)').run('owner','owner','unused',now);
  const book='relation-book';store.create('owner',book,'家庭','family',[{kind:'accounts',id:'cash',data:account(book)}]);
  const original=tx(book,'original',500);
  store.mutate(book,'owner',[op('transactions',original)]);
@@ -64,4 +64,23 @@ test('服务端拒绝已删除原流水继续被关联',async(t)=>{
  store.mutate(book,'owner',[op('transactions',{...refund,deleted_at:now+2,updated_at:now+2},1)]);
  store.mutate(book,'owner',[op('transactions',{...original,deleted_at:now+3,updated_at:now+3},1)]);
  assert.equal(store.get(book,'transactions','original')?.data.deleted_at,now+3);
+});
+
+
+test('账户昵称随注册、登录和 me 返回，旧注册请求仍兼容',async(t)=>{
+ const {app}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
+ const registered=await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username:'named_user',password:'local-test-password',displayName:'小陆'}});
+ assert.equal(registered.statusCode,201);
+ const first=registered.json() as any;
+ assert.equal(first.user.username,'named_user');
+ assert.equal(first.user.displayName,'小陆');
+ const login=await app.inject({method:'POST',url:'/api/v1/auth/login',payload:{username:'named_user',password:'local-test-password'}});
+ assert.equal(login.statusCode,200);
+ assert.equal((login.json() as any).user.displayName,'小陆');
+ const me=await app.inject({method:'GET',url:'/api/v1/auth/me',headers:{authorization:`Bearer ${first.token}`}});
+ assert.equal(me.statusCode,200);
+ assert.equal((me.json() as any).user.displayName,'小陆');
+ const legacy=await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username:'legacy_user',password:'local-test-password'}});
+ assert.equal(legacy.statusCode,201);
+ assert.equal((legacy.json() as any).user.displayName,null);
 });

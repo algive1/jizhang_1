@@ -98,6 +98,7 @@ StubResponse Function(StubRequest request) accountRoutes({
   StubResponse books = StubResponse.unauthorized,
   String userId = 'server-user-id',
   String username = 'lu_2026',
+  String? displayName,
   String token = 'server-token-1',
   int validDays = 30,
 }) => (request) => switch (request.path) {
@@ -106,7 +107,11 @@ StubResponse Function(StubRequest request) accountRoutes({
     'expiresAt':
         DateTime.now().add(Duration(days: validDays)).millisecondsSinceEpoch ~/
         1000,
-    'user': {'id': userId, 'username': username},
+    'user': {
+      'id': userId,
+      'username': username,
+      'displayName': displayName,
+    },
   }),
   '/api/v1/auth/logout' => const StubResponse(200),
   '/api/v1/books' => books,
