@@ -6,6 +6,79 @@
 
 ---
 
+## 零、补记：Phase 1 落地到 Git 正式工程（本轮）
+
+### 0.1 问题
+
+Phase 1 的**设计文档写在了 Git 根目录**（`docs/development/2026-09-18-account-phase1-foundation.md`），
+但**源码却落在了被 `.gitignore` 排除的源码快照目录 `jizhang_app/`** 里：
+
+```
+/lib/features/account/                     ← 不存在
+/jizhang_app/lib/features/account/         ← 5 个文件都在这里（不跟踪）
+```
+
+结果 GitHub `main` 分支上只有文档、没有实现：`lib/features/sharing/data/session_repository.dart`
+仍是旧实现（只用 `shared_ledger_session_v1`），`SharedBookSyncService` 的 401 仍直接
+`session.invalidate()`，也没有 `AccountSessionController`。
+
+### 0.2 本轮处理
+
+以 `git rev-parse --show-toplevel` = `/Users/algive/jizhang_01` 确认 Git 根目录，把 Phase 1
+按设计文档**重新落到正式工程**，并补上两条此前没有的回归测试。`jizhang_app/` 本轮**没有**作为开发目录，
+也未被修改（它只是复制来源）。
+
+| 动作 | 内容 |
+| --- | --- |
+| 正式新增 | `lib/features/account/` 下 5 个源文件（与快照逐字节一致） |
+| 正式修改 | `session_repository.dart`（兼容门面）、`shared_book_sync_service.dart`（401 分支） |
+| 正式迁移 | 4 个账户测试文件从快照移入 `test/` |
+| 测试新增 | `test/account_guest_to_login_regression_test.dart`、`test/account_session_expired_regression_test.dart`、`test/support/account_http_stub.dart` |
+| 代码修正 | `AccountSessionController.expire()` 现在会删除持久化凭证（见 0.3） |
+
+### 0.3 本轮修掉的一个真实缺陷：401 之后重启会复活被拒绝的 Token
+
+原实现的 `expire()` 只在内存里把状态改成 `expired`，**没有清理安全存储**。当时的测试甚至把这个行为
+写成了断言（`expire 只影响内存状态，不删除也不重写凭证` → 重启后 `authenticated`）。
+
+但服务端 401 与本地 `expiresAt` 无关：Token 被服务器拒绝时，磁盘上那份信封的 `expiresAt` 往往还在
+未来。于是 App 重启会重新读回它，把**服务器已经拒绝的 Token 再拿去请求**，形成一次注定失败的
+登录态复活。这直接违反“重启不得重新使用已经被 401 拒绝的 Token”。
+
+修正：`expire()` 先 `_storage.clear()` 再广播 `expired`。语义变成
+
+- 内存里保留 `expired` + 上一次身份，用于当次会话的“登录已失效”提示；
+- 磁盘上不再有任何可用凭证，重启退化为 `guest`，用户重新登录即可。
+
+已用“回退修正 → 测试必须失败”的方式验证该测试不是空断言：去掉 `_storage.clear()` 后，
+`restartedApi.sessionToken` 恢复成 `'server-token-1'`，两个用例立刻失败。
+
+> Phase 2 若要让“登录已失效”跨重启提示，应改为**只持久化身份、不持久化 Token**的失效标记，
+> 而不是把 Token 留在磁盘上。
+
+### 0.4 本轮新增的两组回归测试
+
+**`test/account_guest_to_login_regression_test.dart`** —— 游客 → 服务器账号登录：
+
+游客期（`currentActor = user-local`）创建本地个人账本 + 本地账户 + 一笔流水，然后走真实
+`SessionRepository.authenticate()` 登录（真实 HTTP 桩 + 真实 SQLite），断言：
+原本地个人账本仍可见（走仓库自己的 `visibleBooksSql` ACL）、原账户可读、原流水可读、
+可继续向原个人账本新增流水、`books.owner_user_id` 仍是 `user-local`、原流水 `user_id` 仍是
+`user-local` 且金额/账本/账户未被改写、`sync_outbox`/`sync_books`/`sync_promotions`/`sync_id_map`
+全为 0、`books.family_id` 仍为 NULL、且**登录期间只发生了一次 `/auth/login` 请求**（没有云同步）。
+
+**`test/account_session_expired_regression_test.dart`** —— 401 / 网络异常 / 离线登出：
+
+- 服务器明确 401：状态为 `expired`（可区分于 `guest`）、Token 置空且存储已清、
+  actor 回到 `user-local`、本地账务不动；
+- 401 之后重启 App：新 `SharedApi` 的 `sessionToken` 为 null、状态 `guest`，
+  且该 Token 在整个过程中只出现在那一次被拒绝的请求里（用请求日志证明）；
+- 服务器 503：**不得**退出登录、不得清凭证；
+- 网络不通（服务器下线 → 连接失败）：**不得**退出登录、不得清凭证；
+- 离线退出登录：`SocketException` 不得让本地登录态残留，本地清理必须完成且重启后仍是游客。
+
+---
+
 ## 一、本轮实际阅读的关键源码
 
 ### 客户端（`jizhang_app/lib`）
@@ -125,6 +198,7 @@
 | `lib/features/account/application/account_session_controller.dart` | 会话状态机 + 广播；`start/signIn/adoptIdentity/expire/clear/watch`；`accountSessionControllerProvider`、`accountSessionProvider` |
 
 测试新增 4 个文件（`test/account_session_test.dart`、`account_session_storage_test.dart`、`account_session_controller_test.dart`、`account_session_repository_test.dart`）。
+本轮补记再新增 2 个回归测试文件与 1 个测试用 HTTP 桩（见 0.4）。
 
 ---
 
@@ -227,22 +301,33 @@
 | --- | --- |
 | `flutter analyze`（改动前基线） | `No issues found! (ran in 7.6s)` |
 | `flutter analyze`（改动后） | `No issues found! (ran in 6.7s)` |
-| `flutter test`（全量） | **+443 passed / 3 failed**，3 个失败**全部是环境/产物问题，与本次改动无关**（见下） |
+| `flutter analyze`（本轮落地 Git 根目录后） | `No issues found! (ran in 6.9s)` |
+| `flutter test`（全量，改动前记录） | **+443 passed / 3 failed**，3 个失败**全部是环境/产物问题，与本次改动无关**（见下） |
+| `flutter test`（全量，本轮在 Git 根目录重跑） | **+453 passed / 0 failed，`All tests passed!`** |
 | `flutter test`（两文件在仓库根目录运行） | `All tests passed!`（`shared_backend_integration_test`、`shared_restore_regression_test`） |
 | 服务端 `npm run typecheck` | 退出码 0，无输出错误 |
 | 服务端 `npm test` | `# tests 11 / # pass 11 / # fail 0` |
 
-3 个失败项说明：
+改动前记录里的 3 个失败项**在本轮全部不再出现**，原因正是它们都与工作目录有关：那 3 个用例
+（`shared_backend_integration_test.dart`、`shared_restore_regression_test.dart`、
+`asset_visual_qa_test.dart`）用相对路径引用 `server/node_modules` 与 `docs/qa` 产物目录，
+必须从**仓库根目录**运行。本轮 Phase 1 落地到 Git 根目录后即在根目录运行，因此
 
-1. `shared_backend_integration_test.dart`、`shared_restore_regression_test.dart`：测试用相对路径 `server/node_modules/tsx/dist/cli.mjs` 启动服务端，因此必须在**仓库根目录**运行；在 `jizhang_app/` 下运行会 `MODULE_NOT_FOUND`。这是既有测试的运行方式要求，不是回归 —— 在根目录运行两者均通过。
-2. `asset_visual_qa_test.dart`：写入 `docs/qa/asset-overview-fidelity-2026-09-12/round3.png` 失败（该产物路径在 `jizhang_app/` 下不存在），同样是既有 QA 产物测试与工作目录相关的问题，与账户体系无关。
+- `shared_backend_integration_test.dart` / `shared_restore_regression_test.dart`：通过；
+- `asset_visual_qa_test.dart`：产物路径 `docs/qa/asset-overview-fidelity-2026-09-12/round3.png`
+  在根目录存在，通过（该用例会重写这些 QA 参考图，属测试既有的正常产物行为；
+  本次提交已把这些被重新生成的图片还原，不纳入 Phase 1 变更）。
+
+**没有删除任何测试，也没有降低任何断言。** 唯一被改写的断言是 0.3 中那条把缺陷写成期望的
+`expire` 用例，它被换成了更强的断言（存储必须为空 + 重启必须为 guest）。
+
 
 ---
 
 ## 十、已知风险 / TODO / 临时兼容层
 
 1. **双写临时层**：`account_session_v1` 与 `shared_ledger_session_v1` 同时维护。Phase 2 完成后应评估是否停止写旧键（建议至少保留一个版本周期）。
-2. **`expired` 状态不落盘**：401 后的 `expired` 只在内存存活，App 重启后退化为 `guest`。好处是绝不会复用被服务器拒绝的 Token；代价是重启后无法提示“你的登录状态已失效”。Phase 2 如需该提示，应改为“只持久化身份、不持久化 Token”的失效标记。
+2. **`expired` 状态不落盘**：401 后的 `expired` 只在内存存活，App 重启后退化为 `guest`。这是**有意**的：`expire()` 会删除持久化凭证，因此绝不会复用被服务器拒绝的 Token（本轮已修正原实现漏删凭证的缺陷，见 0.3）；代价是重启后无法提示“你的登录状态已失效”。Phase 2 如需该提示，应改为“只持久化身份、不持久化 Token”的失效标记。
 3. **`SessionUser` 与 `AccountUser` 并存**：两者目前都表示同一个人。Phase 2 改造 Profile 时应统一切到 `AccountUser`，并让 `SessionUser` 退化为 `AccountUser` 的类型别名或直接删除。
 4. **`SessionRepository.user` setter 仍在**：为兼容旧的 UI 测试保留。Phase 2 之后应改为只能在测试中通过注入控制器实现。
 5. **`account_api.dart`、`device_identity_repository.dart`、`data_binding_repository.dart` 未创建**：分别对应 Phase 2/6；提示词第 36 节建议的目录结构会在后续阶段自然补齐。
@@ -284,5 +369,8 @@ Phase 2 目标：独立登录注册（Login / Register / displayName / ProfileHe
 ## 十二、结论
 
 - 本轮**只完成 Phase 1**：账户基础层（AccountUser / AccountSessionState / Secure Session / 兼容 SessionRepository），未改变共享账本行为。
+- Phase 1 的代码已**正式落在 Git 根目录**（提交 `account: complete phase 1 account foundation`），
+  `jizhang_app/` 源码快照不再承载任何未提交的实现；`git status` 中 Phase 1 的改动全部出现在正式工作区。
 - 不存在阻碍 Phase 2 的结构性问题；唯一需要在 Phase 2 一并处理的是 `expired` 状态的持久化策略与 `SessionUser`/`AccountUser` 的合并。
 - 建议可以进入 Phase 2，但**必须先落服务端 users.display_name migration**（可空 + 回退 username），否则客户端 `AccountUser.displayName` 永远为空。
+- 进入 Phase 2 前请先读 0.3：**Phase 2 不要再把 Token 留在磁盘上换取“失效提示”**。

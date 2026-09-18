@@ -2,6 +2,16 @@
 
 更新时间：2026-09-18
 
+## 最新任务交接（2026-09-18 账户体系 Phase 1 落地 Git 正式工程）
+
+[账户体系 Phase 1：账户基础层](2026-09-18-account-phase1-foundation.md)。上一轮 Phase 1 的设计文档写进了 Git 根目录，**源码却落在了被 `.gitignore` 排除的源码快照 `jizhang_app/`**，导致 GitHub `main` 上只有文档没有实现。本轮以 `git rev-parse --show-toplevel`（`/Users/algive/jizhang_01`）确认正式工程后，把 Phase 1 重新落到根目录：正式新增 `lib/features/account/{domain,data,application}` 5 个文件、修改 `session_repository.dart`（保留兼容门面，委托 `AccountSessionController`）与 `shared_book_sync_service.dart`（401 改走 `markSessionExpired()`），旧键 `shared_ledger_session_v1` 继续迁移并由规范键 `account_session_v1` 双写维护；未改任何 Drift 账务表、未加 `dataset_id`、未做云同步/登录 UI/AuthGate，未进入 Phase 2。
+
+期间修掉一个真实缺陷：`AccountSessionController.expire()` 原先只改内存状态、不清理安全存储，而服务端 401 与本地 `expiresAt` 无关，因此 **App 重启会读回那份“本地还没过期”的信封并把已被拒绝的 Token 再拿去请求**（当时的测试甚至把这个行为写成了断言）。现在 `expire()` 先 `_storage.clear()` 再广播 `expired`，凭证不再复活；已用“回退修正即测试失败”验证新断言非空。
+
+新增两组回归测试：`test/account_guest_to_login_regression_test.dart`（游客建本地账本/账户/流水 → 登录 → 账本仍可见、账户与流水可读、可继续记账、`owner_user_id` 与流水 `user_id` 仍为 `user-local`、`sync_*` 全空、登录期间只有一次 `/auth/login` 请求）与 `test/account_session_expired_regression_test.dart`（401 → `expired` + 清凭证 + actor 回 `user-local`；重启绝不复用被拒 Token；503 与网络不通不得退出登录；离线登出必须完成本地清理）。
+
+检查：`flutter analyze` 无问题；`flutter test` 全量 **+453 全通过 / 0 失败**（此前记录的 3 个失败均为工作目录/产物相关，在 Git 根目录运行后全部通过，未删除测试、未降低断言）；服务端 `npm run typecheck` 退出码 0、`npm test` 11/11 通过。未改动 Phase 2～7。
+
 ## 最新任务交接（2026-09-18 全工程 Git 跟踪）
 
 把此前游离在工作区外的整份工程纳入版本管理：一次性提交 120 个未跟踪文件与 130 个修改文件（投资管理、循环账单、自动记账与诊断日志、会员法律文档、服务端诊断接口、QA 截图归档、`scripts/package_source.sh`），工作区提交后干净无遗漏。`.gitignore` 只保留生成物忽略规则：`build/`、`dist/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/`、`jizhang_app/`、`jizhang_app_source_*.zip`、签名材料；安装包改为 `dist/` 整体忽略，需要分发时上传 GitHub Release（`git rm --cached` 后本地文件保留）。跟踪范围与远端说明见根目录 [`README.md`](../../README.md) 的「版本管理（Git）」。远端 `origin/main` 原本只有一个无关的 `Initial commit`（LICENSE + 单行 README），已用 `--allow-unrelated-histories` 合并后推送；本地历史里 2026-09-17 之前的两个 release APK 版本（约 169MB）仍留在提交历史中，如需给远端瘦身需重写历史并强推。

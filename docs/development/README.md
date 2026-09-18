@@ -4,7 +4,7 @@
 
 这里是本项目唯一的当前开发文档目录。后续开发、审查和交接先阅读本文件，再按任务进入对应文档。
 
-最新任务：[2026-09-18 账户体系 Phase 1 账户基础层](2026-09-18-account-phase1-foundation.md)：新增 `features/account` 基础层（AccountUser / AccountSession 五态 / Secure Session / AccountSessionController），旧 `SessionRepository` 改为兼容门面，旧 Token 与旧用户无需重新登录；未改页面视觉、未改数据库结构、未开发 Phase 2～7。`flutter analyze` 无问题，`flutter test` 443 通过（3 个失败均为既有工作目录/产物问题），服务端 11 项测试全通过。
+最新任务：[2026-09-18 账户体系 Phase 1 账户基础层](2026-09-18-account-phase1-foundation.md)：新增 `features/account` 基础层（AccountUser / AccountSession 五态 / Secure Session / AccountSessionController），旧 `SessionRepository` 改为兼容门面，旧 Token 与旧用户无需重新登录；未改页面视觉、未改数据库结构、未开发 Phase 2～7。**本文件第「零」节记录了 Phase 1 源码从被忽略的 `jizhang_app/` 快照正式回落到 Git 根目录的过程，以及随之修掉的“401 后重启会复活被拒绝 Token”缺陷。** `flutter analyze` 无问题，`flutter test` 全量 `+453` 全通过（0 失败），服务端 11 项测试全通过。
 
 上一轮任务：[2026-09-18 Android 自动记账与诊断日志收尾](2026-09-18-android-autobookkeeping-diagnostics.md)：修复首页编辑进入「记一笔」的 modal 层级、备注行和周期账单编辑联动；统一四类 Android 付款应用的待确认自动记账链路，并增加本地脱敏诊断日志与服务端上传。最新 APK 已安装到实体 Android 设备 `145a0a68`。
 

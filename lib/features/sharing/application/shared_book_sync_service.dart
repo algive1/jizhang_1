@@ -139,7 +139,9 @@ class SharedBookSyncService {
       lastError = null;
     } on SharedApiException catch (e) {
       lastError = e.message;
-      if (e.status == 401) await session.invalidate();
+      // 只有服务器明确返回 401 才视为登录失效。网络异常走下面的通用分支，
+      // 不会清 Token、不会清账号，也不会把用户标记成已退出。
+      if (e.status == 401) await session.markSessionExpired();
       _backoff();
     } catch (e) {
       lastError = '同步未完成：$e';
