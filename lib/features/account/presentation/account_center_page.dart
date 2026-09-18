@@ -389,7 +389,7 @@ class AccountCenterPage extends ConsumerWidget {
   }
 
   static String _date(DateTime value) =>
-      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+      "${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}";
 
   static void _error(BuildContext context, Object error) {
     ScaffoldMessenger.of(context).showSnackBar(
