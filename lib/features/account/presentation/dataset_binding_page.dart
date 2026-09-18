@@ -7,6 +7,7 @@ import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
 import '../application/personal_cloud_bootstrap_service.dart';
 import '../application/personal_cloud_backup_service.dart';
+import '../application/personal_cloud_remote_change_service.dart';
 
 class DatasetBindingPage extends ConsumerWidget {
   const DatasetBindingPage({super.key});
@@ -66,9 +67,17 @@ class DatasetBindingPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       _StatusRow(
-                        icon: Icons.cloud_outlined,
-                        title: value.cloudSyncEnabled ? '云同步已启用' : '云同步未启用',
-                        subtitle: value.cloudSyncEnabled
+                        icon: value.hasRemoteUpdate
+                            ? Icons.cloud_download_outlined
+                            : Icons.cloud_outlined,
+                        title: value.hasRemoteUpdate
+                            ? '云端有新版本待处理'
+                            : value.cloudSyncEnabled
+                            ? '云同步已启用'
+                            : '云同步未启用',
+                        subtitle: value.hasRemoteUpdate
+                            ? '云端版本 ${value.lastSeenRemoteRevision}，本机基线版本 ${value.lastCloudRevision}。为避免覆盖其他设备的新数据，自动备份已暂停。'
+                            : value.cloudSyncEnabled
                             ? value.lastSyncAt == null
                                 ? '云同步通道已建立，可手动上传首份云端备份。'
                                 : '最近备份：${value.lastSyncAt!.toLocal()}\n'
@@ -110,13 +119,20 @@ class DatasetBindingPage extends ConsumerWidget {
                     label: const Text('启用云同步通道'),
                   )
                 else ...[
-                  FilledButton.icon(
-                    onPressed: () => _uploadCloudBackup(context, ref),
-                    icon: const Icon(Icons.cloud_upload_outlined),
-                    label: Text(
-                      value.lastSyncAt == null ? '首次备份到云端' : '立即备份到云端',
+                  if (value.hasRemoteUpdate)
+                    FilledButton.icon(
+                      onPressed: () => _restoreCloudBackup(context, ref),
+                      icon: const Icon(Icons.cloud_download_outlined),
+                      label: const Text('恢复云端新版本'),
+                    )
+                  else
+                    FilledButton.icon(
+                      onPressed: () => _uploadCloudBackup(context, ref),
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: Text(
+                        value.lastSyncAt == null ? '首次备份到云端' : '立即备份到云端',
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () => _showCloudStatus(context, ref),
@@ -364,10 +380,14 @@ class DatasetBindingPage extends ConsumerWidget {
     WidgetRef ref,
   ) async {
     try {
+      await ref
+          .read(personalCloudRemoteChangeServiceProvider)
+          .checkIfDue(force: true);
+      ref.invalidate(datasetBindingProvider);
       final status = await ref
           .read(personalCloudBootstrapServiceProvider)
           .status();
-      final localBinding = await ref.read(datasetBindingProvider.future);
+      final localBinding = await ref.read(datasetBindingServiceProvider).status();
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
