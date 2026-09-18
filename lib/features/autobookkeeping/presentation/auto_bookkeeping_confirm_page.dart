@@ -467,6 +467,7 @@ class _AutoBookkeepingConfirmPageState
         ),
       ],
     );
+  }
 
   String? _validAccountId(List<Account> accounts) {
     if (accounts.any((item) => item.id == _accountId)) return _accountId;
