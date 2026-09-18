@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/data/app_settings_repository.dart';
 import '../../sharing/data/shared_api.dart';
+import '../../sharing/data/session_repository.dart';
 
 enum AppUpdateKind { none, optional, required }
 
