@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # 构建 Android APK，安装到模拟器/设备并启动应用。
-# 默认构建 release 包，产物可拷贝到 Android 手机直接安装。
+# 默认构建 debug 包；正式 release 必须通过生产签名预检。
 #
 # 用法：
 #   ./scripts/build_install_android.sh
 #   ./scripts/build_install_android.sh --package-only
 #   ./scripts/build_install_android.sh --debug
+#   ./scripts/build_install_android.sh --release
+#   ./scripts/build_install_android.sh --release-local
 #   ./scripts/build_install_android.sh --emulator pixel_7
 #   ./scripts/build_install_android.sh --device emulator-5554
 #   ./scripts/build_install_android.sh --no-pub-get
@@ -16,7 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ADB_BIN="${ADB_BIN:-adb}"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
-BUILD_MODE="${ANDROID_BUILD_MODE:-release}"
+BUILD_MODE="${ANDROID_BUILD_MODE:-debug}"
+LOCAL_RELEASE_SIGNING=0
 DEVICE_ID="${ANDROID_DEVICE_ID:-}"
 EMULATOR_ID="${ANDROID_EMULATOR_ID:-}"
 RUN_PUB_GET=1
@@ -28,7 +31,8 @@ usage() {
 
 选项：
   --debug              构建 debug APK
-  --release            构建 release APK
+  --release            构建正式签名 release APK（要求生产配置）
+  --release-local      构建 debug 证书签名的本地 release 验收 APK
   --package-only       只构建并输出可安装 APK，不启动模拟器或执行 adb 安装
   --device <id>        安装到指定 adb 设备，例如 emulator-5554
   --emulator <id>      没有在线模拟器时启动指定 AVD，例如 pixel_7
@@ -52,6 +56,12 @@ while [ "$#" -gt 0 ]; do
       ;;
     --release)
       BUILD_MODE="release"
+      LOCAL_RELEASE_SIGNING=0
+      shift
+      ;;
+    --release-local)
+      BUILD_MODE="release"
+      LOCAL_RELEASE_SIGNING=1
       shift
       ;;
     --package-only)
@@ -137,8 +147,25 @@ if [ "$RUN_PUB_GET" -eq 1 ]; then
   "$FLUTTER_BIN" pub get
 fi
 
-echo "==> flutter build apk --$BUILD_MODE"
-"$FLUTTER_BIN" build apk "--$BUILD_MODE"
+DART_ARGS=()
+if [ -n "${SHARED_API_BASE_URL:-}" ]; then
+  DART_ARGS+=("--dart-define=SHARED_API_BASE_URL=$SHARED_API_BASE_URL")
+fi
+
+if [ "$BUILD_MODE" = "release" ] && [ "$LOCAL_RELEASE_SIGNING" -eq 1 ]; then
+  echo "==> 本地 Release 验收预检"
+  bash "$SCRIPT_DIR/android_release_preflight.sh" --local
+  echo "==> flutter build apk --release（debug certificate，仅本地验收）"
+  ALLOW_DEBUG_RELEASE_SIGNING=true     "$FLUTTER_BIN" build apk --release "${DART_ARGS[@]}"
+elif [ "$BUILD_MODE" = "release" ]; then
+  echo "==> 正式 Release 预检"
+  bash "$SCRIPT_DIR/android_release_preflight.sh" --production
+  echo "==> flutter build apk --release（production signing）"
+  "$FLUTTER_BIN" build apk --release "${DART_ARGS[@]}"
+else
+  echo "==> flutter build apk --debug"
+  "$FLUTTER_BIN" build apk --debug "${DART_ARGS[@]}"
+fi
 
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-${BUILD_MODE}.apk"
 if [ ! -f "$APK_PATH" ]; then
@@ -153,7 +180,12 @@ if [ -z "$VERSION" ]; then
 fi
 
 DIST_DIR="$PROJECT_DIR/dist"
-PACKAGE_PATH="$DIST_DIR/jizhang_app-${VERSION}-${BUILD_MODE}.apk"
+if [ "$BUILD_MODE" = "release" ] && [ "$LOCAL_RELEASE_SIGNING" -eq 1 ]; then
+  PACKAGE_SUFFIX="local-release-debug-signed"
+else
+  PACKAGE_SUFFIX="$BUILD_MODE"
+fi
+PACKAGE_PATH="$DIST_DIR/jizhang_app-${VERSION}-${PACKAGE_SUFFIX}.apk"
 mkdir -p "$DIST_DIR"
 cp "$APK_PATH" "$PACKAGE_PATH"
 echo "✅ 可直接安装的 APK 已生成：$PACKAGE_PATH"
