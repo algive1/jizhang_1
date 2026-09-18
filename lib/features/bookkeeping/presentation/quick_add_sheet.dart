@@ -555,6 +555,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           _NoteRow(
             controller: _noteController,
             onAi: _openAi,
+            onVoice: _openVoice,
           ),
           const SizedBox(height: 10),
           AmountInputView(
@@ -778,9 +779,21 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     ReimbursementStatus.partial => '部分报销',
   };
 
+  Future<void> _openVoice() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VoiceBookkeepingSheet(bookId: _bookId),
+    );
+    if (saved == true && mounted) Navigator.pop(context);
+  }
+
   Future<void> _openAi() async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => VoiceBookkeepingSheet(textOnly: true, bookId: _bookId),
@@ -1955,10 +1968,12 @@ class _NoteRow extends StatelessWidget {
   const _NoteRow({
     required this.controller,
     required this.onAi,
+    required this.onVoice,
   });
 
   final TextEditingController controller;
   final VoidCallback onAi;
+  final VoidCallback onVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -2021,6 +2036,10 @@ class _NoteRow extends StatelessWidget {
       iconColor: AppColors.primaryDark,
       selected: true,
       onTap: onAi,
+      // Keep voice bookkeeping available without adding the separate mic
+      // button that widened this row. Long-press preserves the capability
+      // while the visible layout matches the compact reference card.
+      onLongPress: onVoice,
     );
 
     if (stacks) {
@@ -2085,6 +2104,7 @@ class _QuickChip extends StatelessWidget {
     this.selected = false,
     this.showChevron = false,
     this.onTap,
+    this.onLongPress,
   });
 
   final String label;
@@ -2094,6 +2114,7 @@ class _QuickChip extends StatelessWidget {
   final bool selected;
   final bool showChevron;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2102,6 +2123,7 @@ class _QuickChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: 40,
