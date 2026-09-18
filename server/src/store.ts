@@ -10,7 +10,7 @@ export class Store {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
     let version = this.db.pragma('user_version', { simple: true }) as number;
-    check(version <= 7, '服务端数据库版本过新', 500);
+    check(version <= 8, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {
       this.db.exec(`
         CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -123,6 +123,25 @@ export class Store {
         this.db.exec('ALTER TABLE cloud_datasets ADD COLUMN snapshot_size INTEGER');
       }
       this.db.pragma('user_version = 7');
+    }
+    if (version < 8) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS analytics_events(
+          installation_id TEXT NOT NULL,
+          event_id TEXT NOT NULL,
+          occurred_at INTEGER NOT NULL,
+          event_name TEXT NOT NULL,
+          screen TEXT,
+          properties_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(installation_id,event_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_analytics_events_name_time
+          ON analytics_events(event_name,occurred_at);
+        CREATE INDEX IF NOT EXISTS idx_analytics_events_install_time
+          ON analytics_events(installation_id,occurred_at);
+      `);
+      this.db.pragma('user_version = 8');
     }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
   }

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/analytics/product_analytics.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../accounts/data/account_repository.dart';
@@ -22,7 +23,37 @@ class DataExportPage extends ConsumerStatefulWidget {
 
 class _DataExportPageState extends ConsumerState<DataExportPage> {
   bool _saving = false;
+  bool _analyticsChanging = false;
+  bool? _analyticsEnabled;
   String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAnalyticsPreference();
+  }
+
+  Future<void> _loadAnalyticsPreference() async {
+    final enabled = await ref.read(productAnalyticsProvider).isEnabled();
+    if (mounted) setState(() => _analyticsEnabled = enabled);
+  }
+
+  Future<void> _setAnalyticsEnabled(bool enabled) async {
+    if (_analyticsChanging) return;
+    setState(() => _analyticsChanging = true);
+    try {
+      await ref.read(productAnalyticsProvider).setEnabled(enabled);
+      if (mounted) setState(() => _analyticsEnabled = enabled);
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('统计设置保存失败：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _analyticsChanging = false);
+    }
+  }
 
   Future<void> _exportBackup() async {
     setState(() {
@@ -230,6 +261,38 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                   onPressed: !databaseReady || _saving ? null : _restoreBackup,
                   icon: const Icon(Icons.restore_outlined),
                   label: const Text('从备份恢复'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '使用情况统计',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '帮助我们了解哪些页面和功能更常用。默认关闭，只有你主动开启后才会上传匿名使用事件。',
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('允许匿名使用情况统计'),
+                  subtitle: const Text(
+                    '不上传金额、商户、备注、分类名、附件路径、账户信息或流水内容。',
+                  ),
+                  value: _analyticsEnabled ?? false,
+                  onChanged: _analyticsEnabled == null || _analyticsChanging
+                      ? null
+                      : _setAnalyticsEnabled,
+                ),
+                TextButton(
+                  onPressed: () => context.push('/profile/privacy'),
+                  child: const Text('查看隐私协议'),
                 ),
               ],
             ),

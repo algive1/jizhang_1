@@ -66,3 +66,16 @@ iOS:
 - `APP_UPDATE_IOS_MESSAGE`
 
 Clients below the minimum version receive a required update. Clients below the latest version but at or above the minimum receive an optional update.
+
+
+## Anonymous product analytics
+
+Product analytics is opt-in on the client and does not require a login. The ingest endpoint accepts only a small allowlist of non-financial events and rejects property names related to amounts, merchants, notes, transactions, accounts, cards, phone numbers, file paths, attachments, tokens, passwords, or categories.
+
+Set `ANALYTICS_ADMIN_KEY` to a random value of at least 24 characters to enable the aggregate summary endpoint:
+
+- `POST /api/v1/analytics/events` — anonymous event ingest.
+- `GET /api/v1/analytics/summary?days=7` — aggregate counts for 1–90 days; requires header `x-analytics-admin-key`.
+- The summary returns active installation count, total event count, counts by event name, and daily active installations. It never returns raw event rows.
+
+If `ANALYTICS_ADMIN_KEY` is not configured, the summary endpoint behaves as unavailable.

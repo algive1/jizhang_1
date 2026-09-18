@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
 import '../../../core/diagnostics/operation_log.dart';
+import '../../../core/analytics/product_analytics.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/transaction_record.dart';
@@ -112,6 +113,7 @@ class QuickBookkeepingService {
     this.activeBookId,
     this.attachments,
     this.diagnostics,
+    this.analytics,
   });
 
   static const lastAccountKey = 'last_used_account_id';
@@ -122,6 +124,7 @@ class QuickBookkeepingService {
   final String Function()? activeBookId;
   final TransactionAttachmentRepository? attachments;
   final OperationLogService? diagnostics;
+  final ProductAnalytics? analytics;
 
   Future<TransactionRecord> save(QuickBookkeepingRequest request) async {
     return (await saveAll([request])).single;
@@ -220,6 +223,12 @@ class QuickBookkeepingService {
         data: {'source': request.source.name},
       ),
     );
+    unawaited(
+      analytics?.track(
+        'bookkeeping_updated',
+        properties: {'source': request.source.name},
+      ),
+    );
     return saved;
   }
 
@@ -285,6 +294,15 @@ class QuickBookkeepingService {
       diagnostics?.record(
         kind: 'bookkeeping_saved',
         data: {'count': saved.length, 'source': requests.first.source.name},
+      ),
+    );
+    unawaited(
+      analytics?.track(
+        'bookkeeping_saved',
+        properties: {
+          'count': saved.length,
+          'source': requests.first.source.name,
+        },
       ),
     );
     return saved;
@@ -473,5 +491,6 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
     activeBookId: () => ref.read(activeBookIdProvider),
     attachments: ref.watch(transactionAttachmentRepositoryProvider),
     diagnostics: ref.watch(operationLogServiceProvider),
+    analytics: ref.watch(productAnalyticsProvider),
   );
 });
