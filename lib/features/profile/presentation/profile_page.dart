@@ -332,9 +332,9 @@ class ProfilePage extends ConsumerWidget {
                   child: FilledButton(
                     onPressed: () {
                       Navigator.pop(sheetContext);
-                      context.push('/profile/family');
+                      context.push('/profile/account');
                     },
-                    child: const Text('管理共享账本'),
+                    child: const Text('进入账号中心'),
                   ),
                 ),
                 TextButton(
