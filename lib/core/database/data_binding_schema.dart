@@ -10,6 +10,7 @@ class DeviceDataBinding {
     this.boundAt,
     this.lastSyncAt,
     this.lastCloudRevision = 0,
+    this.lastSeenRemoteRevision = 0,
   });
 
   final String datasetId;
@@ -18,10 +19,12 @@ class DeviceDataBinding {
   final DateTime? boundAt;
   final DateTime? lastSyncAt;
   final int lastCloudRevision;
+  final int lastSeenRemoteRevision;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   bool isBoundTo(String userId) => boundUserId == userId;
+  bool get hasRemoteUpdate => lastSeenRemoteRevision > lastCloudRevision;
 }
 
 class DatasetBindingConflict implements Exception {
@@ -43,6 +46,7 @@ extension DeviceDataBindingStore on AppDatabase {
         bound_at INTEGER,
         last_sync_at INTEGER,
         last_cloud_revision INTEGER NOT NULL DEFAULT 0,
+        last_seen_remote_revision INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -56,11 +60,17 @@ extension DeviceDataBindingStore on AppDatabase {
         'ADD COLUMN last_cloud_revision INTEGER NOT NULL DEFAULT 0',
       );
     }
+    if (!columns.any((row) => row.read<String>('name') == 'last_seen_remote_revision')) {
+      await customStatement(
+        'ALTER TABLE device_data_binding '
+        'ADD COLUMN last_seen_remote_revision INTEGER NOT NULL DEFAULT 0',
+      );
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     await customStatement(
       'INSERT OR IGNORE INTO device_data_binding('
-      'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at'
-      ') VALUES(1,?,NULL,0,NULL,NULL,0,?,?)',
+      'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,last_seen_remote_revision,created_at,updated_at'
+      ') VALUES(1,?,NULL,0,NULL,NULL,0,0,?,?)',
       [newEntityId(), now, now],
     );
   }
@@ -68,7 +78,7 @@ extension DeviceDataBindingStore on AppDatabase {
   Future<DeviceDataBinding> getDeviceDataBinding() async {
     await ensureDataBindingSchema();
     final row = await customSelect(
-      'SELECT dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at '
+      'SELECT dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,last_seen_remote_revision,created_at,updated_at '
       'FROM device_data_binding WHERE id=1',
     ).getSingle();
 
@@ -83,6 +93,7 @@ extension DeviceDataBindingStore on AppDatabase {
       boundAt: date(row.data['bound_at']),
       lastSyncAt: date(row.data['last_sync_at']),
       lastCloudRevision: row.read<int>('last_cloud_revision'),
+      lastSeenRemoteRevision: row.read<int>('last_seen_remote_revision'),
       createdAt: date(row.data['created_at'])!,
       updatedAt: date(row.data['updated_at'])!,
     );
@@ -120,8 +131,27 @@ extension DeviceDataBindingStore on AppDatabase {
       final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
       await customStatement(
         'UPDATE device_data_binding '
-        'SET last_sync_at=?,last_cloud_revision=?,updated_at=? WHERE id=1',
-        [now, revision, now],
+        'SET last_sync_at=?,last_cloud_revision=?,last_seen_remote_revision=?,updated_at=? WHERE id=1',
+        [now, revision, revision, now],
+      );
+      return getDeviceDataBinding();
+    });
+  }
+
+  Future<DeviceDataBinding> setDatasetRemoteRevision({
+    required String userId,
+    required int revision,
+  }) {
+    return transaction(() async {
+      final current = await getDeviceDataBinding();
+      if (current.boundUserId != userId || !current.cloudSyncEnabled) {
+        throw StateError('本地数据尚未启用当前账号的云同步');
+      }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await customStatement(
+        'UPDATE device_data_binding '
+        'SET last_seen_remote_revision=?,updated_at=? WHERE id=1',
+        [revision, now],
       );
       return getDeviceDataBinding();
     });
