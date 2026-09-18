@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { gzipSync } from 'node:zlib';
 
 import { createApp } from '../src/app.js';
 
@@ -93,7 +94,46 @@ test('personal cloud bootstrap keeps one canonical dataset per account', async (
     hasSnapshot: false,
     revision: 0,
     updatedAt: (created.json() as any).updatedAt,
+    snapshotSize: null,
+    snapshotSha256: null,
   });
+
+
+  const sqlite = Buffer.concat([
+    Buffer.from('SQLite format 3\u0000', 'binary'),
+    Buffer.alloc(256, 1),
+  ]);
+  const compressed = gzipSync(sqlite).toString('base64');
+  const uploaded = await app.inject({
+    method: 'POST',
+    url: '/api/v1/sync/snapshot',
+    headers: authA,
+    payload: {
+      datasetId: datasetA,
+      baseRevision: 0,
+      encoding: 'gzip+base64',
+      snapshot: compressed,
+    },
+  });
+  assert.equal(uploaded.statusCode, 200);
+  const uploadedBody = uploaded.json() as any;
+  assert.equal(uploadedBody.hasSnapshot, true);
+  assert.equal(uploadedBody.revision, 1);
+  assert.equal(uploadedBody.snapshotSize, sqlite.length);
+  assert.match(uploadedBody.snapshotSha256, /^[a-f0-9]{64}$/);
+
+  const stale = await app.inject({
+    method: 'POST',
+    url: '/api/v1/sync/snapshot',
+    headers: authA,
+    payload: {
+      datasetId: datasetA,
+      baseRevision: 0,
+      encoding: 'gzip+base64',
+      snapshot: compressed,
+    },
+  });
+  assert.equal(stale.statusCode, 409);
 
   const secondDevice = await app.inject({
     method: 'POST',

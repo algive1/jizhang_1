@@ -10,7 +10,7 @@ export class Store {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
     let version = this.db.pragma('user_version', { simple: true }) as number;
-    check(version <= 6, '服务端数据库版本过新', 500);
+    check(version <= 7, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {
       this.db.exec(`
         CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -110,6 +110,19 @@ export class Store {
           ON cloud_datasets(dataset_id);
       `);
       this.db.pragma('user_version = 6');
+    }
+    if (version < 7) {
+      const cloudColumns = this.db.prepare('PRAGMA table_info(cloud_datasets)').all() as Array<{name: string}>;
+      if (!cloudColumns.some((column) => column.name === 'snapshot_blob')) {
+        this.db.exec('ALTER TABLE cloud_datasets ADD COLUMN snapshot_blob BLOB');
+      }
+      if (!cloudColumns.some((column) => column.name === 'snapshot_sha256')) {
+        this.db.exec('ALTER TABLE cloud_datasets ADD COLUMN snapshot_sha256 TEXT');
+      }
+      if (!cloudColumns.some((column) => column.name === 'snapshot_size')) {
+        this.db.exec('ALTER TABLE cloud_datasets ADD COLUMN snapshot_size INTEGER');
+      }
+      this.db.pragma('user_version = 7');
     }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
   }

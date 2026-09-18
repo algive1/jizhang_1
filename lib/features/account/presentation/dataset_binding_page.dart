@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
 import '../application/personal_cloud_bootstrap_service.dart';
+import '../application/personal_cloud_backup_service.dart';
 
 class DatasetBindingPage extends ConsumerWidget {
   const DatasetBindingPage({super.key});
@@ -68,7 +69,9 @@ class DatasetBindingPage extends ConsumerWidget {
                         icon: Icons.cloud_outlined,
                         title: value.cloudSyncEnabled ? '云同步已启用' : '云同步未启用',
                         subtitle: value.cloudSyncEnabled
-                            ? '云同步通道已建立；首次账务上传仍需后续单独确认。'
+                            ? value.lastSyncAt == null
+                                ? '云同步通道已建立，可手动上传首份云端备份。'
+                                : '最近备份：${value.lastSyncAt!.toLocal()}'
                             : '尚未建立个人云同步通道。登录和绑定都不会自动上传数据。',
                       ),
                     ],
@@ -105,12 +108,21 @@ class DatasetBindingPage extends ConsumerWidget {
                     icon: const Icon(Icons.cloud_upload_outlined),
                     label: const Text('启用云同步通道'),
                   )
-                else
+                else ...[
+                  FilledButton.icon(
+                    onPressed: () => _uploadCloudBackup(context, ref),
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: Text(
+                      value.lastSyncAt == null ? '首次备份到云端' : '立即备份到云端',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () => _showCloudStatus(context, ref),
                     icon: const Icon(Icons.cloud_done_outlined),
                     label: const Text('检查云端状态'),
                   ),
+                ],
               ]
               else
                 const Card(
@@ -200,6 +212,51 @@ class DatasetBindingPage extends ConsumerWidget {
       if (upgrade == true && context.mounted) {
         context.push('/profile/membership');
       }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
+
+  static Future<void> _uploadCloudBackup(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('备份到云端？'),
+        content: const Text(
+          '将当前本地 SQLite 账务备份上传到当前账号的个人云数据集。此操作不会删除或覆盖本机数据，也不会自动恢复到其他设备。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('开始备份'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final result = await ref
+          .read(personalCloudBackupServiceProvider)
+          .uploadSnapshot();
+      ref.invalidate(datasetBindingProvider);
+      if (!context.mounted) return;
+      final size = result.snapshotSize == null
+          ? ''
+          : '，${(result.snapshotSize! / 1024).toStringAsFixed(0)} KB';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('云端备份完成 · 版本 ${result.revision}$size')),
+      );
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
