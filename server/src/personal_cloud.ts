@@ -87,18 +87,14 @@ export function registerPersonalCloudRoutes(
       .get(user.id) as DatasetRow | undefined;
     check(row, '请先建立云同步通道', 409);
     check(row.dataset_id === input.datasetId, '本地数据集与云端数据集不一致', 409);
-    check(row.revision === input.baseRevision, '云端数据已更新，请先检查最新状态', 409, {
-      currentRevision: row.revision,
-    });
+    check(row.revision === input.baseRevision, '云端数据已更新，请先检查最新状态', 409);
 
-    let compressed: Buffer;
+    const compressed = Buffer.from(input.snapshot, 'base64');
+    check(compressed.length <= 10 * 1024 * 1024, '云端备份暂时不能超过 10MB（压缩后）', 413);
     let sqlite: Buffer;
     try {
-      compressed = Buffer.from(input.snapshot, 'base64');
-      check(compressed.length <= 10 * 1024 * 1024, '云端备份暂时不能超过 10MB（压缩后）', 413);
       sqlite = gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 });
-    } catch (error) {
-      if (error instanceof Error && error.name === 'ApiError') throw error;
+    } catch {
       check(false, '云端备份内容无效', 400);
       return;
     }
