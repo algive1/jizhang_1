@@ -13,13 +13,23 @@ import { Store } from './store.js';
 import type { AssistantModelProvider } from './assistant_ai.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
-const credentials = z.strictObject({ username: usernameField, password: z.string().min(10).max(128) });
-const registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional() });
+const deviceNameField = z.string().trim().min(1).max(80).optional();
+const credentials = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), deviceName: deviceNameField });
+const registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional(), deviceName: deviceNameField });
+const changePasswordSchema = z.strictObject({ currentPassword: z.string().min(10).max(128), newPassword: z.string().min(10).max(128) });
+const recoverySchema = z.strictObject({ username: usernameField, recoveryKey: z.string().min(20).max(200), newPassword: z.string().min(10).max(128), deviceName: deviceNameField });
 type AuthUser = { id:string; username:string; displayName:string|null };
 const hashToken = (token:string) => createHash('sha256').update(token).digest('hex');
+const hashRecoveryKey = (key:string) => createHash('sha256').update(key).digest('hex');
 async function passwordHash(password:string, salt=randomBytes(16).toString('hex')) {
   const digest = await scrypt(password,salt,64) as Buffer;
   return `${salt}:${digest.toString('hex')}`;
+}
+async function passwordMatches(password:string, encoded:string|undefined) {
+  if (!encoded) return false;
+  const salt=encoded.split(':')[0]??'00000000000000000000000000000000';
+  const actual=await passwordHash(password,salt);
+  return actual.length===encoded.length && timingSafeEqual(Buffer.from(actual),Buffer.from(encoded));
 }
 export async function createApp(path:string, modelProvider?: AssistantModelProvider) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
@@ -40,10 +50,15 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
     const row=store.db.prepare('SELECT u.id,u.username,u.display_name AS displayName FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(hashToken(header!.slice(7)),store.now()) as AuthUser|undefined;
     check(row,'登录已失效，请重新登录',401);return row;
   };
-  const session=(user:AuthUser)=>{
+  const session=(user:AuthUser,deviceName?:string)=>{
     const token=randomBytes(32).toString('base64url');
+    const tokenHash=hashToken(token);
     const expiresAt=store.now()+30*86400;
-    store.db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hashToken(token),user.id,expiresAt);
+    const sessionId=randomUUID();
+    const now=store.now();
+    store.db.prepare(
+      'INSERT INTO sessions(token_hash,user_id,expires_at,session_id,device_name,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)'
+    ).run(tokenHash,user.id,expiresAt,sessionId,deviceName??'当前设备',now,now);
     return {user,token,expiresAt};
   };
   registerMembershipCatalog(app,store);
@@ -52,7 +67,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   app.get('/health',async()=>({status:'ok',schemaVersion:1}));
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
-    const {username,password,displayName}=registration.parse(req.body);
+    const {username,password,displayName,deviceName}=registration.parse(req.body);
     check(!store.db.prepare('SELECT 1 FROM users WHERE username=?').get(username),'用户名已被使用',409);
     const password_hash=await passwordHash(password);
     // Hashing is asynchronous: recheck inside the insertion transaction.
@@ -61,20 +76,84 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
       const user:AuthUser={id:randomUUID(),username,displayName:displayName ?? null};
       store.db.prepare('INSERT INTO users(id,username,password_hash,created_at,display_name) VALUES(?,?,?,?,?)').run(user.id,username,password_hash,store.now(),user.displayName);return user;
     })();
-    return reply.code(201).send(session(user));
+    return reply.code(201).send(session(user,deviceName));
   });
   app.post('/api/v1/auth/login',{config:{rateLimit:{max:15,timeWindow:'1 minute'}}},async(req)=>{
-    const {username,password}=credentials.parse(req.body);
+    const {username,password,deviceName}=credentials.parse(req.body);
     const user=store.db.prepare('SELECT id,username,password_hash,display_name AS displayName FROM users WHERE username=?').get(username) as (AuthUser & {password_hash:string})|undefined;
-    const salt=user?.password_hash.split(':')[0]??'00000000000000000000000000000000';
-    const actual=await passwordHash(password,salt);
-    check(user && actual.length===user.password_hash.length && timingSafeEqual(Buffer.from(actual),Buffer.from(user.password_hash)),'用户名或密码错误',401);
-    return session({id:user.id,username:user.username,displayName:user.displayName});
+    check(user && await passwordMatches(password,user.password_hash),'用户名或密码错误',401);
+    return session({id:user.id,username:user.username,displayName:user.displayName},deviceName);
   });
   app.get('/api/v1/auth/me',async(req)=>({user:authenticate(req.headers.authorization)}));
   app.post('/api/v1/auth/logout',async(req)=>{
     authenticate(req.headers.authorization);
     store.db.prepare('DELETE FROM sessions WHERE token_hash=?').run(hashToken(req.headers.authorization!.slice(7)));
+    return {ok:true};
+  });
+  app.patch('/api/v1/account/profile',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const {displayName}=z.strictObject({displayName:z.string().trim().min(1).max(24)}).parse(req.body);
+    store.db.prepare('UPDATE users SET display_name=? WHERE id=?').run(displayName,user.id);
+    return {user:{...user,displayName}};
+  });
+  app.post('/api/v1/auth/change-password',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const body=changePasswordSchema.parse(req.body);
+    const row=store.db.prepare('SELECT password_hash FROM users WHERE id=?').get(user.id) as {password_hash:string}|undefined;
+    check(row && await passwordMatches(body.currentPassword,row.password_hash),'当前密码错误',401);
+    check(body.currentPassword!==body.newPassword,'新密码不能与当前密码相同',400);
+    const next=await passwordHash(body.newPassword);
+    const currentHash=hashToken(req.headers.authorization!.slice(7));
+    store.db.transaction(()=>{
+      store.db.prepare('UPDATE users SET password_hash=?,password_changed_at=? WHERE id=?').run(next,store.now(),user.id);
+      store.db.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(user.id,currentHash);
+    })();
+    return {ok:true};
+  });
+  app.post('/api/v1/auth/recovery-key/rotate',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const recoveryKey=randomBytes(24).toString('base64url');
+    store.db.prepare('UPDATE users SET recovery_key_hash=? WHERE id=?').run(hashRecoveryKey(recoveryKey),user.id);
+    return {recoveryKey};
+  });
+  app.post('/api/v1/auth/recover',{config:{rateLimit:{max:8,timeWindow:'1 minute'}}},async(req)=>{
+    const {username,recoveryKey,newPassword,deviceName}=recoverySchema.parse(req.body);
+    const row=store.db.prepare('SELECT id,username,password_hash,display_name AS displayName,recovery_key_hash FROM users WHERE username=?').get(username) as (AuthUser & {password_hash:string;recovery_key_hash:string|null})|undefined;
+    const provided=hashRecoveryKey(recoveryKey);
+    check(row?.recovery_key_hash && timingSafeEqual(Buffer.from(provided),Buffer.from(row.recovery_key_hash)),'账号或恢复密钥无效',401);
+    const nextPassword=await passwordHash(newPassword);
+    const nextRecoveryKey=randomBytes(24).toString('base64url');
+    store.db.transaction(()=>{
+      store.db.prepare('UPDATE users SET password_hash=?,password_changed_at=?,recovery_key_hash=? WHERE id=?').run(nextPassword,store.now(),hashRecoveryKey(nextRecoveryKey),row!.id);
+      store.db.prepare('DELETE FROM sessions WHERE user_id=?').run(row!.id);
+    })();
+    return {...session({id:row!.id,username:row!.username,displayName:row!.displayName},deviceName),recoveryKey:nextRecoveryKey};
+  });
+  app.get('/api/v1/auth/sessions',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const currentHash=hashToken(req.headers.authorization!.slice(7));
+    const rows=store.db.prepare('SELECT token_hash,session_id,device_name,created_at,last_seen_at,expires_at FROM sessions WHERE user_id=? ORDER BY created_at DESC').all(user.id) as Array<{token_hash:string;session_id:string;device_name:string|null;created_at:number|null;last_seen_at:number|null;expires_at:number}>;
+    return {sessions:rows.map(row=>({
+      id:row.session_id,
+      deviceName:row.device_name??'设备',
+      createdAt:row.created_at,
+      lastSeenAt:row.last_seen_at,
+      expiresAt:row.expires_at,
+      current:row.token_hash===currentHash,
+    }))};
+  });
+  app.delete('/api/v1/auth/sessions/:sessionId',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const {sessionId}=z.object({sessionId:z.string().min(1).max(100)}).parse(req.params);
+    const currentHash=hashToken(req.headers.authorization!.slice(7));
+    const target=store.db.prepare('SELECT token_hash FROM sessions WHERE session_id=? AND user_id=?').get(sessionId,user.id) as {token_hash:string}|undefined;
+    check(target,'登录设备不存在',404);
+    store.db.prepare('DELETE FROM sessions WHERE session_id=? AND user_id=?').run(sessionId,user.id);
+    return {ok:true,current:target.token_hash===currentHash};
+  });
+  app.post('/api/v1/auth/logout-all',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    store.db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
     return {ok:true};
   });
   app.get('/api/v1/books',async(req)=>({books:store.list(authenticate(req.headers.authorization).id)}));
