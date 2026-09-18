@@ -47,3 +47,22 @@ npm run dev
 服务端在同一 SQLite 事务内执行权限检查、`operationId` 幂等判断、账务变更、余额/目标重算、版本递增和变更日志。支付订单金额只从 `assets/config/membership_catalog.json` 或后台 catalog 读取；必须配置真实商户证书和公网 HTTPS 回调后才会向支付平台下单。公网 TLS、生产数据库备份、监控、短信、附件存储和企业报税仍需按部署环境配置。
 
 当前账号边界：客户端登录/注册入口仍位于共享账本页，个人本地账本不强制登录；服务端尚未实现手机号/邮箱验证码、找回密码、修改密码、账号注销、第三方登录或多设备会话管理。诊断上传接口只接受有限 primitive 字段，并拒绝包含 token、密码、通知、账户、卡号、手机号、路径和堆栈等敏感键；本地诊断日志不等同于公网 Crashlytics/Sentry 监控。
+
+
+## App update policy
+
+The public endpoint `GET /api/v1/app/update` is disabled by default and becomes active only when a store URL is configured.
+
+Android:
+- `APP_UPDATE_ANDROID_LATEST_VERSION` (default `1.0.0`)
+- `APP_UPDATE_ANDROID_MINIMUM_VERSION` (default `1.0.0`)
+- `APP_UPDATE_ANDROID_STORE_URL` (HTTPS; empty disables prompts)
+- `APP_UPDATE_ANDROID_MESSAGE`
+
+iOS:
+- `APP_UPDATE_IOS_LATEST_VERSION`
+- `APP_UPDATE_IOS_MINIMUM_VERSION`
+- `APP_UPDATE_IOS_STORE_URL`
+- `APP_UPDATE_IOS_MESSAGE`
+
+Clients below the minimum version receive a required update. Clients below the latest version but at or above the minimum receive an optional update.

@@ -27,6 +27,54 @@ import UserNotifications
       emitNotificationRoute(route)
     }
 
+    let appUpdateChannel = FlutterMethodChannel(
+      name: "jizhang/app_update",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    appUpdateChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "appInfo":
+        let version =
+          Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "0.0.0"
+        let build =
+          Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
+            as? String ?? "0"
+        result([
+          "platform": "ios",
+          "version": version,
+          "build": Int(build) ?? 0,
+        ])
+      case "openStore":
+        guard let arguments = call.arguments as? [String: Any],
+              let rawUrl = arguments["url"] as? String,
+              let url = URL(string: rawUrl),
+              url.scheme?.lowercased() == "https" else {
+          result(FlutterError(
+            code: "INVALID_STORE_URL",
+            message: "更新地址必须使用 HTTPS",
+            details: nil
+          ))
+          return
+        }
+        DispatchQueue.main.async {
+          UIApplication.shared.open(url, options: [:]) { opened in
+            if opened {
+              result(true)
+            } else {
+              result(FlutterError(
+                code: "NO_HANDLER",
+                message: "无法打开更新地址",
+                details: nil
+              ))
+            }
+          }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let recurringNotificationChannel = FlutterMethodChannel(
       name: "jizhang/recurring_notifications",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()

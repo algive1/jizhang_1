@@ -19,6 +19,7 @@ import '../core/diagnostics/operation_log.dart';
 import '../features/sharing/data/session_repository.dart';
 import '../features/account/application/personal_cloud_auto_backup_service.dart';
 import '../features/account/application/personal_cloud_remote_change_service.dart';
+import '../features/update/application/app_update_service.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -37,6 +38,8 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   late final bool Function(Object, StackTrace)? _previousPlatformErrorHandler;
   late final OperationLogService _diagnostics;
   late final SessionRepository _sessionRepository;
+  bool _updateDialogVisible = false;
+  bool _initialUpdateCheckScheduled = false;
 
   @override
   void initState() {
@@ -134,10 +137,76 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
+      _checkForAppUpdate();
     }
     ref
         .read(sharedBookSyncProvider)
         .setForeground(state == AppLifecycleState.resumed);
+  }
+
+  void _checkForAppUpdate() {
+    if (_updateDialogVisible) return;
+    unawaited(() async {
+      try {
+        final decision = await ref
+            .read(appUpdateServiceProvider)
+            .checkIfDue();
+        if (!mounted || decision == null) return;
+        final dialogContext = rootNavigatorKey.currentContext;
+        if (dialogContext == null || !dialogContext.mounted) return;
+
+        _updateDialogVisible = true;
+        await showDialog<void>(
+          context: dialogContext,
+          barrierDismissible: decision.kind != AppUpdateKind.required,
+          builder: (context) {
+            final required = decision.kind == AppUpdateKind.required;
+            return PopScope(
+              canPop: !required,
+              child: AlertDialog(
+                title: Text(required ? '需要更新后继续使用' : '发现新版本'),
+                content: Text(
+                  '${decision.message ?? '新版本已经可以更新。'}\n\n'
+                  '当前版本：${decision.currentVersion}\n'
+                  '最新版本：${decision.latestVersion}',
+                ),
+                actions: [
+                  if (!required)
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('稍后'),
+                    ),
+                  FilledButton(
+                    onPressed: () async {
+                      final opened = await ref
+                          .read(appUpdateServiceProvider)
+                          .openStore(decision);
+                      if (!context.mounted) return;
+                      if (opened && !required) {
+                        Navigator.pop(context);
+                      } else if (!opened) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('暂时无法打开更新地址')),
+                        );
+                      }
+                    },
+                    child: Text(required ? '立即更新' : '去更新'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      } on Object catch (error) {
+        await _diagnostics.record(
+          kind: 'app_update_check',
+          level: 'warn',
+          message: error.runtimeType.toString(),
+        );
+      } finally {
+        _updateDialogVisible = false;
+      }
+    }());
   }
 
   void _syncPersonalCloudForeground() {
@@ -268,6 +337,13 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         debugShowCheckedModeBanner: false,
         home: StartupPoster(),
       );
+    }
+
+    if (!_initialUpdateCheckScheduled) {
+      _initialUpdateCheckScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _checkForAppUpdate();
+      });
     }
 
     return MaterialApp.router(
