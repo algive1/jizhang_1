@@ -46,6 +46,7 @@ jobs:
           test/account_phase2_session_test.dart
           test/account_pending_intent_test.dart
           test/account_phase2_test.dart
+          test/account_dataset_binding_test.dart
 
   server-core:
     name: Server core checks
