@@ -122,6 +122,13 @@ class AccountCenterPage extends ConsumerWidget {
                   title: '数据',
                   children: [
                     ListTile(
+                      leading: const Icon(Icons.link_outlined),
+                      title: const Text('本地数据绑定'),
+                      subtitle: const Text('控制这份本地数据可以同步到哪个账号'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/profile/account/data-binding'),
+                    ),
+                    ListTile(
                       leading: const Icon(Icons.storage_outlined),
                       title: const Text('数据与安全'),
                       trailing: const Icon(Icons.chevron_right),
