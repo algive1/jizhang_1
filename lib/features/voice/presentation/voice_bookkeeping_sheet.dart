@@ -135,6 +135,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
         : ref.watch(categoriesByBookProvider(selectedBookId)).value ??
               const <Category>[];
     return SafeArea(
+      bottom: false,
       child: FractionallySizedBox(
         heightFactor: .92,
         child: Material(
@@ -148,7 +149,9 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
               18,
               10,
               18,
-              16 + MediaQuery.viewInsetsOf(context).bottom,
+              16 +
+                  MediaQuery.viewPaddingOf(context).bottom +
+                  MediaQuery.viewInsetsOf(context).bottom,
             ),
             child: Column(
               children: [
