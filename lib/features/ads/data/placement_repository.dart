@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/installation/installation_age_repository.dart';
 import '../../../core/models/membership.dart';
 import '../../../core/models/placement.dart';
 import '../../membership/data/membership_repository.dart';
-import '../../settings/data/app_settings_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import '../domain/ad_provider.dart';
@@ -16,56 +16,56 @@ abstract interface class PlacementConfigRepository {
   Future<List<PlacementConfig>> getActiveConfigs();
 }
 
-class InstallationAgeRepository {
-  InstallationAgeRepository(
-    this.settings, {
+class RemotePlacementConfigRepository implements PlacementConfigRepository {
+  RemotePlacementConfigRepository({
+    required this.api,
+    required this.fallback,
+    this.cacheTtl = const Duration(minutes: 15),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
-  static const createdAtKey = 'app.installation_created_at.v1';
-
-  final AppSettingsRepository settings;
-  final DateTime Function() _clock;
-
-  Future<DateTime> createdAt() async {
-    final now = _clock();
-    final raw = (await settings.get(createdAtKey))?.trim();
-    final parsed = raw == null ? null : DateTime.tryParse(raw);
-    if (parsed != null && !parsed.isAfter(now)) return parsed;
-
-    await settings.set(createdAtKey, now.toIso8601String());
-    return now;
-  }
-}
-
-class RemotePlacementConfigRepository implements PlacementConfigRepository {
-  const RemotePlacementConfigRepository({
-    required this.api,
-    required this.fallback,
-  });
-
   final SharedApi api;
   final PlacementConfigRepository fallback;
+  final Duration cacheTtl;
+  final DateTime Function() _clock;
+
+  List<PlacementConfig>? _cachedRemote;
+  DateTime? _cacheExpiresAt;
 
   @override
   Future<List<PlacementConfig>> getActiveConfigs() async {
-    final bundled = await fallback.getActiveConfigs();
+    final now = _clock();
+    final cached = _cachedRemote;
+    final expiresAt = _cacheExpiresAt;
+    if (cached != null && expiresAt != null && now.isBefore(expiresAt)) {
+      return cached;
+    }
+
     try {
       final response = await api.request('/ads/placements');
+      final configured = response['configured'];
       final raw = response['placements'];
-      if (raw is! List || raw.isEmpty) return bundled;
+      if (configured != true) {
+        return await fallback.getActiveConfigs();
+      }
+      if (raw is! List) {
+        throw const FormatException('广告位配置格式无效');
+      }
 
       final remote = raw
-          .whereType<Map>()
-          .map((item) => _placementFromJson(item.cast<String, dynamic>()))
+          .map((item) {
+            if (item is! Map) {
+              throw const FormatException('广告位配置项无效');
+            }
+            return _placementFromJson(item.cast<String, dynamic>());
+          })
           .toList(growable: false);
-      final merged = <String, PlacementConfig>{
-        for (final placement in bundled) placement.id: placement,
-        for (final placement in remote) placement.id: placement,
-      };
-      return merged.values.toList(growable: false);
+      _cachedRemote = remote;
+      _cacheExpiresAt = now.add(cacheTtl);
+      return remote;
     } on Object {
-      return bundled;
+      if (cached != null) return cached;
+      return fallback.getActiveConfigs();
     }
   }
 
@@ -82,6 +82,28 @@ class RemotePlacementConfigRepository implements PlacementConfigRepository {
       if (raw == null) return null;
       if (raw is! num) throw const FormatException('广告位时间配置无效');
       return DateTime.fromMillisecondsSinceEpoch(raw.toInt() * 1000);
+    }
+
+    final id = json['id'];
+    final title = json['title'];
+    final description = json['description'];
+    final enabled = json['enabled'];
+    final dailyLimit = json['dailyLimit'];
+    final priority = json['priority'];
+    if (id is! String ||
+        id.isEmpty ||
+        title is! String ||
+        description is! String ||
+        enabled is! bool ||
+        dailyLimit is! num ||
+        priority is! num) {
+      throw const FormatException('广告位基础配置无效');
+    }
+
+    final surface = enumValue(PlacementSurface.values, json['surface']);
+    final format = enumValue(AdFormat.values, json['format']);
+    if (!_formatMatchesSurface(surface, format)) {
+      throw const FormatException('广告位展示类型与位置不匹配');
     }
 
     final contentType = enumValue(
@@ -111,27 +133,49 @@ class RemotePlacementConfigRepository implements PlacementConfigRepository {
       throw const FormatException('广告内容类别不允许');
     }
 
+    final startAt = date(json['startAt']);
+    final endAt = date(json['endAt']);
+    if (startAt != null && endAt != null && !startAt.isBefore(endAt)) {
+      throw const FormatException('广告位时间范围无效');
+    }
+    if (dailyLimit.toInt() <= 0 || dailyLimit.toInt() > 20) {
+      throw const FormatException('广告位频控无效');
+    }
+
     return PlacementConfig(
-      id: json['id'] as String,
-      surface: enumValue(PlacementSurface.values, json['surface']),
-      format: enumValue(AdFormat.values, json['format']),
+      id: id,
+      surface: surface,
+      format: format,
       contentType: contentType,
-      title: json['title'] as String,
-      description: json['description'] as String,
+      title: title,
+      description: description,
       actionLabel: json['actionLabel'] as String?,
       actionRoute: actionRoute as String?,
-      enabled: json['enabled'] as bool,
+      enabled: enabled,
       targetAudience: enumValue(
         PlacementAudience.values,
         json['targetAudience'],
       ),
-      startAt: date(json['startAt']),
-      endAt: date(json['endAt']),
-      dailyLimit: (json['dailyLimit'] as num).toInt(),
-      priority: (json['priority'] as num).toInt(),
+      startAt: startAt,
+      endAt: endAt,
+      dailyLimit: dailyLimit.toInt(),
+      priority: priority.toInt(),
       provider: provider,
       contentCategory: category,
     );
+  }
+
+  static bool _formatMatchesSurface(
+    PlacementSurface surface,
+    AdFormat format,
+  ) {
+    return switch (surface) {
+      PlacementSurface.splash => format == AdFormat.splash,
+      PlacementSurface.aiReward => format == AdFormat.rewarded,
+      PlacementSurface.homePromo ||
+      PlacementSurface.profilePromo ||
+      PlacementSurface.goalPromo => format == AdFormat.native,
+    };
   }
 }
 
@@ -253,6 +297,10 @@ class PlacementResolver {
           ..sort((a, b) => b.priority.compareTo(a.priority));
     for (final placement in candidates) {
       if (placement.contentType == PlacementContentType.thirdParty) {
+        // Native ad networks require their official renderer so impressions,
+        // clicks and disclosure remain owned by the SDK. Do not render their
+        // payload as a normal app card.
+        if (placement.format == AdFormat.native) continue;
         if (placement.provider != provider.id) continue;
         if (!await provider.isAvailable(placement.format)) continue;
       }
@@ -299,16 +347,18 @@ class RewardedAdService {
 }
 
 final placementConfigRepositoryProvider = Provider<PlacementConfigRepository>(
-  (ref) => RemotePlacementConfigRepository(
-    api: ref.watch(sharedApiProvider),
-    fallback: const BundledPlacementConfigRepository(),
-  ),
+  (ref) {
+    const baseUrl = String.fromEnvironment('SHARED_API_BASE_URL');
+    if (baseUrl.isEmpty) return const BundledPlacementConfigRepository();
+    return RemotePlacementConfigRepository(
+      api: ref.watch(sharedApiProvider),
+      fallback: const BundledPlacementConfigRepository(),
+    );
+  },
 );
 
 final installationAgeRepositoryProvider = Provider<InstallationAgeRepository>(
-  (ref) => InstallationAgeRepository(
-    ref.watch(appSettingsRepositoryProvider),
-  ),
+  (ref) => InstallationAgeRepository(),
 );
 
 final adEventRepositoryProvider = Provider((ref) {
