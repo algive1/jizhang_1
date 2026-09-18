@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/membership.dart';
+import '../../account/application/account_auth_gate.dart';
+import '../../account/application/account_pending_intent.dart';
 import '../../sharing/data/session_repository.dart';
 import '../data/membership_catalog.dart';
 import '../data/membership_repository.dart';
@@ -185,34 +187,46 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   Future<void> _purchase(MembershipProduct product) async {
     if (_isPaying) return;
     final channel = _selectedChannel;
+    final intent = AccountPendingIntent(
+      id: 'membership:${product.id}:${channel.name}',
+      action: AccountPendingAction.membershipPurchase,
+      returnLocation: '/profile/membership',
+      payload: {
+        'productId': product.id,
+        'channel': channel.name,
+      },
+    );
+    final allowed = await AccountAuthGate.requireLogin(
+      context,
+      ref,
+      reason: AccountAuthReason.membership,
+      intent: intent,
+    );
+    if (!mounted || !allowed) return;
+
+    final pending = ref
+        .read(accountPendingIntentProvider)
+        .consume(intent.id);
+    if (pending == null ||
+        pending.payload['productId'] != product.id ||
+        pending.payload['channel'] != channel.name) {
+      return;
+    }
+
     setState(() => _isPaying = true);
     try {
       final session = ref.read(sessionRepositoryProvider);
       await session.initialize();
-      if (!mounted) return;
-      if (session.user == null) {
-        await showDialog<void>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('登录后开通会员'),
-            content: const Text('支付订单需要绑定登录账号，请先登录后再继续。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('知道了'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
+      final user = session.accountUser;
+      if (user == null) return;
+
       final random = math.Random.secure().nextInt(1 << 32).toRadixString(16);
       final idempotencyKey =
           'membership-${DateTime.now().microsecondsSinceEpoch}-$random';
       final service = ref.read(paymentServiceProvider);
       final order = await service.createOrder(
         CreatePaymentOrderRequest(
-          userId: session.user!.id,
+          userId: user.id,
           productId: product.id,
           channel: channel,
           idempotencyKey: idempotencyKey,
@@ -221,9 +235,6 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       await service.invoke(order);
       _refreshMembershipStatus();
       if (!mounted) return;
-      // The network/SDK work is complete before the informational dialog is
-      // shown. Stop the progress animation so test and accessibility settling
-      // do not depend on an indefinite spinner behind the dialog.
       setState(() => _isPaying = false);
       await showDialog<void>(
         context: context,
@@ -254,6 +265,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         ),
       );
     } finally {
+      ref.read(accountPendingIntentProvider).clear(intent.id);
       if (mounted) setState(() => _isPaying = false);
     }
   }

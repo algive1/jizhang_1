@@ -71,7 +71,7 @@ class _AccountRegisterPageState extends ConsumerState<AccountRegisterPage> {
       _password.clear();
       _confirm.clear();
       if (context.canPop()) {
-        context.pop();
+        context.pop(true);
       } else {
         context.go('/profile');
       }
@@ -193,7 +193,19 @@ class _AccountRegisterPageState extends ConsumerState<AccountRegisterPage> {
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: _busy ? null : () => context.pushReplacement('/account/login'),
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final loggedIn = await context.push<bool>(
+                          '/account/login?gate=1',
+                        );
+                        if (!context.mounted || loggedIn != true) return;
+                        if (context.canPop()) {
+                          context.pop(true);
+                        } else {
+                          context.go('/profile');
+                        }
+                      },
                 child: const Text('已有账号？去登录'),
               ),
             ],

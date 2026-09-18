@@ -50,7 +50,7 @@ class _AccountLoginPageState extends ConsumerState<AccountLoginPage> {
       if (!mounted) return;
       _password.clear();
       if (context.canPop()) {
-        context.pop();
+        context.pop(true);
       } else {
         context.go('/profile');
       }
@@ -126,7 +126,19 @@ class _AccountLoginPageState extends ConsumerState<AccountLoginPage> {
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: _busy ? null : () => context.pushReplacement('/account/register'),
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final registered = await context.push<bool>(
+                          '/account/register?gate=1',
+                        );
+                        if (!context.mounted || registered != true) return;
+                        if (context.canPop()) {
+                          context.pop(true);
+                        } else {
+                          context.go('/profile');
+                        }
+                      },
                 child: const Text('还没有账号？创建账号'),
               ),
             ],
