@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
+import { requireCondition as check } from './contract.js';
 import type { Store } from './store.js';
 
 const eventName = z.enum([
@@ -48,6 +50,19 @@ const analyticsBody = z.strictObject({
   events: z.array(analyticsEvent).min(1).max(50),
 });
 
+function requireAnalyticsAdmin(header: string | string[] | undefined) {
+  const configured = (process.env.ANALYTICS_ADMIN_KEY ?? '').trim();
+  check(configured.length >= 24, '统计后台未启用', 404);
+  const provided = Array.isArray(header) ? header[0] ?? '' : header ?? '';
+  const left = Buffer.from(configured);
+  const right = Buffer.from(provided);
+  check(
+    left.length === right.length && timingSafeEqual(left, right),
+    '统计管理密钥无效',
+    401,
+  );
+}
+
 export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
   app.post(
     '/api/v1/analytics/events',
@@ -81,5 +96,50 @@ export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
         duplicates: body.events.length - accepted,
       };
     },
+  app.get('/api/v1/analytics/summary', async (request) => {
+    requireAnalyticsAdmin(request.headers['x-analytics-admin-key']);
+    const { days } = z
+      .strictObject({
+        days: z.coerce.number().int().min(1).max(90).default(7),
+      })
+      .parse(request.query);
+    const now = store.now();
+    const since = now - days * 86400;
+
+    const totals = store.db
+      .prepare(
+        'SELECT COUNT(*) AS totalEvents, '
+          + 'COUNT(DISTINCT installation_id) AS activeInstallations '
+          + 'FROM analytics_events WHERE occurred_at>=?',
+      )
+      .get(since) as { totalEvents: number; activeInstallations: number };
+
+    const eventsByName = store.db
+      .prepare(
+        'SELECT event_name AS name,COUNT(*) AS count '
+          + 'FROM analytics_events WHERE occurred_at>=? '
+          + 'GROUP BY event_name ORDER BY count DESC,event_name ASC',
+      )
+      .all(since) as Array<{ name: string; count: number }>;
+
+    const dailyActive = store.db
+      .prepare(
+        "SELECT strftime('%Y-%m-%d',occurred_at,'unixepoch') AS day,"
+          + 'COUNT(DISTINCT installation_id) AS installations '
+          + 'FROM analytics_events WHERE occurred_at>=? '
+          + 'GROUP BY day ORDER BY day ASC',
+      )
+      .all(since) as Array<{ day: string; installations: number }>;
+
+    return {
+      days,
+      since,
+      until: now,
+      activeInstallations: totals.activeInstallations,
+      totalEvents: totals.totalEvents,
+      eventsByName,
+      dailyActive,
+    };
+  });
   );
 }
