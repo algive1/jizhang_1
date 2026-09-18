@@ -152,7 +152,7 @@ void main() {
     expect(find.byKey(const ValueKey('quick-image-chip')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-recurring-chip')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-ai-entry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-voice-entry')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-voice-entry')), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
 
     expect(find.byKey(const ValueKey('amount-key-1')), findsOneWidget);
@@ -199,12 +199,17 @@ void main() {
         .decoration!;
 
     final ai = tester.getRect(find.byKey(const ValueKey('quick-ai-entry')));
+    final voice = tester.getRect(
+      find.byKey(const ValueKey('quick-voice-entry')),
+    );
 
     expect(note.height, closeTo(40, .1));
+    expect(voice.width, closeTo(36, .1));
+    expect(voice.height, closeTo(36, .1));
     expect(
       note.width,
       greaterThan(ai.width * 1.5),
-      reason: '备注输入区应明显宽于 AI 入口，不能再被右侧按钮挤窄',
+      reason: '保留语音按钮后，备注输入区仍应明显宽于 AI 入口，不能再次被挤窄',
     );
     expect(note.bottom, lessThan(amount.top));
     expect(detail.top, lessThanOrEqualTo(note.top));
