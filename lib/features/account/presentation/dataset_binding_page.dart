@@ -71,7 +71,8 @@ class DatasetBindingPage extends ConsumerWidget {
                         subtitle: value.cloudSyncEnabled
                             ? value.lastSyncAt == null
                                 ? '云同步通道已建立，可手动上传首份云端备份。'
-                                : '最近备份：${value.lastSyncAt!.toLocal()}'
+                                : '最近备份：${value.lastSyncAt!.toLocal()}\n'
+                                    '首次手动备份完成后，打开或回到应用时每 6 小时最多自动备份一次。'
                             : '尚未建立个人云同步通道。登录和绑定都不会自动上传数据。',
                       ),
                     ],
