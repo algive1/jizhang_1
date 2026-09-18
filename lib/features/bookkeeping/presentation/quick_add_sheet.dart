@@ -2035,6 +2035,10 @@ class _NoteRow extends StatelessWidget {
       icon: Icons.auto_awesome_outlined,
       iconColor: AppColors.primaryDark,
       selected: true,
+      height: 36,
+      horizontalPadding: 6,
+      iconGap: 4,
+      fontSize: 12,
       onTap: onAi,
     );
     final voiceAction = _NoteIconAction(
@@ -2047,7 +2051,7 @@ class _NoteRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         aiAction,
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         voiceAction,
       ],
     );
@@ -2066,7 +2070,7 @@ class _NoteRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(child: field),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         actions,
       ],
     );
@@ -2150,8 +2154,11 @@ class _QuickChip extends StatelessWidget {
     this.leading,
     this.selected = false,
     this.showChevron = false,
+    this.height = 40,
+    this.horizontalPadding = 8,
+    this.iconGap = 6,
+    this.fontSize = 12.5,
     this.onTap,
-    this.onLongPress,
   });
 
   final String label;
@@ -2160,8 +2167,11 @@ class _QuickChip extends StatelessWidget {
   final Widget? leading;
   final bool selected;
   final bool showChevron;
+  final double height;
+  final double horizontalPadding;
+  final double iconGap;
+  final double fontSize;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2170,11 +2180,10 @@ class _QuickChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          height: height,
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
@@ -2189,14 +2198,14 @@ class _QuickChip extends StatelessWidget {
               children: [
                 if (leading != null) ...[
                   leading!,
-                  const SizedBox(width: 6),
+                  SizedBox(width: iconGap),
                 ] else if (icon != null) ...[
                   Icon(
                     icon,
                     size: 16,
                     color: iconColor ?? AppColors.textSecondary,
                   ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: iconGap),
                 ],
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 120),
@@ -2205,7 +2214,7 @@ class _QuickChip extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: fontSize,
                       color: selected
                           ? AppColors.primaryDark
                           : AppColors.textPrimary,

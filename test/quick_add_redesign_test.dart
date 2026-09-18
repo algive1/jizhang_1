@@ -204,12 +204,14 @@ void main() {
     );
 
     expect(note.height, closeTo(40, .1));
+    expect(ai.height, closeTo(36, .1));
+    expect(ai.width, lessThan(92));
     expect(voice.width, closeTo(36, .1));
     expect(voice.height, closeTo(36, .1));
     expect(
       note.width,
-      greaterThan(ai.width * 1.5),
-      reason: '保留语音按钮后，备注输入区仍应明显宽于 AI 入口，不能再次被挤窄',
+      greaterThan(ai.width * 1.7),
+      reason: 'AI/语音入口压缩后，备注输入区应继续占据这一行的主要宽度',
     );
     expect(note.bottom, lessThan(amount.top));
     expect(detail.top, lessThanOrEqualTo(note.top));
