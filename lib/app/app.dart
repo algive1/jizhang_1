@@ -21,6 +21,7 @@ import '../features/sharing/data/session_repository.dart';
 import '../features/account/application/personal_cloud_auto_backup_service.dart';
 import '../features/account/application/personal_cloud_remote_change_service.dart';
 import '../features/update/application/app_update_service.dart';
+import '../features/push/application/push_registration_service.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -65,6 +66,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
+      _registerPushIfAvailable();
       unawaited(const FinanceSchedulerBridge().scheduleDaily());
       final sync = ref.read(sharedBookSyncProvider);
       unawaited(
@@ -140,11 +142,30 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _syncRecurringBillNotifications();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
+      _registerPushIfAvailable();
       _checkForAppUpdate();
     }
     ref
         .read(sharedBookSyncProvider)
         .setForeground(state == AppLifecycleState.resumed);
+  }
+
+  void _registerPushIfAvailable() {
+    unawaited(
+      ref
+          .read(pushRegistrationServiceProvider)
+          .registerIfAvailable()
+          .then((result) {
+            if (result == PushRegistrationResult.failed) {
+              return _diagnostics.record(
+                kind: 'push_registration',
+                level: 'warn',
+                data: {'result': result.name},
+              );
+            }
+            return Future<void>.value();
+          }),
+    );
   }
 
   void _checkForAppUpdate() {

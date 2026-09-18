@@ -79,3 +79,20 @@ Set `ANALYTICS_ADMIN_KEY` to a random value of at least 24 characters to enable 
 - The summary returns active installation count, total event count, counts by event name, and daily active installations. It never returns raw event rows.
 
 If `ANALYTICS_ADMIN_KEY` is not configured, the summary endpoint behaves as unavailable.
+
+
+## Push device registration
+
+Remote push delivery is provider-neutral in the application core. The current repository does not bundle FCM, APNs credential handling, or a domestic push vendor SDK yet.
+
+Authenticated clients can register a provider token with:
+
+- `POST /api/v1/push/devices`
+- `GET /api/v1/push/devices`
+- `DELETE /api/v1/push/devices/:deviceId`
+
+Each device token is bound to the login session that registered it. The database uses a cascading session foreign key, so logout or logout-all removes the corresponding push registration automatically. Device listing never returns the provider token.
+
+The Flutter client reads future provider tokens through MethodChannel `jizhang/push`. Until a native provider implementation is configured, the bridge returns unavailable and the app continues normally without requesting remote-notification permissions.
+
+When a delivery provider is added, senders must only target rows whose linked session is still active.

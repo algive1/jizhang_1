@@ -14,6 +14,7 @@ import type { AssistantModelProvider } from './assistant_ai.js';
 import { registerPersonalCloudRoutes } from './personal_cloud.js';
 import { registerAppUpdateRoutes } from './app_update.js';
 import { registerAnalyticsRoutes } from './analytics.js';
+import { registerPushRoutes } from './push.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
 const deviceNameField = z.string().trim().min(1).max(80).optional();
@@ -70,6 +71,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerPaymentRoutes(app,store,authenticate);
   registerPersonalCloudRoutes(app,store,authenticate);
   registerDiagnosticsRoutes(app,store,authenticate);
+  registerPushRoutes(app,store,authenticate);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   app.get('/health',async()=>({status:'ok',schemaVersion:1}));
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{

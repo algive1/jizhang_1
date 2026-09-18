@@ -101,10 +101,10 @@ test('anonymous analytics rejects financial or unapproved event fields', async t
   assert.equal(unknown.statusCode, 400);
 });
 
-test('server migrates analytics schema to version 8', async t => {
+test('server schema keeps analytics storage after later migrations', async t => {
   const { app, store } = await createApp(':memory:');
   t.after(() => app.close());
-  assert.equal(store.db.pragma('user_version', { simple: true }), 8);
+  assert.ok((store.db.pragma('user_version', { simple: true }) as number) >= 8);
   const table = store.db
     .prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_events'",
