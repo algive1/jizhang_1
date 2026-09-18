@@ -55,8 +55,6 @@ app.*.map.json
 /jizhang_app/
 /jizhang_app_source_*.zip
 
-# 本地构建的 APK 输出：dist/ 只跟踪正式 release 包
-# 保留：dist/jizhang_app-<版本>-release.apk
-# 忽略：dist/jizhang_app-<版本>-debug.apk、dist/jizhang_app-<版本>-release-<时间戳>.apk
-/dist/*-debug.apk
-/dist/*-release-*.apk
+# 本地构建的安装包输出：dist/ 不随仓库分发
+# APK 由 ./scripts/build_install_android.sh 生成到本地 dist/，需要分发时上传 GitHub Release
+/dist/

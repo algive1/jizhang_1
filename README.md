@@ -63,10 +63,10 @@ git push origin main            # 备份到远端
 | 类别 | 是否跟踪 | 说明 |
 | --- | --- | --- |
 | `lib/`、`test/`、`android/`、`ios/`、`server/src`、`server/test`、`scripts/`、`assets/`、`docs/` | 跟踪 | 源码、测试、文档、设计与验收资源 |
-| `dist/jizhang_app-<版本>-release.apk` | 跟踪 | 唯一随仓库分发的正式安装包 |
-| `build/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/` | 忽略 | 可重建的构建/依赖产物 |
-| `dist/*-debug.apk`、`dist/*-release-<时间戳>.apk` | 忽略 | 本地调试与历史构建包，避免仓库膨胀 |
+| `build/`、`dist/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/` | 忽略 | 可重建的构建/依赖产物；安装包 `dist/*.apk` 不随仓库分发，需要分发时上传 GitHub Release |
 | `jizhang_app/`、`jizhang_app_source_*.zip` | 忽略 | `scripts/package_source.sh` 产出的源码快照，可随时重建 |
 | `android/key.properties`、`*.jks`、`*.keystore` | 忽略 | 签名材料不入库 |
 
 `haohaojizhangœ/` 是另一个独立仓库（`algive1/haohaojizhang-.`），与本 App 无关，历史提交中以 gitlink 记录、不参与本工程构建。
+
+远端仓库创建时自带的 `Initial commit`（`LICENSE` + 占位 README）与本地历史没有共同祖先，2026-09-18 用 `git merge origin/main --allow-unrelated-histories` 合并收口：README 以本文件为准，MIT `LICENSE` 保留。

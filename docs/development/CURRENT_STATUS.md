@@ -4,7 +4,7 @@
 
 ## 最新任务交接（2026-09-18 全工程 Git 跟踪）
 
-把此前游离在工作区外的整份工程纳入版本管理：一次性提交 120 个未跟踪文件与 130 个修改文件（投资管理、循环账单、自动记账与诊断日志、会员法律文档、服务端诊断接口、QA 截图归档、`scripts/package_source.sh`），工作区提交后干净无遗漏。`.gitignore` 仅保留生成物忽略规则：`build/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/`、`dist/*-debug.apk`、`dist/*-release-<时间戳>.apk`、`jizhang_app/`、`jizhang_app_source_*.zip`、签名材料；`dist/jizhang_app-<版本>-release.apk` 仍随仓库分发。跟踪范围与远端说明见根目录 [`README.md`](../../README.md) 的「版本管理（Git）」。遗留：远端 `origin/main` 只有一个无关的 `Initial commit`（LICENSE + 单行 README），本地 23 个提交从未推送，推送策略需人工确认后再执行。
+把此前游离在工作区外的整份工程纳入版本管理：一次性提交 120 个未跟踪文件与 130 个修改文件（投资管理、循环账单、自动记账与诊断日志、会员法律文档、服务端诊断接口、QA 截图归档、`scripts/package_source.sh`），工作区提交后干净无遗漏。`.gitignore` 只保留生成物忽略规则：`build/`、`dist/`、`.dart_tool/`、`android/.gradle/`、`ios/Pods/`、`server/node_modules/`、`jizhang_app/`、`jizhang_app_source_*.zip`、签名材料；安装包改为 `dist/` 整体忽略，需要分发时上传 GitHub Release（`git rm --cached` 后本地文件保留）。跟踪范围与远端说明见根目录 [`README.md`](../../README.md) 的「版本管理（Git）」。远端 `origin/main` 原本只有一个无关的 `Initial commit`（LICENSE + 单行 README），已用 `--allow-unrelated-histories` 合并后推送；本地历史里 2026-09-17 之前的两个 release APK 版本（约 169MB）仍留在提交历史中，如需给远端瘦身需重写历史并强推。
 
 ## 最新任务交接（2026-09-18 Android 自动记账与诊断日志）
 
