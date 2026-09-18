@@ -37,6 +37,10 @@ class PersonalCloudAutoBackupService {
         return PersonalCloudAutoBackupResult.skipped;
       }
 
+      if (binding.hasRemoteUpdate) {
+        return PersonalCloudAutoBackupResult.conflict;
+      }
+
       final elapsed = DateTime.now().difference(binding.lastSyncAt!);
       if (elapsed < minimumInterval) {
         return PersonalCloudAutoBackupResult.skipped;
