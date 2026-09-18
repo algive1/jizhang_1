@@ -60,6 +60,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
               onPressed: () => showQuickAddSheet(context),
               onLongPress: () => showModalBottomSheet<void>(
                 context: context,
+                useRootNavigator: true,
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,
                 builder: (_) => const VoiceBookkeepingSheet(),

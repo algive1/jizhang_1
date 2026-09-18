@@ -332,6 +332,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final input = _amount;
 
     return SafeArea(
+      // Keep the sheet background opaque through the system gesture area.
+      // The keypad gets its own inner SafeArea below, so controls stay clear
+      // without exposing the app shell/navigation underneath the modal.
+      bottom: false,
       // Modal routes may remove MediaQuery's top padding. Read the actual
       // window inset so every entry point stays below the status bar.
       minimum: EdgeInsets.only(
@@ -344,6 +348,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         child: FractionallySizedBox(
           heightFactor: 1,
           child: Material(
+            key: const ValueKey('quick-sheet-surface'),
             color: const Color(0xFFF8F7F1),
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
@@ -445,19 +450,22 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   ),
                 ),
                 if (!keyboardVisible)
-                  NumberKeyboard(
-                    canRepeat: !_isEditing,
-                    isSaving: _isSaving,
-                    onKey: (key) => _updateAmount(_amount.enter(key)),
-                    onBackspace: () => _updateAmount(_amount.backspace()),
-                    onDone: () => _submit(
-                      bookId: selectedBookId,
-                      sourceAccount: sourceAccount,
-                      destinationAccount: destinationAccount,
-                      selectedCategory: selectedCategory,
-                      subcategoryId: effectiveSubcategoryId,
+                  SafeArea(
+                    top: false,
+                    child: NumberKeyboard(
+                      canRepeat: !_isEditing,
+                      isSaving: _isSaving,
+                      onKey: (key) => _updateAmount(_amount.enter(key)),
+                      onBackspace: () => _updateAmount(_amount.backspace()),
+                      onDone: () => _submit(
+                        bookId: selectedBookId,
+                        sourceAccount: sourceAccount,
+                        destinationAccount: destinationAccount,
+                        selectedCategory: selectedCategory,
+                        subcategoryId: effectiveSubcategoryId,
+                      ),
+                      onRepeat: _resetForNextEntry,
                     ),
-                    onRepeat: _resetForNextEntry,
                   ),
               ],
             ),
@@ -647,7 +655,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               ),
               _QuickChip(
                 key: const ValueKey('quick-date-chip'),
-                label: '时间',
+                label: _dateChipLabel,
                 icon: Icons.calendar_today_outlined,
                 selected: true,
                 onTap: _pickDateTime,
@@ -688,6 +696,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   String get _reimbursementLabel =>
       _reimbursementLabelFor(_reimbursementStatus);
+
+  String get _dateChipLabel {
+    final now = DateTime.now();
+    if (DateUtils.isSameDay(_occurredAt, now)) return '今天';
+    final yesterday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 1));
+    if (DateUtils.isSameDay(_occurredAt, yesterday)) return '昨天';
+    return '${_occurredAt.month}/${_occurredAt.day}';
+  }
 
   String _currencySymbol(Account? account) =>
       account == null || account.currency == 'CNY' ? '¥' : account.currency;
@@ -762,6 +782,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Future<void> _openVoice() async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => VoiceBookkeepingSheet(bookId: _bookId),
@@ -772,6 +793,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Future<void> _openAi() async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => VoiceBookkeepingSheet(textOnly: true, bookId: _bookId),
@@ -1981,9 +2003,10 @@ class _NoteRow extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
               decoration: const InputDecoration(
-                // The app-wide form theme uses a 52dp outlined field. The
-                // compact note row is part of the amount card, so it must not
-                // inherit that height or outline in any focus state.
+                // This is an integrated row, not a standalone form field.
+                // Explicitly neutralize the app-wide 52dp outlined field theme
+                // so the note area stays borderless and compact like the
+                // reference bookkeeping card.
                 isDense: true,
                 isCollapsed: true,
                 filled: false,
@@ -2006,32 +2029,26 @@ class _NoteRow extends StatelessWidget {
         ],
       ),
     );
-    final actions = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _QuickChip(
-          key: const ValueKey('quick-ai-entry'),
-          label: 'AI帮我记',
-          icon: Icons.auto_awesome_outlined,
-          iconColor: const Color(0xFF765A94),
-          onTap: onAi,
-        ),
-        const SizedBox(width: 6),
-        _IconChip(
-          key: const ValueKey('quick-voice-entry'),
-          icon: Icons.mic_none_rounded,
-          tooltip: '语音记账',
-          onTap: onVoice,
-        ),
-      ],
+    final aiAction = _QuickChip(
+      key: const ValueKey('quick-ai-entry'),
+      label: 'AI帮我记',
+      icon: Icons.auto_awesome_outlined,
+      iconColor: AppColors.primaryDark,
+      selected: true,
+      onTap: onAi,
+      // Keep voice bookkeeping available without adding the separate mic
+      // button that widened this row. Long-press preserves the capability
+      // while the visible layout matches the compact reference card.
+      onLongPress: onVoice,
     );
+
     if (stacks) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           field,
           const SizedBox(height: 8),
-          Align(alignment: Alignment.centerRight, child: actions),
+          Align(alignment: Alignment.centerRight, child: aiAction),
         ],
       );
     }
@@ -2039,8 +2056,8 @@ class _NoteRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(child: field),
-        const SizedBox(width: 6),
-        actions,
+        const SizedBox(width: 8),
+        aiAction,
       ],
     );
   }
@@ -2087,6 +2104,7 @@ class _QuickChip extends StatelessWidget {
     this.selected = false,
     this.showChevron = false,
     this.onTap,
+    this.onLongPress,
   });
 
   final String label;
@@ -2096,6 +2114,7 @@ class _QuickChip extends StatelessWidget {
   final bool selected;
   final bool showChevron;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2104,6 +2123,7 @@ class _QuickChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: 40,
@@ -2156,43 +2176,6 @@ class _QuickChip extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconChip extends StatelessWidget {
-  const _IconChip({
-    super.key,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: Icon(icon, size: 18, color: AppColors.textSecondary),
           ),
         ),
       ),
