@@ -152,7 +152,9 @@ class _AccountRegisterPageState extends ConsumerState<AccountRegisterPage> {
                 decoration: const InputDecoration(labelText: '确认密码'),
               ),
               const SizedBox(height: 12),
-              CheckboxListTile(
+              Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
                 key: const ValueKey('account-register-agreement'),
                 value: _accepted,
                 enabled: !_busy,
@@ -163,6 +165,7 @@ class _AccountRegisterPageState extends ConsumerState<AccountRegisterPage> {
                   style: TextStyle(fontSize: 13),
                 ),
                 onChanged: (value) => setState(() => _accepted = value ?? false),
+                ),
               ),
               Align(
                 alignment: Alignment.centerLeft,
