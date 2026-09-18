@@ -116,17 +116,19 @@ class AppUpdateService {
       throw const FormatException('版本更新响应无效');
     }
 
-    await _settings.set(_lastCheckKey, DateTime.now().toIso8601String());
-
     final kind = switch (status) {
       'required' => AppUpdateKind.required,
       'optional' => AppUpdateKind.optional,
-      _ => AppUpdateKind.none,
+      'none' => AppUpdateKind.none,
+      _ => throw const FormatException('版本更新状态无效'),
     };
-    if (kind == AppUpdateKind.none) return null;
-    if (storeUrl is! String || !storeUrl.startsWith('https://')) {
+    if (kind != AppUpdateKind.none &&
+        (storeUrl is! String || !storeUrl.startsWith('https://'))) {
       throw const FormatException('更新地址无效');
     }
+
+    await _settings.set(_lastCheckKey, DateTime.now().toIso8601String());
+    if (kind == AppUpdateKind.none) return null;
 
     return AppUpdateDecision(
       kind: kind,
