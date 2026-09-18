@@ -72,6 +72,24 @@ export function registerPersonalCloudRoutes(
     return status(row, input.datasetId);
   });
 
+  app.get('/api/v1/sync/snapshot/download', async (req) => {
+    const user = authenticate(req.headers.authorization);
+    check(hasCloudEntitlement(store, user.id), '云同步需要有效会员', 403);
+    const row = store.db
+      .prepare('SELECT * FROM cloud_datasets WHERE user_id=?')
+      .get(user.id) as DatasetRow | undefined;
+    check(row && row.has_snapshot === 1 && row.snapshot_blob, '云端还没有可恢复的备份', 404);
+    return {
+      datasetId: row.dataset_id,
+      revision: row.revision,
+      encoding: 'gzip+base64',
+      snapshot: row.snapshot_blob.toString('base64'),
+      snapshotSize: row.snapshot_size,
+      snapshotSha256: row.snapshot_sha256,
+      updatedAt: row.updated_at,
+    };
+  });
+
   app.post('/api/v1/sync/snapshot', async (req) => {
     const user = authenticate(req.headers.authorization);
     check(hasCloudEntitlement(store, user.id), '云同步需要有效会员', 403);
