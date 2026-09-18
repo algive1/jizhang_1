@@ -124,7 +124,11 @@ class _AccountLoginPageState extends ConsumerState<AccountLoginPage> {
                   child: Text(_busy ? '正在登录…' : '登录'),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: _busy ? null : () => context.push('/account/recover'),
+                child: const Text('忘记密码？使用恢复密钥'),
+              ),
               TextButton(
                 onPressed: _busy
                     ? null
