@@ -6,70 +6,79 @@ import '../../app/theme/app_colors.dart';
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({required this.location, super.key});
 
+  static const double _horizontalInset = 10;
+  static const double _bottomInset = 8;
+  static const double _cornerRadius = 32;
+
   final String location;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: SizedBox(
-            height: 64,
-            child: BottomAppBar(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              color: const Color(0xFFFFFEFB),
-              elevation: 0,
-              shape: const CircularNotchedRectangle(),
-              notchMargin: 8,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _item(
-                      context,
-                      0,
-                      Icons.home_outlined,
-                      Icons.home,
-                      '首页',
-                      '/',
-                    ),
-                  ),
-                  Expanded(
-                    child: _item(
-                      context,
-                      1,
-                      Icons.receipt_long_outlined,
-                      Icons.receipt_long,
-                      '流水',
-                      '/transactions',
-                    ),
-                  ),
-                  const SizedBox(width: 72),
-                  Expanded(
-                    child: _item(
-                      context,
-                      2,
-                      Icons.track_changes_outlined,
-                      Icons.track_changes,
-                      '目标',
-                      '/goals',
-                    ),
-                  ),
-                  Expanded(
-                    child: _item(
-                      context,
-                      3,
-                      Icons.person_outline,
-                      Icons.person,
-                      '我的',
-                      '/profile',
-                    ),
-                  ),
-                ],
+      child: SizedBox(
+        height: 72,
+        child: BottomAppBar(
+          key: const ValueKey('app-bottom-navigation-bar'),
+          padding: const EdgeInsets.fromLTRB(
+            _horizontalInset + 8,
+            4,
+            _horizontalInset + 8,
+            _bottomInset + 4,
+          ),
+          color: const Color(0xFFFFFEFB),
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
+          shape: const _InsetRoundedCircularNotchedShape(
+            horizontalInset: _horizontalInset,
+            bottomInset: _bottomInset,
+            cornerRadius: _cornerRadius,
+          ),
+          notchMargin: 8,
+          child: Row(
+            children: [
+              Expanded(
+                child: _item(
+                  context,
+                  0,
+                  Icons.home_outlined,
+                  Icons.home,
+                  '首页',
+                  '/',
+                ),
               ),
-            ),
+              Expanded(
+                child: _item(
+                  context,
+                  1,
+                  Icons.receipt_long_outlined,
+                  Icons.receipt_long,
+                  '流水',
+                  '/transactions',
+                ),
+              ),
+              const SizedBox(width: 72),
+              Expanded(
+                child: _item(
+                  context,
+                  2,
+                  Icons.track_changes_outlined,
+                  Icons.track_changes,
+                  '目标',
+                  '/goals',
+                ),
+              ),
+              Expanded(
+                child: _item(
+                  context,
+                  3,
+                  Icons.person_outline,
+                  Icons.person,
+                  '我的',
+                  '/profile',
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -122,5 +131,48 @@ class AppBottomNavigation extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Keeps the [BottomAppBar] itself full-width so Flutter's FAB geometry and
+/// notch geometry share the same coordinate system. Only the painted/clipped
+/// navigation surface is inset, preserving the floating pill appearance.
+///
+/// This avoids compensating with an arbitrary FAB X offset: the FAB remains
+/// truly centered in the Scaffold while the notch is cut around that same
+/// center point on every screen width and safe-area configuration.
+class _InsetRoundedCircularNotchedShape extends NotchedShape {
+  const _InsetRoundedCircularNotchedShape({
+    required this.horizontalInset,
+    required this.bottomInset,
+    required this.cornerRadius,
+  });
+
+  final double horizontalInset;
+  final double bottomInset;
+  final double cornerRadius;
+
+  @override
+  Path getOuterPath(Rect host, Rect? guest) {
+    final visualHost = Rect.fromLTRB(
+      host.left + horizontalInset,
+      host.top,
+      host.right - horizontalInset,
+      host.bottom - bottomInset,
+    );
+
+    final notchedPath = const CircularNotchedRectangle().getOuterPath(
+      visualHost,
+      guest,
+    );
+    final roundedPath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          visualHost,
+          Radius.circular(cornerRadius),
+        ),
+      );
+
+    return Path.combine(PathOperation.intersect, notchedPath, roundedPath);
   }
 }
