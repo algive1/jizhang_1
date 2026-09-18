@@ -94,6 +94,24 @@ extension DeviceDataBindingStore on AppDatabase {
     });
   }
 
+  Future<DeviceDataBinding> setDatasetLastSyncAt({
+    required String userId,
+    DateTime? at,
+  }) {
+    return transaction(() async {
+      final current = await getDeviceDataBinding();
+      if (current.boundUserId != userId || !current.cloudSyncEnabled) {
+        throw StateError('本地数据尚未启用当前账号的云同步');
+      }
+      final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
+      await customStatement(
+        'UPDATE device_data_binding SET last_sync_at=?,updated_at=? WHERE id=1',
+        [now, now],
+      );
+      return getDeviceDataBinding();
+    });
+  }
+
   Future<DeviceDataBinding> setDatasetCloudSyncEnabled({
     required String userId,
     required bool enabled,
