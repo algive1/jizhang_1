@@ -33,11 +33,7 @@ Future<void> _pumpSheet(WidgetTester tester, AppDatabase database) async {
             body: Builder(
               builder: (context) => Center(
                 child: ElevatedButton(
-                  onPressed: () => showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) => const QuickAddSheet(),
-                  ),
+                  onPressed: () => showQuickAddSheet(context),
                   child: const Text('打开记一笔'),
                 ),
               ),
@@ -104,6 +100,14 @@ void main() {
       lessThanOrEqualTo(810),
     );
     expect(find.byTooltip('清空金额'), findsNothing);
+    final sheetSurface = tester.getRect(
+      find.byKey(const ValueKey('quick-sheet-surface')),
+    );
+    expect(
+      sheetSurface.bottom,
+      closeTo(844, .1),
+      reason: '记一笔背景必须覆盖到底部系统手势区，不能透出底部导航',
+    );
     final amountCard = tester.getRect(
       find.byKey(const ValueKey('quick-amount-input')),
     );
@@ -148,7 +152,8 @@ void main() {
     expect(find.byKey(const ValueKey('quick-image-chip')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-recurring-chip')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-ai-entry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-voice-entry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-voice-entry')), findsNothing);
+    expect(find.text('今天'), findsOneWidget);
 
     expect(find.byKey(const ValueKey('amount-key-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('amount-key-+')), findsOneWidget);
@@ -193,7 +198,14 @@ void main() {
         .widget<TextField>(find.byKey(const ValueKey('quick-note-field')))
         .decoration!;
 
+    final ai = tester.getRect(find.byKey(const ValueKey('quick-ai-entry')));
+
     expect(note.height, closeTo(40, .1));
+    expect(
+      note.width,
+      greaterThan(ai.width * 1.5),
+      reason: '备注输入区应明显宽于 AI 入口，不能再被右侧按钮挤窄',
+    );
     expect(note.bottom, lessThan(amount.top));
     expect(detail.top, lessThanOrEqualTo(note.top));
     expect(detail.bottom, greaterThanOrEqualTo(amount.bottom));
