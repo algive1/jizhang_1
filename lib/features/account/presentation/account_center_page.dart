@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/database/app_database.dart';
 import '../../sharing/data/session_repository.dart';
 import '../application/account_session_controller.dart';
+import '../application/dataset_binding_service.dart';
 import '../domain/account_session_status.dart';
 
 class AccountCenterPage extends ConsumerWidget {
@@ -16,6 +18,7 @@ class AccountCenterPage extends ConsumerWidget {
     final session = ref.watch(accountSessionProvider).value;
     final user = session?.user;
     final status = session?.status ?? AccountSessionStatus.initializing;
+    final binding = ref.watch(datasetBindingProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('账号中心')),
@@ -122,6 +125,13 @@ class AccountCenterPage extends ConsumerWidget {
                   title: '数据',
                   children: [
                     ListTile(
+                      leading: Icon(_cloudIcon(binding)),
+                      title: const Text('云同步'),
+                      subtitle: Text(_cloudSubtitle(binding)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/profile/account/data-binding'),
+                    ),
+                    ListTile(
                       leading: const Icon(Icons.link_outlined),
                       title: const Text('本地数据绑定'),
                       subtitle: const Text('控制这份本地数据可以同步到哪个账号'),
@@ -152,6 +162,27 @@ class AccountCenterPage extends ConsumerWidget {
               ],
             ),
     );
+  }
+
+  static IconData _cloudIcon(AsyncValue<DeviceDataBinding> binding) {
+    final value = binding.value;
+    if (value == null) return Icons.cloud_outlined;
+    if (value.hasRemoteUpdate) return Icons.cloud_download_outlined;
+    if (value.cloudSyncEnabled) return Icons.cloud_done_outlined;
+    return Icons.cloud_off_outlined;
+  }
+
+  static String _cloudSubtitle(AsyncValue<DeviceDataBinding> binding) {
+    if (binding.isLoading) return '正在读取同步状态…';
+    if (binding.hasError) return '同步状态暂不可用';
+    final value = binding.value;
+    if (value == null) return '尚未启用';
+    if (value.hasRemoteUpdate) {
+      return '云端版本 ${value.lastSeenRemoteRevision} 待恢复';
+    }
+    if (!value.cloudSyncEnabled) return '尚未启用';
+    if (value.lastSyncAt == null) return '已启用 · 尚未首次备份';
+    return '已同步 · 本机版本 ${value.lastCloudRevision}';
   }
 
   static Future<void> _editDisplayName(
