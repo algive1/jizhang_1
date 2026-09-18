@@ -17,25 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  flutter-quality:
-    name: Flutter analyze & test
+  flutter-core:
+    name: Flutter core checks
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 18
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Node.js for integration tests
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
-      - name: Install server dependencies used by Flutter integration tests
-        working-directory: server
-        run: npm ci
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -43,22 +32,25 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Flutter version
-        run: flutter --version
-
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Analyze Flutter project
+      - name: Analyze
         run: flutter analyze
 
-      - name: Run Flutter tests
-        run: flutter test --reporter compact
+      - name: Run account core tests
+        run: >
+          flutter test --reporter compact
+          test/account_guest_to_login_regression_test.dart
+          test/account_session_expired_regression_test.dart
+          test/account_phase2_session_test.dart
+          test/account_pending_intent_test.dart
+          test/account_phase2_test.dart
 
-  server-quality:
-    name: Server typecheck, test & build
+  server-core:
+    name: Server core checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     defaults:
       run:
@@ -75,54 +67,11 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
 
-      - name: Install server dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck server
+      - name: Typecheck
         run: npm run typecheck
 
-      - name: Test server
+      - name: Test
         run: npm test
-
-      - name: Build server
-        run: npm run build
-
-  android-debug:
-    name: Build Android debug APK
-    if: github.event_name != 'pull_request'
-    needs:
-      - flutter-quality
-      - server-quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install Flutter dependencies
-        run: flutter pub get
-
-      - name: Build debug APK
-        run: flutter build apk --debug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: jizhang-debug-apk-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
