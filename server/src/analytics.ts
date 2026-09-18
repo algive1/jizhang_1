@@ -96,6 +96,8 @@ export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
         duplicates: body.events.length - accepted,
       };
     },
+  );
+
   app.get('/api/v1/analytics/summary', async (request) => {
     requireAnalyticsAdmin(request.headers['x-analytics-admin-key']);
     const { days } = z
@@ -141,5 +143,4 @@ export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
       dailyActive,
     };
   });
-  );
 }
