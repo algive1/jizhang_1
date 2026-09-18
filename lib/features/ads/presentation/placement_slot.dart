@@ -25,6 +25,9 @@ class _PlacementSlotState extends ConsumerState<PlacementSlot> {
     return placement.when(
       data: (value) {
         if (value == null) return const SizedBox.shrink();
+        if (value.contentType == PlacementContentType.thirdParty) {
+          return const SizedBox.shrink();
+        }
         _recordImpression(value);
         return Padding(
           padding: const EdgeInsets.only(bottom: 14),
