@@ -271,6 +271,31 @@ class DatasetBindingPage extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('云端备份完成 · 版本 ${result.revision}$size')),
       );
+    } on PersonalCloudRevisionConflict catch (conflict) {
+      if (!context.mounted) return;
+      final restore = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('云端有更新'),
+          content: Text(
+            '本机基线版本 ${conflict.localRevision}，云端版本 ${conflict.remoteRevision}。'
+            '为避免覆盖其他设备的新数据，本次备份已停止。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('从云端恢复'),
+            ),
+          ],
+        ),
+      );
+      if (restore == true && context.mounted) {
+        await _restoreCloudBackup(context, ref);
+      }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -341,6 +366,7 @@ class DatasetBindingPage extends ConsumerWidget {
       final status = await ref
           .read(personalCloudBootstrapServiceProvider)
           .status();
+      final localBinding = await ref.read(datasetBindingProvider.future);
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
@@ -348,7 +374,8 @@ class DatasetBindingPage extends ConsumerWidget {
           title: const Text('个人云同步状态'),
           content: Text(
             status.datasetMatches
-                ? '云端数据集已登记。版本 ${status.revision}，'
+                ? '云端版本 ${status.revision}，'
+                    '本机基线版本 ${localBinding.lastCloudRevision}。'
                     '${status.hasSnapshot ? '已有云端备份。' : '尚未上传首份账务备份。'}'
                 : '账号云端存在另一份数据集，当前设备需要先恢复或合并。',
           ),

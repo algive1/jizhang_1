@@ -13,6 +13,19 @@ import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import 'personal_cloud_bootstrap_service.dart';
 
+class PersonalCloudRevisionConflict implements Exception {
+  const PersonalCloudRevisionConflict({
+    required this.localRevision,
+    required this.remoteRevision,
+  });
+
+  final int localRevision;
+  final int remoteRevision;
+
+  @override
+  String toString() => '云端已有更新，请先恢复或处理冲突后再备份';
+}
+
 class PersonalCloudBackupService {
   const PersonalCloudBackupService(
     this.database,
@@ -60,6 +73,31 @@ class PersonalCloudBackupService {
       throw const PersonalCloudDatasetConflict();
     }
 
+    var localRevision = context.binding.lastCloudRevision;
+    if (current.hasSnapshot && localRevision != current.revision) {
+      final localTime = context.binding.lastSyncAt;
+      final remoteTime = current.updatedAt;
+      final legacyCheckpointMatches =
+          localRevision == 0 &&
+          localTime != null &&
+          remoteTime != null &&
+          localTime.difference(remoteTime).abs() <= const Duration(seconds: 1);
+      if (legacyCheckpointMatches) {
+        await database.setDatasetCloudCheckpoint(
+          userId: context.userId,
+          revision: current.revision,
+          at: remoteTime,
+        );
+        localRevision = current.revision;
+      }
+    }
+    if (current.hasSnapshot && localRevision != current.revision) {
+      throw PersonalCloudRevisionConflict(
+        localRevision: localRevision,
+        remoteRevision: current.revision,
+      );
+    }
+
     final databaseBytes = await localBackup.exportDatabase();
     final compressed = gzip.encode(databaseBytes);
     if (compressed.length > 10 * 1024 * 1024) {
@@ -81,14 +119,15 @@ class PersonalCloudBackupService {
       throw StateError('云端备份状态异常，请稍后重试');
     }
 
-    await database.setDatasetLastSyncAt(
+    await database.setDatasetCloudCheckpoint(
       userId: context.userId,
+      revision: result.revision,
       at: result.updatedAt ?? DateTime.now(),
     );
     return result;
   }
   Future<PersonalCloudRestoreResult> downloadAndPrepareRestore() async {
-    await _context(requireEnabled: false);
+    final context = await _context(requireEnabled: false);
     final response = await api.request('/sync/snapshot/download');
     if (response['encoding'] != 'gzip+base64') {
       throw const FormatException('云端备份编码不受支持');
@@ -111,6 +150,16 @@ class PersonalCloudBackupService {
 
     LocalBackupService.validateBackupBytes(databaseBytes);
     await localBackup.restoreDatabase(databaseBytes);
+    await localBackup.stampPendingCloudRestore(
+      datasetId: canonicalDatasetId,
+      userId: context.userId,
+      revision: revision,
+      syncedAt: response['updatedAt'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (response['updatedAt'] as int) * 1000,
+            )
+          : DateTime.now(),
+    );
 
     return PersonalCloudRestoreResult(
       datasetId: canonicalDatasetId,

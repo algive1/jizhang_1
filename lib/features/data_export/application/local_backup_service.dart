@@ -63,6 +63,70 @@ class LocalBackupService {
     }
   }
 
+  Future<void> stampPendingCloudRestore({
+    required String datasetId,
+    required String userId,
+    required int revision,
+    required DateTime syncedAt,
+  }) async {
+    final databaseFile = await _databaseFile();
+    final pendingFile = File('${databaseFile.path}$pendingRestoreSuffix');
+    if (!await pendingFile.exists()) {
+      throw StateError('待恢复数据库不存在');
+    }
+
+    Database? pending;
+    try {
+      pending = sqlite3.open(pendingFile.path);
+      final tables = pending
+          .select("SELECT name FROM sqlite_master WHERE type='table' AND name='device_data_binding'");
+      if (tables.isEmpty) {
+        pending.execute('''
+          CREATE TABLE device_data_binding(
+            id INTEGER PRIMARY KEY CHECK(id=1),
+            dataset_id TEXT NOT NULL UNIQUE,
+            bound_user_id TEXT,
+            cloud_sync_enabled INTEGER NOT NULL DEFAULT 0,
+            bound_at INTEGER,
+            last_sync_at INTEGER,
+            last_cloud_revision INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+      } else {
+        final columns = pending
+            .select('PRAGMA table_info(device_data_binding)')
+            .map((row) => row['name'] as String)
+            .toSet();
+        if (!columns.contains('last_cloud_revision')) {
+          pending.execute(
+            'ALTER TABLE device_data_binding '
+            'ADD COLUMN last_cloud_revision INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+      }
+
+      final synced = syncedAt.millisecondsSinceEpoch;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      pending.execute(
+        'INSERT INTO device_data_binding('
+        'id,dataset_id,bound_user_id,cloud_sync_enabled,bound_at,last_sync_at,last_cloud_revision,created_at,updated_at'
+        ') VALUES(1,?,?,1,?,?,?, ?,?) '
+        'ON CONFLICT(id) DO UPDATE SET '
+        'dataset_id=excluded.dataset_id,'
+        'bound_user_id=excluded.bound_user_id,'
+        'cloud_sync_enabled=1,'
+        'last_sync_at=excluded.last_sync_at,'
+        'last_cloud_revision=excluded.last_cloud_revision,'
+        'updated_at=excluded.updated_at',
+        [datasetId, userId, now, synced, revision, now, now],
+      );
+    } finally {
+      pending?.close();
+    }
+  }
+
   static void validateBackupBytes(Uint8List bytes) {
     if (bytes.length < _sqliteHeader.length ||
         String.fromCharCodes(bytes.take(_sqliteHeader.length)) !=

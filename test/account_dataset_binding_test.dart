@@ -13,6 +13,7 @@ void main() {
     expect(initial.datasetId, isNotEmpty);
     expect(initial.boundUserId, isNull);
     expect(initial.cloudSyncEnabled, isFalse);
+    expect(initial.lastCloudRevision, 0);
 
     final ownerBefore = await database
         .customSelect(
@@ -24,6 +25,21 @@ void main() {
     final bound = await database.bindDatasetToUser('server-user-a');
     expect(bound.datasetId, initial.datasetId);
     expect(bound.boundUserId, 'server-user-a');
+
+    await database.setDatasetCloudSyncEnabled(
+      userId: 'server-user-a',
+      enabled: true,
+    );
+    final checkpoint = await database.setDatasetCloudCheckpoint(
+      userId: 'server-user-a',
+      revision: 3,
+      at: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+    );
+    expect(checkpoint.lastCloudRevision, 3);
+    expect(
+      checkpoint.lastSyncAt,
+      DateTime.fromMillisecondsSinceEpoch(1700000000000),
+    );
 
     final repeated = await database.bindDatasetToUser('server-user-a');
     expect(repeated.datasetId, initial.datasetId);
