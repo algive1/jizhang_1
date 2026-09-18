@@ -48,6 +48,7 @@ jobs:
           test/account_phase2_test.dart
           test/account_dataset_binding_test.dart
           test/account_cloud_attachment_restore_test.dart
+          test/app_update_service_test.dart
 
   server-core:
     name: Server core checks
