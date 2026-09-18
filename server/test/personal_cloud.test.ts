@@ -122,6 +122,21 @@ test('personal cloud bootstrap keeps one canonical dataset per account', async (
   assert.equal(uploadedBody.snapshotSize, sqlite.length);
   assert.match(uploadedBody.snapshotSha256, /^[a-f0-9]{64}$/);
 
+  const downloaded = await app.inject({
+    method: 'GET',
+    url: '/api/v1/sync/snapshot/download',
+    headers: authA,
+  });
+  assert.equal(downloaded.statusCode, 200);
+  const downloadedBody = downloaded.json() as any;
+  assert.equal(downloadedBody.datasetId, datasetA);
+  assert.equal(downloadedBody.revision, 1);
+  assert.equal(downloadedBody.encoding, 'gzip+base64');
+  assert.deepEqual(
+    gunzipSync(Buffer.from(downloadedBody.snapshot, 'base64')),
+    sqlite,
+  );
+
   const stale = await app.inject({
     method: 'POST',
     url: '/api/v1/sync/snapshot',
