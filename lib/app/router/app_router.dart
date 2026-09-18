@@ -7,6 +7,7 @@ import '../../features/analysis/presentation/analysis_page.dart';
 import '../../features/account/presentation/account_center_page.dart';
 import '../../features/account/presentation/account_login_page.dart';
 import '../../features/account/presentation/account_recovery_page.dart';
+import '../../features/account/presentation/dataset_binding_page.dart';
 import '../../features/account/presentation/account_register_page.dart';
 import '../../features/accounts/presentation/account_management_page.dart';
 import '../../features/accounts/presentation/asset_overview_page.dart';
@@ -123,6 +124,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'account',
                 builder: (context, state) => const AccountCenterPage(),
+                routes: [
+                  GoRoute(
+                    path: 'data-binding',
+                    builder: (context, state) => const DatasetBindingPage(),
+                  ),
+                ],
               ),
               GoRoute(
                 path: 'data',
