@@ -112,3 +112,68 @@ test('server migrates analytics schema to version 8', async t => {
     .get();
   assert.ok(table);
 });
+
+
+test('analytics summary requires admin key and returns aggregates only', async t => {
+  const previous = process.env.ANALYTICS_ADMIN_KEY;
+  process.env.ANALYTICS_ADMIN_KEY = 'analytics-admin-key-1234567890';
+  t.after(() => {
+    if (previous == null) delete process.env.ANALYTICS_ADMIN_KEY;
+    else process.env.ANALYTICS_ADMIN_KEY = previous;
+  });
+
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+
+  const installationA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const installationB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const now = Math.floor(Date.now() / 1000);
+  for (const [installationId, eventId, name] of [
+    [installationA, '11111111111111111111111111111111', 'app_open'],
+    [installationA, '22222222222222222222222222222222', 'screen_view'],
+    [installationB, '33333333333333333333333333333333', 'app_open'],
+  ] as const) {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/analytics/events',
+      payload: {
+        installationId,
+        events: [
+          {
+            eventId,
+            occurredAt: now,
+            name,
+            ...(name === 'screen_view' ? { screen: '/profile' } : {}),
+            properties: {},
+          },
+        ],
+      },
+    });
+    assert.equal(response.statusCode, 200);
+  }
+
+  const denied = await app.inject({
+    method: 'GET',
+    url: '/api/v1/analytics/summary?days=7',
+  });
+  assert.equal(denied.statusCode, 401);
+
+  const summary = await app.inject({
+    method: 'GET',
+    url: '/api/v1/analytics/summary?days=7',
+    headers: {
+      'x-analytics-admin-key': process.env.ANALYTICS_ADMIN_KEY,
+    },
+  });
+  assert.equal(summary.statusCode, 200);
+  const body = summary.json() as any;
+  assert.equal(body.activeInstallations, 2);
+  assert.equal(body.totalEvents, 3);
+  assert.deepEqual(body.eventsByName, [
+    { name: 'app_open', count: 2 },
+    { name: 'screen_view', count: 1 },
+  ]);
+  assert.equal(body.dailyActive.length, 1);
+  assert.equal(body.dailyActive[0].installations, 2);
+  assert.equal('events' in body, false);
+});
