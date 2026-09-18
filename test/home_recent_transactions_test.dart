@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -122,6 +124,46 @@ void main() {
       expect(recent, hasLength(10));
       expect(recent.map((item) => item.id), isNot(contains('未来计划')));
       expect(await repository.getAll(), hasLength(11));
+    },
+  );
+
+  test(
+    'active recent subscription includes transactions saved after opening home',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final repository = DriftTransactionRepository(
+        database,
+        bookId: SeedIds.personalBook,
+      );
+      final events = StreamIterator(repository.watchRecent());
+      addTearDown(events.cancel);
+      expect(await events.moveNext(), isTrue);
+      expect(events.current, isEmpty);
+      // Drift stores whole seconds; cross a second boundary after subscription.
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      final now = DateTime.now();
+      await repository.create(
+        TransactionRecord(
+          id: 'saved-after-home-opened',
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 200,
+          accountId: scopedSeedId(SeedIds.personalBook, SeedIds.cashAccount),
+          occurredAt: now,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      expect(
+        await events.moveNext().timeout(const Duration(seconds: 5)),
+        isTrue,
+      );
+      expect(
+        events.current.map((item) => item.id),
+        contains('saved-after-home-opened'),
+      );
     },
   );
 

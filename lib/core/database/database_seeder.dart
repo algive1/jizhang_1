@@ -314,6 +314,37 @@ class DatabaseSeeder {
         );
       }
     }
+    for (final rootTemplate in templates) {
+      final parentId = _categorySeedId(bookId, rootTemplate.key, type);
+      final parent = await _database.categoryDao.findById(parentId);
+      if (parent == null || parent.isArchived || !parent.isDefault) continue;
+      final children = subcategoryTemplates(type, rootTemplate);
+      for (var index = 0; index < children.length; index++) {
+        final template = children[index];
+        final id = _categorySeedId(bookId, template.key, type);
+        if (await _database.categoryDao.findById(id) != null) continue;
+        // A matching user-created child takes precedence over a default.
+        final duplicate = await _database
+            .customSelect(
+              'SELECT 1 FROM categories WHERE parent_id=? AND name=? LIMIT 1',
+              variables: [Variable(parentId), Variable(template.name)],
+            )
+            .getSingleOrNull();
+        if (duplicate != null) continue;
+        await _database.categoryDao.insertOne(
+          CategoryEntriesCompanion.insert(
+            id: id,
+            bookId: Value(bookId),
+            parentId: Value(parentId),
+            name: template.name,
+            icon: template.icon,
+            type: template.type,
+            sortOrder: Value(index),
+            isDefault: const Value(true),
+          ),
+        );
+      }
+    }
     return;
     // ignore: dead_code
     final expenses = switch (type) {

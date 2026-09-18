@@ -10,12 +10,10 @@ import 'asset_dashboard_icons.dart';
 class AssetLiabilitySection extends StatelessWidget {
   const AssetLiabilitySection({
     required this.accounts,
-    required this.hidden,
     required this.onAccounts,
     super.key,
   });
   final List<Account> accounts;
-  final bool hidden;
   final VoidCallback onAccounts;
 
   @override
@@ -58,7 +56,6 @@ class AssetLiabilitySection extends StatelessWidget {
                     AssetAmount(
                       overview.liabilities,
                       currency: overview.currency,
-                      hidden: hidden,
                       size: 10,
                       color: assetMuted,
                     ),
@@ -81,13 +78,11 @@ class AssetLiabilitySection extends StatelessWidget {
                 child: Column(
                   children: [
                     Semantics(
-                      label: hidden
-                          ? '负债率已隐藏'
-                          : '负债率 ${(ratio * 100).toStringAsFixed(1)}%',
+                      label: '负债率 ${(ratio * 100).toStringAsFixed(1)}%',
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: LinearProgressIndicator(
-                          value: hidden ? 0 : ratio,
+                          value: ratio,
                           minHeight: 6,
                           color: assetCoral,
                           backgroundColor: const Color(0xfffaeae4),
@@ -158,7 +153,6 @@ class AssetLiabilitySection extends StatelessWidget {
                                                   AssetAmount(
                                                     debt.balance.abs(),
                                                     currency: debt.currency,
-                                                    hidden: hidden,
                                                     size: 10,
                                                   ),
                                                 ],

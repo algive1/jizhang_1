@@ -15,6 +15,7 @@ Map<String, int> accountBalanceEffect(TransactionRecord transaction) {
     TransactionType.refund ||
     TransactionType.reimbursement ||
     TransactionType.borrow ||
-    TransactionType.adjustment => {source: cents},
+    TransactionType.adjustment ||
+    TransactionType.assetSale => {source: cents},
   };
 }

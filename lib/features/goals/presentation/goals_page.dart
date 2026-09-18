@@ -1,3 +1,6 @@
+import '../../../core/widgets/app_action_sheet.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import 'goal_detail_page.dart' show editGoal;
 import '../../../core/utils/entity_id.dart';
 
 import 'package:flutter/material.dart';
@@ -134,18 +137,52 @@ class GoalsPage extends ConsumerWidget {
   }
 }
 
-class _GoalItem extends StatelessWidget {
+class _GoalItem extends ConsumerWidget {
   const _GoalItem({required this.goal});
 
   final Goal goal;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: GoalProgressCard(
-        goal: goal,
-        onTap: () => context.go('/goals/${goal.id}'),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AppContextMenu(
+      onOpen: () async {
+        final action = await AppActionSheet.show<String>(
+          context,
+          title: goal.name,
+          items: [
+            const PopupMenuItem(value: 'edit', child: Text('编辑目标')),
+            if (goal.status != GoalStatus.archived)
+              const PopupMenuItem(value: 'archive', child: Text('归档目标')),
+          ],
+        );
+        if (!context.mounted) return;
+        try {
+          if (action == 'edit') {
+            await editGoal(context, ref, goal);
+            return;
+          }
+          if (action == 'archive') {
+            if (!context.mounted) return;
+            final confirmed = await AppConfirmDialog.show(
+              context,
+              title: '归档目标？',
+              message: '保留目标和存取记录，可随时恢复。',
+            );
+            if (!confirmed || !context.mounted) return;
+            await ref.read(goalRepositoryProvider).archive(goal.id);
+          }
+        } on Object catch (error) {
+          if (context.mounted)
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: GoalProgressCard(
+          goal: goal,
+          onTap: () => context.go('/goals/${goal.id}'),
+        ),
       ),
     );
   }

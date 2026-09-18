@@ -1,3 +1,7 @@
+import 'package:image_picker/image_picker.dart';
+
+import '../../transactions/domain/transaction_attachment.dart';
+
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-enum AttachmentUploadStatus { uploading, uploaded, failed }
+enum AttachmentUploadStatus { idle, uploading, uploaded, failed }
 
 class StoredAttachment {
   const StoredAttachment({
@@ -14,13 +18,17 @@ class StoredAttachment {
     this.status = AttachmentUploadStatus.uploaded,
     this.errorMessage,
     this.sourceFile,
+    this.sizeInBytes,
   });
 
+  final int? sizeInBytes;
+  bool get isImage =>
+      TransactionAttachment(path: path, displayName: name).isImage;
   final String name;
   final String path;
   final AttachmentUploadStatus status;
   final String? errorMessage;
-  final PlatformFile? sourceFile;
+  final XFile? sourceFile;
 }
 
 class AttachmentStorageService {
@@ -31,11 +39,27 @@ class AttachmentStorageService {
   Future<StoredAttachment?> pickAndStore({
     FileType type = FileType.any,
     String dialogTitle = '选择账单附件',
+    ImageSource? imageSource,
   }) async {
-    final selected = await FilePicker.pickFile(
-      dialogTitle: dialogTitle,
-      type: type,
-    );
+    final image = imageSource == null
+        ? null
+        : await ImagePicker().pickImage(
+            source: imageSource,
+            requestFullMetadata: false,
+          );
+    if (imageSource != null && image == null) return null;
+    final selected =
+        image ??
+        (await FilePicker.pickFile(
+          dialogTitle: dialogTitle,
+          type: type,
+        ))?.xFile;
+    if (selected != null &&
+        imageSource == null &&
+        type != FileType.image &&
+        TransactionAttachment(path: selected.name).isImage) {
+      throw ArgumentError('图片请通过“图片”入口添加');
+    }
     if (selected == null) return null;
 
     try {
@@ -67,7 +91,7 @@ class AttachmentStorageService {
     }
   }
 
-  Future<StoredAttachment> _storeSelected(PlatformFile selected) async {
+  Future<StoredAttachment> _storeSelected(XFile selected) async {
     final documents = await getApplicationDocumentsDirectory();
     final attachmentDirectory = Directory(
       p.join(documents.path, 'bookkeeping_attachments'),
@@ -82,7 +106,7 @@ class AttachmentStorageService {
       '${DateTime.now().microsecondsSinceEpoch}-$safeName',
     );
     try {
-      await selected.xFile.saveTo(storedPath);
+      await selected.saveTo(storedPath);
     } on Object {
       final partial = File(storedPath);
       if (await partial.exists()) await partial.delete();
@@ -91,6 +115,7 @@ class AttachmentStorageService {
     return StoredAttachment(
       name: selected.name,
       path: storedPath,
+      sizeInBytes: await selected.length(),
       status: AttachmentUploadStatus.uploaded,
     );
   }

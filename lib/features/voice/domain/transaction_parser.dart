@@ -88,7 +88,7 @@ class RuleBasedTransactionParser implements TransactionParser {
       return ('income-other', '其他收入', null);
     }
     const rules = [
-      (r'午饭|早餐|晚饭|吃饭|咖啡|外卖|餐厅|面馆', 'expense-food', '餐饮', null),
+      (r'午饭|午餐|早餐|早饭|晚饭|晚餐|吃饭|咖啡|奶茶|外卖|餐厅|面馆', 'expense-food', '餐饮', null),
       (r'滴滴|打车|出租|地铁|公交|加油', 'expense-transport', '交通', '打车'),
       (r'唱歌|KTV|电影|游戏', 'expense-entertainment', '娱乐', '休闲娱乐'),
       (r'房租|物业', 'expense-housing', '住房', null),
@@ -98,6 +98,20 @@ class RuleBasedTransactionParser implements TransactionParser {
     ];
     for (final rule in rules) {
       if (RegExp(rule.$1, caseSensitive: false).hasMatch(clause)) {
+        if (rule.$2 == 'expense-food') {
+          final child = RegExp(r'早餐|早饭').hasMatch(clause)
+              ? '早餐'
+              : RegExp(r'午饭|午餐|中午').hasMatch(clause)
+              ? '午餐'
+              : RegExp(r'晚饭|晚餐').hasMatch(clause)
+              ? '晚餐'
+              : RegExp(r'咖啡|奶茶').hasMatch(clause)
+              ? '奶茶咖啡'
+              : clause.contains('外卖')
+              ? '外卖'
+              : null;
+          return (rule.$2, rule.$3, child);
+        }
         return (rule.$2, rule.$3, rule.$4);
       }
     }
@@ -148,6 +162,9 @@ class RuleBasedTransactionParser implements TransactionParser {
       final parsedMinute = RegExp(r'点([0-5]?\d)分?').firstMatch(time)?.group(1);
       minute = int.tryParse(parsedMinute ?? '') ?? 0;
       if (RegExp(r'晚上|晚间|昨晚').hasMatch(time) && hour < 12) hour += 12;
+    } else if (clause.contains('中午')) {
+      hour = 12;
+      minute = 30;
     } else if (clause.contains('午饭')) {
       hour = 12;
       minute = 0;

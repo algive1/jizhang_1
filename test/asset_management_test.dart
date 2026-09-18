@@ -72,6 +72,31 @@ void main() {
     },
   );
 
+  test('investment market value is folded into net worth', () {
+    final total = AssetOverview.group(
+      [_account('bank', 1000, form: AssetForm.demandDeposit)],
+      investmentByCurrency: const {'CNY': 2500},
+    ).single;
+
+    // Investments are positions rather than accounts, so they raise assets
+    // and net worth without inventing an account row.
+    expect(total.assets, 3500);
+    expect(total.netAssets, 3500);
+    expect(total.byForm[AssetForm.investment], 2500);
+    expect(total.byForm[AssetForm.demandDeposit], 1000);
+  });
+
+  test('an investment-only currency still gets its own group', () {
+    final groups = AssetOverview.group(
+      [_account('bank', 10)],
+      investmentByCurrency: const {'USD': 500},
+    );
+
+    expect(groups.map((group) => group.currency).toList(), ['CNY', 'USD']);
+    expect(groups.first.netAssets, 10);
+    expect(groups.last.netAssets, 500);
+  });
+
   test('currency groups and deposit forms do not mix balances', () {
     final groups = AssetOverview.group([
       _account('fixed', 100.01, form: AssetForm.termDeposit),
@@ -113,7 +138,18 @@ void main() {
       final account = (await DriftAccountRepository(migrated).getAll()).single;
       expect(account.balance, -123.45);
       expect(account.assetForm, AssetForm.unspecified);
-      expect(migrated.schemaVersion, 16);
+      expect(migrated.schemaVersion, 18);
+      // The 17→18 branch is additive: an old database gains the investment
+      // tables without losing the account it already had.
+      final investmentTables = await migrated
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('investment_assets','investment_holdings',"
+            "'investment_transactions','investment_snapshots')",
+          )
+          .get();
+      expect(investmentTables.length, 4);
+      await migrated.investmentDao.getHoldings(bookId: 'book-personal');
     },
   );
 }

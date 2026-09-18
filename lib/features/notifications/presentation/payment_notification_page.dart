@@ -59,9 +59,14 @@ class _PaymentNotificationPageState
       if (!mounted) return;
       setState(() {
         _enabled = !_enabled;
-        _message = _enabled ? '已开启，新的支付通知会自动记账。' : '已关闭自动记账。';
+        _message = _enabled ? '已开启，识别到的支付通知会先进入待确认，不会静默写入流水。' : '已关闭自动记账。';
       });
-      if (_enabled) await _processPending(showFeedback: true);
+      if (_enabled) {
+        if (!await bridge.isNotificationGranted()) {
+          await bridge.requestNotificationPermission();
+        }
+        await _processPending(showFeedback: true);
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
     }
@@ -74,9 +79,9 @@ class _PaymentNotificationPageState
           .processPending();
       if (!mounted || !showFeedback) return;
       setState(
-        () => _message = result.created == 0
+        () => _message = result.created == 0 && result.queued == 0
             ? '没有新的可识别支付通知。'
-            : '已自动记账 ${result.created} 笔，重复通知 ${result.duplicates} 笔，等待账户或权限处理 ${result.waiting} 笔。',
+            : '待确认 ${result.queued} 笔，历史重复 ${result.duplicates} 笔，等待账户或权限处理 ${result.waiting} 笔。',
       );
     } on Object catch (error) {
       if (mounted) setState(() => _message = '处理通知失败：$error');
@@ -117,7 +122,7 @@ class _PaymentNotificationPageState
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '仅处理微信、支付宝和云闪付的支付通知；金额和商户解析后仍会经过本地去重，不会自动删除已有流水。',
+                  '支持微信、支付宝、云闪付和美团付款通知；金额与商户会先在本机解析、去重并进入待确认，不会静默写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -176,7 +181,7 @@ class _PaymentNotificationPageState
           const SizedBox(height: 14),
           const AppCard(
             child: Text(
-              '隐私说明：通知只在本机转换为待处理数据，记账后会删除已处理通知。系统权限关闭后，不再接收新的支付通知。',
+              '隐私说明：通知只在本机转换为待确认数据，确认或忽略后才会清理。收款、到账、退款等入账类通知不会按支出处理。',
               style: TextStyle(height: 1.5, color: AppColors.textSecondary),
             ),
           ),

@@ -1,4 +1,23 @@
+import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
+
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_media_picker.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../core/models/recurring_bill.dart';
+import '../../../core/utils/entity_id.dart';
+import '../../recurring/data/recurring_bill_repository.dart';
+import '../../recurring/application/recurring_bill_notification_service.dart';
+import '../../recurring/presentation/recurring_bill_create_sheet.dart';
+import 'components/number_keyboard.dart';
+import 'components/category_grid.dart';
+
 import 'dart:async';
+
+import 'components/amount_input_view.dart';
+import 'components/time_selector.dart';
+import 'components/business_fields.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,10 +31,11 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/book.dart';
+import '../../../core/models/family.dart';
+import '../../categories/presentation/category_management_page.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
-import '../../../core/widgets/category_icon.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
@@ -37,18 +57,50 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   const QuickAddSheet({
     super.key,
     this.initialTransaction,
+    this.copyFrom,
     this.initialType = TransactionType.expense,
   });
 
   final TransactionType initialType;
 
   final TransactionRecord? initialTransaction;
+  final TransactionRecord? copyFrom;
 
   @override
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
 }
 
+/// Opens the bookkeeping sheet above the app shell.
+///
+/// Pages rendered by [ShellRoute] have their own navigator below the root
+/// navigator. Using that nested navigator leaves the shell's bottom bar above
+/// the modal route, so the bar can remain visible over the keypad. All entry
+/// points use this helper to keep the stacking order consistent.
+Future<void> showQuickAddSheet(
+  BuildContext context, {
+  TransactionRecord? initialTransaction,
+  TransactionRecord? copyFrom,
+  TransactionType initialType = TransactionType.expense,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => QuickAddSheet(
+      initialTransaction: initialTransaction,
+      copyFrom: copyFrom,
+      initialType: initialType,
+    ),
+  );
+}
+
 class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
+  final _invoiceController = TextEditingController();
+  final _customerController = TextEditingController();
+  final _projectController = TextEditingController();
+  final _supplierController = TextEditingController();
+
   final _merchantController = TextEditingController();
   final _noteController = TextEditingController();
   final _tagsController = TextEditingController();
@@ -69,6 +121,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   bool _isPlanned = false;
   bool _isOneTime = true;
   bool _isRecurring = false;
+  RecurringBill? _recurringDraft;
   bool _isSaving = false;
   bool _amountError = false;
   ReimbursementStatus _reimbursementStatus = ReimbursementStatus.none;
@@ -82,7 +135,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   @override
   void initState() {
     super.initState();
-    final transaction = widget.initialTransaction;
+    final transaction = widget.initialTransaction ?? widget.copyFrom;
     _type = widget.initialType;
     if (_type == TransactionType.borrow ||
         _type == TransactionType.lend ||
@@ -91,17 +144,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
     _bookId = transaction?.bookId ?? ref.read(activeBookIdProvider);
     if (transaction == null) {
-      Future<void>(() async {
-        final lastAccount = await ref
-            .read(quickBookkeepingServiceProvider)
-            .getLastAccountId();
-        if (mounted && lastAccount != null) {
-          setState(() => _accountId = lastAccount);
-        }
-      });
       return;
     }
-    _amount = AmountInput(transaction.amount.toStringAsFixed(2));
+    final formula = _decodeMetadata(transaction.metadataJson)['formula'];
+    final restoredAmount = AmountInput(formula is String ? formula : '');
+    _amount =
+        restoredAmount.isValid && restoredAmount.amount == transaction.amount
+        ? restoredAmount
+        : AmountInput(transaction.amount.toStringAsFixed(2));
     _type = transaction.type;
     if (_type == TransactionType.borrow ||
         _type == TransactionType.lend ||
@@ -121,9 +171,24 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _reimbursementStatus = transaction.reimbursementStatus;
     _reimbursementNoteController.text = transaction.reimbursementNote ?? '';
     final metadata = _decodeMetadata(transaction.metadataJson);
+    final business = metadata['business'];
+    if (business is Map) {
+      _invoiceController.text = business['invoice']?.toString() ?? '';
+      _customerController.text = business['customer']?.toString() ?? '';
+      _projectController.text = business['project']?.toString() ?? '';
+      _supplierController.text = business['supplier']?.toString() ?? '';
+    }
     final tags = metadata['tags'];
     if (tags is List) {
       _tagsController.text = tags.map((item) => item.toString()).join(', ');
+    }
+    if (widget.copyFrom != null) {
+      _occurredAt = DateTime.now();
+      _isRecurring = false;
+      _isOneTime = true;
+      _reimbursementStatus = ReimbursementStatus.none;
+      _reimbursementNoteController.clear();
+      return;
     }
     _attachmentsLoad = _loadExistingAttachments(transaction);
     unawaited(_attachmentsLoad!);
@@ -138,7 +203,11 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (persisted.isNotEmpty) {
         restored = [
           for (final attachment in persisted)
-            StoredAttachment(name: attachment.name, path: attachment.path),
+            StoredAttachment(
+              name: attachment.name,
+              path: attachment.path,
+              sizeInBytes: attachment.sizeInBytes,
+            ),
         ];
       }
     } on Object {
@@ -165,6 +234,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   @override
   void dispose() {
+    _invoiceController.dispose();
+    _customerController.dispose();
+    _projectController.dispose();
+    _supplierController.dispose();
     _merchantController.dispose();
     _noteController.dispose();
     _tagsController.dispose();
@@ -259,14 +332,19 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final input = _amount;
 
     return SafeArea(
+      // Modal routes may remove MediaQuery's top padding. Read the actual
+      // window inset so every entry point stays below the status bar.
+      minimum: EdgeInsets.only(
+        top: MediaQueryData.fromView(View.of(context)).padding.top + 8,
+      ),
       child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: FractionallySizedBox(
-          heightFactor: .98,
+          heightFactor: 1,
           child: Material(
-            color: AppColors.background,
+            color: const Color(0xFFF8F7F1),
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -302,62 +380,72 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_tab == _EntryTab.debt) ...[
-                          _DebtTabs(
-                            selected: _debtType,
-                            onChanged: (value) => setState(() {
-                              _debtType = value;
-                              _type = value;
-                              _categoryId = null;
-                              _subcategoryId = null;
-                              _reimbursementStatus = ReimbursementStatus.none;
-                            }),
-                          ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_tab == _EntryTab.debt) ...[
+                            _DebtTabs(
+                              selected: _debtType,
+                              onChanged: (value) => setState(() {
+                                _debtType = value;
+                                _type = value;
+                                _categoryId = null;
+                                _subcategoryId = null;
+                                _reimbursementStatus = ReimbursementStatus.none;
+                              }),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          if (!_usesAccountPair)
+                            SizedBox(
+                              height: (constraints.maxHeight - 242).clamp(
+                                150.0,
+                                360.0,
+                              ),
+                              child: CategoryGrid(
+                                categories: activeCategories,
+                                selected: selectedCategory,
+                                subcategories: subcategories,
+                                selectedSubcategoryId: effectiveSubcategoryId,
+                                onSelected: (category) => setState(() {
+                                  _categoryId = category.id;
+                                  _subcategoryId = null;
+                                }),
+                                onSubcategorySelected: (category) => setState(
+                                  () => _subcategoryId = category.id,
+                                ),
+                              ),
+                            )
+                          else
+                            _AccountPairCard(
+                              isRepayment: _type == TransactionType.repayment,
+                              source: sourceAccount,
+                              destination: destinationAccount,
+                              onSourceTap: () => _chooseAccount(
+                                accounts,
+                                isDestination: false,
+                              ),
+                              onDestinationTap: () =>
+                                  _chooseAccount(accounts, isDestination: true),
+                            ),
                           const SizedBox(height: 10),
-                        ],
-                        if (!_usesAccountPair)
-                          _CategoryCard(
-                            categories: activeCategories,
-                            selected: selectedCategory,
-                            subcategories: subcategories,
-                            selectedSubcategoryId: effectiveSubcategoryId,
-                            onSelected: (category) => setState(() {
-                              _categoryId = category.id;
-                              _subcategoryId = null;
-                            }),
-                            onSubcategorySelected: (category) =>
-                                setState(() => _subcategoryId = category.id),
-                            onMore: () => _showAllCategories(activeCategories),
-                          )
-                        else
-                          _AccountPairCard(
-                            isRepayment: _type == TransactionType.repayment,
-                            source: sourceAccount,
-                            destination: destinationAccount,
-                            onSourceTap: () =>
-                                _chooseAccount(accounts, isDestination: false),
-                            onDestinationTap: () =>
-                                _chooseAccount(accounts, isDestination: true),
+                          _buildDetailCard(
+                            context,
+                            input: input,
+                            accounts: accounts,
+                            selectedBook: selectedBook,
+                            sourceAccount: sourceAccount,
                           ),
-                        const SizedBox(height: 10),
-                        _buildDetailCard(
-                          context,
-                          input: input,
-                          accounts: accounts,
-                          selectedBook: selectedBook,
-                          sourceAccount: sourceAccount,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 if (!keyboardVisible)
-                  _Keypad(
+                  NumberKeyboard(
                     canRepeat: !_isEditing,
                     isSaving: _isSaving,
                     onKey: (key) => _updateAmount(_amount.enter(key)),
@@ -368,16 +456,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       destinationAccount: destinationAccount,
                       selectedCategory: selectedCategory,
                       subcategoryId: effectiveSubcategoryId,
-                      keepOpen: false,
                     ),
-                    onRepeat: () => _submit(
-                      bookId: selectedBookId,
-                      sourceAccount: sourceAccount,
-                      destinationAccount: destinationAccount,
-                      selectedCategory: selectedCategory,
-                      subcategoryId: effectiveSubcategoryId,
-                      keepOpen: true,
-                    ),
+                    onRepeat: _resetForNextEntry,
                   ),
               ],
             ),
@@ -424,7 +504,26 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ),
       );
     }
-    return const SizedBox.shrink();
+    return TextButton(
+      key: const ValueKey('quick-edit-categories'),
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.primarySoft,
+        foregroundColor: AppColors.textPrimary,
+        padding: EdgeInsets.zero,
+      ),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: AppColors.background,
+            body: CategoryManagementPage(
+              bookId: _bookId,
+              onBack: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ),
+      ),
+      child: const Text('编辑'),
+    );
   }
 
   Widget _buildDetailCard(
@@ -435,6 +534,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Account? sourceAccount,
   }) {
     return Container(
+      key: const ValueKey('quick-detail-card'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -444,115 +544,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('quick-note-field'),
-                  controller: _noteController,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: '添加备注...',
-                    hintStyle: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              _QuickChip(
-                key: const ValueKey('quick-ai-entry'),
-                label: 'AI帮我记',
-                icon: Icons.auto_awesome_outlined,
-                iconColor: const Color(0xFF765A94),
-                onTap: _openAi,
-              ),
-              const SizedBox(width: 6),
-              _IconChip(
-                key: const ValueKey('quick-voice-entry'),
-                icon: Icons.mic_none_rounded,
-                tooltip: '语音记账',
-                onTap: _openVoice,
-              ),
-            ],
+          _NoteRow(
+            controller: _noteController,
+            onAi: _openAi,
+            onVoice: _openVoice,
           ),
           const SizedBox(height: 10),
-          Container(
-            key: const ValueKey('quick-amount-input'),
-            padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      input.hasOperator
-                          ? input.value
-                          : '${_currencySymbol(sourceAccount)} ${input.displayValue}',
-                      key: const ValueKey('quick-amount-display'),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w600,
-                        height: 1.15,
-                      ),
-                    ),
-                  ),
-                ),
-                if (input.hasOperator) ...[
-                  const SizedBox(width: 8),
-                  // 表达式与结果都要能缩放：320dp + 大字号下固定宽度会横向溢出。
-                  Flexible(
-                    flex: 2,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '= ${_currencySymbol(sourceAccount)}${input.displayValue}',
-                        key: const ValueKey('quick-amount-result'),
-                        style: const TextStyle(
-                          color: AppColors.primaryDark,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                IconButton(
-                  onPressed: () => setState(() {
-                    _amount = const AmountInput();
-                    _amountError = false;
-                  }),
-                  tooltip: '清空金额',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(
-                    Icons.cancel,
-                    size: 20,
-                    color: Color(0xFFBCC3B4),
-                  ),
-                ),
-              ],
-            ),
+          AmountInputView(
+            input: input,
+            currency: _currencySymbol(sourceAccount),
           ),
           if (_amountError)
             const Padding(
@@ -579,6 +579,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   label: sourceAccount?.displayName ?? '请选择账户',
                   icon: _accountVisual(sourceAccount?.type).$1,
                   iconColor: _accountVisual(sourceAccount?.type).$2,
+                  // 账户、报销状态、账本在进页面时就已有确定取值，
+                  // 因此默认就呈选中态，而不是等用户改过才高亮。
+                  selected: sourceAccount != null,
                   showChevron: true,
                   onTap: () => _chooseAccount(accounts, isDestination: false),
                 ),
@@ -587,7 +590,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   key: const ValueKey('quick-reimbursement-chip'),
                   label: _reimbursementLabel,
                   icon: Icons.receipt_long_outlined,
-                  selected: _reimbursementStatus != ReimbursementStatus.none,
+                  // 「不报销」本身也是一个已确定的选择。
+                  selected: true,
                   showChevron: true,
                   onTap: _pickReimbursement,
                 ),
@@ -602,8 +606,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           color: AppColors.primary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
+                  selected: selectedBook != null,
                   showChevron: true,
-                  onTap: () => _chooseBook(ref.read(booksProvider).value ?? const []),
+                  onTap: () =>
+                      _chooseBook(ref.read(booksProvider).value ?? const []),
                 )
               else
                 _QuickChip(
@@ -616,6 +622,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           color: AppColors.primary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
+                  selected: selectedBook != null,
                   onTap: null,
                 ),
             ],
@@ -640,9 +647,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               ),
               _QuickChip(
                 key: const ValueKey('quick-date-chip'),
-                label: _dateLabel,
+                label: '时间',
                 icon: Icons.calendar_today_outlined,
-                selected: _isToday,
+                selected: true,
                 onTap: _pickDateTime,
               ),
               _QuickChip(
@@ -650,23 +657,30 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 label: '定期付',
                 icon: Icons.schedule_outlined,
                 selected: _isRecurring,
-                onTap: () => setState(() {
-                  _isRecurring = !_isRecurring;
-                  if (_isRecurring) _isOneTime = false;
-                }),
-              ),
-              _QuickChip(
-                key: const ValueKey('quick-more-chip'),
-                label: '更多',
-                icon: Icons.tune,
-                selected:
-                    _isPlanned ||
-                    _merchantController.text.trim().isNotEmpty ||
-                    _tagsController.text.trim().isNotEmpty,
-                onTap: _openMoreOptions,
+                onTap: _configureRecurring,
               ),
             ],
           ),
+          if (_recurringDraft != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 4),
+              child: Text(
+                '已设置${_recurringDraft!.scheduleLabel}，点击完成会同时保存首笔流水和周期规则',
+                key: const ValueKey('quick-recurring-summary'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primaryDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (selectedBook?.type == BookType.enterprise)
+            BusinessFields(
+              invoice: _invoiceController,
+              customer: _customerController,
+              project: _projectController,
+              supplier: _supplierController,
+            ),
         ],
       ),
     );
@@ -674,28 +688,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   String get _reimbursementLabel =>
       _reimbursementLabelFor(_reimbursementStatus);
-
-  bool get _isToday => DateUtils.isSameDay(_occurredAt, DateTime.now());
-
-  String get _dateLabel {
-    final now = DateTime.now();
-    final target = DateTime(
-      _occurredAt.year,
-      _occurredAt.month,
-      _occurredAt.day,
-    );
-    final today = DateTime(now.year, now.month, now.day);
-    final difference = target.difference(today).inDays;
-    return switch (difference) {
-      0 => '今天',
-      -1 => '昨天',
-      1 => '明天',
-      _ =>
-        _occurredAt.year == now.year
-            ? '${_occurredAt.month}月${_occurredAt.day}日'
-            : '${_occurredAt.year}年${_occurredAt.month}月${_occurredAt.day}日',
-    };
-  }
 
   String _currencySymbol(Account? account) =>
       account == null || account.currency == 'CNY' ? '¥' : account.currency;
@@ -760,13 +752,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     setState(() => _reimbursementStatus = selected);
   }
 
-  String _reimbursementLabelFor(ReimbursementStatus status) =>
-      switch (status) {
-        ReimbursementStatus.none => '不报销',
-        ReimbursementStatus.pending => '待报销',
-        ReimbursementStatus.reimbursed => '已报销',
-        ReimbursementStatus.partial => '部分报销',
-      };
+  String _reimbursementLabelFor(ReimbursementStatus status) => switch (status) {
+    ReimbursementStatus.none => '不报销',
+    ReimbursementStatus.pending => '待报销',
+    ReimbursementStatus.reimbursed => '已报销',
+    ReimbursementStatus.partial => '部分报销',
+  };
 
   Future<void> _openVoice() async {
     final saved = await showModalBottomSheet<bool>(
@@ -788,261 +779,143 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     if (saved == true && mounted) Navigator.pop(context);
   }
 
-  Future<void> _onAttachmentChip() async {
-    if (_attachments.isEmpty) {
-      await _pickAttachment();
-      return;
-    }
-    await _openAttachmentManager();
-  }
+  Future<void> _onAttachmentChip() => _openAttachmentManager(images: false);
 
-  Future<void> _openAttachmentManager() async {
-    await showModalBottomSheet<void>(
+  Future<void> _openAttachmentManager({required bool images}) async {
+    await AppBottomSheet.show<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          void refresh(VoidCallback change) {
-            setState(change);
-            setSheetState(() {});
-          }
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '附件 ${_attachments.length}/4',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+      builder: (sheet) => StatefulBuilder(
+        builder: (context, refresh) {
+          final entries = _attachments
+              .where((a) => a.isImage == images)
+              .toList();
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${images ? '图片' : '附件'} ${entries.length} · 合计最多 4 项',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    '长按拖动可排序，最多 4 个附件',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_attachmentsBusy)
-                    const LinearProgressIndicator(minHeight: 2),
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    itemCount: _attachments.length,
-                    onReorderItem: (oldIndex, newIndex) {
-                      final reordered = [..._attachments];
-                      final item = reordered.removeAt(oldIndex);
-                      reordered.insert(newIndex, item);
-                      refresh(() {
-                        _attachmentsChanged = true;
-                        _attachments
-                          ..clear()
-                          ..addAll(reordered);
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      final attachment = _attachments[index];
-                      return ListTile(
-                        key: ValueKey('${attachment.path}-$index'),
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: _AttachmentThumbnail(attachment: attachment),
+                ),
+                const Text('文件保存在本机；保存失败可重试，表单会保留。'),
+                if (_attachmentsBusy) const LinearProgressIndicator(),
+                for (final attachment in entries)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: _AttachmentThumbnail(attachment: attachment),
+                          ),
+                          title: Text(
+                            attachment.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${attachment.sizeInBytes == null ? '' : '${(attachment.sizeInBytes! / 1024).toStringAsFixed(1)} KB · '}${switch (attachment.status) {
+                              AttachmentUploadStatus.idle => '待保存',
+                              AttachmentUploadStatus.uploading => '保存中…',
+                              AttachmentUploadStatus.uploaded => '已保存',
+                              AttachmentUploadStatus.failed => attachment.errorMessage ?? '保存失败',
+                            }}',
+                          ),
                         ),
-                        title: Text(
-                          attachment.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          switch (attachment.status) {
-                            AttachmentUploadStatus.uploading => '保存中…',
-                            AttachmentUploadStatus.uploaded =>
-                              '已保存 · 长按拖动排序',
-                            AttachmentUploadStatus.failed =>
-                              '${attachment.errorMessage ?? '保存失败'} · 可重试',
-                          },
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Wrap(
-                          spacing: 0,
+                        Wrap(
+                          spacing: 8,
                           children: [
                             if (attachment.status ==
                                 AttachmentUploadStatus.failed)
-                              IconButton(
+                              TextButton.icon(
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('重新保存'),
                                 onPressed: _attachmentsBusy
                                     ? null
                                     : () async {
                                         await _retryAttachment(attachment);
-                                        setSheetState(() {});
+                                        if (context.mounted) refresh(() {});
                                       },
-                                icon: const Icon(Icons.refresh),
-                                tooltip: '重试保存',
-                              )
-                            else ...[
-                              IconButton(
-                                onPressed: _attachmentsBusy
-                                    ? null
-                                    : () async {
-                                        await _replaceAttachment(attachment);
-                                        setSheetState(() {});
-                                      },
-                                icon: const Icon(Icons.refresh),
-                                tooltip: '替换附件',
                               ),
-                              ReorderableDragStartListener(
-                                index: index,
-                                child: const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: Icon(Icons.drag_handle),
-                                ),
+                            if (attachment.status ==
+                                AttachmentUploadStatus.uploaded)
+                              TextButton.icon(
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('查看'),
+                                onPressed: () async {
+                                  final result = await OpenFilex.open(
+                                    attachment.path,
+                                  );
+                                  if (result.type != ResultType.done && mounted)
+                                    _showMessage(result.message);
+                                },
                               ),
-                            ],
-                            IconButton(
+                            TextButton.icon(
+                              icon: const Icon(Icons.swap_horiz),
+                              label: const Text('重新选择'),
                               onPressed: _attachmentsBusy
                                   ? null
-                                  : () => refresh(() {
-                                      _attachmentsChanged = true;
-                                      _attachments.remove(attachment);
-                                    }),
+                                  : () async {
+                                      await _replaceAttachment(attachment);
+                                      if (context.mounted) refresh(() {});
+                                    },
+                            ),
+                            TextButton.icon(
                               icon: const Icon(Icons.close),
-                              tooltip: '移除附件',
+                              label: const Text('删除'),
+                              onPressed: _attachmentsBusy
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _attachments.remove(attachment);
+                                        _attachmentsChanged = true;
+                                      });
+                                      refresh(() {});
+                                    },
                             ),
                           ],
                         ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _attachments.length >= 4 || _attachmentsBusy
+                FilledButton.icon(
+                  icon: Icon(
+                    images ? Icons.photo_library_outlined : Icons.attach_file,
+                  ),
+                  label: Text(images ? '从相册选择' : '选择文件'),
+                  onPressed: _attachmentsBusy || _attachments.length >= 4
+                      ? null
+                      : () async {
+                          await _pickAttachment(
+                            type: images ? FileType.image : FileType.any,
+                            imageSource: images ? ImageSource.gallery : null,
+                          );
+                          if (context.mounted) refresh(() {});
+                        },
+                ),
+                if (images)
+                  TextButton.icon(
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('拍照'),
+                    onPressed: _attachmentsBusy || _attachments.length >= 4
                         ? null
                         : () async {
-                            await _pickAttachment();
-                            setSheetState(() {});
+                            await _pickAttachment(
+                              type: FileType.image,
+                              imageSource: ImageSource.camera,
+                            );
+                            if (context.mounted) refresh(() {});
                           },
-                    icon: const Icon(Icons.attach_file),
-                    label: const Text('添加附件'),
                   ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _openMoreOptions() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          void refresh(VoidCallback change) {
-            setState(change);
-            setSheetState(() {});
-          }
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    '更多选项',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _merchantController,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      prefixIcon: Icon(Icons.storefront_outlined),
-                      hintText: '商户（可选）',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile.adaptive(
-                      key: const ValueKey('quick-planned-toggle'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('计划内消费'),
-                      value: _isPlanned,
-                      onChanged: (value) => refresh(() => _isPlanned = value),
-                    ),
-                  ),
-                  Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile.adaptive(
-                      key: const ValueKey('quick-one-time-toggle'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('一次性消费'),
-                      value: _isOneTime,
-                      onChanged: (value) => refresh(() {
-                        _isOneTime = value;
-                        if (value) _isRecurring = false;
-                      }),
-                    ),
-                  ),
-                  Material(
-                    color: Colors.transparent,
-                    child: SwitchListTile.adaptive(
-                      key: const ValueKey('quick-recurring-toggle'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('周期消费'),
-                      value: _isRecurring,
-                      onChanged: (value) => refresh(() {
-                        _isRecurring = value;
-                        if (value) _isOneTime = false;
-                      }),
-                    ),
-                  ),
-                  TextField(
-                    controller: _tagsController,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      prefixIcon: Icon(Icons.sell_outlined),
-                      hintText: '标签，用逗号分隔',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      unawaited(_openAttachmentManager());
-                    },
-                    icon: const Icon(Icons.attach_file),
-                    label: Text('管理附件 ${_attachments.length}/4'),
-                  ),
-                ],
-              ),
+              ],
             ),
           );
         },
@@ -1149,7 +1022,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     for (final account in accounts) {
       if (account.id == selectedId) return account;
     }
-    return accounts.firstOrNull;
+    return accounts
+            .where((item) => item.type == AccountType.wechat)
+            .firstOrNull ??
+        accounts.firstOrNull;
   }
 
   Account? _destinationAccount(List<Account> accounts, Account? sourceAccount) {
@@ -1162,39 +1038,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return accounts.where((item) => item.id != sourceAccount?.id).firstOrNull;
   }
 
-  Future<void> _showAllCategories(List<Category> categories) async {
-    final selected = await showModalBottomSheet<Category>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-          children: [
-            Text('全部分类', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            ...categories.map(
-              (category) => ListTile(
-                title: Text(category.name),
-                trailing: category.id == _categoryId
-                    ? const Icon(Icons.check, color: AppColors.primary)
-                    : null,
-                onTap: () => Navigator.pop(context, category),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null && mounted) {
-      setState(() {
-        _categoryId = selected.id;
-        _subcategoryId = null;
-      });
-    }
-  }
-
   Future<void> _chooseBook(List<LedgerBook> books) async {
     final selected = await showBookChoiceSheet(
       context,
@@ -1203,6 +1046,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     );
     if (selected == null || !mounted) return;
     setState(() {
+      _invoiceController.clear();
+      _customerController.clear();
+      _projectController.clear();
+      _supplierController.clear();
       _bookId = selected.id;
       _categoryId = null;
       _subcategoryId = null;
@@ -1268,36 +1115,109 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return _type == TransactionType.repayment ? '选择债务账户' : '选择转入账户';
   }
 
-  Future<void> _pickDateTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _occurredAt,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 366)),
+  Future<void> _configureRecurring() async {
+    if (_type != TransactionType.expense && _type != TransactionType.income) {
+      _showMessage('周期账单支持支出和收入');
+      return;
+    }
+    final activeBookId = ref.read(activeBookIdProvider);
+    final selectedBookId = _bookId ?? activeBookId;
+    final accounts = selectedBookId == activeBookId
+        ? ref.read(accountsProvider).value ?? const <Account>[]
+        : ref.read(accountsByBookProvider(selectedBookId)).value ??
+              const <Account>[];
+    final categories = selectedBookId == activeBookId
+        ? ref.read(categoriesProvider).value ?? const <Category>[]
+        : ref.read(categoriesByBookProvider(selectedBookId)).value ??
+              const <Category>[];
+    final sourceAccount = _selectedAccount(accounts, _accountId);
+    final activeCategories = _sortedCategories(categories, const []);
+    final selectedCategory = _selectedCategory(activeCategories);
+    if (sourceAccount == null || selectedCategory == null) {
+      _showMessage('请先选择扣款账户和分类');
+      return;
+    }
+    final subcategoryId =
+        categories.any(
+          (category) =>
+              category.id == _subcategoryId &&
+              category.parentId == selectedCategory.id,
+        )
+        ? _subcategoryId
+        : null;
+    final now = DateTime.now();
+    final draft = _recurringDraft ?? await _linkedRecurringBill();
+    if (!mounted) return;
+    final bill = RecurringBill(
+      id: draft?.id ?? 'recurring-${newEntityId()}',
+      bookId: selectedBookId,
+      name: _merchantController.text.trim().isEmpty
+          ? selectedCategory.name
+          : _merchantController.text.trim(),
+      type: _type == TransactionType.income
+          ? RecurringBillType.income
+          : RecurringBillType.other,
+      amount: _amount.amount ?? 0,
+      cycle: draft?.cycle ?? RecurringBillCycle.monthly,
+      startDate: draft?.startDate ?? _occurredAt,
+      endDate: draft?.endDate,
+      nextDate: draft?.nextDate ?? _occurredAt,
+      accountId: sourceAccount.id,
+      categoryId: selectedCategory.id,
+      subcategoryId: subcategoryId,
+      interval: draft?.interval ?? 1,
+      weekday: draft?.weekday,
+      dayOfMonth: draft?.dayOfMonth,
+      month: draft?.month,
+      repeatCount: draft?.repeatCount,
+      completedCount: draft?.completedCount ?? 0,
+      reminderDays: draft?.reminderDays ?? 1,
+      customIntervalDays: draft?.customIntervalDays,
+      autoRecord: draft?.autoRecord ?? false,
+      reminder: draft?.reminder ?? true,
+      status: draft?.status ?? RecurringBillStatus.active,
+      createdAt: draft?.createdAt ?? now,
+      updatedAt: now,
     );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_occurredAt),
+    final result = await RecurringBillCreateSheet.showRules(
+      context,
+      bill,
+      onDisable: draft == null || widget.initialTransaction != null
+          ? null
+          : () => setState(() {
+              _recurringDraft = null;
+              _isRecurring = false;
+              _isOneTime = true;
+            }),
     );
-    if (time == null || !mounted) return;
-    setState(() {
-      _occurredAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+    if (result != null && mounted)
+      setState(() {
+        _recurringDraft = result;
+        _isRecurring = true;
+        _isOneTime = false;
+      });
   }
 
-  Future<void> _pickImageAttachment() =>
-      _pickAttachment(type: FileType.image, dialogTitle: '选择图片附件');
+  Future<RecurringBill?> _linkedRecurringBill() async {
+    final transaction = widget.initialTransaction;
+    if (transaction == null) return null;
+    final metadata = _decodeMetadata(transaction.metadataJson);
+    final id = metadata['recurring_bill_id'];
+    if (id is! String || id.isEmpty) return null;
+    final bills = await ref.read(recurringBillsAllProvider.future);
+    return bills.where((bill) => bill.id == id).firstOrNull;
+  }
+
+  Future<void> _pickDateTime() async {
+    final value = await TimeSelector.show(context, _occurredAt);
+    if (value != null && mounted) setState(() => _occurredAt = value);
+  }
+
+  Future<void> _pickImageAttachment() => _openAttachmentManager(images: true);
 
   Future<void> _pickAttachment({
     FileType type = FileType.any,
-    String dialogTitle = '选择账单附件',
+    ImageSource? imageSource,
   }) async {
     if (_attachments.length >= 4 || _attachmentsBusy) {
       if (_attachments.length >= 4) _showMessage('一笔流水最多添加 4 个附件');
@@ -1313,9 +1233,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _attachmentsBusy = true;
     });
     try {
-      final attachment = await ref
-          .read(attachmentStorageServiceProvider)
-          .pickAndStore(type: type, dialogTitle: dialogTitle);
+      final storage = ref.read(attachmentStorageServiceProvider);
+      final attachment = imageSource == ImageSource.gallery
+          ? await AppImagePicker.gallery(storage)
+          : imageSource == ImageSource.camera
+          ? await AppImagePicker.camera(storage)
+          : await AppFilePicker.pick(storage);
       if (mounted) {
         setState(() {
           final index = _attachments.indexOf(pending);
@@ -1356,7 +1279,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     try {
       final replacement = await ref
           .read(attachmentStorageServiceProvider)
-          .pickAndStore();
+          .pickAndStore(type: existing.isImage ? FileType.image : FileType.any);
       if (!mounted) return;
       setState(() {
         final pendingIndex = _attachments.indexOf(pending);
@@ -1433,7 +1356,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Account? destinationAccount,
     required Category? selectedCategory,
     required String? subcategoryId,
-    required bool keepOpen,
   }) async {
     if (_isSaving) return;
     if (_attachmentsBusy) {
@@ -1456,9 +1378,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       return;
     }
     if (_usesAccountPair && destinationAccount == null) {
-      _showMessage(
-        _type == TransactionType.repayment ? '请选择债务账户' : '请选择转入账户',
-      );
+      _showMessage(_type == TransactionType.repayment ? '请选择债务账户' : '请选择转入账户');
       return;
     }
     if (!_usesAccountPair && selectedCategory == null) {
@@ -1481,6 +1401,31 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         bookId: bookId,
         type: _type,
         amount: _amount.amount!,
+        metadata: {
+          'formula': _amount.value,
+          'amount_formula': _amount.value,
+          if (_recurringDraft != null) 'recurring_bill_id': _recurringDraft!.id,
+          'transaction_date':
+              '${_occurredAt.year}-${_occurredAt.month.toString().padLeft(2, '0')}-${_occurredAt.day.toString().padLeft(2, '0')}',
+          'transaction_time':
+              '${_occurredAt.hour.toString().padLeft(2, '0')}:${_occurredAt.minute.toString().padLeft(2, '0')}',
+          'timezone_offset_minutes': _occurredAt.timeZoneOffset.inMinutes,
+          'business':
+              ref
+                      .read(booksProvider)
+                      .value
+                      ?.where((book) => book.id == bookId)
+                      .firstOrNull
+                      ?.type ==
+                  BookType.enterprise
+              ? {
+                  'invoice': _invoiceController.text.trim(),
+                  'customer': _customerController.text.trim(),
+                  'project': _projectController.text.trim(),
+                  'supplier': _supplierController.text.trim(),
+                }
+              : null,
+        },
         currency: sourceAccount.currency,
         categoryId: _usesAccountPair ? null : selectedCategory!.id,
         subcategoryId: _usesAccountPair
@@ -1514,27 +1459,124 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       );
       final service = ref.read(quickBookkeepingServiceProvider);
       if (widget.initialTransaction == null) {
-        await service.save(request);
+        if (_recurringDraft == null) {
+          await service.save(request);
+        } else {
+          final draft = _recurringDraft!;
+          if (_type != TransactionType.expense &&
+              _type != TransactionType.income) {
+            throw ArgumentError('周期账单仅支持收入和支出');
+          }
+          var next = draft.firstOccurrence();
+          final currentDay = DateTime(
+            _occurredAt.year,
+            _occurredAt.month,
+            _occurredAt.day,
+          );
+          while (!next.isAfter(currentDay)) {
+            next = draft.nextOccurrence(next);
+          }
+          final ended =
+              (draft.repeatCount != null && draft.repeatCount! <= 1) ||
+              (draft.endDate != null && next.isAfter(draft.endDate!));
+          final plan = RecurringBill(
+            id: draft.id,
+            bookId: bookId,
+            name: _merchantController.text.trim().isNotEmpty
+                ? _merchantController.text.trim()
+                : selectedCategory!.name,
+            type: _type == TransactionType.income
+                ? RecurringBillType.income
+                : RecurringBillType.other,
+            amount: request.amount,
+            cycle: draft.cycle,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            nextDate: next,
+            accountId: sourceAccount.id,
+            categoryId: request.categoryId,
+            subcategoryId: request.subcategoryId,
+            interval: draft.interval,
+            weekday: draft.weekday,
+            dayOfMonth: draft.dayOfMonth,
+            month: draft.month,
+            repeatCount: draft.repeatCount,
+            completedCount: 1,
+            reminderDays: draft.reminderDays,
+            reminder: draft.reminder,
+            autoRecord: draft.autoRecord,
+            customIntervalDays: draft.customIntervalDays,
+            status: ended
+                ? RecurringBillStatus.ended
+                : RecurringBillStatus.active,
+            createdAt: draft.createdAt,
+            updatedAt: DateTime.now(),
+          );
+          await RecurringBillExecutionService(
+            ref.read(databaseProvider),
+            service,
+            ref.read(transactionRepositoryProvider),
+            DriftRecurringBillRepository(
+              ref.read(databaseProvider),
+              bookId: bookId,
+            ),
+          ).createWithInitial(plan, request);
+          unawaited(_syncRecurringNotification(plan));
+          ref.invalidate(recurringBillsAllProvider);
+        }
       } else {
         await service.update(widget.initialTransaction!, request);
+        final draft = _recurringDraft;
+        if (draft != null) {
+          final repository = DriftRecurringBillRepository(
+            ref.read(databaseProvider),
+            bookId: bookId,
+          );
+          final existing = (await repository.getAll())
+              .where((bill) => bill.id == draft.id)
+              .firstOrNull;
+          final updated = RecurringBill(
+            id: draft.id,
+            bookId: bookId,
+            name: _merchantController.text.trim().isNotEmpty
+                ? _merchantController.text.trim()
+                : selectedCategory!.name,
+            type: _type == TransactionType.income
+                ? RecurringBillType.income
+                : RecurringBillType.other,
+            amount: request.amount,
+            cycle: draft.cycle,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            nextDate: draft.nextDate,
+            accountId: sourceAccount.id,
+            categoryId: request.categoryId,
+            subcategoryId: request.subcategoryId,
+            interval: draft.interval,
+            weekday: draft.weekday,
+            dayOfMonth: draft.dayOfMonth,
+            month: draft.month,
+            repeatCount: draft.repeatCount,
+            completedCount: draft.completedCount,
+            reminderDays: draft.reminderDays,
+            reminder: draft.reminder,
+            autoRecord: draft.autoRecord,
+            customIntervalDays: draft.customIntervalDays,
+            status: draft.status,
+            createdAt: draft.createdAt,
+            updatedAt: DateTime.now(),
+          );
+          if (existing == null) {
+            await repository.create(updated);
+          } else {
+            await repository.update(updated);
+          }
+          unawaited(_syncRecurringNotification(updated));
+          ref.invalidate(recurringBillsAllProvider);
+        }
       }
       unawaited(HapticFeedback.lightImpact());
       if (!mounted) return;
-      if (keepOpen) {
-        setState(() {
-          _isSaving = false;
-          _amount = const AmountInput();
-          _amountError = false;
-          _noteController.clear();
-          _merchantController.clear();
-          _tagsController.clear();
-          _reimbursementNoteController.clear();
-          _attachments.clear();
-          _attachmentsChanged = false;
-        });
-        _showMessage('已保存，继续记下一笔');
-        return;
-      }
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(
@@ -1559,6 +1601,42 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
   }
 
+  Future<void> _syncRecurringNotification(RecurringBill bill) async {
+    try {
+      final scheduler = ref.read(recurringBillNotificationSchedulerProvider);
+      if (bill.reminder) await scheduler.requestPermission();
+      await scheduler.syncBill(bill);
+    } on Object catch (error) {
+      debugPrint('周期账单通知同步失败：$error');
+    }
+  }
+
+  void _resetForNextEntry({String? showMessage}) {
+    if (!mounted || _isSaving) return;
+    setState(() {
+      _amount = const AmountInput();
+      _occurredAt = DateTime.now();
+      _isRecurring = false;
+      _recurringDraft = null;
+      _isOneTime = true;
+      _reimbursementStatus = ReimbursementStatus.none;
+      _categoryId = null;
+      _subcategoryId = null;
+      _amountError = false;
+      _invoiceController.clear();
+      _customerController.clear();
+      _projectController.clear();
+      _supplierController.clear();
+      _noteController.clear();
+      _merchantController.clear();
+      _tagsController.clear();
+      _reimbursementNoteController.clear();
+      _attachments.clear();
+      _attachmentsChanged = false;
+    });
+    if (showMessage != null) _showMessage(showMessage);
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
@@ -1581,15 +1659,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   ),
   AccountType.cash => (Icons.payments_rounded, const Color(0xFFD9A03C)),
   AccountType.debitCard => (Icons.credit_card_rounded, const Color(0xFF539AF2)),
-  AccountType.creditCard => (Icons.credit_card_rounded, const Color(0xFFEF789E)),
-  AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
-  _ => (
-    Icons.account_balance_wallet_outlined,
-    AppColors.textSecondary,
+  AccountType.creditCard => (
+    Icons.credit_card_rounded,
+    const Color(0xFFEF789E),
   ),
+  AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
+  _ => (Icons.account_balance_wallet_outlined, AppColors.textSecondary),
 };
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
+  TransactionType.assetSale => '资产卖出',
   TransactionType.expense => '支出',
   TransactionType.income => '收入',
   TransactionType.transfer => '转账',
@@ -1744,254 +1823,6 @@ class _DebtTabs extends StatelessWidget {
 }
 
 /// The 5-column primary grid plus the optional sub-category strip.
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
-    required this.categories,
-    required this.selected,
-    required this.subcategories,
-    required this.selectedSubcategoryId,
-    required this.onSelected,
-    required this.onSubcategorySelected,
-    required this.onMore,
-  });
-
-  final List<Category> categories;
-  final Category? selected;
-  final List<Category> subcategories;
-  final String? selectedSubcategoryId;
-  final ValueChanged<Category> onSelected;
-  final ValueChanged<Category> onSubcategorySelected;
-  final VoidCallback onMore;
-
-  /// Three rows of five tiles before the 更多 tile takes over.
-  static const _maxTiles = 15;
-
-  @override
-  Widget build(BuildContext context) {
-    final showsMore = categories.length > _maxTiles;
-    final visible = categories
-        .take(showsMore ? _maxTiles - 1 : _maxTiles)
-        .toList();
-    if (selected != null &&
-        !visible.any((item) => item.id == selected!.id) &&
-        visible.isNotEmpty) {
-      visible[visible.length - 1] = selected!;
-    }
-    return Container(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = MediaQuery.textScalerOf(context).scale(14) > 19
-                  ? 4
-                  : 5;
-              return Wrap(
-                key: const ValueKey('quick-category-section'),
-                children: [
-                  for (final category in visible)
-                    _CategoryTile(
-                      key: ValueKey('quick-category-${category.id}'),
-                      width: constraints.maxWidth / columns,
-                      name: category.name,
-                      iconKey: category.icon,
-                      selected: selected?.id == category.id,
-                      onTap: () => onSelected(category),
-                    ),
-                  if (showsMore)
-                    _CategoryTile(
-                      key: const ValueKey('quick-more-categories'),
-                      width: constraints.maxWidth / columns,
-                      name: '更多',
-                      iconKey: 'more_horiz',
-                      selected: false,
-                      onTap: onMore,
-                    ),
-                  if (categories.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text('暂无可用分类，请先在分类管理中添加'),
-                    ),
-                ],
-              );
-            },
-          ),
-          if (subcategories.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Divider(height: 1, color: AppColors.divider),
-            ),
-            SizedBox(
-              height: 62,
-              child: ListView.separated(
-                key: const ValueKey('quick-subcategory-strip'),
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                itemCount: subcategories.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 6),
-                itemBuilder: (context, index) {
-                  final child = subcategories[index];
-                  return _SubcategoryTile(
-                    key: ValueKey('quick-subcategory-${child.id}'),
-                    category: child,
-                    selected: child.id == selectedSubcategoryId,
-                    onTap: () => onSubcategorySelected(child),
-                  );
-                },
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({
-    super.key,
-    required this.width,
-    required this.name,
-    required this.iconKey,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final double width;
-  final String name;
-  final String iconKey;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 180);
-    final accent = CategoryIcon.accentFor(name, iconKey: iconKey);
-    return SizedBox(
-      width: width,
-      child: Semantics(
-        selected: selected,
-        button: true,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              children: [
-                AnimatedScale(
-                  scale: selected ? 1.06 : 1,
-                  duration: duration,
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: duration,
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: selected
-                            ? accent.withValues(alpha: .55)
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: CategoryIcon(
-                      category: name,
-                      iconKey: iconKey,
-                      size: 40,
-                      vivid: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textPrimary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SubcategoryTile extends StatelessWidget {
-  const _SubcategoryTile({
-    super.key,
-    required this.category,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Category category;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 62,
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primarySoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? AppColors.primary : Colors.transparent,
-              width: 1.2,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CategoryIcon(
-                category: category.name,
-                iconKey: category.icon,
-                size: 28,
-                vivid: selected,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                category.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  color: selected
-                      ? AppColors.primaryDark
-                      : AppColors.textSecondary,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 转出 → 转入 (or 还款账户 → 债务账户) shown where the category grid would be.
 class _AccountPairCard extends StatelessWidget {
   const _AccountPairCard({
@@ -2109,6 +1940,112 @@ class _AccountPairButton extends StatelessWidget {
   }
 }
 
+/// 备注行：常规字号下是「备注 + AI + 麦克风」一行；
+/// 大字号/窄屏下 AI 与麦克风换到第二行，避免备注输入框被挤成一个字。
+class _NoteRow extends StatelessWidget {
+  const _NoteRow({
+    required this.controller,
+    required this.onAi,
+    required this.onVoice,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onAi;
+  final VoidCallback onVoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final stacks = MediaQuery.textScalerOf(context).scale(14) > 19;
+    final field = SizedBox(
+      height: 40,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.edit_outlined,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              key: const ValueKey('quick-note-field'),
+              controller: controller,
+              minLines: 1,
+              maxLines: 1,
+              textAlignVertical: TextAlignVertical.center,
+              onTapOutside: (_) =>
+                  FocusManager.instance.primaryFocus?.unfocus(),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+              decoration: const InputDecoration(
+                // The app-wide form theme uses a 52dp outlined field. The
+                // compact note row is part of the amount card, so it must not
+                // inherit that height or outline in any focus state.
+                isDense: true,
+                isCollapsed: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                hintText: '添加备注...',
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+                contentPadding: EdgeInsets.zero,
+                constraints: BoxConstraints.tightFor(height: 40),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _QuickChip(
+          key: const ValueKey('quick-ai-entry'),
+          label: 'AI帮我记',
+          icon: Icons.auto_awesome_outlined,
+          iconColor: const Color(0xFF765A94),
+          onTap: onAi,
+        ),
+        const SizedBox(width: 6),
+        _IconChip(
+          key: const ValueKey('quick-voice-entry'),
+          icon: Icons.mic_none_rounded,
+          tooltip: '语音记账',
+          onTap: onVoice,
+        ),
+      ],
+    );
+    if (stacks) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          field,
+          const SizedBox(height: 8),
+          Align(alignment: Alignment.centerRight, child: actions),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: 6),
+        actions,
+      ],
+    );
+  }
+}
+
 class _ChipRow extends StatelessWidget {
   const _ChipRow({required this.children});
 
@@ -2116,6 +2053,16 @@ class _ChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.textScalerOf(context).scale(12.5) <= 15) {
+      return Row(
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            if (index > 0) const SizedBox(width: 8),
+            Expanded(child: children[index]),
+          ],
+        ],
+      );
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -2159,8 +2106,8 @@ class _QuickChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
@@ -2168,44 +2115,47 @@ class _QuickChip extends StatelessWidget {
               width: selected ? 1.2 : 1,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(width: 6),
-              ] else if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 16,
-                  color: iconColor ?? AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-              ],
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 120),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: selected
-                        ? AppColors.primaryDark
-                        : AppColors.textPrimary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (leading != null) ...[
+                  leading!,
+                  const SizedBox(width: 6),
+                ] else if (icon != null) ...[
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: iconColor ?? AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: selected
+                          ? AppColors.primaryDark
+                          : AppColors.textPrimary,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-              if (showChevron) ...[
-                const SizedBox(width: 2),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
+                if (showChevron) ...[
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -2251,218 +2201,6 @@ class _IconChip extends StatelessWidget {
 }
 
 /// The always-visible calculator keypad that replaces the old save button.
-class _Keypad extends StatelessWidget {
-  const _Keypad({
-    required this.canRepeat,
-    required this.isSaving,
-    required this.onKey,
-    required this.onBackspace,
-    required this.onDone,
-    required this.onRepeat,
-  });
-
-  final bool canRepeat;
-  final bool isSaving;
-  final ValueChanged<String> onKey;
-  final VoidCallback onBackspace;
-  final VoidCallback onDone;
-  final VoidCallback onRepeat;
-
-  @override
-  Widget build(BuildContext context) {
-    final height = (MediaQuery.sizeOf(context).height * .25).clamp(
-      176.0,
-      210.0,
-    );
-    return Container(
-      height: height,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                _digit('1'),
-                _digit('2'),
-                _digit('3'),
-                Expanded(
-                  child: _KeypadKey(
-                    key: const ValueKey('amount-key-backspace'),
-                    icon: Icons.backspace_outlined,
-                    semanticLabel: '删除金额字符',
-                    onTap: onBackspace,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Row(
-              children: [
-                _digit('4'),
-                _digit('5'),
-                _digit('6'),
-                _operatorPair('+', '-'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Row(
-              children: [
-                _digit('7'),
-                _digit('8'),
-                _digit('9'),
-                _operatorPair('×', '÷'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Row(
-              children: [
-                if (canRepeat)
-                  Expanded(
-                    child: _KeypadKey(
-                      key: const ValueKey('quick-repeat'),
-                      label: '再记',
-                      fontSize: 15,
-                      onTap: isSaving ? null : onRepeat,
-                    ),
-                  ),
-                Expanded(
-                  child: _KeypadKey(
-                    key: const ValueKey('amount-key-0'),
-                    label: '0',
-                    onTap: () => onKey('0'),
-                  ),
-                ),
-                Expanded(
-                  child: _KeypadKey(
-                    key: const ValueKey('amount-key-.'),
-                    label: '.',
-                    onTap: () => onKey('.'),
-                  ),
-                ),
-                Expanded(
-                  flex: canRepeat ? 1 : 2,
-                  child: _KeypadKey(
-                    key: const ValueKey('quick-done'),
-                    label: '完成',
-                    fontSize: 15,
-                    primary: true,
-                    busy: isSaving,
-                    onTap: isSaving ? null : onDone,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _digit(String value) => Expanded(
-    child: _KeypadKey(
-      key: ValueKey('amount-key-$value'),
-      label: value,
-      onTap: () => onKey(value),
-    ),
-  );
-
-  Widget _operatorPair(String multiplication, String division) => Expanded(
-    child: Row(
-      children: [
-        Expanded(
-          child: _KeypadKey(
-            key: ValueKey('amount-key-$multiplication'),
-            label: multiplication,
-            onTap: () => onKey(multiplication == '×' ? '*' : '+'),
-          ),
-        ),
-        Expanded(
-          child: _KeypadKey(
-            key: ValueKey('amount-key-$division'),
-            label: division,
-            onTap: () => onKey(division == '÷' ? '/' : '-'),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _KeypadKey extends StatelessWidget {
-  const _KeypadKey({
-    super.key,
-    this.label,
-    this.icon,
-    this.semanticLabel,
-    this.fontSize = 20,
-    this.primary = false,
-    this.busy = false,
-    this.onTap,
-  });
-
-  final String? label;
-  final IconData? icon;
-  final String? semanticLabel;
-  final double fontSize;
-  final bool primary;
-  final bool busy;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(3),
-      child: Semantics(
-        label: semanticLabel,
-        button: true,
-        child: Material(
-          color: primary ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: primary
-                    ? null
-                    : Border.all(color: AppColors.divider),
-              ),
-              child: Center(
-                child: busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : icon != null
-                    ? Icon(icon, color: AppColors.textPrimary, size: 20)
-                    : Text(
-                        label!,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.w500,
-                          color: primary ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AttachmentThumbnail extends StatelessWidget {
   const _AttachmentThumbnail({required this.attachment});
 

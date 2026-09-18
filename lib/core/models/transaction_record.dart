@@ -10,6 +10,7 @@ enum TransactionType {
   lend,
   repayment,
   assetPurchase,
+  assetSale,
   adjustment,
 }
 
@@ -131,6 +132,21 @@ class TransactionRecord {
     _ => false,
   };
 
+  /// A row that converts between cash and an investment position.
+  ///
+  /// These rows are real account movements: they appear in the ledger and
+  /// change account balances, but they are never consumption. Buying a fund
+  /// does not spend money, it moves money.
+  bool get isAssetTransfer =>
+      type == TransactionType.assetPurchase ||
+      type == TransactionType.assetSale;
+
+  /// Consumption expense used by reports, budgets and the home totals.
+  ///
+  /// Asset conversions are excluded so an investment purchase never inflates
+  /// the monthly spending figure.
+  bool get isConsumptionExpense => isExpense && !isAssetTransfer;
+
   /// Debt repayments reduce cash or a liability but do not represent a new
   /// consumption. They remain transaction rows for auditability.
   bool get isDebtRepayment => type == TransactionType.repayment;
@@ -146,6 +162,7 @@ class TransactionRecord {
   /// record is read from the database. Keep the special transaction types
   /// readable even though they do not have a category.
   String get displayCategoryLabel => switch (type) {
+    TransactionType.assetSale => '资产卖出',
     TransactionType.adjustment => '余额校准',
     TransactionType.transfer => '转账',
     _ => categoryName?.trim().isNotEmpty == true ? categoryName!.trim() : '未分类',

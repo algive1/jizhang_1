@@ -1,3 +1,4 @@
+import '../../../core/widgets/app_form.dart';
 import '../../../core/utils/entity_id.dart';
 
 import 'package:flutter/material.dart';
@@ -68,7 +69,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
                   v == null || v.trim().isEmpty ? '请填写账户名称' : null,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<AccountType>(
+            AppSelect<AccountType>(
               initialValue: _type,
               isExpanded: true,
               decoration: const InputDecoration(labelText: '账户渠道 / 类型'),
@@ -107,7 +108,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
             ],
             if (!_type.isDebt) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<AssetForm>(
+              AppSelect<AssetForm>(
                 initialValue: _assetForm,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '资金形式'),
@@ -122,7 +123,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
             ],
             if (widget.account == null) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
+              AppSelect<String>(
                 initialValue: _currency,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '币种（分别统计，不折算）'),

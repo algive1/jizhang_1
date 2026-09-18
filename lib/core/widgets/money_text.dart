@@ -37,7 +37,7 @@ class MoneyText extends StatelessWidget {
     final amountStyle = resolvedStyle.copyWith(
       color: positive == null
           ? resolvedStyle.color
-          : (isPositive ? AppColors.income : AppColors.textPrimary),
+          : (isPositive ? AppColors.income : AppColors.expense),
     );
     return PrivacyAmount(
       text: '$sign$value',

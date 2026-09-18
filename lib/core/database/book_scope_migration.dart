@@ -56,6 +56,7 @@ extension BookScopeMigration on AppDatabase {
       'lend',
       'repayment',
       'assetPurchase',
+      'assetSale',
       'adjustment',
     };
     if (records.any(

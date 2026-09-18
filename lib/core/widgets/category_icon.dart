@@ -8,8 +8,10 @@ class CategoryIcon extends StatelessWidget {
     this.vivid = false,
     this.monochrome = false,
     this.iconKey,
+    this.illustrated = false,
   });
 
+  final bool illustrated;
   final String category;
   final double size;
   final bool vivid;
@@ -35,9 +37,22 @@ class CategoryIcon extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: resolvedStyle.$1,
-        borderRadius: BorderRadius.circular(vivid ? size * .32 : size / 2),
+        borderRadius: BorderRadius.circular(
+          illustrated
+              ? size / 2
+              : vivid
+              ? size * .32
+              : size / 2,
+        ),
       ),
-      child: Icon(resolvedStyle.$2, color: resolvedStyle.$3, size: size * .48),
+      child: illustrated
+          ? Center(
+              child: Text(
+                _emojiByName[category] ?? _emojiByIcon[iconKey] ?? '🧩',
+                style: TextStyle(fontSize: size * .64, height: 1.15),
+              ),
+            )
+          : Icon(resolvedStyle.$2, color: resolvedStyle.$3, size: size * .48),
     );
   }
 
@@ -50,8 +65,55 @@ class CategoryIcon extends StatelessWidget {
         _vividStyles['其他']!;
   }
 
+  static const _emojiByName = <String, String>{
+    '早餐': '🍜',
+    '午餐': '🍱',
+    '晚餐': '🍜',
+    '奶茶咖啡': '🧋',
+    '火锅': '🍲',
+    '零食': '🍟',
+    '买菜': '🥬',
+    '水果': '🍎',
+    '外卖': '🛵',
+  };
+  static const _emojiByIcon = <String, String>{
+    'restaurant_outlined': '🍜',
+    'shopping_bag_outlined': '🛍️',
+    'directions_car_outlined': '🚙',
+    'home_outlined': '🏠',
+    'movie_outlined': '🎮',
+    'school_outlined': '📖',
+    'medical_services_outlined': '💊',
+    'redeem_outlined': '🎁',
+    'trending_up': '🪙',
+    'pets_outlined': '🐾',
+    'devices_outlined': '📷',
+    'work_outline': '💼',
+    'flight_takeoff_outlined': '🏝️',
+    'more_horiz': '🟩',
+    'category_outlined': '🧩',
+    'receipt_long_outlined': '🧾',
+    'directions_car_filled_outlined': '🚗',
+    'local_cafe_outlined': '🧋',
+    'fastfood_outlined': '🍟',
+    'shopping_cart_outlined': '🧺',
+    'nutrition_outlined': '🍎',
+    'delivery_dining_outlined': '🛵',
+    'payments_outlined': '💰',
+    'stars_outlined': '🌟',
+    'schedule_outlined': '⏰',
+    'undo': '💸',
+    'add_circle_outline': '💵',
+    'campaign_outlined': '📣',
+  };
+
   static const _categoryByIconKey = <String, String>{
     'restaurant_outlined': '餐饮',
+    'local_cafe_outlined': '奶茶咖啡',
+    'fastfood_outlined': '零食',
+    'shopping_cart_outlined': '日用',
+    'nutrition_outlined': '水果',
+    'delivery_dining_outlined': '外卖',
     'directions_car_outlined': '交通',
     'shopping_bag_outlined': '购物',
     'movie_outlined': '娱乐',
@@ -76,6 +138,12 @@ class CategoryIcon extends StatelessWidget {
     'category_outlined': '其他',
   };
   static const _vividStyles = <String, (Color, IconData, Color)>{
+    '转账': (Color(0xFFE7F2FF), Icons.swap_horiz_rounded, Color(0xFF398FF2)),
+    '余额校准': (Color(0xFFF0F3F7), Icons.tune_rounded, Color(0xFF8799B0)),
+    '奶茶咖啡': (Color(0xFFFFF0DF), Icons.local_cafe_rounded, Color(0xFFB78450)),
+    '零食': (Color(0xFFFFF0DF), Icons.fastfood_rounded, Color(0xFFFF973F)),
+    '水果': (Color(0xFFE0F8EF), Icons.eco_rounded, Color(0xFF12B992)),
+    '外卖': (Color(0xFFE7F2FF), Icons.delivery_dining_rounded, Color(0xFF398FF2)),
     '餐饮': (Color(0xFFFFF0DF), Icons.restaurant_rounded, Color(0xFFFF973F)),
     '购物': (Color(0xFFFFEAF2), Icons.shopping_bag_rounded, Color(0xFFF75C9A)),
     '交通': (Color(0xFFE7F2FF), Icons.directions_car_rounded, Color(0xFF398FF2)),

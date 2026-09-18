@@ -23,6 +23,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             )?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return
         val content = "$title $text".lowercase(Locale.ROOT)
+        if (INCOMING_WORDS.any { content.contains(it) }) return
         if (PAYMENT_WORDS.none { content.contains(it) }) return
         val id = "$packageName:${statusBarNotification.key}:${statusBarNotification.postTime}"
         PaymentNotificationStore.append(
@@ -48,7 +49,12 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "com.tencent.mm",
             "com.eg.android.AlipayGphone",
             "com.unionpay",
+            "com.sankuai.meituan",
+            "com.sankuai.meituan.takeout",
         )
-        private val PAYMENT_WORDS = setOf("支付", "付款", "消费", "扣款", "收款")
+        // Only retain outgoing-payment notifications. In particular, "收款"
+        // used to make incoming receipts become fake expenses.
+        private val PAYMENT_WORDS = setOf("支付", "付款", "消费", "扣款", "已付", "支出")
+        private val INCOMING_WORDS = setOf("收款到账", "收款成功", "转入", "入账", "到账", "退款", "退回")
     }
 }

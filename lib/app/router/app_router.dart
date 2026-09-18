@@ -13,10 +13,18 @@ import '../../features/goals/presentation/goal_detail_page.dart';
 import '../../features/goals/presentation/goals_page.dart';
 import '../../features/family/presentation/family_page.dart';
 import '../../features/home/presentation/home_page.dart';
+import '../../features/investments/domain/investment_asset.dart';
+import '../../features/investments/presentation/investment_add_page.dart';
+import '../../features/investments/presentation/investment_detail_page.dart';
+import '../../features/investments/presentation/investment_overview_page.dart';
 import '../../features/intelligence/presentation/bill_inbox_page.dart';
 import '../../features/notifications/presentation/payment_notification_page.dart';
+import '../../features/autobookkeeping/presentation/auto_bookkeeping_page.dart';
+import '../../features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart';
+import '../../features/autobookkeeping/presentation/auto_bookkeeping_logs_page.dart';
 import '../../features/membership/presentation/membership_page.dart';
 import '../../features/membership/presentation/membership_records_page.dart';
+import '../../features/legal/presentation/legal_document_page.dart';
 import '../../features/profile/presentation/profile_page.dart';
 import '../../features/data_export/presentation/data_export_page.dart';
 import '../../core/models/transaction_record.dart';
@@ -132,7 +140,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'records',
                     builder: (context, state) => const MembershipRecordsPage(),
                   ),
+                  GoRoute(
+                    path: 'agreement',
+                    builder: (context, state) => const LegalDocumentPage(
+                      kind: LegalDocumentKind.membership,
+                    ),
+                  ),
                 ],
+              ),
+              GoRoute(
+                path: 'privacy',
+                builder: (context, state) =>
+                    const LegalDocumentPage(kind: LegalDocumentKind.privacy),
+              ),
+              GoRoute(
+                path: 'legal',
+                builder: (context, state) => const LegalDocumentsPage(),
               ),
               GoRoute(
                 path: 'family',
@@ -143,8 +166,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const PaymentNotificationPage(),
               ),
               GoRoute(
+                path: 'autobookkeeping',
+                builder: (context, state) => const AutoBookkeepingPage(),
+                routes: [
+                  GoRoute(
+                    path: 'logs',
+                    builder: (context, state) =>
+                        const AutoBookkeepingLogsPage(),
+                  ),
+                  GoRoute(
+                    path: 'confirm',
+                    builder: (context, state) =>
+                        const AutoBookkeepingConfirmPage(),
+                  ),
+                ],
+              ),
+              GoRoute(
                 path: 'recurring-bills',
-                builder: (context, state) => const RecurringBillsPage(),
+                builder: (context, state) => RecurringBillsPage(
+                  focusBillId: state.uri.queryParameters['billId'],
+                ),
               ),
               GoRoute(
                 path: 'installments',
@@ -158,6 +199,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+              GoRoute(
+                path: 'investments',
+                builder: (context, state) => const InvestmentOverviewPage(),
+                routes: [
+                  // One route per class keeps the URL shareable and keeps the
+                  // four classes on the exact same page implementation.
+                  GoRoute(
+                    path: 'holdings/:assetType',
+                    builder: (context, state) => InvestmentOverviewPage(
+                      initialTab: _assetType(state.pathParameters['assetType']),
+                    ),
+                  ),
+                  // `detail` is a sibling of `:assetType`, never its child, so
+                  // the two patterns cannot compete for the same segment.
+                  GoRoute(
+                    path: 'holdings/detail/:holdingId',
+                    builder: (context, state) => InvestmentDetailPage(
+                      holdingId: state.pathParameters['holdingId']!,
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'add',
+                    builder: (context, state) => InvestmentAddPage(
+                      initialType: _assetType(
+                        state.uri.queryParameters['type'],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ],
@@ -165,6 +236,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Maps a route/query value onto an asset class, defaulting to 股票.
+InvestmentAssetType _assetType(String? value) {
+  if (value == null) return InvestmentAssetType.stock;
+  return InvestmentAssetType.values.firstWhere(
+    (type) => type.name == value,
+    orElse: () => InvestmentAssetType.stock,
+  );
+}
 
 DateTime? _queryMonth(Uri uri) {
   final value = uri.queryParameters['month'];

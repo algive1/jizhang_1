@@ -1,3 +1,5 @@
+import '../../bookkeeping/presentation/components/ai_confirm_card.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -271,7 +273,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                           itemCount: _transactions.length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 10),
-                          itemBuilder: (context, index) => _TransactionEditor(
+                          itemBuilder: (context, index) => AIConfirmCard(
                             index: index,
                             transaction: _transactions[index],
                             accounts: accounts,
@@ -322,7 +324,10 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
         .toList(growable: false);
     if (resolvedTransactions.any(
       (item) =>
-          item.amount <= 0 || item.accountId == null || item.categoryId == null,
+          item.amount <= 0 ||
+          !item.amount.isFinite ||
+          !accounts.any((account) => account.id == item.accountId) ||
+          !categories.any((category) => category.id == item.categoryId),
     )) {
       setState(() => _error = '请补全每笔账单的金额、分类和账户');
       return;
@@ -343,10 +348,27 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                 .currency,
             accountId: resolvedTransactions[index].accountId!,
             occurredAt: resolvedTransactions[index].occurredAt,
-            categoryId: resolvedTransactions[index].categoryId,
+            categoryId:
+                categories
+                    .firstWhere(
+                      (category) =>
+                          category.id == resolvedTransactions[index].categoryId,
+                    )
+                    .parentId ??
+                resolvedTransactions[index].categoryId,
+            subcategoryId: _resolvedSubcategory(
+              resolvedTransactions[index],
+              categories,
+            ),
             categoryName: resolvedTransactions[index].categoryName,
             merchant: resolvedTransactions[index].merchant,
             source: TransactionSource.voice,
+            metadata: {
+              'entryMode': widget.textOnly ? 'text' : 'voice',
+              'rawText': resolvedTransactions[index].rawFragment,
+              'confidence': resolvedTransactions[index].confidence,
+              'parser': resolvedTransactions[index].source.name,
+            },
             userCorrected: _categoryCorrections.contains(index),
           ),
       ]);
@@ -397,6 +419,24 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     }
   }
 
+  String? _resolvedSubcategory(
+    ParsedVoiceTransaction item,
+    List<Category> categories,
+  ) {
+    final category = categories
+        .where((category) => category.id == item.categoryId)
+        .firstOrNull;
+    if (category?.parentId != null) return category!.id;
+    return categories
+        .where(
+          (child) =>
+              child.parentId == item.categoryId &&
+              child.name == item.subcategoryName,
+        )
+        .firstOrNull
+        ?.id;
+  }
+
   ParsedVoiceTransaction _resolveAccount(
     ParsedVoiceTransaction item,
     List<Account> accounts,
@@ -432,184 +472,6 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
             accountName: matches.single.displayName,
           )
         : item;
-  }
-}
-
-class _TransactionEditor extends StatelessWidget {
-  const _TransactionEditor({
-    required this.index,
-    required this.transaction,
-    required this.accounts,
-    required this.categories,
-    required this.onChanged,
-  });
-
-  final int index;
-  final ParsedVoiceTransaction transaction;
-  final List<Account> accounts;
-  final List<Category> categories;
-  final void Function(ParsedVoiceTransaction value, bool categoryCorrected)
-  onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final categoryType = transaction.type == TransactionType.income
-        ? CategoryType.income
-        : CategoryType.expense;
-    final categoryOptions = categories
-        .where((item) => item.type == categoryType)
-        .toList();
-    final categoryValue =
-        categoryOptions.any((item) => item.id == transaction.categoryId)
-        ? transaction.categoryId
-        : null;
-    final suffixMatch = transaction.identifierSuffix == null
-        ? const <Account>[]
-        : accounts
-              .where(
-                (item) => item.identifierSuffix == transaction.identifierSuffix,
-              )
-              .toList();
-    final nameMatch = transaction.accountName == null
-        ? const <Account>[]
-        : accounts
-              .where(
-                (item) =>
-                    item.displayName == transaction.accountName ||
-                    item.name == transaction.accountName,
-              )
-              .toList();
-    final accountValue =
-        transaction.identifierSuffix != null && suffixMatch.length == 1
-        ? suffixMatch.single.id
-        : accounts.any((item) => item.id == transaction.accountId)
-        ? transaction.accountId
-        : suffixMatch.length == 1
-        ? suffixMatch.single.id
-        : nameMatch.length == 1
-        ? nameMatch.single.id
-        : null;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(
-          color: transaction.needsReview
-              ? AppColors.warning
-              : AppColors.divider,
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                '第 ${index + 1} 笔 · ${transaction.type == TransactionType.income ? '收入' : '支出'}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const Spacer(),
-              Text(
-                '${(transaction.confidence * 100).round()}% 置信度',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  initialValue: transaction.amount.toStringAsFixed(2),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText:
-                        '金额 ${accounts.where((a) => a.id == accountValue).firstOrNull?.currency ?? 'CNY'}',
-                  ),
-                  onChanged: (value) {
-                    final amount = double.tryParse(value);
-                    if (amount != null) {
-                      onChanged(transaction.copyWith(amount: amount), false);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: accountValue,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: '账户'),
-                  items: accounts
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item.id,
-                          child: Text(
-                            item.displayName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    final account = accounts
-                        .where((item) => item.id == value)
-                        .firstOrNull;
-                    if (account != null) {
-                      onChanged(
-                        transaction.copyWith(
-                          accountId: account.id,
-                          accountName: account.displayName,
-                        ),
-                        false,
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: categoryValue,
-            decoration: const InputDecoration(labelText: '分类'),
-            items: categoryOptions
-                .map(
-                  (item) =>
-                      DropdownMenuItem(value: item.id, child: Text(item.name)),
-                )
-                .toList(),
-            onChanged: (value) {
-              final category = categoryOptions
-                  .where((item) => item.id == value)
-                  .firstOrNull;
-              if (category != null) {
-                onChanged(
-                  transaction.copyWith(
-                    categoryId: category.id,
-                    categoryName: category.name,
-                  ),
-                  category.id != transaction.categoryId,
-                );
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: transaction.merchant,
-            decoration: const InputDecoration(labelText: '商户/用途'),
-            onChanged: (value) =>
-                onChanged(transaction.copyWith(merchant: value.trim()), false),
-          ),
-        ],
-      ),
-    );
   }
 }
 

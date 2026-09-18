@@ -2,6 +2,7 @@ import { registerAssistantPolicy } from './assistant_policy.js';
 import Fastify from 'fastify';
 import { registerMembershipCatalog } from './membership_catalog.js';
 import { registerPaymentRoutes } from './payment.js';
+import { registerDiagnosticsRoutes } from './diagnostics.js';
 import rateLimit from '@fastify/rate-limit';
 import rawBody from 'fastify-raw-body';
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
@@ -44,6 +45,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   };
   registerMembershipCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
+  registerDiagnosticsRoutes(app,store,authenticate);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   app.get('/health',async()=>({status:'ok',schemaVersion:1}));
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{

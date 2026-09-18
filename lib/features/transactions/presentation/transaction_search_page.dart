@@ -263,7 +263,8 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   }
 
   String _recurringCycleLabel(RecurringBill bill) => switch (bill.cycle) {
-    RecurringBillCycle.weekly => '每周',
+    RecurringBillCycle.daily => '每天',
+      RecurringBillCycle.weekly => '每周',
     RecurringBillCycle.monthly => '每月',
     RecurringBillCycle.quarterly => '每季度',
     RecurringBillCycle.halfYear => '每半年',

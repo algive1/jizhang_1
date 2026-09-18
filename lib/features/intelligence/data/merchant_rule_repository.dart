@@ -69,7 +69,8 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
       TransactionType.borrow => seeded('income-other'),
       TransactionType.transfer ||
       TransactionType.repayment ||
-      TransactionType.adjustment => null,
+      TransactionType.adjustment ||
+      TransactionType.assetSale => null,
       _ => seeded('expense-other'),
     };
     final categoryExists = defaultCategory == null

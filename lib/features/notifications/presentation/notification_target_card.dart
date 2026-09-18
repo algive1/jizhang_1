@@ -30,6 +30,7 @@ const _channels = {
   SeedIds.wechatAccount: '微信',
   SeedIds.alipayAccount: '支付宝',
   SeedIds.bankAccount: '云闪付',
+  'meituan': '美团',
 };
 
 class NotificationTargetCard extends ConsumerWidget {

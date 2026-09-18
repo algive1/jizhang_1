@@ -4,74 +4,74 @@
       "id": "monthly",
       "title": "月度会员",
       "months": 1,
-      "priceInCents": 1200,
-      "description": "灵活体验\n适合初次使用",
+      "priceInCents": 800,
+      "description": "适合体验，灵活选择",
       "recommended": false
     },
     {
       "id": "quarterly",
       "title": "季度会员",
       "months": 3,
-      "priceInCents": 3000,
-      "description": "性价比之选\n大多数用户的选择",
+      "priceInCents": 2200,
+      "description": "性价比高，最受欢迎",
       "recommended": true
     },
     {
       "id": "yearly",
       "title": "年度会员",
       "months": 12,
-      "priceInCents": 9800,
-      "description": "长期更划算\n适合深度使用",
+      "priceInCents": 6800,
+      "description": "一次开通，省心省钱",
       "recommended": false
     }
   ],
   "benefits": [
     {
       "id": "automatic",
-      "title": "自动记账",
-      "subtitle": "智能识别收支",
+      "title": "AI智能记账",
+      "subtitle": "自动识别账单",
       "detail": "自动记账的可用范围以当前设备和功能设置为准。"
+    },
+    {
+      "id": "statistics",
+      "title": "消费分析",
+      "subtitle": "深度洞察习惯",
+      "detail": "查看收支趋势与资产报表。"
     },
     {
       "id": "books",
       "title": "多账本管理",
-      "subtitle": "家庭/情侣/企业",
+      "subtitle": "家庭/情侣/生意",
       "detail": "分类管理个人、家庭与共享账本。"
     },
     {
-      "id": "statistics",
-      "title": "高级统计",
-      "subtitle": "多维度图表分析",
-      "detail": "查看收支趋势与资产报表。"
-    },
-    {
       "id": "cloud",
-      "title": "云同步备份",
-      "subtitle": "多设备数据同步",
+      "title": "数据云同步",
+      "subtitle": "多设备实时同步",
       "detail": "云同步需配置服务并登录账号，请同时保留本地备份。"
     },
     {
-      "id": "assets",
-      "title": "资产管理",
-      "subtitle": "多账户统一管理",
-      "detail": "集中查看资产、负债与账户余额。"
+      "id": "categories",
+      "title": "自定义分类",
+      "subtitle": "打造专属分类",
+      "detail": "在分类管理中按记账习惯创建和调整收支分类。"
     },
     {
       "id": "export",
-      "title": "数据导出",
-      "subtitle": "CSV 数据导出",
+      "title": "导出数据",
+      "subtitle": "支持多种格式",
       "detail": "当前版本支持 CSV 导出，可使用 Excel 打开。"
     },
     {
-      "id": "theme",
-      "title": "主题皮肤",
-      "subtitle": "专属视觉体验",
-      "detail": "主题能力以当前版本实际开放情况为准。"
+      "id": "adfree",
+      "title": "无广告体验",
+      "subtitle": "纯净记账体验",
+      "detail": "当前应用不含广告，具体会员权益以实际开放范围为准。"
     },
     {
       "id": "support",
       "title": "专属客服",
-      "subtitle": "优先响应支持",
+      "subtitle": "快速响应支持",
       "detail": "客服服务与渠道尚待开放。"
     }
   ],

@@ -272,6 +272,7 @@ class RecurringBillEntries extends Table {
   IntColumn get customIntervalDays => integer().nullable()();
   BoolColumn get autoRecord => boolean().withDefault(const Constant(false))();
   BoolColumn get reminder => boolean().withDefault(const Constant(true))();
+  TextColumn get scheduleJson => text().withDefault(const Constant('{}'))();
   TextColumn get status => text().withDefault(const Constant('active'))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -305,6 +306,119 @@ class InstallmentPlanEntries extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+/// A tradable instrument known to the app (股票 / 基金 / 债券 / 虚拟币).
+///
+/// Rows are shared by every user: two users holding `600519` resolve to the
+/// same asset id, so the quote cache keyed by symbol is shared as well.
+@DataClassName('InvestmentAssetEntity')
+class InvestmentAssetEntries extends Table {
+  @override
+  String get tableName => 'investment_assets';
+
+  TextColumn get id => text()();
+
+  /// `stock` | `fund` | `bond` | `crypto`.
+  TextColumn get type => text()();
+  TextColumn get symbol => text()();
+  TextColumn get name => text()();
+  TextColumn get market => text().withDefault(const Constant('CN'))();
+  TextColumn get currency => text().withDefault(const Constant('CNY'))();
+
+  /// `market` | `manual`.
+  TextColumn get priceSource => text().withDefault(const Constant('market'))();
+
+  /// Last user-entered valuation, only meaningful for manual assets.
+  RealColumn get manualPrice => real().nullable()();
+
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+/// One user's position in one [InvestmentAssetEntries].
+@DataClassName('InvestmentHoldingEntity')
+class InvestmentHoldingEntries extends Table {
+  @override
+  String get tableName => 'investment_holdings';
+
+  TextColumn get id => text()();
+  TextColumn get bookId =>
+      text().withDefault(const Constant('book-personal'))();
+  TextColumn get assetId => text().references(InvestmentAssetEntries, #id)();
+
+  /// Optional attribution to an existing 账户管理 account.
+  TextColumn get accountId => text().nullable()();
+
+  RealColumn get quantity => real()();
+  RealColumn get averageCost => real()();
+  TextColumn get note => text().nullable()();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+/// A buy / sell / dividend / interest applied to a holding.
+///
+/// These rows are NEVER written into `transactions`: buying an investment is
+/// an asset-to-asset conversion, not consumption, so it must not reduce net
+/// worth the way an expense does.
+@DataClassName('InvestmentTransactionEntity')
+class InvestmentTransactionEntries extends Table {
+  @override
+  String get tableName => 'investment_transactions';
+
+  TextColumn get id => text()();
+  TextColumn get bookId =>
+      text().withDefault(const Constant('book-personal'))();
+  TextColumn get holdingId =>
+      text().references(InvestmentHoldingEntries, #id)();
+
+  /// `buy` | `sell` | `dividend` | `interest`.
+  TextColumn get type => text()();
+  RealColumn get price => real()();
+  RealColumn get quantity => real()();
+
+  /// Signed cash effect. A buy is negative (money out), everything else is
+  /// positive (money in).
+  RealColumn get amount => real()();
+
+  DateTimeColumn get transactionDate => dateTime()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+/// One portfolio snapshot per ledger per calendar day.
+///
+/// Written lazily the first time 投资管理 is opened on a given day. No
+/// background timer exists, so an inactive user costs nothing.
+@DataClassName('InvestmentSnapshotEntity')
+class InvestmentSnapshotEntries extends Table {
+  @override
+  String get tableName => 'investment_snapshots';
+
+  TextColumn get bookId => text()();
+
+  /// `YYYY-MM-DD`, so a day is one row regardless of timezone offsets.
+  TextColumn get date => text()();
+  RealColumn get investmentValue => real()();
+  RealColumn get stockValue => real()();
+  RealColumn get fundValue => real()();
+  RealColumn get bondValue => real()();
+  RealColumn get cryptoValue => real()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId, date};
 }
 
 @DataClassName('MerchantRuleEntity')
@@ -561,6 +675,10 @@ class AdEventEntries extends Table {
     FamilyBudgetEntries,
     AdEventEntries,
     TransactionAttachmentEntries,
+    InvestmentAssetEntries,
+    InvestmentHoldingEntries,
+    InvestmentTransactionEntries,
+    InvestmentSnapshotEntries,
   ],
   daos: [
     AccountDao,
@@ -575,6 +693,7 @@ class AdEventEntries extends Table {
     FamilyDao,
     AdEventDao,
     TransactionAttachmentDao,
+    InvestmentDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -615,7 +734,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 18;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -629,6 +748,14 @@ class AppDatabase extends _$AppDatabase {
     },
     onUpgrade: (migrator, from, to) async {
       await transaction(() async {
+        if (from >= 14 &&
+            from < 17 &&
+            !await _hasColumn('recurring_bills', 'schedule_json')) {
+          await migrator.addColumn(
+            recurringBillEntries,
+            recurringBillEntries.scheduleJson,
+          );
+        }
         // Version 1 is the initial persistent schema. Future versions must add
         // explicit, forward-only migrations here instead of deleting the DB.
         if (from < 1) {
@@ -787,6 +914,16 @@ class AppDatabase extends _$AppDatabase {
           }
           await _createAccountIdentifierIndex();
         }
+        // Version 18 introduces the 投资管理 module. It is purely additive:
+        // three new tables, no change to any existing column, so upgrading
+        // users keep every account, transaction and balance untouched.
+        if (from < 18) {
+          await migrator.createTable(investmentAssetEntries);
+          await migrator.createTable(investmentHoldingEntries);
+          await migrator.createTable(investmentTransactionEntries);
+          await migrator.createTable(investmentSnapshotEntries);
+          await _createInvestmentIndexes();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -823,6 +960,26 @@ class AppDatabase extends _$AppDatabase {
     await _createAdIndexes();
     await _createAttachmentIndexes();
     await _createAccountIdentifierIndex();
+    await _createInvestmentIndexes();
+  }
+
+  Future<void> _createInvestmentIndexes() async {
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_assets_symbol '
+      'ON investment_assets(type, market, symbol)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_investment_holdings_book '
+      'ON investment_holdings(book_id, is_archived)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_investment_holdings_asset '
+      'ON investment_holdings(asset_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_investment_transactions_holding '
+      'ON investment_transactions(holding_id, transaction_date)',
+    );
   }
 
   Future<void> _createAccountIdentifierIndex() async {
@@ -1017,13 +1174,10 @@ LazyDatabase _openConnection() {
         source.close();
       }
     }
-    // Android's system libsqlite.so is loaded by the app isolate. Keeping the
-    // Drift connection in that isolate avoids a worker-isolate startup hang
-    // before the first seed query. Desktop targets retain the background
-    // connection for the existing test and UI performance characteristics.
-    return Platform.isAndroid
-        ? NativeDatabase(file)
-        : NativeDatabase.createInBackground(file);
+    // SQLite is bundled through native assets on every platform. Keep queries
+    // off the UI isolate, including Android; the old system-library loading
+    // workaround is no longer needed.
+    return NativeDatabase.createInBackground(file);
   });
 }
 
@@ -1261,6 +1415,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     int? limit,
     bool onlyOccurred = false,
   }) {
+    // Evaluate the time cutoff in SQLite on every stream refresh. Capturing
+    // DateTime.now() here would hide transactions saved after subscribing.
     final query = select(transactionEntries)
       ..where(
         (row) =>
@@ -1272,7 +1428,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 ? const Constant(true)
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
-                ? row.occurredAt.isSmallerOrEqualValue(DateTime.now())
+                ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
                 : const Constant(true)),
       )
       ..orderBy([
@@ -1300,7 +1456,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 ? const Constant(true)
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
-                ? row.occurredAt.isSmallerOrEqualValue(DateTime.now())
+                ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
                 : const Constant(true)),
       )
       ..orderBy([
@@ -1406,6 +1562,159 @@ class TransactionAttachmentDao extends DatabaseAccessor<AppDatabase>
   Future<void> replaceOne(TransactionAttachmentEntriesCompanion attachment) {
     return into(transactionAttachmentEntries)
         .insertOnConflictUpdate(attachment);
+  }
+}
+
+@DriftAccessor(
+  tables: [
+    InvestmentAssetEntries,
+    InvestmentHoldingEntries,
+    InvestmentTransactionEntries,
+    InvestmentSnapshotEntries,
+  ],
+)
+class InvestmentDao extends DatabaseAccessor<AppDatabase>
+    with _$InvestmentDaoMixin {
+  InvestmentDao(super.attachedDatabase);
+
+  /// Emits whenever anything the investment module renders changes, so the UI
+  /// can refresh after a holding or transaction write.
+  Stream<void> watchChanges() => select(investmentHoldingEntries).watch().map(
+    (_) {},
+  );
+
+  // ---------------------------------------------------------------- assets
+
+  Future<InvestmentAssetEntity?> findAssetBySymbol({
+    required String type,
+    required String market,
+    required String symbol,
+  }) {
+    return (select(investmentAssetEntries)..where(
+          (row) =>
+              row.type.equals(type) &
+              row.market.equals(market) &
+              row.symbol.equals(symbol),
+        ))
+        .getSingleOrNull();
+  }
+
+  Future<InvestmentAssetEntity?> findAssetById(String id) {
+    return (select(investmentAssetEntries)
+          ..where((row) => row.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<List<InvestmentAssetEntity>> getAssetsByIds(List<String> ids) {
+    if (ids.isEmpty) return Future.value(const []);
+    return (select(investmentAssetEntries)
+          ..where((row) => row.id.isIn(ids)))
+        .get();
+  }
+
+  Future<void> upsertAsset(InvestmentAssetEntriesCompanion asset) {
+    return into(investmentAssetEntries).insertOnConflictUpdate(asset);
+  }
+
+  Future<void> writeAssetPrice(String id, double? manualPrice) {
+    return (update(investmentAssetEntries)..where((row) => row.id.equals(id)))
+        .write(
+          InvestmentAssetEntriesCompanion(
+            manualPrice: Value(manualPrice),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+  }
+
+  // -------------------------------------------------------------- holdings
+
+  Future<List<InvestmentHoldingEntity>> getHoldings({String? bookId}) {
+    final query = select(investmentHoldingEntries)
+      ..where(
+        (row) => bookId == null
+            ? const Constant(true)
+            : row.bookId.equals(bookId),
+      )
+      ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
+    return query.get();
+  }
+
+  Future<InvestmentHoldingEntity?> findHoldingById(String id) {
+    return (select(investmentHoldingEntries)
+          ..where((row) => row.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<void> insertHolding(InvestmentHoldingEntriesCompanion holding) {
+    return into(investmentHoldingEntries).insert(holding);
+  }
+
+  Future<void> writeHoldingFields(
+    String id,
+    InvestmentHoldingEntriesCompanion fields,
+  ) {
+    return (update(
+      investmentHoldingEntries,
+    )..where((row) => row.id.equals(id))).write(fields);
+  }
+
+  Future<void> deleteHolding(String id) {
+    return (delete(
+      investmentHoldingEntries,
+    )..where((row) => row.id.equals(id))).go();
+  }
+
+  // ---------------------------------------------------------- transactions
+
+  Future<List<InvestmentTransactionEntity>> getTransactions(
+    String holdingId,
+  ) {
+    final query = select(investmentTransactionEntries)
+      ..where((row) => row.holdingId.equals(holdingId))
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.transactionDate),
+        (row) => OrderingTerm.desc(row.createdAt),
+      ]);
+    return query.get();
+  }
+
+  Future<void> insertTransaction(
+    InvestmentTransactionEntriesCompanion transaction,
+  ) {
+    return into(investmentTransactionEntries).insert(transaction);
+  }
+
+  Future<void> deleteTransactionsForHolding(String holdingId) {
+    return (delete(
+      investmentTransactionEntries,
+    )..where((row) => row.holdingId.equals(holdingId))).go();
+  }
+
+  // ------------------------------------------------------------ snapshots
+
+  Future<List<InvestmentSnapshotEntity>> getSnapshots({
+    required String bookId,
+    required String fromDate,
+  }) {
+    final query = select(investmentSnapshotEntries)
+      ..where((row) => row.bookId.equals(bookId) & row.date.isBiggerOrEqualValue(fromDate))
+      ..orderBy([(row) => OrderingTerm.asc(row.date)]);
+    return query.get();
+  }
+
+  Future<InvestmentSnapshotEntity?> findSnapshot({
+    required String bookId,
+    required String date,
+  }) {
+    return (select(investmentSnapshotEntries)
+          ..where((row) => row.bookId.equals(bookId) & row.date.equals(date)))
+        .getSingleOrNull();
+  }
+
+  Future<void> upsertSnapshot(
+    InvestmentSnapshotEntriesCompanion snapshot,
+  ) {
+    return into(investmentSnapshotEntries).insertOnConflictUpdate(snapshot);
   }
 }
 
@@ -1585,9 +1894,13 @@ class RecurringBillDao extends DatabaseAccessor<AppDatabase>
         .watch();
   }
 
-  Future<List<RecurringBillEntity>> getAll({required String bookId}) {
+  Future<List<RecurringBillEntity>> getAll({String? bookId}) {
     return (select(recurringBillEntries)
-          ..where((row) => row.bookId.equals(bookId))
+          ..where(
+            (row) => bookId == null
+                ? const Constant(true)
+                : row.bookId.equals(bookId),
+          )
           ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
         .get();
   }

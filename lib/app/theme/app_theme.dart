@@ -75,16 +75,31 @@ abstract final class AppTheme {
         thickness: 1,
         space: 1,
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        clipBehavior: Clip.antiAlias,
+      ),
+      listTileTheme: const ListTileThemeData(minTileHeight: 56),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        constraints: const BoxConstraints(minHeight: 52),
+        labelStyle: const TextStyle(fontSize: 14),
+        errorMaxLines: 3,
         fillColor: AppColors.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

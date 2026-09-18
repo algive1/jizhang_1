@@ -2,6 +2,7 @@ package com.algive.jizhang_app.autobookkeeping
 
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
+import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.*
 import org.junit.Assert.*
@@ -23,7 +24,24 @@ class PaymentEngineTest {
     @Test fun chatQuoteRejected() { assertNull(parse("他说支付成功", "收款方", "商店", "￥20")) }
     @Test fun wrongAppRejected() { assertNull(PaymentSceneDetector().detect("other", nodes("支付成功", "收款方", "商店", "￥20"))) }
     @Test fun failureRejected() { assertNull(parse("支付失败", "收款方", "商店", "￥20")) }
+    @Test fun supportedAppsUseConservativeGenericParser() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.sankuai.meituan",
+            nodes("支付成功", "商户", "美团外卖", "实付金额", "36.00元"),
+            100000,
+        )
+        assertEquals(3600L, candidate?.amountInCents)
+        assertEquals("MEITUAN", candidate?.sourceApp)
+    }
+    @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
+        assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
+    }
     @Test fun normalization() { assertEquals("麦当劳", parse("支付成功", "商户", "McDonald's 成都", "￥38.50")?.merchantNormalized) }
+    @Test fun transferSuccessUsesRecipientAsMerchant() {
+        val candidate = parse("支付成功", "待陆勤老师-专注职工社保确认收款", "￥1.00")
+        assertEquals(100L, candidate?.amountInCents)
+        assertEquals("待陆勤老师-专注职工社保确认收款", candidate?.merchantRaw)
+    }
     @Test fun repeatedPageVersusNewPayment() {
         val c = parse("支付成功", "收款方", "商店", "￥20")!!
         val engine = BillDedupEngine()

@@ -1,3 +1,4 @@
+import '../../../core/widgets/app_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -246,7 +247,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DropdownButtonFormField<String>(
+          AppSelect<String>(
             initialValue: _original.id,
             decoration: const InputDecoration(labelText: '原始消费'),
             items: widget.expenses
@@ -272,7 +273,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
               }
             }),
           ),
-          DropdownButtonFormField<String>(
+          AppSelect<String>(
             initialValue: _creditAccountId,
             decoration: const InputDecoration(labelText: '信用卡账户'),
             items: widget.accounts
@@ -285,7 +286,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
                 .toList(),
             onChanged: (value) => setState(() => _creditAccountId = value),
           ),
-          DropdownButtonFormField<String>(
+          AppSelect<String>(
             initialValue: _repaymentAccountId,
             decoration: const InputDecoration(labelText: '还款账户'),
             items: widget.accounts

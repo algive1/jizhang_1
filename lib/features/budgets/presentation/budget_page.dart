@@ -1,3 +1,7 @@
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_action_sheet.dart';
+import '../../../core/widgets/app_form.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -114,9 +118,18 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                     selectableCategories: categories,
                     categoryName: progress.category?.name,
                   ),
-                  onRemove: () => ref
-                      .read(budgetRepositoryProvider)
-                      .removeBudget(progress.budget.id),
+                  onRemove: () async {
+                    if (await AppConfirmDialog.show(
+                          context,
+                          title: '移除预算？',
+                          message: '仅移除预算设置，已有流水保留。',
+                        ) &&
+                        context.mounted) {
+                      await ref
+                          .read(budgetRepositoryProvider)
+                          .removeBudget(progress.budget.id);
+                    }
+                  },
                 ),
               ),
             ),
@@ -212,7 +225,7 @@ class _BudgetDialogState extends State<_BudgetDialog> {
               widget.selectableCategories.any(
                 (category) => category.id == _categoryId,
               ))
-            DropdownButtonFormField<String>(
+            AppSelect<String>(
               initialValue: _categoryId,
               decoration: const InputDecoration(labelText: '分类'),
               items: widget.selectableCategories
@@ -361,58 +374,76 @@ class _CategoryBudgetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      borderRadius: 18,
-      child: Row(
-        children: [
-          const CircleAvatar(
-            backgroundColor: AppColors.primarySoft,
-            child: Icon(Icons.category_outlined, color: AppColors.primaryDark),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        progress.category?.name ?? '已隐藏分类',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+    return AppContextMenu(
+      onOpen: () async {
+        final value = await AppActionSheet.show<String>(
+          context,
+          title: progress.category?.name ?? '预算',
+          items: const [
+            PopupMenuItem(value: 'edit', child: Text('调整')),
+            PopupMenuItem(value: 'remove', child: Text('移除')),
+          ],
+        );
+        if (value != null && context.mounted) {
+          value == 'edit' ? onEdit() : onRemove();
+        }
+      },
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        borderRadius: 18,
+        child: Row(
+          children: [
+            const CircleAvatar(
+              backgroundColor: AppColors.primarySoft,
+              child: Icon(
+                Icons.category_outlined,
+                color: AppColors.primaryDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          progress.category?.name ?? '已隐藏分类',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    ),
-                    _StatusBadge(status: progress.status),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                LinearProgressIndicator(
-                  value: progress.percentage.clamp(0, 1),
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(6),
-                  backgroundColor: AppColors.primarySoft,
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '已用 ¥${MoneyFormatter.whole(progress.used)}  ·  '
-                  '剩余 ¥${MoneyFormatter.whole(progress.remaining)}',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
+                      _StatusBadge(status: progress.status),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: progress.percentage.clamp(0, 1),
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(6),
+                    backgroundColor: AppColors.primarySoft,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '已用 ¥${MoneyFormatter.whole(progress.used)}  ·  '
+                    '剩余 ¥${MoneyFormatter.whole(progress.remaining)}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AppActionMenuButton<String>(
+              onSelected: (value) => value == 'edit' ? onEdit() : onRemove(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('调整')),
+                PopupMenuItem(value: 'remove', child: Text('移除')),
               ],
             ),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) => value == 'edit' ? onEdit() : onRemove(),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('调整')),
-              PopupMenuItem(value: 'remove', child: Text('移除')),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

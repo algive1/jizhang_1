@@ -1,3 +1,4 @@
+import 'package:jizhang_app/core/widgets/app_action_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/widgets/app_bottom_navigation.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/recurring_bill.dart';
+import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/features/budgets/data/budget_repository.dart';
 import 'package:jizhang_app/features/budgets/domain/safe_to_spend_service.dart';
@@ -116,6 +118,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'home long-press edit covers navigation and opens recurring rules',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpApp(tester);
+      await tester.pumpAndSettle();
+
+      await tester.dragFrom(const Offset(190, 500), const Offset(0, -260));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('瑞幸咖啡').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('编辑流水'));
+      await tester.pumpAndSettle();
+
+      final sheet = tester.getRect(find.byType(QuickAddSheet));
+      final navigation = tester.getRect(find.byType(AppBottomNavigation));
+      expect(sheet.bottom, greaterThanOrEqualTo(navigation.bottom));
+      _expectNavigationCoveredByQuickAdd(tester);
+
+      await tester.tap(find.byKey(const ValueKey('quick-recurring-chip')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('recurring-create-title')),
+        findsOneWidget,
+      );
+      expect(find.text('配置周期规则'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('transaction list edit covers navigation', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('流水').last);
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('瑞幸咖啡').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑流水'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QuickAddSheet), findsOneWidget);
+    _expectNavigationCoveredByQuickAdd(tester);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('goal can be archived and restored from its detail menu', (
     tester,
   ) async {
@@ -129,7 +180,7 @@ void main() {
     await tester.tap(find.textContaining('买车计划').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byType(AppActionMenuButton<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('编辑目标'));
     await tester.pumpAndSettle();
@@ -138,7 +189,7 @@ void main() {
     expect(find.text('目标详情'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byType(AppActionMenuButton<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('调整节点'));
     await tester.pumpAndSettle();
@@ -147,7 +198,7 @@ void main() {
     expect(find.text('目标详情'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byType(AppActionMenuButton<String>));
     await tester.pumpAndSettle();
     expect(find.text('归档目标'), findsOneWidget);
     await tester.tap(find.text('归档目标'));
@@ -160,13 +211,13 @@ void main() {
     expect(find.textContaining('买车计划'), findsOneWidget);
     await tester.tap(find.textContaining('买车计划').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byType(AppActionMenuButton<String>));
     await tester.pumpAndSettle();
     expect(find.text('恢复目标'), findsOneWidget);
     await tester.tap(find.text('恢复目标'));
     await tester.pumpAndSettle();
     expect(find.text('目标已恢复'), findsOneWidget);
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byType(AppActionMenuButton<String>));
     await tester.pumpAndSettle();
     expect(find.text('归档目标'), findsOneWidget);
   });
@@ -322,7 +373,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('amount-key-3')));
     await tester.tap(find.byKey(const ValueKey('amount-key-6')));
     await tester.pump();
-    expect(find.text('¥ 36.00'), findsOneWidget);
+    expect(find.text('= ¥36.00'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('quick-done')));
     await tester.tap(find.byKey(const ValueKey('quick-done')));
     await tester.pump();
@@ -379,7 +430,7 @@ void main() {
       expect(find.byKey(const ValueKey('quick-repeat')), findsOneWidget);
       expect(find.byKey(const ValueKey('quick-done')), findsOneWidget);
 
-      await tester.tap(find.byTooltip('清空金额'));
+      expect(find.byTooltip('清空金额'), findsNothing);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
@@ -396,7 +447,7 @@ void main() {
     await tester.tap(find.byTooltip('会员').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('会员与数据安全'), findsOneWidget);
+    expect(find.text('开通会员'), findsOneWidget);
     expect(find.text('选择账本'), findsNothing);
     expect(find.text('我的账本'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -466,16 +517,17 @@ void main() {
           await tester.tap(find.byKey(const ValueKey('amount-key-9')));
         }
         await tester.pumpAndSettle();
-        expect(find.text('¥ 9999999.00'), findsOneWidget);
+        expect(find.text('= ¥9999999.00'), findsOneWidget);
         expect(tester.takeException(), isNull);
         // 计算器：表达式与实时结果同屏显示。
         await tester.tap(find.byKey(const ValueKey('amount-key-+')));
         await tester.tap(find.byKey(const ValueKey('amount-key-1')));
         await tester.pumpAndSettle();
         expect(find.text('9999999+1'), findsOneWidget);
+        // 大字是「将要入账的金额」，表达式在右侧小灰字。
         expect(find.text('= ¥10000000.00'), findsOneWidget);
         expect(tester.takeException(), isNull);
-        await tester.tap(find.byTooltip('清空金额'));
+        expect(find.byTooltip('清空金额'), findsNothing);
         await tester.pumpAndSettle();
         tester.view.viewInsets = const FakeViewPadding(bottom: 250);
         await tester.pumpAndSettle();
@@ -520,9 +572,9 @@ void main() {
 
     GoRouter.of(tester.element(find.text('分类预算'))).go('/profile/membership');
     await tester.pumpAndSettle();
-    expect(find.text('功能开放情况'), findsOneWidget);
+    expect(find.text('开通会员'), findsOneWidget);
 
-    GoRouter.of(tester.element(find.text('功能开放情况'))).go('/profile/family');
+    GoRouter.of(tester.element(find.text('开通会员'))).go('/profile/family');
     await tester.pumpAndSettle();
     expect(find.text('登录后即可共享'), findsOneWidget);
 
@@ -733,6 +785,31 @@ Future<AppDatabase> _pumpApp(
     UncontrolledProviderScope(container: container, child: const JizhangApp()),
   );
   return database;
+}
+
+void _expectNavigationCoveredByQuickAdd(WidgetTester tester) {
+  final navigation = find.byType(AppBottomNavigation);
+  final navigationRenderObject = tester.renderObject(navigation);
+  final hit = tester.hitTestOnBinding(tester.getCenter(navigation));
+  expect(
+    hit.path.any(
+      (entry) => _isDescendantOf(entry.target, navigationRenderObject),
+    ),
+    isFalse,
+    reason: '记一笔弹层必须位于全局底部导航之上',
+  );
+}
+
+bool _isDescendantOf(Object target, RenderObject ancestor) {
+  if (target is! RenderObject) return false;
+  for (
+    RenderObject? current = target;
+    current != null;
+    current = current.parent
+  ) {
+    if (identical(current, ancestor)) return true;
+  }
+  return false;
 }
 
 class _FakeSpeechService implements SpeechRecognitionService {

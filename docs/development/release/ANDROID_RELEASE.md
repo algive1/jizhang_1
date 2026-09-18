@@ -1,6 +1,6 @@
 # Android 构建与交付
 
-更新时间：2026-09-09
+更新时间：2026-09-18
 
 ## 基本信息
 
@@ -29,14 +29,14 @@ flutter build apk --release
 
 ## 当前验收产物
 
-本轮验证的 APK 为 72,799,794 bytes，SHA-256 为：
-`ea4762b9b8964bb6ebb015e4f1e79a6c9bad53747059e2dae878bf17d924d81c`。
+2026-09-18 本轮验证的 APK 为 94,051,561 bytes，SHA-256 为：
+`6ac8d2c5dfb188659e9b2dc68f4d604c6fd027434e8cd822aa7c1492d9c66564`。
 
-Release APK 已安装到 `emulator-5554`（Pixel 7 模拟器），并打开首页、立体书架抽屉和系统桌面图标；没有物理 Android 设备验收。
+APK 已通过 `adb install -r` 安装到实体 Android 设备 `145a0a68`（型号 `23116PN5BC`），安装后启动 `com.algive.jizhang_app/.MainActivity`，并确认当前 Activity 处于前台。未清理应用数据。
 
 启动图标的统一源是项目内的 `assets/images/icon.png`，内容来自本轮指定的桌面 `icon.png`；Android 各密度资源和 iOS AppIcon 均由该源生成。
 
-构建过程有 `speech_to_text` 使用 Kotlin Gradle Plugin 的未来兼容性 warning，但本轮 Release APK 已成功生成；后续插件升级时需迁移到 Built-in Kotlin。
+构建过程有 Android Gradle Plugin / Kotlin Built-in Kotlin 迁移和 `speech_to_text` 相关未来兼容性 warning，但本轮 Release APK 已成功生成；后续插件升级时需迁移到 Built-in Kotlin。
 
 ## 签名说明
 

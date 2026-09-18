@@ -1,3 +1,5 @@
+import '../../../core/widgets/app_action_sheet.dart';
+import '../../../core/widgets/app_form.dart';
 import '../../../core/utils/entity_id.dart';
 
 import 'package:flutter/material.dart';
@@ -6,11 +8,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../data/category_repository.dart';
 
 class CategoryManagementPage extends ConsumerStatefulWidget {
-  const CategoryManagementPage({super.key});
+  const CategoryManagementPage({super.key, this.bookId, this.onBack});
+
+  final String? bookId;
+  final VoidCallback? onBack;
 
   @override
   ConsumerState<CategoryManagementPage> createState() =>
@@ -21,9 +28,18 @@ class _CategoryManagementPageState
     extends ConsumerState<CategoryManagementPage> {
   CategoryType _type = CategoryType.expense;
 
+  CategoryRepository get _repository => widget.bookId == null
+      ? ref.read(categoryRepositoryProvider)
+      : DriftCategoryRepository(
+          ref.read(databaseProvider),
+          bookId: widget.bookId!,
+        );
+
   @override
   Widget build(BuildContext context) {
-    final categoriesAsync = ref.watch(categoriesProvider);
+    final categoriesAsync = widget.bookId == null
+        ? ref.watch(categoriesProvider)
+        : ref.watch(categoriesByBookProvider(widget.bookId!));
     final all = categoriesAsync.value ?? const <Category>[];
     final categories = all.where((item) => item.type == _type).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -36,7 +52,7 @@ class _CategoryManagementPageState
           Row(
             children: [
               IconButton(
-                onPressed: () => context.go('/profile'),
+                onPressed: widget.onBack ?? () => context.go('/profile'),
                 icon: const Icon(Icons.arrow_back),
               ),
               Expanded(
@@ -124,7 +140,7 @@ class _CategoryManagementPageState
     final target = index + direction;
     final moved = reordered.removeAt(index);
     reordered.insert(target, moved);
-    await ref.read(categoryRepositoryProvider).reorder(reordered);
+    await _repository.reorder(reordered);
   }
 
   Future<void> _editCategory({
@@ -137,7 +153,7 @@ class _CategoryManagementPageState
           _CategoryEditorDialog(category: category, all: all, type: _type),
     );
     if (result == null) return;
-    final repository = ref.read(categoryRepositoryProvider);
+    final repository = _repository;
     if (category == null) {
       await repository.create(result);
     } else {
@@ -168,7 +184,7 @@ class _CategoryManagementPageState
       ),
     );
     if (confirmed == true) {
-      await ref.read(categoryRepositoryProvider).archive(category.id);
+      await _repository.archive(category.id);
     }
   }
 }
@@ -222,7 +238,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
             decoration: const InputDecoration(labelText: '分类名称'),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String?>(
+          AppSelect<String?>(
             initialValue: _parentId,
             decoration: const InputDecoration(labelText: '上级分类'),
             items: [
@@ -295,62 +311,75 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.primarySoft,
-            child: const Icon(
-              Icons.category_outlined,
-              color: AppColors.primaryDark,
-              size: 20,
+    return AppContextMenu(
+      onOpen: () async {
+        final value = await AppActionSheet.show<String>(
+          context,
+          title: category.name,
+          items: const [
+            PopupMenuItem(value: 'edit', child: Text('编辑')),
+            PopupMenuItem(value: 'archive', child: Text('隐藏')),
+          ],
+        );
+        if (value != null && context.mounted) {
+          value == 'edit' ? onEdit() : onArchive();
+        }
+      },
+      child: Column(
+        children: [
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: CategoryIcon(
+              category: category.name,
+              iconKey: category.icon,
+              vivid: true,
+              size: 36,
             ),
-          ),
-          title: Row(
-            children: [
-              Flexible(child: Text(category.name)),
-              if (category.isDefault) ...[
-                const SizedBox(width: 6),
-                const Text(
-                  '默认',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
+            title: Row(
+              children: [
+                Flexible(child: Text(category.name)),
+                if (category.isDefault) ...[
+                  const SizedBox(width: 6),
+                  const Text(
+                    '默认',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                    ),
                   ),
+                ],
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onMoveUp != null)
+                  IconButton(
+                    onPressed: canMoveUp ? onMoveUp : null,
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    tooltip: '上移',
+                  ),
+                if (onMoveDown != null)
+                  IconButton(
+                    onPressed: canMoveDown ? onMoveDown : null,
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    tooltip: '下移',
+                  ),
+                AppActionMenuButton<String>(
+                  onSelected: (value) =>
+                      value == 'edit' ? onEdit() : onArchive(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('编辑')),
+                    PopupMenuItem(value: 'archive', child: Text('隐藏')),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (onMoveUp != null)
-                IconButton(
-                  onPressed: canMoveUp ? onMoveUp : null,
-                  icon: const Icon(Icons.keyboard_arrow_up),
-                  tooltip: '上移',
-                ),
-              if (onMoveDown != null)
-                IconButton(
-                  onPressed: canMoveDown ? onMoveDown : null,
-                  icon: const Icon(Icons.keyboard_arrow_down),
-                  tooltip: '下移',
-                ),
-              PopupMenuButton<String>(
-                onSelected: (value) => value == 'edit' ? onEdit() : onArchive(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('编辑')),
-                  PopupMenuItem(value: 'archive', child: Text('隐藏')),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-      ],
+          const Divider(height: 1),
+        ],
+      ),
     );
   }
 }

@@ -4,12 +4,20 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
+import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
+import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 
 class AutoBillOverlayService : Service() {
     private var root: LinearLayout? = null
@@ -18,8 +26,14 @@ class AutoBillOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     fun offer(candidate: PaymentCandidate): Boolean {
-        if (!android.provider.Settings.canDrawOverlays(this)) return false
-        if (root != null) return true
+        if (!AutoBookkeepingOverlayPermission.isGranted(this)) {
+            AutoBookkeepingLogStore.record(this, "overlay_permission_denied", "overlay permission check returned false")
+            return false
+        }
+        if (root != null) {
+            AutoBookkeepingLogStore.record(this, "overlay_duplicate", "overlay already visible")
+            return true
+        }
 
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -41,12 +55,21 @@ class AutoBillOverlayService : Service() {
                 setPadding(0, 12, 0, 12)
             })
             addView(TextView(context).apply {
-                text = "关闭"
+                text = "识别到支付，确认后记账"
                 setTextColor(Color.WHITE)
                 textSize = 14f
                 gravity = Gravity.CENTER
                 setPadding(12, 12, 12, 12)
-                setOnClickListener { remove() }
+            })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END
+                addView(action("忽略") {
+                    AutoBookkeepingLogStore.record(context, "overlay_ignored", "user ignored candidate")
+                    AutoBookkeepingPendingStore.complete(context)
+                    remove()
+                })
+                addView(action("去确认") { openConfirmation(candidate) })
             })
         }
         val params = WindowManager.LayoutParams(
@@ -65,6 +88,10 @@ class AutoBillOverlayService : Service() {
             manager.addView(box, params)
             root = box
             wm = manager
+            AutoBookkeepingLogStore.record(this, "overlay_shown", "confirmation overlay added")
+        }.onFailure { error ->
+            Log.e(TAG, "overlay addView failed", error)
+            AutoBookkeepingLogStore.record(this, "overlay_add_failed", error.javaClass.simpleName)
         }.isSuccess
     }
 
@@ -73,18 +100,63 @@ class AutoBillOverlayService : Service() {
         root = null
     }
 
+    private fun action(label: String, onClick: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding(18, 14, 18, 14)
+            setOnClickListener { onClick() }
+        }
+
+    private fun openConfirmation(candidate: PaymentCandidate) {
+        AutoBookkeepingLogStore.record(this, "confirm_open_requested", "user opened confirmation page")
+        remove()
+        runCatching {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra(MainActivity.OPEN_ROUTE_EXTRA, "/profile/autobookkeeping/confirm")
+                },
+            )
+        }.onFailure { error ->
+            AutoBookkeepingLogStore.record(this, "confirm_open_failed", error.javaClass.simpleName)
+            offer(candidate)
+        }
+    }
+
     companion object {
         var instance: AutoBillOverlayService? = null
+        private const val TAG = "AutoBookkeeping"
     }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+        runCatching {
+            AutoBookkeepingNotificationController.sync(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForeground(
+                    AutoBookkeepingNotificationController.NOTIFICATION_ID,
+                    AutoBookkeepingNotificationController.buildNotification(this),
+                )
+            }
+        }.onFailure { error -> Log.e(TAG, "overlay foreground initialization failed", error) }
+        AutoBookkeepingDiagnostics.foregroundRunning = true
+        Log.i(TAG, "overlay service created")
+        AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service created")
     }
 
     override fun onDestroy() {
         remove()
         instance = null
+        AutoBookkeepingDiagnostics.foregroundRunning = false
+        AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service destroyed")
         super.onDestroy()
     }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+
 }

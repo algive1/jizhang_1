@@ -80,17 +80,26 @@ abstract interface class MembershipCatalogRepository {
 
 class ConfiguredMembershipCatalogRepository
     implements MembershipCatalogRepository {
+  static Future<MembershipCatalog>? _localCatalogFuture;
+
   @override
   Future<MembershipCatalog> load() => _load();
 
   Future<MembershipCatalog> _load() async {
     const url = String.fromEnvironment('SHARED_API_BASE_URL');
     if (url.isEmpty) {
-      return MembershipCatalog.fromJson(
-        jsonDecode(
-          await rootBundle.loadString('assets/config/membership_catalog.json'),
-        ) as Map<String, dynamic>,
-      );
+      final cached = _localCatalogFuture;
+      if (cached != null) return cached;
+      final future = _loadLocalCatalog();
+      _localCatalogFuture = future;
+      try {
+        return await future;
+      } catch (_) {
+        if (identical(_localCatalogFuture, future)) {
+          _localCatalogFuture = null;
+        }
+        rethrow;
+      }
     }
     final api = SharedApi(baseUrl: url);
     try {
@@ -101,6 +110,14 @@ class ConfiguredMembershipCatalogRepository
     } finally {
       api.close();
     }
+  }
+
+  Future<MembershipCatalog> _loadLocalCatalog() async {
+    return MembershipCatalog.fromJson(
+      jsonDecode(
+        await rootBundle.loadString('assets/config/membership_catalog.json'),
+      ) as Map<String, dynamic>,
+    );
   }
 }
 

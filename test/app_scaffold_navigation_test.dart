@@ -15,6 +15,7 @@ void main() {
       '/profile/membership',
       '/profile/family',
       '/profile/payment-notifications',
+      '/profile/autobookkeeping',
       '/profile/recurring-bills',
       '/profile/installments',
       '/profile/installments/plan-1',

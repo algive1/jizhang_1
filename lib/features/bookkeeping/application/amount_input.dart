@@ -56,10 +56,14 @@ class AmountInput {
   }
 
   /// The text shown as the typed expression (`100*2`) or the padded number.
-  String get label =>
-      hasOperator ? value : (value.isEmpty ? '' : displayValue);
+  String get label => hasOperator ? value : (value.isEmpty ? '' : displayValue);
 
   AmountInput enter(String key) {
+    key = switch (key) {
+      '×' => '*',
+      '÷' => '/',
+      _ => key,
+    };
     if (operators.contains(key)) return _enterOperator(key);
     if (key == '.') return _enterDot();
     if (!RegExp(r'^\d$').hasMatch(key)) return this;

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Stable bidirectional IDs also survive restoring an older local backup.
 class SharedIdMap {
   const SharedIdMap(this.localBook, this.remoteBook, [this.aliases = const {}]);
@@ -54,6 +56,26 @@ class SharedIdMap {
     for (final entry in refs.entries) {
       if (data[entry.key] != null)
         data[entry.key] = convert(entry.value, data[entry.key] as String);
+    }
+    final jsonField = kind == 'transactions'
+        ? 'metadata_json'
+        : kind == 'recurring_bills'
+        ? 'schedule_json'
+        : null;
+    if (jsonField != null && data[jsonField] is String) {
+      final payload = jsonDecode(data[jsonField] as String);
+      if (payload is Map<String, dynamic>) {
+        final refField = kind == 'transactions'
+            ? 'recurring_bill_id'
+            : 'subcategory_id';
+        if (payload[refField] is String) {
+          payload[refField] = convert(
+            kind == 'transactions' ? 'recurring_bills' : 'categories',
+            payload[refField] as String,
+          );
+        }
+        data[jsonField] = jsonEncode(payload);
+      }
     }
     if (kind == 'books') data['family_id'] = remoteBook;
     return data;

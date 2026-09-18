@@ -18,9 +18,7 @@ import 'package:jizhang_app/features/membership/presentation/membership_page.dar
 import 'support/reference_capture.dart';
 
 void main() {
-  testWidgets('captures asset and membership prototypes at 393dp', (
-    tester,
-  ) async {
+  testWidgets('captures membership page QA slices at 390dp', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await loadReferenceFonts(tester);
@@ -60,7 +58,7 @@ void main() {
     });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await _capture(tester, assetBoundary, 'home-asset-card-393');
+    await _capture(tester, assetBoundary, 'home-asset-card-390');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -88,11 +86,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       final imageContext = tester.element(find.byType(MembershipPage));
-      await precacheImage(AssetImage(AppAssets.proCloud), imageContext);
+      for (final asset in [
+        'assets/images/membership/hero-bg.webp',
+        'assets/images/membership/hero-mascot.png',
+        'assets/images/membership/hero-leaves.png',
+        'assets/images/membership/testimonial-user-female.webp',
+        'assets/images/membership/testimonial-user-male.webp',
+      ]) {
+        await precacheImage(AssetImage(asset), imageContext);
+      }
     });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await _capture(tester, membershipBoundary, 'membership-page-393');
+    await _capture(tester, membershipBoundary, 'membership-page-top-390');
+    final scrollable = find.byType(CustomScrollView);
+    await tester.drag(scrollable, const Offset(0, -680));
+    await tester.pumpAndSettle();
+    await _capture(tester, membershipBoundary, 'membership-page-lower-390');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -119,7 +129,7 @@ void main() {
     router.go('/profile/membership');
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await _capture(tester, shellBoundary, 'membership-page-shell-393');
+    await _capture(tester, shellBoundary, 'membership-page-shell-390');
   });
 }
 
@@ -136,9 +146,7 @@ Future<void> _capture(WidgetTester tester, Key key, String name) async {
     final image = await boundary.toImage(pixelRatio: 2);
     try {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      final output = File(
-        'docs/qa/asset-membership-prototype-2026-09-11/$name.png',
-      );
+      final output = File('docs/qa/member-open-2026-09-17/$name.png');
       await output.parent.create(recursive: true);
       await output.writeAsBytes(data!.buffer.asUint8List());
     } finally {

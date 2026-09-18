@@ -8,8 +8,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'app/app.dart';
 import 'core/database/app_database.dart';
 import 'core/database/database_seeder.dart';
+import 'core/models/recurring_bill.dart';
 import 'features/bookkeeping/application/quick_bookkeeping_service.dart';
 import 'features/installments/data/installment_plan_repository.dart';
+import 'features/recurring/application/recurring_bill_notification_service.dart';
 import 'features/recurring/data/recurring_bill_repository.dart';
 import 'features/settings/data/app_settings_repository.dart';
 import 'features/transactions/data/transactions_repository.dart';
@@ -48,6 +50,11 @@ Future<void> scheduledFinanceMain() async {
       accountBookIdForBook: (bookId) => accountBookByBook[bookId],
     );
     final settings = DriftAppSettingsRepository(database);
+    final notifications = RecurringBillNotificationScheduler(
+      channel: channel,
+      background: true,
+    );
+    final allBills = <RecurringBill>[];
     for (final book in books) {
       final recurringRepository = DriftRecurringBillRepository(
         database,
@@ -59,11 +66,23 @@ Future<void> scheduledFinanceMain() async {
         transactions,
         recurringRepository,
       ).processDueAutoRecords();
+      allBills.addAll(await recurringRepository.getAll());
       await DriftInstallmentPlanRepository(
         database,
         bookId: book.id,
       ).processDueRepayments();
     }
+    // Read the complete table for notification cleanup as well. This also
+    // cancels reminders belonging to books archived since the last sync.
+    allBills
+      ..clear()
+      ..addAll(
+        await DriftRecurringBillRepository(
+          database,
+          bookId: '',
+        ).getAllForNotification(),
+      );
+    await notifications.syncBills(allBills);
     await channel.invokeMethod<void>('completed');
   } catch (error) {
     try {

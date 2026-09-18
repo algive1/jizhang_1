@@ -24,6 +24,7 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../analysis/data/analysis_repository.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../accounts/data/account_repository.dart';
+import '../../investments/data/investment_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../goals/data/goal_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -223,6 +224,9 @@ class _HomePageState extends ConsumerState<HomePage>
               else
                 HomeAssetCard(
                   accounts: accounts,
+                  investmentByCurrency: ref.watch(
+                    investmentValueByCurrencyProvider,
+                  ),
                   amountHidden: visibility.assets,
                   onAmountHiddenChanged: (hidden) => ref
                       .read(homeCardVisibilityProvider.notifier)
@@ -324,12 +328,7 @@ class _HomePageState extends ConsumerState<HomePage>
                               ),
                             ),
                             TextButton.icon(
-                              onPressed: () => showModalBottomSheet<void>(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => const QuickAddSheet(),
-                              ),
+                              onPressed: () => showQuickAddSheet(context),
                               icon: const Icon(Icons.add),
                               label: const Text('记一笔'),
                             ),

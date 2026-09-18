@@ -25,14 +25,8 @@ const _assetTrendPeriods = <(int, String)>[
 ];
 
 class AssetDistribution extends StatelessWidget {
-  const AssetDistribution({
-    required this.overview,
-    required this.hidden,
-    this.onTap,
-    super.key,
-  });
+  const AssetDistribution({required this.overview, this.onTap, super.key});
   final AssetOverview overview;
-  final bool hidden;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
@@ -45,19 +39,13 @@ class AssetDistribution extends StatelessWidget {
             .toList()
           ..sort((a, b) => b.value.compareTo(a.value));
     final panel = AssetPanel(
+      key: const ValueKey('asset-distribution-card'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const AssetSectionHeading('资产分布', more: true),
           const SizedBox(height: 12),
-          if (hidden)
-            const SizedBox(
-              height: 95,
-              child: Center(
-                child: Text('金额已隐藏', style: TextStyle(color: assetMuted)),
-              ),
-            )
-          else if (entries.isEmpty)
+          if (entries.isEmpty)
             const SizedBox(
               height: 95,
               child: Center(
@@ -178,7 +166,6 @@ class AssetTrend extends StatefulWidget {
     required this.history,
     required this.currency,
     required this.days,
-    required this.hidden,
     required this.onDays,
     this.onTap,
     super.key,
@@ -186,7 +173,6 @@ class AssetTrend extends StatefulWidget {
   final AssetHistory history;
   final String currency;
   final int days;
-  final bool hidden;
   final ValueChanged<int> onDays;
   final VoidCallback? onTap;
 
@@ -195,33 +181,6 @@ class AssetTrend extends StatefulWidget {
 }
 
 class _AssetTrendState extends State<AssetTrend> {
-  final _chartController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollToLatest();
-  }
-
-  @override
-  void didUpdateWidget(covariant AssetTrend oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.days != widget.days) _scrollToLatest();
-  }
-
-  @override
-  void dispose() {
-    _chartController.dispose();
-    super.dispose();
-  }
-
-  void _scrollToLatest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_chartController.hasClients) return;
-      _chartController.jumpTo(_chartController.position.maxScrollExtent);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final delta = widget.history.change(widget.days);
@@ -265,13 +224,6 @@ class _AssetTrendState extends State<AssetTrend> {
                 ),
               ),
             )
-          else if (widget.hidden)
-            const SizedBox(
-              height: 115,
-              child: Center(
-                child: Text('金额已隐藏', style: TextStyle(color: assetMuted)),
-              ),
-            )
           else ...[
             AssetAmount(
               delta,
@@ -297,25 +249,13 @@ class _AssetTrendState extends State<AssetTrend> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final points = widget.history.points(widget.days);
-                  final chartWidth = math
-                      .max(constraints.maxWidth, 32 + (points.length - 1) * 14)
-                      .toDouble();
-                  return SizedBox(
+                  return AssetTrendPlot(
+                    points: points,
                     height: 58,
-                    child: SingleChildScrollView(
-                      controller: _chartController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: SizedBox(
-                        width: chartWidth,
-                        child: CustomPaint(
-                          painter: _AssetTrendPainter(
-                            points,
-                            Theme.of(context).textTheme.bodySmall?.fontFamily,
-                          ),
-                        ),
-                      ),
-                    ),
+                    fontFamily: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.fontFamily,
                   );
                 },
               ),
@@ -341,11 +281,13 @@ class AssetTrendPeriodSelector extends StatelessWidget {
   const AssetTrendPeriodSelector({
     required this.days,
     required this.onDays,
+    this.detail = false,
     super.key,
   });
 
   final int days;
   final ValueChanged<int> onDays;
+  final bool detail;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -353,14 +295,15 @@ class AssetTrendPeriodSelector extends StatelessWidget {
     children: [
       for (final option in _assetTrendPeriods)
         SizedBox(
-          width: 32,
+          width: detail ? 58 : 32,
           child: Padding(
-            padding: const EdgeInsets.only(right: 2),
+            padding: EdgeInsets.only(right: detail ? 4 : 2),
             child: InkWell(
               onTap: () => onDays(option.$1),
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 3),
+                height: detail ? 36 : null,
+                padding: EdgeInsets.symmetric(vertical: detail ? 8 : 3),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: days == option.$1
@@ -388,13 +331,8 @@ class AssetTrendPeriodSelector extends StatelessWidget {
 }
 
 class AssetDistributionDetail extends StatelessWidget {
-  const AssetDistributionDetail({
-    required this.overview,
-    required this.hidden,
-    super.key,
-  });
+  const AssetDistributionDetail({required this.overview, super.key});
   final AssetOverview overview;
-  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -408,11 +346,7 @@ class AssetDistributionDetail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AssetSectionHeading('资产分布详情'),
-          const SizedBox(height: 12),
-          if (hidden)
-            const SizedBox(height: 180, child: Center(child: Text('金额已隐藏')))
-          else if (entries.isEmpty)
+          if (entries.isEmpty)
             const SizedBox(height: 180, child: Center(child: Text('暂无正余额资产')))
           else
             LayoutBuilder(
@@ -492,7 +426,7 @@ class AssetDistributionDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _AssetAnalysisNote(
             key: const ValueKey('asset-distribution-analysis'),
-            text: _distributionSummary(entries, overview, hidden: hidden),
+            text: _distributionSummary(entries, overview),
           ),
         ],
       ),
@@ -505,14 +439,12 @@ class AssetTrendDetail extends StatelessWidget {
     required this.history,
     required this.currency,
     required this.days,
-    required this.hidden,
     this.onDays,
     super.key,
   });
   final AssetHistory history;
   final String currency;
   final int days;
-  final bool hidden;
   final ValueChanged<int>? onDays;
 
   @override
@@ -523,56 +455,81 @@ class AssetTrendDetail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AssetSectionHeading('资产变化详情'),
-          if (onDays != null) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AssetTrendPeriodSelector(days: days, onDays: onDays!),
-            ),
-          ],
-          const SizedBox(height: 12),
           if (history.hasFutureRecords)
-            const SizedBox(
-              height: 180,
-              child: Center(
-                child: Text(
-                  '存在未来日期流水\n历史曲线暂不可用',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: assetMuted),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Expanded(
+                  child: SizedBox(
+                    height: 180,
+                    child: Center(
+                      child: Text(
+                        '存在未来日期流水\n历史曲线暂不可用',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: assetMuted),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                if (onDays != null) ...[
+                  const SizedBox(width: 10),
+                  AssetTrendPeriodSelector(
+                    days: days,
+                    onDays: onDays!,
+                    detail: true,
+                    key: const ValueKey('asset-trend-detail-periods'),
+                  ),
+                ],
+              ],
             )
-          else if (hidden)
-            const SizedBox(height: 210, child: Center(child: Text('金额已隐藏')))
           else ...[
-            AssetAmount(
-              delta,
-              currency: currency,
-              signed: true,
-              size: 23,
-              color: delta < 0 ? assetCoral : assetGreen,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              history.percent(days) == null
-                  ? '暂无可比基数'
-                  : '${history.percent(days)! >= 0 ? '↑ +' : '↓ '}${history.percent(days)!.toStringAsFixed(1)}%',
-              style: TextStyle(
-                color: delta < 0 ? assetCoral : assetGreen,
-                fontSize: 13,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: AssetAmount(
+                        delta,
+                        key: const ValueKey('asset-trend-detail-amount'),
+                        currency: currency,
+                        signed: true,
+                        size: 23,
+                        color: delta < 0 ? assetCoral : assetGreen,
+                      ),
+                    ),
+                    if (onDays != null) ...[
+                      const SizedBox(width: 10),
+                      AssetTrendPeriodSelector(
+                        days: days,
+                        onDays: onDays!,
+                        detail: true,
+                        key: const ValueKey('asset-trend-detail-periods'),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  history.percent(days) == null
+                      ? '暂无可比基数'
+                      : '${history.percent(days)! >= 0 ? '↑ +' : '↓ '}${history.percent(days)!.toStringAsFixed(1)}%',
+                  style: TextStyle(
+                    color: delta < 0 ? assetCoral : assetGreen,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            SizedBox(
+            AssetTrendPlot(
+              points: points,
               height: 180,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _AssetTrendPainter(
-                  points,
-                  Theme.of(context).textTheme.bodySmall?.fontFamily,
-                ),
-              ),
+              detail: true,
+              plotKey: const ValueKey('asset-trend-detail-plot'),
+              currency: currency,
+              fontFamily: Theme.of(context).textTheme.bodySmall?.fontFamily,
             ),
             const SizedBox(height: 8),
             Text(
@@ -583,7 +540,7 @@ class AssetTrendDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _AssetAnalysisNote(
             key: const ValueKey('asset-trend-analysis'),
-            text: _trendSummary(history, days, hidden: hidden),
+            text: _trendSummary(history, days),
           ),
         ],
       ),
@@ -593,10 +550,8 @@ class AssetTrendDetail extends StatelessWidget {
 
 String _distributionSummary(
   List<MapEntry<String, double>> entries,
-  AssetOverview overview, {
-  required bool hidden,
-}) {
-  if (hidden) return '金额已隐藏，暂不展示资产集中度分析。';
+  AssetOverview overview,
+) {
   if (entries.isEmpty) return '当前没有正余额资产，添加或更新账户后可以查看分布。';
 
   final top = entries.first;
@@ -608,9 +563,8 @@ String _distributionSummary(
   return '$prefix 可继续关注各账户的余额变化。';
 }
 
-String _trendSummary(AssetHistory history, int days, {required bool hidden}) {
+String _trendSummary(AssetHistory history, int days) {
   final period = days == 365 ? '近1年' : '近$days天';
-  if (hidden) return '$period金额已隐藏，暂不展示趋势分析。';
   if (history.hasFutureRecords) {
     return '当前存在未来日期流水，历史曲线暂不可用；修正流水日期后可继续查看。';
   }
@@ -699,11 +653,146 @@ class _DonutPainter extends CustomPainter {
       oldDelegate.values != values;
 }
 
+class AssetTrendPlot extends StatefulWidget {
+  const AssetTrendPlot({
+    required this.points,
+    required this.height,
+    this.detail = false,
+    this.currency,
+    this.fontFamily,
+    this.plotKey,
+    super.key,
+  });
+
+  final List<AssetHistoryPoint> points;
+  final double height;
+  final bool detail;
+  final String? currency;
+  final String? fontFamily;
+  final Key? plotKey;
+
+  @override
+  State<AssetTrendPlot> createState() => _AssetTrendPlotState();
+}
+
+class _AssetTrendPlotState extends State<AssetTrendPlot> {
+  int? _selectedIndex;
+
+  @override
+  void didUpdateWidget(covariant AssetTrendPlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameTimeline(oldWidget.points, widget.points)) {
+      _selectedIndex = null;
+    } else if (_selectedIndex != null && widget.points.isNotEmpty) {
+      _selectedIndex = _selectedIndex!.clamp(0, widget.points.length - 1);
+    }
+  }
+
+  bool _sameTimeline(
+    List<AssetHistoryPoint> oldPoints,
+    List<AssetHistoryPoint> newPoints,
+  ) {
+    if (oldPoints.length != newPoints.length || oldPoints.isEmpty) {
+      return false;
+    }
+    return oldPoints.first.date == newPoints.first.date &&
+        oldPoints.last.date == newPoints.last.date;
+  }
+
+  int get _activeIndex {
+    if (widget.points.isEmpty) return 0;
+    return (_selectedIndex ?? widget.points.length - 1).clamp(
+      0,
+      widget.points.length - 1,
+    );
+  }
+
+  void _selectAt(double dx, double width) {
+    if (widget.points.length < 2) return;
+    const left = 27.0;
+    const right = 5.0;
+    final plotWidth = math.max(1.0, width - left - right);
+    final ratio = ((dx - left) / plotWidth).clamp(0.0, 1.0);
+    final index = (ratio * (widget.points.length - 1)).round();
+    if (index == _activeIndex) return;
+    setState(() => _selectedIndex = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.points.isEmpty) {
+      return SizedBox(height: widget.height);
+    }
+    final labelCount = widget.detail
+        ? widget.points.length <= 7
+              ? widget.points.length
+              : 5
+        : 3;
+    final selected = widget.points[_activeIndex];
+    final selectedLabel = widget.currency == null
+        ? '${selected.date.month}/${selected.date.day} · 账面净资产 ${MoneyFormatter.decimal(selected.balance)}'
+        : '${selected.date.month}/${selected.date.day} · 账面净资产 ${MoneyFormatter.decimal(selected.balance)} ${widget.currency}';
+
+    return SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                key: widget.plotKey ?? const ValueKey('asset-trend-plot'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    _selectAt(details.localPosition.dx, constraints.maxWidth),
+                onHorizontalDragStart: (details) =>
+                    _selectAt(details.localPosition.dx, constraints.maxWidth),
+                onHorizontalDragUpdate: (details) =>
+                    _selectAt(details.localPosition.dx, constraints.maxWidth),
+                child: CustomPaint(
+                  painter: _AssetTrendPainter(
+                    widget.points,
+                    widget.fontFamily,
+                    selectedIndex: _activeIndex,
+                    labelCount: labelCount,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+          if (widget.detail)
+            SizedBox(
+              height: 20,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  key: const ValueKey('asset-trend-selected'),
+                  selectedLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10, color: assetMuted),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Unlike a cashflow chart this scale includes negative net assets.
 class _AssetTrendPainter extends CustomPainter {
-  _AssetTrendPainter(this.points, this.fontFamily);
+  _AssetTrendPainter(
+    this.points,
+    this.fontFamily, {
+    required this.selectedIndex,
+    required this.labelCount,
+  });
   final List<AssetHistoryPoint> points;
   final String? fontFamily;
+  final int selectedIndex;
+  final int labelCount;
   @override
   void paint(Canvas canvas, Size size) {
     final low = points.map((p) => p.balance).reduce(math.min);
@@ -757,6 +846,15 @@ class _AssetTrendPainter extends CustomPainter {
           colors: [Color(0x508AA950), Color(0x068AA950)],
         ).createShader(Rect.fromLTWH(left, top, width, bottom - top)),
     );
+    final activeIndex = selectedIndex.clamp(0, points.length - 1);
+    final active = coordinates[activeIndex];
+    canvas.drawLine(
+      Offset(active.dx, top),
+      Offset(active.dx, bottom),
+      Paint()
+        ..color = const Color(0x5583A25D)
+        ..strokeWidth = .7,
+    );
     canvas.drawPath(
       path,
       Paint()
@@ -770,11 +868,12 @@ class _AssetTrendPainter extends CustomPainter {
       canvas.drawCircle(coordinates[i], 2.5, Paint()..color = Colors.white);
       canvas.drawCircle(coordinates[i], 1.8, Paint()..color = assetGreen);
     }
-    final latest = coordinates.last;
-    final latestText = MoneyFormatter.whole(points.last.balance);
-    final latestPainter = TextPainter(
+    canvas.drawCircle(active, 4.2, Paint()..color = Colors.white);
+    canvas.drawCircle(active, 2.8, Paint()..color = assetGreen);
+    final activeText = MoneyFormatter.whole(points[activeIndex].balance);
+    final activePainter = TextPainter(
       text: TextSpan(
-        text: latestText,
+        text: activeText,
         style: TextStyle(
           color: Colors.white,
           fontSize: 7,
@@ -784,22 +883,29 @@ class _AssetTrendPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 44);
-    final bubbleWidth = latestPainter.width + 10;
+    final bubbleWidth = activePainter.width + 10;
     final bubbleRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
-        (latest.dx - bubbleWidth + 4).clamp(left, size.width - bubbleWidth),
-        (latest.dy - 22).clamp(top, bottom - 18),
+        (active.dx - bubbleWidth + 4).clamp(left, size.width - bubbleWidth),
+        (active.dy - 22).clamp(top, bottom - 18),
         bubbleWidth,
         16,
       ),
       const Radius.circular(6),
     );
     canvas.drawRRect(bubbleRect, Paint()..color = assetGreen);
-    latestPainter.paint(
+    activePainter.paint(
       canvas,
       Offset(bubbleRect.left + 5, bubbleRect.top + 4),
     );
-    for (final i in {0, points.length ~/ 2, points.length - 1}) {
+    final safeLabelCount = math.max(1, math.min(labelCount, points.length));
+    final labelIndices = <int>{
+      for (var index = 0; index < safeLabelCount; index++)
+        safeLabelCount == 1
+            ? 0
+            : ((points.length - 1) * index / (safeLabelCount - 1)).round(),
+    };
+    for (final i in labelIndices) {
       final date = points[i].date;
       label(
         canvas,
@@ -829,5 +935,8 @@ class _AssetTrendPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AssetTrendPainter old) =>
-      old.points != points || old.fontFamily != fontFamily;
+      old.points != points ||
+      old.fontFamily != fontFamily ||
+      old.selectedIndex != selectedIndex ||
+      old.labelCount != labelCount;
 }

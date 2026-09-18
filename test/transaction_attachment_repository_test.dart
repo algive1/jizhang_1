@@ -134,7 +134,7 @@ void main() {
     expect(migratedTransaction, isNotNull);
     expect(migratedTransaction!.metadataJson, contains('午餐'));
     expect(migratedTransaction.metadataJson, contains('attachments'));
-    expect(upgraded.schemaVersion, 16);
+    expect(upgraded.schemaVersion, 18);
 
     await upgraded.close();
     final reopened = AppDatabase.forTesting(NativeDatabase(file));

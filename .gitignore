@@ -49,3 +49,14 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# 源码快照与打包产物（scripts/package_source.sh 生成，可随时重建）
+# 例：jizhang_app_source_20260918-2125.zip 与解包目录 jizhang_app/
+/jizhang_app/
+/jizhang_app_source_*.zip
+
+# 本地构建的 APK 输出：dist/ 只跟踪正式 release 包
+# 保留：dist/jizhang_app-<版本>-release.apk
+# 忽略：dist/jizhang_app-<版本>-debug.apk、dist/jizhang_app-<版本>-release-<时间戳>.apk
+/dist/*-debug.apk
+/dist/*-release-*.apk

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/account.dart';
 
-enum AssetGlyph { wallet, bank, alipay, house, card, tag, transfer, pie }
+enum AssetGlyph { wallet, bank, alipay, house, card, tag, transfer, pie, growth }
 
 AssetGlyph accountGlyph(Account account) => switch (account.type) {
   AccountType.cash || AccountType.wechat => AssetGlyph.wallet,
@@ -158,6 +158,19 @@ class _GlyphPainter extends CustomPainter {
           true,
           pen,
         );
+      case AssetGlyph.growth:
+        // A rising trend line with three markers. Deliberately not a K-line /
+        // candlestick: 投资管理 is a personal-asset view, not a trading app.
+        path(const [Offset(3, 18), Offset(9, 12), Offset(14, 15), Offset(21, 6)]);
+        line(21, 6, 15.5, 6);
+        line(21, 6, 21, 11.5);
+        for (final point in const [
+          Offset(3, 18),
+          Offset(9, 12),
+          Offset(14, 15),
+          Offset(21, 6),
+        ])
+          canvas.drawCircle(point, 1.1, Paint()..color = color);
     }
   }
 

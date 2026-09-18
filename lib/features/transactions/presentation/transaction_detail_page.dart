@@ -107,11 +107,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   }
 
   Future<void> _editTransaction(TransactionRecord transaction) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => QuickAddSheet(initialTransaction: transaction),
-    );
+    await showQuickAddSheet(context, initialTransaction: transaction);
     if (mounted) await _reloadAfterEdit();
   }
 
@@ -633,6 +629,7 @@ class _DetailLoadFailure extends StatelessWidget {
 }
 
 String _typeLabel(TransactionType type) => switch (type) {
+  TransactionType.assetSale => '资产卖出',
   TransactionType.expense => '支出',
   TransactionType.income => '收入',
   TransactionType.transfer => '转账',

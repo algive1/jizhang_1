@@ -286,11 +286,11 @@ class _ConsumptionCalendarPageState
   bool get _isCurrentMonth =>
       _month.year == _today.year && _month.month == _today.month;
 
+  /// The calendar is a consumption view. Lending and asset conversions move
+  /// money without spending it, so they stay off the daily consumption totals.
   bool _isConsumption(TransactionRecord item) =>
       item.deletedAt == null &&
-      (item.type == TransactionType.expense ||
-          item.type == TransactionType.lend ||
-          item.type == TransactionType.assetPurchase) &&
+      item.isConsumptionExpense &&
       item.netExpenseAmount > 0;
 
   void _moveMonth(int delta) =>

@@ -1,3 +1,5 @@
+import '../../../core/widgets/app_bottom_sheet.dart';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -932,9 +934,8 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     WidgetRef ref,
     LedgerBook book,
   ) async {
-    final action = await showModalBottomSheet<_BookAction>(
+    final action = await AppBottomSheet.show<_BookAction>(
       context: context,
-      showDragHandle: true,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [

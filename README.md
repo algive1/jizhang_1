@@ -35,3 +35,15 @@ Android 模拟器一键构建、安装并启动：
 开发文档统一从 [`docs/development/README.md`](docs/development/README.md) 进入；当前状态见 [`docs/development/CURRENT_STATUS.md`](docs/development/CURRENT_STATUS.md)，架构全景见 [`docs/development/ARCHITECTURE.md`](docs/development/ARCHITECTURE.md)。原型资源位于 `docs/design_refs/`。
 
 最终 Android Release APK 位于 `build/app/outputs/flutter-apk/app-release.apk`。未提供正式 keystore 时会使用 debug key 生成仅供本地验收的 Release APK；上架前必须配置 `android/key.properties`。构建说明见 [`docs/development/release/ANDROID_RELEASE.md`](docs/development/release/ANDROID_RELEASE.md)。
+
+## 源码打包
+
+交付或备份整套源码（Flutter 客户端 + Node 共享账本服务 + Android/iOS 原生工程）：
+
+```bash
+./scripts/package_source.sh              # 生成 jizhang_app_source_<时间戳>.zip 到工程根目录
+./scripts/package_source.sh --out ~/Desktop
+./scripts/package_source.sh --list       # 只查看将被打包的文件
+```
+
+构建产物（`build/`、`dist/`、APK）、依赖缓存（`.dart_tool/`、`node_modules/`、`ios/Pods/`）、服务端运行时数据库和 QA 截图归档默认不入包；需要截图归档时加 `--with-qa-docs`。范围和验证记录见 [`docs/development/2026-09-18-source-package-delivery.md`](docs/development/2026-09-18-source-package-delivery.md)。

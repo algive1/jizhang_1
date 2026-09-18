@@ -1,3 +1,6 @@
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_form.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,6 +20,7 @@ import '../data/transactions_repository.dart';
 
 enum _TransactionAction {
   edit,
+  copy,
   editRefund,
   editReimbursement,
   category,
@@ -42,14 +46,19 @@ Future<void> showTransactionActions(
   TransactionRecord transaction, {
   Future<void> Function()? onCorrectCategory,
 }) async {
-  final action = await showModalBottomSheet<_TransactionAction>(
+  final action = await AppBottomSheet.show<_TransactionAction>(
     context: context,
-    backgroundColor: AppColors.surface,
-    showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (transaction.type == TransactionType.expense ||
+              transaction.type == TransactionType.income)
+            AppSheetOption(
+              title: '复制一笔',
+              icon: Icons.copy_outlined,
+              onTap: () => Navigator.pop(sheetContext, _TransactionAction.copy),
+            ),
           if (transaction.type == TransactionType.adjustment)
             const Padding(
               padding: EdgeInsets.all(16),
@@ -139,12 +148,10 @@ Future<void> showTransactionActions(
   if (!context.mounted || action == null) return;
 
   switch (action) {
+    case _TransactionAction.copy:
+      await showQuickAddSheet(context, copyFrom: transaction);
     case _TransactionAction.edit:
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => QuickAddSheet(initialTransaction: transaction),
-      );
+      await showQuickAddSheet(context, initialTransaction: transaction);
     case _TransactionAction.editRefund:
       await _editRefund(context, ref, transaction);
     case _TransactionAction.editReimbursement:
@@ -460,7 +467,7 @@ Future<void> showTransactionCategoryCorrection(
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
+              AppSelect<String>(
                 initialValue: selectedId,
                 decoration: const InputDecoration(labelText: '分类'),
                 items: options

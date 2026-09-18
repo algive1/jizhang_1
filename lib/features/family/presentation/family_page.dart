@@ -1,3 +1,4 @@
+import '../../../core/widgets/app_action_sheet.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -397,7 +398,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                           }),
                           trailing: member['role'] == 'owner'
                               ? null
-                              : PopupMenuButton<String>(
+                              : AppActionMenuButton<String>(
                                   onSelected: (action) => _run(() async {
                                     final service = ref.read(
                                           familyServiceProvider,

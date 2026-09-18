@@ -1,3 +1,5 @@
+import '../../../core/widgets/app_action_sheet.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +16,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../data/account_repository.dart';
 import '../domain/asset_history.dart';
 import '../domain/asset_overview.dart';
+import '../../investments/data/investment_repository.dart';
 import '../../home/presentation/home_asset_card.dart';
 import 'account_forms.dart';
 import 'asset_dashboard_cards.dart';
@@ -40,7 +43,10 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     final transactionState = ref.watch(allTransactionsProvider);
     final activeBook = ref.watch(activeBookProvider);
     final allAccounts = accountState.value ?? const <Account>[];
-    final groups = AssetOverview.group(allAccounts);
+    final groups = AssetOverview.group(
+      allAccounts,
+      investmentByCurrency: ref.watch(investmentValueByCurrencyProvider),
+    );
     final selected =
         groups.where((g) => g.currency == _currency).firstOrNull ??
         groups.firstOrNull;
@@ -83,6 +89,9 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
             else ...[
               HomeAssetCard(
                 accounts: selected.accounts,
+                investmentByCurrency: {
+                  selected.currency: selected.investmentValue,
+                },
                 amountHidden: _hidden,
                 compactHeight: 130,
                 onAmountHiddenChanged: (value) =>
@@ -102,14 +111,10 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                     )
                     .length,
                 onAccounts: () => context.push('/profile/accounts'),
-                onCategories: () => context.push('/analysis'),
-                onTransfers: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => const QuickAddSheet(
-                    initialType: TransactionType.transfer,
-                  ),
+                onInvestments: () => context.push('/profile/investments'),
+                onTransfers: () => showQuickAddSheet(
+                  context,
+                  initialType: TransactionType.transfer,
                 ),
                 onReport: () => context.push('/analysis'),
               ),
@@ -132,7 +137,6 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 key: _trendKey,
                 history: history,
                 selected: selected,
-                hidden: _hidden,
                 days: _days,
                 onDays: (days) => setState(() => _days = days),
                 onDistribution: () => _showDistributionSheet(context, selected),
@@ -141,14 +145,12 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
               const SizedBox(height: 8),
               AssetLiabilitySection(
                 accounts: selected.accounts,
-                hidden: _hidden,
                 onAccounts: () => context.push('/profile/accounts'),
               ),
               const SizedBox(height: 8),
               _RecentChanges(
                 records: records,
                 accountIds: selected.accounts.map((a) => a.id).toSet(),
-                hidden: _hidden,
                 onViewAll: () => context.push('/transactions'),
               ),
               if (activeBook?.usesPrimaryAssets == true)
@@ -177,12 +179,8 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _AssetOverviewSheet(
-      overview: selected,
-      history: history,
-      hidden: _hidden,
-      days: _days,
-    ),
+    builder: (_) =>
+        _AssetOverviewSheet(overview: selected, history: history, days: _days),
   );
 
   Future<void> _showDistributionSheet(
@@ -192,7 +190,7 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _DistributionSheet(overview: selected, hidden: _hidden),
+    builder: (_) => _DistributionSheet(overview: selected),
   );
 
   Future<void> _showTrendSheet(
@@ -206,7 +204,6 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     builder: (_) => _TrendSheet(
       overview: selected,
       history: history,
-      hidden: _hidden,
       days: _days,
       onDays: (days) => setState(() => _days = days),
     ),
@@ -299,7 +296,7 @@ class _Header extends StatelessWidget {
         if (currencies.length > 1)
           Align(
             alignment: Alignment.centerRight,
-            child: PopupMenuButton<String>(
+            child: AppActionMenuButton<String>(
               onSelected: onCurrency,
               tooltip: '选择币种',
               itemBuilder: (_) => [
@@ -412,6 +409,22 @@ class _AccountAssetCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
+        onLongPress: () async {
+          final value = await AppActionSheet.show<String>(
+            context,
+            title: account.displayName,
+            items: [
+              const PopupMenuItem(value: 'detail', child: Text('查看明细')),
+              if (!account.isArchived) ...[
+                const PopupMenuItem(value: 'edit', child: Text('编辑账户')),
+                const PopupMenuItem(value: 'calibrate', child: Text('校准余额')),
+                const PopupMenuItem(value: 'archive', child: Text('归档账户')),
+              ] else
+                const PopupMenuItem(value: 'restore', child: Text('恢复账户')),
+            ],
+          );
+          if (value != null && context.mounted) onAction(value);
+        },
         borderRadius: BorderRadius.circular(13),
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -422,7 +435,7 @@ class _AccountAssetCard extends StatelessWidget {
                 children: [
                   AssetVectorIcon(accountGlyph(account), size: 22, tile: true),
                   const Spacer(),
-                  PopupMenuButton<String>(
+                  AppActionMenuButton<String>(
                     padding: EdgeInsets.zero,
                     onSelected: onAction,
                     itemBuilder: (_) => [
@@ -507,7 +520,6 @@ class _ChartPair extends StatelessWidget {
   const _ChartPair({
     required this.history,
     required this.selected,
-    required this.hidden,
     required this.days,
     required this.onDays,
     required this.onDistribution,
@@ -516,7 +528,6 @@ class _ChartPair extends StatelessWidget {
   });
   final AssetHistory history;
   final AssetOverview selected;
-  final bool hidden;
   final int days;
   final ValueChanged<int> onDays;
   final VoidCallback onDistribution;
@@ -527,17 +538,12 @@ class _ChartPair extends StatelessWidget {
       if (box.maxWidth < 300)
         return Column(
           children: [
-            AssetDistribution(
-              overview: selected,
-              hidden: hidden,
-              onTap: onDistribution,
-            ),
+            AssetDistribution(overview: selected, onTap: onDistribution),
             const SizedBox(height: 8),
             AssetTrend(
               history: history,
               currency: selected.currency,
               days: days,
-              hidden: hidden,
               onDays: onDays,
               onTap: onTrend,
             ),
@@ -548,11 +554,7 @@ class _ChartPair extends StatelessWidget {
         children: [
           Expanded(
             flex: 51,
-            child: AssetDistribution(
-              overview: selected,
-              hidden: hidden,
-              onTap: onDistribution,
-            ),
+            child: AssetDistribution(overview: selected, onTap: onDistribution),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -561,7 +563,6 @@ class _ChartPair extends StatelessWidget {
               history: history,
               currency: selected.currency,
               days: days,
-              hidden: hidden,
               onDays: onDays,
               onTap: onTrend,
             ),
@@ -576,12 +577,10 @@ class _RecentChanges extends StatefulWidget {
   const _RecentChanges({
     required this.records,
     required this.accountIds,
-    required this.hidden,
     required this.onViewAll,
   });
   final List<TransactionRecord> records;
   final Set<String> accountIds;
-  final bool hidden;
   final VoidCallback onViewAll;
   @override
   State<_RecentChanges> createState() => _RecentChangesState();
@@ -595,7 +594,6 @@ class _RecentChangesState extends State<_RecentChanges> {
   Widget build(BuildContext context) {
     final records = widget.records;
     final accountIds = widget.accountIds;
-    final hidden = widget.hidden;
     final recent =
         records
             .where(
@@ -662,11 +660,7 @@ class _RecentChangesState extends State<_RecentChanges> {
             )
           else
             for (var index = 0; index < visible.length; index++) ...[
-              _RecentRow(
-                record: visible[index],
-                accountIds: accountIds,
-                hidden: hidden,
-              ),
+              _RecentRow(record: visible[index], accountIds: accountIds),
               if (index < visible.length - 1)
                 const Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
             ],
@@ -720,21 +714,17 @@ class _RecentChangesState extends State<_RecentChanges> {
       '转账' => record.type == TransactionType.transfer,
       '资产变动' =>
         record.type == TransactionType.adjustment ||
-            record.type == TransactionType.assetPurchase,
+            record.type == TransactionType.assetPurchase ||
+            record.type == TransactionType.assetSale,
       _ => true,
     };
   }
 }
 
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({
-    required this.record,
-    required this.accountIds,
-    required this.hidden,
-  });
+  const _RecentRow({required this.record, required this.accountIds});
   final TransactionRecord record;
   final Set<String> accountIds;
-  final bool hidden;
   @override
   Widget build(BuildContext context) {
     final effects = accountBalanceEffect(record);
@@ -791,7 +781,6 @@ class _RecentRow extends StatelessWidget {
           AssetAmount(
             amount,
             currency: record.currency,
-            hidden: hidden,
             signed: true,
             size: 15,
             color: amount >= 0 ? assetGreen : assetInk,
@@ -834,12 +823,10 @@ class _AssetOverviewSheet extends StatelessWidget {
   const _AssetOverviewSheet({
     required this.overview,
     required this.history,
-    required this.hidden,
     required this.days,
   });
   final AssetOverview overview;
   final AssetHistory history;
-  final bool hidden;
   final int days;
 
   @override
@@ -848,13 +835,12 @@ class _AssetOverviewSheet extends StatelessWidget {
     child: ListView(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
       children: [
-        AssetDistributionDetail(overview: overview, hidden: hidden),
+        AssetDistributionDetail(overview: overview),
         const SizedBox(height: 10),
         AssetTrendDetail(
           history: history,
           currency: overview.currency,
           days: days,
-          hidden: hidden,
         ),
       ],
     ),
@@ -862,16 +848,15 @@ class _AssetOverviewSheet extends StatelessWidget {
 }
 
 class _DistributionSheet extends StatelessWidget {
-  const _DistributionSheet({required this.overview, required this.hidden});
+  const _DistributionSheet({required this.overview});
   final AssetOverview overview;
-  final bool hidden;
 
   @override
   Widget build(BuildContext context) => _AssetSheetFrame(
     title: '资产分布详情',
     child: ListView(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
-      children: [AssetDistributionDetail(overview: overview, hidden: hidden)],
+      children: [AssetDistributionDetail(overview: overview)],
     ),
   );
 }
@@ -880,13 +865,11 @@ class _TrendSheet extends StatefulWidget {
   const _TrendSheet({
     required this.overview,
     required this.history,
-    required this.hidden,
     required this.days,
     required this.onDays,
   });
   final AssetOverview overview;
   final AssetHistory history;
-  final bool hidden;
   final int days;
   final ValueChanged<int> onDays;
 
@@ -913,7 +896,6 @@ class _TrendSheetState extends State<_TrendSheet> {
           history: widget.history,
           currency: widget.overview.currency,
           days: _days,
-          hidden: widget.hidden,
           onDays: (days) {
             setState(() => _days = days);
             widget.onDays(days);
@@ -950,26 +932,18 @@ class _AssetSheetFrame extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: assetInk,
-                      ),
-                    ),
+            SizedBox(
+              height: 52,
+              child: Center(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: assetInk,
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                    tooltip: '关闭',
-                  ),
-                ],
+                ),
               ),
             ),
             Expanded(child: child),

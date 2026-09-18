@@ -28,7 +28,16 @@ class AssetHistory {
   final DateTime now;
   late final List<TransactionRecord> records;
 
-  bool get hasFutureRecords => records.any((t) => t.occurredAt.isAfter(now));
+  /// History is sampled by calendar day. A transaction later today is still
+  /// part of the current day's timeline, so only a date after [now]'s local
+  /// calendar date should disable the historical chart.
+  bool get hasFutureRecords {
+    final today = DateTime(now.year, now.month, now.day);
+    return records.any((transaction) {
+      final date = transaction.occurredAt.toLocal();
+      return DateTime(date.year, date.month, date.day).isAfter(today);
+    });
+  }
 
   int effect(TransactionRecord record, {String? accountId}) {
     final ids = accountId == null

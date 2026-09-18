@@ -19,7 +19,9 @@ class WeChatPaymentParser(val rule: PaymentRule = PaymentRule()) {
             }
             return null
         }
-        val merchant = field(rule.merchantPatterns)?.takeIf { value -> value.isNotBlank() && value !in rule.keywords && rule.methodLabels.none { value.contains(it) } } ?: return null
+        val merchant = (field(rule.merchantPatterns) ?: fallbackMerchant(labels))
+            ?.takeIf { value -> value.isNotBlank() && value !in rule.keywords && rule.methodLabels.none { value.contains(it) } }
+            ?: return null
         val method = field(rule.methodLabels)?.takeIf { it.isNotBlank() && it !in rule.keywords } ?: "UNKNOWN"
         val amounts = mutableListOf<Pair<Long, Int>>()
         labels.forEachIndexed { index, label ->
@@ -38,5 +40,29 @@ class WeChatPaymentParser(val rule: PaymentRule = PaymentRule()) {
         val winners = amounts.filter { it.second == best }.map { it.first }.distinct()
         if (winners.size != 1) return null // Ambiguous amounts require a better rule, never guess.
         return PaymentCandidate(winners.single(), merchant.take(80), MerchantNormalizer.normalize(merchant), method.take(80), timestamp, PaymentScene(confidence = if (method != "UNKNOWN") .98 else .9), if (best == 3) 1.0 else .92, .92)
+    }
+
+    private fun fallbackMerchant(labels: List<String>): String? {
+        val genericLabels = setOf(
+            "微信",
+            "微信支付",
+            "转账",
+            "红包",
+            "扫一扫",
+            "完成",
+            "返回",
+            "更多",
+            "查看账单",
+            "账单详情",
+        )
+        return labels.firstOrNull { label ->
+            label.length in 2..80 &&
+                label !in genericLabels &&
+                label !in rule.keywords &&
+                label !in rule.amountLabels &&
+                label !in rule.methodLabels &&
+                rule.excludedKeywords.none { label == it } &&
+                rule.amountPatterns.none { it.containsMatchIn(label) }
+        }
     }
 }

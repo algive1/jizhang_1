@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jizhang_app/app/theme/app_colors.dart';
 import 'package:jizhang_app/core/widgets/money_text.dart';
 import 'package:jizhang_app/core/widgets/privacy_amount.dart';
 
@@ -41,6 +42,27 @@ void main() {
     final fraction = _findSpan(root, '00');
     expect(root.toPlainText(), '¥88.00');
     expect(fraction?.style?.fontSize, 9);
+  });
+
+  testWidgets('expense money uses the home negative amount color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MoneyText(
+            12,
+            positive: false,
+            showSign: true,
+            style: TextStyle(fontSize: 20),
+          ),
+        ),
+      ),
+    );
+
+    final richText = tester.widget<RichText>(find.byType(RichText));
+    final root = richText.text as TextSpan;
+    expect((root.children!.single as TextSpan).style?.color, AppColors.expense);
   });
 }
 

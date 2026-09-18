@@ -4,6 +4,7 @@ import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/accounts/data/account_repository.dart';
+import 'package:jizhang_app/features/autobookkeeping/auto_bookkeeping_pending.dart';
 import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/bookkeeping/application/quick_bookkeeping_service.dart';
 import 'package:jizhang_app/features/membership/data/membership_repository.dart';
@@ -13,6 +14,97 @@ import 'package:jizhang_app/features/settings/data/app_settings_repository.dart'
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 
 void main() {
+  test(
+    'incoming receipt, refund, or ambiguous actual amounts are rejected',
+    () {
+      final parser = const PaymentNotificationParser();
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: 'incoming',
+            packageName: 'com.tencent.mm',
+            title: '微信支付',
+            text: '收款到账 ¥28.50，来自便利店',
+            postedAt: DateTime(2026, 9, 8, 9),
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: 'refund',
+            packageName: 'com.eg.android.AlipayGphone',
+            title: '支付宝',
+            text: '退款成功 ¥28.50',
+            postedAt: DateTime(2026, 9, 8, 9),
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: 'ambiguous',
+            packageName: 'com.tencent.mm',
+            title: '微信支付',
+            text: '支付金额 ¥12.00，支付金额 ¥18.00',
+            postedAt: DateTime(2026, 9, 8, 9),
+          ),
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test('美团付款通知可解析但必须通过目标账户和待确认队列', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'meituan-1',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功 ¥36.00，商户：美团外卖',
+        postedAt: DateTime(2026, 9, 8, 9),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.channel, 'meituan');
+    expect(parsed.accountId, isNull);
+  });
+
+  test('Android notification path queues for confirmation instead of saving silently', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'queued-1',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功 ¥36.00，商户：美团外卖',
+        postedAt: DateTime(2026, 9, 8, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      resolveTarget: (_, _) async =>
+          (bookId: SeedIds.personalBook, accountId: SeedIds.cashAccount),
+      pendingBridge: pending,
+    ).processPending();
+    expect(result.queued, 1);
+    expect(result.created, 0);
+    expect(await transactions.getAll(), isEmpty);
+    expect(pending.candidates, hasLength(1));
+    expect(bridge.acknowledged, ['queued-1']);
+  });
+
   test('parser extracts a supported wallet payment notification', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
@@ -30,49 +122,52 @@ void main() {
     expect(parsed.orderId, '202609080001');
   });
 
-  test('parser extracts payment account suffix and resolver receives it', () async {
-    final parsed = const PaymentNotificationParser().parse(
-      PaymentNotification(
-        id: 'n-suffix',
-        packageName: 'com.tencent.mm',
-        title: '微信支付',
-        text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
-        postedAt: DateTime(2026, 9, 8, 9),
-      ),
-    );
-    expect(parsed?.identifierSuffix, '3316');
+  test(
+    'parser extracts payment account suffix and resolver receives it',
+    () async {
+      final parsed = const PaymentNotificationParser().parse(
+        PaymentNotification(
+          id: 'n-suffix',
+          packageName: 'com.tencent.mm',
+          title: '微信支付',
+          text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
+          postedAt: DateTime(2026, 9, 8, 9),
+        ),
+      );
+      expect(parsed?.identifierSuffix, '3316');
 
-    final database = createMemoryDatabase();
-    addTearDown(database.close);
-    await DatabaseSeeder(database).seedIfNeeded();
-    final bridge = _FakeBridge([
-      PaymentNotification(
-        id: 'n-suffix-service',
-        packageName: 'com.tencent.mm',
-        title: '微信支付',
-        text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
-        postedAt: DateTime(2026, 9, 8, 9),
-      ),
-    ]);
-    final transactions = DriftTransactionRepository(database);
-    String? resolvedSuffix;
-    final result = await PaymentNotificationAutoBookkeepingService(
-      bridge: bridge,
-      transactions: transactions,
-      bookkeeping: QuickBookkeepingService(
-        transactions,
-        DriftAppSettingsRepository(database),
-      ),
-      resolveTarget: (channel, suffix) async {
-        resolvedSuffix = suffix;
-        return suffix == '3316'
-            ? (bookId: SeedIds.personalBook, accountId: SeedIds.wechatAccount)
-            : null;
-      },
-    ).processPending();
-    expect(resolvedSuffix, '3316');
-    expect(result.created, 1);
-  });
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final bridge = _FakeBridge([
+        PaymentNotification(
+          id: 'n-suffix-service',
+          packageName: 'com.tencent.mm',
+          title: '微信支付',
+          text: '支付成功 ¥18.00，尾号 3316，商户：便利店',
+          postedAt: DateTime(2026, 9, 8, 9),
+        ),
+      ]);
+      final transactions = DriftTransactionRepository(database);
+      String? resolvedSuffix;
+      final result = await PaymentNotificationAutoBookkeepingService(
+        bridge: bridge,
+        transactions: transactions,
+        bookkeeping: QuickBookkeepingService(
+          transactions,
+          DriftAppSettingsRepository(database),
+        ),
+        resolveTarget: (channel, suffix) async {
+          resolvedSuffix = suffix;
+          return suffix == '3316'
+              ? (bookId: SeedIds.personalBook, accountId: SeedIds.wechatAccount)
+              : null;
+        },
+      ).processPending();
+      expect(resolvedSuffix, '3316');
+      expect(result.created, 1);
+    },
+  );
 
   test(
     'notification processing is idempotent and acknowledges only handled items',
@@ -180,6 +275,12 @@ class _FakeBridge implements PaymentNotificationBridge {
   Future<void> setEnabled(bool enabled) async {}
 
   @override
+  Future<bool> isNotificationGranted() async => true;
+
+  @override
+  Future<void> requestNotificationPermission() async {}
+
+  @override
   Future<List<PaymentNotification>> getPending() async => _pending;
 
   @override
@@ -187,4 +288,20 @@ class _FakeBridge implements PaymentNotificationBridge {
     acknowledged.addAll(ids);
     _pending.removeWhere((item) => ids.contains(item.id));
   }
+}
+
+class _FakePendingBridge implements AutoBookkeepingPendingBridge {
+  final candidates = <PendingAutoBookkeepingCandidate>[];
+
+  @override
+  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate) async {
+    candidates.add(candidate);
+    return true;
+  }
+
+  @override
+  Future<void> complete() async {}
+
+  @override
+  Future<PendingAutoBookkeepingCandidate?> getPending() async => null;
 }

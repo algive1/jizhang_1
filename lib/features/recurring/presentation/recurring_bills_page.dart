@@ -1,21 +1,27 @@
+import 'dart:async';
+
+import '../../../core/widgets/app_bottom_sheet.dart';
+import 'recurring_bill_editor.dart';
+import 'recurring_bill_create_sheet.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/recurring_bill.dart';
-import '../../../core/models/account.dart';
-import '../../../core/models/category.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/money_text.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
-import '../../categories/data/category_repository.dart';
+import '../application/recurring_bill_notification_service.dart';
 import '../data/recurring_bill_repository.dart';
 
 class RecurringBillsPage extends ConsumerStatefulWidget {
-  const RecurringBillsPage({super.key});
+  const RecurringBillsPage({super.key, this.focusBillId});
+
+  final String? focusBillId;
 
   @override
   ConsumerState<RecurringBillsPage> createState() => _RecurringBillsPageState();
@@ -23,6 +29,7 @@ class RecurringBillsPage extends ConsumerStatefulWidget {
 
 class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
   int _tab = 0;
+  bool _focusOpened = false;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +44,15 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
       _ =>
         all.where((bill) => bill.status == RecurringBillStatus.ended).toList(),
     };
+    final focusBill = widget.focusBillId == null
+        ? null
+        : all.where((bill) => bill.id == widget.focusBillId).firstOrNull;
+    if (focusBill != null && !_focusOpened) {
+      _focusOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _detail(focusBill);
+      });
+    }
     final monthlyOut = active
         .where(
           (bill) =>
@@ -158,6 +174,16 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             for (final bill in bills) ...[
               _RecurringBillCard(
                 bill: bill,
+                account:
+                    ref
+                        .watch(accountsProvider)
+                        .value
+                        ?.where((a) => a.id == bill.accountId)
+                        .firstOrNull
+                        ?.displayName ??
+                    '未指定账户',
+                onTap: () => _detail(bill),
+                onLongPress: () => _actions(bill),
                 onToggleStatus: () => _toggleStatus(bill),
                 onEnd: () => _endBill(bill),
                 onRecord:
@@ -173,45 +199,35 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
     );
   }
 
-  RecurringBill _withStatus(RecurringBill bill, RecurringBillStatus status) =>
-      RecurringBill(
-        id: bill.id,
-        bookId: bill.bookId,
-        name: bill.name,
-        type: bill.type,
-        amount: bill.amount,
-        cycle: bill.cycle,
-        startDate: bill.startDate,
-        endDate: bill.endDate,
-        nextDate: bill.nextDate,
-        accountId: bill.accountId,
-        categoryId: bill.categoryId,
-        customIntervalDays: bill.customIntervalDays,
-        autoRecord: bill.autoRecord,
-        reminder: bill.reminder,
-        status: status,
-        createdAt: bill.createdAt,
-        updatedAt: DateTime.now(),
-      );
-
   Future<void> _toggleStatus(RecurringBill bill) async {
     final status = bill.status == RecurringBillStatus.active
         ? RecurringBillStatus.paused
         : RecurringBillStatus.active;
-    await ref
-        .read(recurringBillRepositoryProvider)
-        .update(_withStatus(bill, status));
+    final updated = bill.copyWith(status: status, updatedAt: DateTime.now());
+    await ref.read(recurringBillRepositoryProvider).update(updated);
+    unawaited(_syncNotification(updated));
     _refresh();
   }
 
   Future<void> _endBill(RecurringBill bill) async {
+    if (!await AppConfirmDialog.show(
+          context,
+          title: '删除周期账单？',
+          message: '停止未来计划，已有流水和余额保持不变。',
+        ) ||
+        !mounted)
+      return;
     await ref.read(recurringBillRepositoryProvider).archive(bill.id);
+    unawaited(
+      ref.read(recurringBillNotificationSchedulerProvider).cancel(bill.id),
+    );
     _refresh();
   }
 
   Future<void> _recordBill(RecurringBill bill) async {
     try {
       await ref.read(recurringBillExecutionServiceProvider).recordDue(bill);
+      unawaited(_syncNotifications());
       _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -241,6 +257,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
         // successful count and leaves failed items available for repair.
       }
     }
+    unawaited(_syncNotifications());
     _refresh();
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -253,307 +270,267 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
   }
 
   Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
-    final accounts = ref.read(accountsProvider).value ?? const <Account>[];
-    final categories = ref.read(categoriesProvider).value ?? const <Category>[];
-    final created = await showDialog<RecurringBill>(
-      context: context,
-      builder: (_) => _RecurringBillDialog(
-        bookId: ref.read(activeBookIdProvider),
-        accounts: accounts,
-        categories: categories,
-      ),
-    );
-    if (created == null || !context.mounted) return;
-    try {
-      await ref.read(recurringBillRepositoryProvider).create(created);
-      _refresh();
-    } on Object catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('保存失败：$error')));
-    }
-  }
-}
-
-class _RecurringBillDialog extends StatefulWidget {
-  const _RecurringBillDialog({
-    required this.bookId,
-    required this.accounts,
-    required this.categories,
-  });
-
-  final String bookId;
-  final List<Account> accounts;
-  final List<Category> categories;
-
-  @override
-  State<_RecurringBillDialog> createState() => _RecurringBillDialogState();
-}
-
-class _RecurringBillDialogState extends State<_RecurringBillDialog> {
-  final _name = TextEditingController();
-  final _amount = TextEditingController();
-  final _customInterval = TextEditingController(text: '30');
-  RecurringBillType _type = RecurringBillType.subscription;
-  RecurringBillCycle _cycle = RecurringBillCycle.monthly;
-  bool _autoRecord = false;
-  bool _reminder = true;
-  String? _accountId;
-  String? _categoryId;
-
-  List<Category> get _availableCategories => widget.categories
-      .where(
-        (category) =>
-            category.type ==
-            (_type == RecurringBillType.income
-                ? CategoryType.income
-                : CategoryType.expense),
-      )
-      .toList();
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _amount.dispose();
-    _customInterval.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('新增周期账单'),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _name,
-            decoration: const InputDecoration(labelText: '名称'),
-          ),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: '金额'),
-          ),
-          DropdownButtonFormField<RecurringBillType>(
-            initialValue: _type,
-            decoration: const InputDecoration(labelText: '类型'),
-            items:
-                const {
-                      RecurringBillType.subscription: '订阅',
-                      RecurringBillType.rent: '房租',
-                      RecurringBillType.mortgage: '房贷',
-                      RecurringBillType.insurance: '保险',
-                      RecurringBillType.mobilePlan: '手机套餐',
-                      RecurringBillType.income: '固定收入',
-                      RecurringBillType.other: '其他',
-                    }.entries
-                    .map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                    )
-                    .toList(),
-            onChanged: (value) => setState(() {
-              _type = value ?? _type;
-              _categoryId = null;
-            }),
-          ),
-          DropdownButtonFormField<RecurringBillCycle>(
-            initialValue: _cycle,
-            decoration: const InputDecoration(labelText: '周期'),
-            items:
-                const {
-                      RecurringBillCycle.weekly: '每周',
-                      RecurringBillCycle.monthly: '每月',
-                      RecurringBillCycle.quarterly: '每季度',
-                      RecurringBillCycle.halfYear: '每半年',
-                      RecurringBillCycle.yearly: '每年',
-                      RecurringBillCycle.custom: '自定义',
-                    }.entries
-                    .map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                    )
-                    .toList(),
-            onChanged: (value) => setState(() => _cycle = value ?? _cycle),
-          ),
-          if (_cycle == RecurringBillCycle.custom)
-            TextField(
-              controller: _customInterval,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '自定义间隔（天）'),
-            ),
-          DropdownButtonFormField<String?>(
-            initialValue: _accountId,
-            decoration: const InputDecoration(labelText: '扣款/入账账户'),
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('暂不指定')),
-              ...widget.accounts.map(
-                (account) => DropdownMenuItem<String?>(
-                  value: account.id,
-                  child: Text(account.displayName),
-                ),
-              ),
-            ],
-            onChanged: (value) => setState(() => _accountId = value),
-          ),
-          DropdownButtonFormField<String?>(
-            initialValue: _categoryId,
-            decoration: const InputDecoration(labelText: '分类'),
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('暂不指定')),
-              ..._availableCategories.map(
-                (category) => DropdownMenuItem<String?>(
-                  value: category.id,
-                  child: Text(category.name),
-                ),
-              ),
-            ],
-            onChanged: (value) => setState(() => _categoryId = value),
-          ),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('自动记账'),
-            value: _autoRecord,
-            onChanged: (value) => setState(() => _autoRecord = value),
-          ),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('扣款提醒'),
-            value: _reminder,
-            onChanged: (value) => setState(() => _reminder = value),
-          ),
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('取消'),
-      ),
-      FilledButton(onPressed: _submit, child: const Text('保存')),
-    ],
-  );
-
-  void _submit() {
-    final name = _name.text.trim();
-    final amount = double.tryParse(_amount.text.trim());
-    final customInterval = int.tryParse(_customInterval.text.trim());
-    if (name.isEmpty || amount == null || amount <= 0) return;
-    if (_cycle == RecurringBillCycle.custom &&
-        (customInterval == null || customInterval < 1))
-      return;
-    if (_autoRecord && _accountId == null) return;
     final now = DateTime.now();
-    Navigator.pop(
+    final bill = await RecurringBillCreateSheet.show(
       context,
       RecurringBill(
         id: 'recurring-${newEntityId()}',
-        bookId: widget.bookId,
-        name: name,
-        type: _type,
-        amount: amount,
-        cycle: _cycle,
+        bookId: ref.read(activeBookIdProvider),
+        name: '',
+        type: RecurringBillType.other,
+        amount: 0,
+        cycle: RecurringBillCycle.monthly,
         startDate: now,
         nextDate: now,
-        accountId: _accountId,
-        categoryId: _categoryId,
-        customIntervalDays: _cycle == RecurringBillCycle.custom
-            ? customInterval
-            : null,
-        autoRecord: _autoRecord,
-        reminder: _reminder,
         createdAt: now,
         updatedAt: now,
       ),
     );
+    if (bill == null || !mounted) return;
+    try {
+      await ref.read(recurringBillRepositoryProvider).create(bill);
+      unawaited(_syncNotification(bill));
+      _refresh();
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(this.context)
+            .showSnackBar(SnackBar(content: Text('保存失败：$error')));
+      }
+    }
   }
+
+  Future<void> _edit(RecurringBill bill, {bool create = false}) async {
+    final edited = await RecurringBillEditor.show(context, bill);
+    if (edited == null || !mounted) return;
+    try {
+      final repository = ref.read(recurringBillRepositoryProvider);
+      if (create) {
+        await repository.create(edited);
+      } else {
+        await repository.update(edited);
+      }
+      unawaited(_syncNotification(edited));
+      _refresh();
+    } on Object catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('保存失败：$error')));
+    }
+  }
+
+  Future<void> _syncNotification(RecurringBill bill) async {
+    try {
+      final scheduler = ref.read(recurringBillNotificationSchedulerProvider);
+      if (bill.reminder) await scheduler.requestPermission();
+      await scheduler.syncBill(bill);
+    } on Object catch (error) {
+      debugPrint('周期账单通知同步失败：$error');
+    }
+  }
+
+  Future<void> _syncNotifications() async {
+    try {
+      final scheduler = ref.read(recurringBillNotificationSchedulerProvider);
+      final bills = await ref
+          .read(recurringBillRepositoryProvider)
+          .getAllForNotification();
+      if (bills.any((bill) => bill.reminder)) {
+        await scheduler.requestPermission();
+      }
+      await scheduler.syncBills(bills);
+    } on Object catch (error) {
+      debugPrint('周期账单通知同步失败：$error');
+    }
+  }
+
+  Future<void> _actions(RecurringBill bill) async {
+    final action = await AppBottomSheet.show<String>(
+      context: context,
+      builder: (sheet) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              bill.name,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+          ),
+          AppSheetOption(
+            title: '编辑周期账单',
+            icon: Icons.edit_outlined,
+            onTap: () => Navigator.pop(sheet, 'edit'),
+          ),
+          if (bill.status != RecurringBillStatus.ended)
+            AppSheetOption(
+              title: bill.status == RecurringBillStatus.active
+                  ? '暂停周期账单'
+                  : '恢复周期账单',
+              icon: Icons.pause_circle_outline,
+              onTap: () => Navigator.pop(sheet, 'pause'),
+            ),
+          AppSheetOption(
+            title: '复制周期账单',
+            icon: Icons.copy_outlined,
+            onTap: () => Navigator.pop(sheet, 'copy'),
+          ),
+          AppSheetOption(
+            title: '删除周期账单',
+            destructive: true,
+            icon: Icons.delete_outline,
+            onTap: () => Navigator.pop(sheet, 'delete'),
+          ),
+          AppSheetOption(title: '取消', onTap: () => Navigator.pop(sheet)),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    try {
+      switch (action) {
+        case 'edit':
+          await _edit(bill);
+        case 'pause':
+          await _toggleStatus(bill);
+        case 'copy':
+          await _edit(
+            bill.copyWith(
+              id: 'recurring-${newEntityId()}',
+              completedCount: 0,
+              status: RecurringBillStatus.active,
+            ),
+            create: true,
+          );
+        case 'delete':
+          await _endBill(bill);
+      }
+    } on Object catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+    }
+  }
+
+  Future<void> _detail(RecurringBill bill) => AppBottomSheet.show<void>(
+    context: context,
+    builder: (_) => Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            bill.name,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          MoneyText(bill.amount),
+          Text(bill.scheduleLabel),
+          Text(
+            '下一次：${bill.nextDate.year}-${bill.nextDate.month}-${bill.nextDate.day}',
+          ),
+          Text(bill.autoRecord ? '自动入账' : '到期后待确认，确认前不影响余额'),
+          if (bill.status == RecurringBillStatus.active)
+            FilledButton(
+              onPressed: bill.nextDate.isAfter(DateTime.now())
+                  ? null
+                  : () async {
+                      Navigator.pop(context);
+                      await _recordBill(bill);
+                    },
+              child: Text(
+                bill.nextDate.isAfter(DateTime.now()) ? '到期后确认本期入账' : '确认本期入账',
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _RecurringBillCard extends StatelessWidget {
   const _RecurringBillCard({
     required this.bill,
+    required this.account,
+    required this.onTap,
+    required this.onLongPress,
     required this.onToggleStatus,
     required this.onEnd,
     this.onRecord,
   });
 
   final RecurringBill bill;
+  final String account;
+  final VoidCallback onTap, onLongPress;
   final VoidCallback onToggleStatus;
   final VoidCallback onEnd;
   final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) {
-    final cycle = switch (bill.cycle) {
-      RecurringBillCycle.weekly => '每周',
-      RecurringBillCycle.monthly => '每月',
-      RecurringBillCycle.quarterly => '每季度',
-      RecurringBillCycle.halfYear => '每半年',
-      RecurringBillCycle.yearly => '每年',
-      RecurringBillCycle.custom => '自定义',
-    };
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.event_repeat_outlined,
-                color: AppColors.primary,
-                size: 28,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      bill.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$cycle · 下次 ${bill.nextDate.month}月${bill.nextDate.day}日${bill.autoRecord ? ' · 自动' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              MoneyText(
-                bill.amount,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Wrap(
-              alignment: WrapAlignment.end,
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+        child: Column(
+          children: [
+            Row(
               children: [
-                if (onRecord != null)
-                  TextButton(onPressed: onRecord, child: const Text('记账')),
-                if (bill.status != RecurringBillStatus.ended)
-                  TextButton(
-                    onPressed: onToggleStatus,
-                    child: Text(
-                      bill.status == RecurringBillStatus.active ? '暂停' : '恢复',
-                    ),
+                const Icon(
+                  Icons.event_repeat_outlined,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bill.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${bill.scheduleLabel} · $account\n下次 ${bill.nextDate.month}月${bill.nextDate.day}日 · ${bill.status == RecurringBillStatus.active
+                            ? (bill.nextDate.isAfter(DateTime.now()) ? '进行中' : '待确认')
+                            : bill.status == RecurringBillStatus.paused
+                            ? '已暂停'
+                            : '已结束'}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                if (bill.status != RecurringBillStatus.ended)
-                  TextButton(onPressed: onEnd, child: const Text('结束')),
+                ),
+                MoneyText(
+                  bill.amount,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ],
             ),
-          ),
-        ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                children: [
+                  if (onRecord != null)
+                    TextButton(onPressed: onRecord, child: const Text('记账')),
+                  if (bill.status != RecurringBillStatus.ended)
+                    TextButton(
+                      onPressed: onToggleStatus,
+                      child: Text(
+                        bill.status == RecurringBillStatus.active ? '暂停' : '恢复',
+                      ),
+                    ),
+                  if (bill.status != RecurringBillStatus.ended)
+                    TextButton(onPressed: onEnd, child: const Text('结束')),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -84,18 +84,20 @@ class AssetShortcuts extends StatelessWidget {
   const AssetShortcuts({
     required this.accountCount,
     required this.onAccounts,
-    required this.onCategories,
+    required this.onInvestments,
     required this.onTransfers,
     required this.onReport,
     super.key,
   });
   final int accountCount;
-  final VoidCallback onAccounts, onCategories, onTransfers, onReport;
+  final VoidCallback onAccounts, onInvestments, onTransfers, onReport;
   @override
   Widget build(BuildContext context) {
     final items = [
       (AssetGlyph.wallet, '账户管理', '$accountCount 个账户', onAccounts),
-      (AssetGlyph.tag, '分类统计', '收支分类', onCategories),
+      // Replaces the former 分类统计 entry. Same card size, radius, spacing and
+      // icon container — only the label and glyph changed.
+      (AssetGlyph.growth, '投资管理', '股票·基金·债券', onInvestments),
       (AssetGlyph.transfer, '转账管理', '资产互转', onTransfers),
       (AssetGlyph.pie, '资产报表', '多维分析', onReport),
     ];

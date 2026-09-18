@@ -16,6 +16,7 @@ class HomeAssetCard extends StatelessWidget {
     required this.onTap,
     this.onAmountHiddenChanged,
     this.compactHeight,
+    this.investmentByCurrency = const {},
     super.key,
   }) : onRetry = null,
        _state = _HomeAssetCardState.data;
@@ -26,6 +27,7 @@ class HomeAssetCard extends StatelessWidget {
       onTap = null,
       onAmountHiddenChanged = null,
       compactHeight = null,
+      investmentByCurrency = const {},
       onRetry = null,
       _state = _HomeAssetCardState.loading;
 
@@ -35,9 +37,16 @@ class HomeAssetCard extends StatelessWidget {
       onTap = null,
       onAmountHiddenChanged = null,
       compactHeight = null,
+      investmentByCurrency = const {},
       _state = _HomeAssetCardState.error;
 
   final List<Account> accounts;
+
+  /// Market value of the user's investment positions, by currency.
+  ///
+  /// Folded into net worth here so the home card and 资产总览 never disagree.
+  final Map<String, double> investmentByCurrency;
+
   final bool amountHidden;
   final VoidCallback? onTap;
   final ValueChanged<bool>? onAmountHiddenChanged;
@@ -54,7 +63,10 @@ class HomeAssetCard extends StatelessWidget {
     if (_state == _HomeAssetCardState.loading) return _loadingCard();
     if (_state == _HomeAssetCardState.error) return _errorCard();
 
-    final groups = AssetOverview.group(accounts);
+    final groups = AssetOverview.group(
+      accounts,
+      investmentByCurrency: investmentByCurrency,
+    );
     if (groups.isEmpty) return _emptyCard();
 
     final overview = groups.first;

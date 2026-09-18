@@ -108,6 +108,10 @@ databaseProvider
 | `/profile/budgets` | 预算管理 | 月度总预算、分类预算、使用率、日均可用 |
 | `/profile/recurring-bills` | 周期账单 | 周期配置、到期自动记账、暂停/结束 |
 | `/profile/installments` | 信用卡分期 | 分期计划、详情、每期还款登记 |
+| `/profile/investments` | 投资管理总览 | 总览/股票/基金/债券/虚拟币五个 Tab、四类分类卡片、投资资产趋势、持仓变动 |
+| `/profile/investments/holdings/:assetType` | 分类持仓 | 股票/基金/债券/虚拟币共用同一页面，按 `assetType` 区分 |
+| `/profile/investments/holdings/detail/:holdingId` | 投资详情 | 当前价格、今日涨跌、持仓数据、走势图、交易记录 |
+| `/profile/investments/add?type=` | 添加投资 | 搜索添加（行情检索）与手动添加（`priceSource = manual`） |
 | `/profile/membership` | 会员与数据安全 | 后台 catalog 驱动的套餐/权益、微信/支付宝开通入口、订单记录和服务端会员状态 |
 | `/profile/family` | 家庭/企业共享 | 登录、启用共享、邀请、成员、同步和冲突处理 |
 | `/profile/payment-notifications` | 支付通知记账 | Android 通知权限、开关和待处理通知消费 |
@@ -116,7 +120,7 @@ databaseProvider
 
 ## 5. 数据库与数据结构
 
-数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 15`，连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 使用当前 isolate 的 `NativeDatabase`，桌面端使用后台连接。开启了 SQLite foreign keys，并为交易、附件、目标、智能分类、家庭、账本、同步事件和广告事件创建索引。
+数据库定义在 `lib/core/database/app_database.dart`，当前 `schemaVersion = 18`（17→18 由 2026-09-17 投资管理模块引入），连接文件为应用文档目录下的 `haohao_jizhang.sqlite`。Android 与桌面端均使用 `NativeDatabase.createInBackground` 后台连接，避免常规 SQL 占用 UI isolate（2026-09-14 性能修复）。开启了 SQLite foreign keys，并为交易、附件、目标、智能分类、家庭、账本、同步事件、广告事件和投资模块创建索引。
 
 ### 5.1 核心业务表
 
@@ -132,6 +136,10 @@ databaseProvider
 | `budgets` | 月预算 | `bookId`、月份、可选分类、金额；唯一约束按账本生效 |
 | `recurring_bills` | 周期账单配置 | 周期、下次日期、账户/分类、自动记账、提醒和状态 |
 | `installment_plans` | 信用卡分期计划 | 原始消费、期数、本金/手续费、信用卡/还款账户、剩余本金和状态 |
+| `investment_assets` | 投资标的（共享） | 类型 stock/fund/bond/crypto、代码、名称、市场、币种、行情来源、手动估值 |
+| `investment_holdings` | 用户持仓 | 标的、账本、可选账户、数量、平均成本、备注、归档 |
+| `investment_transactions` | 投资交易 | 买入/卖出/分红/利息、价格、数量、带符号金额、交易日期、备注 |
+| `investment_snapshots` | 每日资产快照 | `(book_id, date)` 主键、投资总值与四类分项，用于投资趋势 |
 | `app_settings` | 本地偏好 | 当前账本、上次使用账户、seed 版本、首页洞察关闭状态 |
 
 ### 5.2 智能、家庭、广告表
@@ -150,7 +158,7 @@ databaseProvider
 
 ### 5.3 迁移与种子
 
-数据库迁移是 forward-only 的 1→15 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器；10→11 创建独立附件表和索引，并把旧交易 `metadata.attachments` 中可识别的路径迁移为记录，malformed 项和其他 metadata 保留；11→12 为账本增加主账本资产来源字段；12→13 增加交易关联、报销和退款字段；13→14 创建周期账单表；14→15 创建分期计划表。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
+数据库迁移是 forward-only 的 1→18 版本链，不能删除数据库绕过迁移。8→9 会先保存数据库副本，再按流水净影响拆分非个人账本账户、重绑流水/分类/预算并校验余额守恒；9→10 创建同步表、版本、ID 映射、待同步队列、推广状态和 SQLite 变更触发器；10→11 创建独立附件表和索引，并把旧交易 `metadata.attachments` 中可识别的路径迁移为记录，malformed 项和其他 metadata 保留；11→12 为账本增加主账本资产来源字段；12→13 增加交易关联、报销和退款字段；13→14 创建周期账单表；14→15 创建分期计划表；16 增加账户识别后四位唯一索引；17 增加周期账单 `schedule_json`；18 创建投资管理四张表（`investment_assets`、`investment_holdings`、`investment_transactions`、`investment_snapshots`）及其索引，**纯新增，不改动任何既有列**。`DatabaseSeeder` 当前 seed 版本为 5：新安装默认只创建空余额账户、默认分类、个人账本和商户规则；演示流水、演示目标和演示预算只有显式 `includeDemoData: true` 才写入。
 
 ## 6. 核心业务调用链
 
@@ -265,6 +273,7 @@ SessionRepository（系统安全存储会话）
 | `bookkeeping` | 手动支出/收入/转账、数字键盘、计划/一次性/周期、标签、独立附件记录 | OCR 未接；附件文件仍只保存本地路径，文件内容未进入备份/同步；扩展交易类型没有独立体验 |
 | `books` | 书架抽屉选择、新建 personal/family/enterprise、重命名、归档、数量限制 | 公网部署和正式权益服务未接入 |
 | `accounts` | 新增、编辑、归档/恢复、排序、资产/负债/资金形式、按账本余额校准 | 不支持跨账本直接转账 |
+| `investments` | 四类投资统一页面结构、总览/分类/详情、搜索与手动添加、买入/卖出/分红/利息、平均成本收益计算、每日快照趋势、`QuoteCache` + `MarketDataProvider` 抽象 | 行情为 `MockMarketDataProvider`，未接真实行情 API；未与账户余额打通；未计入资产总览净资产 |
 | `categories` | 收入/支出、一级/二级、新增、编辑、排序、隐藏默认分类 | 没有批量导入/导出分类 |
 | `budgets` | 按账本的总预算、分类预算、使用/剩余/日均可用、目标预留联动 | 无周期支出计划 |
 | `goals` | 创建、17 类目标、动态节点、贡献、调整、排序、预测、完成庆祝、封面 | 目标贡献与交易只预留 `sourceTransactionId`，没有自动资金关联 |

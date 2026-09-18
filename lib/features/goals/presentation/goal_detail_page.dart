@@ -1,3 +1,5 @@
+import '../../../core/widgets/app_action_sheet.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -185,44 +187,7 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
         );
   }
 
-  Future<void> _editGoal(Goal goal) async {
-    final result = await showDialog<(String, double)>(
-      context: context,
-      builder: (_) =>
-          _GoalEditDialog(name: goal.name, targetAmount: goal.targetAmount),
-    );
-    if (result == null) return;
-    final updated = Goal(
-      id: goal.id,
-      name: result.$1,
-      goalType: goal.goalType,
-      icon: goal.icon,
-      targetAmount: result.$2,
-      currentAmount: goal.currentAmount,
-      targetDate: goal.targetDate,
-      status: goal.status,
-      createdAt: goal.createdAt,
-      updatedAt: DateTime.now(),
-      milestones: goal.milestones,
-      description: goal.description,
-      coverPath: goal.coverPath,
-      completionCelebrationShown: goal.completionCelebrationShown,
-      contributions: goal.contributions,
-      bookId: goal.bookId,
-      version: goal.version,
-      createdBy: goal.createdBy,
-      updatedBy: goal.updatedBy,
-    );
-    final milestoneAmounts =
-        goal.milestones
-            .map((item) => item.amount)
-            .where((amount) => amount < result.$2)
-            .toList()
-          ..add(result.$2);
-    await ref
-        .read(goalRepositoryProvider)
-        .update(updated, milestoneAmounts: milestoneAmounts);
-  }
+  Future<void> _editGoal(Goal goal) => editGoal(context, ref, goal);
 
   Future<void> _archiveGoal(Goal goal) async {
     final confirmed = await showDialog<bool>(
@@ -545,7 +510,7 @@ class _DetailHeader extends StatelessWidget {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
         ),
-        PopupMenuButton<String>(
+        AppActionMenuButton<String>(
           onSelected: (value) {
             switch (value) {
               case 'edit':
@@ -1121,3 +1086,44 @@ IconData _goalIcon(GoalType type) => switch (type) {
   GoalType.majorPurchase => Icons.shopping_bag_outlined,
   GoalType.custom => Icons.flag_outlined,
 };
+
+Future<void> editGoal(BuildContext context, WidgetRef ref, Goal goal) async {
+  final result = await showDialog<(String, double)>(
+    context: context,
+    builder: (_) =>
+        _GoalEditDialog(name: goal.name, targetAmount: goal.targetAmount),
+  );
+  if (result == null || !context.mounted) return;
+  final updated = Goal(
+    id: goal.id,
+    name: result.$1,
+    goalType: goal.goalType,
+    icon: goal.icon,
+    targetAmount: result.$2,
+    currentAmount: goal.currentAmount,
+    targetDate: goal.targetDate,
+    status: goal.status,
+    createdAt: goal.createdAt,
+    updatedAt: DateTime.now(),
+    milestones: goal.milestones,
+    description: goal.description,
+    coverPath: goal.coverPath,
+    completionCelebrationShown: goal.completionCelebrationShown,
+    contributions: goal.contributions,
+    bookId: goal.bookId,
+    sortOrder: goal.sortOrder,
+    monthlyReservation: goal.monthlyReservation,
+    version: goal.version,
+    createdBy: goal.createdBy,
+    updatedBy: goal.updatedBy,
+  );
+  final milestoneAmounts =
+      goal.milestones
+          .map((item) => item.amount)
+          .where((amount) => amount < result.$2)
+          .toList()
+        ..add(result.$2);
+  await ref
+      .read(goalRepositoryProvider)
+      .update(updated, milestoneAmounts: milestoneAmounts);
+}

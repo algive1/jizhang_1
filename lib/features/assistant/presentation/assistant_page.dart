@@ -1,3 +1,5 @@
+import '../../../core/widgets/app_action_sheet.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -270,7 +272,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                           ),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: PopupMenuButton<String>(
+                            child: AppActionMenuButton<String>(
                               tooltip: '更多',
                               onSelected: _sending ? null : _menu,
                               itemBuilder: (_) => [
@@ -561,12 +563,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             children: [
               _chip(
                 '快速记账',
-                () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => const QuickAddSheet(),
-                ),
+                () => showQuickAddSheet(context),
                 icon: Icons.add_circle,
               ),
               const SizedBox(width: 7),
@@ -779,12 +776,9 @@ class AssistantRecordCard extends ConsumerWidget {
                       Expanded(
                         child: _button(
                           '修改',
-                          () => showModalBottomSheet<void>(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) =>
-                                QuickAddSheet(initialTransaction: record),
+                          () => showQuickAddSheet(
+                            context,
+                            initialTransaction: record,
                           ),
                         ),
                       ),

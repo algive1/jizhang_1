@@ -36,6 +36,11 @@ test('会员支付订单只接受服务端套餐金额，并在渠道未配置�
   const register = await request('/auth/register', '', { username: 'payment_test', password: 'local-test-password' });
   assert.equal(register.status, 201);
   const token = register.data.token as string;
+  const catalog = await request('/membership/catalog');
+  const plans = catalog.data.plans as Array<Record<string, unknown>>;
+  assert.deepEqual(plans.map(plan => [plan.id, plan.priceInCents]), [
+    ['monthly', 800], ['quarterly', 2200], ['yearly', 6800],
+  ]);
   const order = await request('/membership/orders', token, {
     productId: 'quarterly', channel: 'wechat', idempotencyKey: 'payment-test-0001', priceInCents: 1,
   });
@@ -48,7 +53,7 @@ test('会员支付订单只接受服务端套餐金额，并在渠道未配置�
   assert.equal(orders.status, 200);
   const rows = orders.data.orders as Array<Record<string, unknown>>;
   assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.amountInCents, 3000);
+  assert.equal(rows[0]?.amountInCents, 2200);
   assert.equal(rows[0]?.status, 'failed');
   const replay = await request('/membership/orders', token, {
     productId: 'quarterly', channel: 'wechat', idempotencyKey: 'payment-test-0002',
@@ -107,9 +112,10 @@ test('微信和支付宝沙箱适配器可生成官方 APP 调起参数', async 
   const wechat = await request('/membership/orders', token, { productId: 'quarterly', channel: 'wechat', idempotencyKey: 'sandbox-wechat-0001' });
   assert.equal(wechat.status, 200);
   assert.equal((wechat.data.invoke as Record<string, unknown>).prepayId, 'wx-prepay-test');
-  assert.equal(wechat.data.amountInCents, 3000);
+  assert.equal(wechat.data.amountInCents, 2200);
   const alipay = await request('/membership/orders', token, { productId: 'monthly', channel: 'alipay', idempotencyKey: 'sandbox-alipay-0001' });
   assert.equal(alipay.status, 200);
+  assert.equal(alipay.data.amountInCents, 800);
   assert.match(String((alipay.data.invoke as Record<string, unknown>).orderString), /alipay\.trade\.app\.pay/);
   assert.ok(publicPem.includes('BEGIN PUBLIC KEY'));
 });
@@ -177,7 +183,7 @@ test('支付回调验签后才授予会员，重复通知保持幂等', async t 
     out_trade_no: orderId,
     transaction_id: 'wx-transaction-callback',
     trade_state: 'SUCCESS',
-    amount: { total: 3000 },
+    amount: { total: 2200 },
   });
   const ciphertext = Buffer.concat([cipher.update(transaction, 'utf8'), cipher.final(), cipher.getAuthTag()]).toString('base64');
   const body = JSON.stringify({ resource: { algorithm: 'AEAD_AES_256_GCM', ciphertext, associated_data: '', nonce } });
@@ -241,7 +247,7 @@ test('支付宝回调验签并校验金额后才授予会员', async t => {
   const notify: Record<string, string> = {
     app_id: process.env.ALIPAY_APP_ID!,
     out_trade_no: order.data.id as string,
-    total_amount: '12.00',
+    total_amount: '8.00',
     trade_status: 'TRADE_SUCCESS',
     trade_no: 'ali-transaction-callback',
     sign_type: 'RSA2',

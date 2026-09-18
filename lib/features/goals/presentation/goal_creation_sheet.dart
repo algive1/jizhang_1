@@ -1,3 +1,4 @@
+import '../../../core/widgets/app_form.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<GoalType>(
+                    AppSelect<GoalType>(
                       initialValue: _type,
                       decoration: const InputDecoration(labelText: '目标类型'),
                       items: GoalType.values

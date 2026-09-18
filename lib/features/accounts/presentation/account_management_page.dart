@@ -1,3 +1,4 @@
+import '../../../core/widgets/app_action_sheet.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -107,7 +108,7 @@ class AccountManagementPage extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        PopupMenuButton<String>(
+                        AppActionMenuButton<String>(
                           onSelected: (action) {
                             if (action == 'edit') {
                               _editAccount(

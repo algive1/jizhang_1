@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/utils/entity_id.dart';
 
 import 'dart:convert';
@@ -6,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
+import '../../../core/diagnostics/operation_log.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/transaction_record.dart';
@@ -108,6 +111,7 @@ class QuickBookkeepingService {
     this.intelligence,
     this.activeBookId,
     this.attachments,
+    this.diagnostics,
   });
 
   static const lastAccountKey = 'last_used_account_id';
@@ -117,12 +121,54 @@ class QuickBookkeepingService {
   final TransactionIntelligenceService? intelligence;
   final String Function()? activeBookId;
   final TransactionAttachmentRepository? attachments;
+  final OperationLogService? diagnostics;
 
   Future<TransactionRecord> save(QuickBookkeepingRequest request) async {
     return (await saveAll([request])).single;
   }
 
   Future<TransactionRecord> update(
+    TransactionRecord existing,
+    QuickBookkeepingRequest request,
+  ) async {
+    try {
+      return await _update(existing, request);
+    } on Object catch (error) {
+      unawaited(
+        diagnostics?.record(
+          kind: 'bookkeeping_failed',
+          level: 'error',
+          message: error.runtimeType.toString(),
+          data: {'operation': 'update', 'source': request.source.name},
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<List<TransactionRecord>> saveAll(
+    List<QuickBookkeepingRequest> requests,
+  ) async {
+    try {
+      return await _saveAll(requests);
+    } on Object catch (error) {
+      unawaited(
+        diagnostics?.record(
+          kind: 'bookkeeping_failed',
+          level: 'error',
+          message: error.runtimeType.toString(),
+          data: {
+            'operation': 'create',
+            'count': requests.length,
+            if (requests.isNotEmpty) 'source': requests.first.source.name,
+          },
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<TransactionRecord> _update(
     TransactionRecord existing,
     QuickBookkeepingRequest request,
   ) async {
@@ -168,6 +214,12 @@ class QuickBookkeepingService {
         stackTrace: stack,
       );
     }
+    unawaited(
+      diagnostics?.record(
+        kind: 'bookkeeping_updated',
+        data: {'source': request.source.name},
+      ),
+    );
     return saved;
   }
 
@@ -184,7 +236,7 @@ class QuickBookkeepingService {
         .toList(growable: false);
   }
 
-  Future<List<TransactionRecord>> saveAll(
+  Future<List<TransactionRecord>> _saveAll(
     List<QuickBookkeepingRequest> requests,
   ) async {
     if (requests.isEmpty) return const [];
@@ -229,6 +281,12 @@ class QuickBookkeepingService {
         stackTrace: firstStack ?? StackTrace.current,
       );
     }
+    unawaited(
+      diagnostics?.record(
+        kind: 'bookkeeping_saved',
+        data: {'count': saved.length, 'source': requests.first.source.name},
+      ),
+    );
     return saved;
   }
 
@@ -414,5 +472,6 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
     intelligence: ref.watch(transactionIntelligenceServiceProvider),
     activeBookId: () => ref.read(activeBookIdProvider),
     attachments: ref.watch(transactionAttachmentRepositoryProvider),
+    diagnostics: ref.watch(operationLogServiceProvider),
   );
 });

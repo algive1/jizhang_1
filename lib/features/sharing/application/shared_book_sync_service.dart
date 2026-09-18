@@ -283,8 +283,19 @@ class SharedBookSyncService {
       final metadata = data['metadata_json'] == null
           ? null
           : jsonDecode(data['metadata_json'] as String);
-      data['metadata_json'] = metadata is Map && metadata['tags'] is List
-          ? jsonEncode({'tags': metadata['tags']})
+      data['metadata_json'] = metadata is Map
+          ? jsonEncode({
+              for (final key in [
+                'tags',
+                'recurring_bill_id',
+                'recurring_occurrence',
+                'amount_formula',
+                'transaction_date',
+                'transaction_time',
+                'timezone_offset_minutes',
+              ])
+                if (metadata.containsKey(key)) key: metadata[key],
+            })
           : null;
     }
     if (kind == 'goals') data['cover_path'] = null;

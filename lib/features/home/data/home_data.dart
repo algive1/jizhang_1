@@ -165,7 +165,7 @@ final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
       100;
   final spending =
       monthTransactions
-          .where((item) => item.isExpense)
+          .where((item) => item.isConsumptionExpense)
           .fold<int>(
             0,
             (total, item) => total + (item.netExpenseAmount * 100).round(),
@@ -259,7 +259,8 @@ MonthlyLedgerSummary monthlySummary(
         item.occurredAt.month != month.month)
       continue;
     if (item.isIncome) income += (item.amount * 100).round();
-    if (item.isExpense) expense += (item.netExpenseAmount * 100).round();
+    if (item.isConsumptionExpense)
+      expense += (item.netExpenseAmount * 100).round();
   }
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),

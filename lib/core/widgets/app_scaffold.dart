@@ -23,12 +23,7 @@ class AppScaffold extends StatelessWidget {
       body: child,
       floatingActionButton: showGlobalEntryActions
           ? QuickAddButton(
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const QuickAddSheet(),
-              ),
+              onPressed: () => showQuickAddSheet(context),
               onLongPress: () => showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,

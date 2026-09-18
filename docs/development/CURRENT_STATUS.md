@@ -1,10 +1,30 @@
 # 当前开发状态
 
-更新时间：2026-09-13
+更新时间：2026-09-18
+
+## 最新任务交接（2026-09-18 Android 自动记账与诊断日志）
+
+[Android 自动记账与诊断日志收尾](2026-09-18-android-autobookkeeping-diagnostics.md)：修复首页长按编辑流水时底部导航栏透出、备注行撑开卡片、编辑周期流水无法打开规则页三个问题；并把通知/无障碍自动记账统一为“保守识别 → 本地待确认 → 悬浮层或系统通知 → 用户确认后入账”。已覆盖微信、支付宝、云闪付和美团包名，过滤收款/到账/退款通知，金额歧义和重复指纹不入账；新增本地脱敏诊断环形队列与登录后可手动上传的服务端批量幂等接口。Flutter 全量 408 项、Android 单测/lint、服务端 11 项测试和 build 已通过。遗留：没有连接实体 Android 设备，支付 App 版本差异、无障碍节点、浮窗和后台存活尚未做真机验收。
+
+## 最新任务交接（2026-09-17 投资账务联动）
+
+[投资账务联动](2026-09-17-investment-ledger-linkage.md)：投资买入/卖出镜像为主流水 `assetPurchase`/`assetSale`，出资账户余额同步增减；投资市值计入资产总览净资产；买入不再计入首页月支出与消费日历；共享同步协议类型枚举加入 `assetSale`。106 项 Flutter 测试与 10 项服务端测试通过。遗留：分红/利息未生成主流水、存量持仓不回溯补写。
+
+## 上一轮任务交接（2026-09-17 投资管理 MVP）
+
+[投资管理 MVP](2026-09-17-investment-management-mvp.md)：资产总览「分类统计」入口改为「投资管理」；新增股票/基金/债券/虚拟币统一页面结构，含总览、分类持仓、投资详情、添加投资（搜索/手动）、交易记录（买入/卖出/分红/利息）；schema 17→18 新增 4 张投资表（纯新增，不改既有列）；行情走 `MarketDataProvider` + `QuoteCache` 抽象，当前为 `MockMarketDataProvider` + `MemoryQuoteCache`。
+
+## 上一轮任务交接（2026-09-14）
+
+[资产详情弹窗布局调整](2026-09-14-asset-detail-popup-layout.md)：去掉详情卡片内部重复标题，弹窗标题居中；资产变化区间按钮右移并与金额同排；未来流水按日期判断。
+
+[金额右对齐与 Android 卡顿排查](2026-09-14-amount-alignment-and-performance.md)：去掉金额清空 X；常规数据库操作移出 Android UI isolate。手机当前仍是调试包，尚未完成新版本真机帧率对比。
+
+[记一笔布局与首页实时流水修复](2026-09-14-entry-layout-and-live-transactions.md)：当前分类、金额、键盘及流水样式以此文档为准。修复首页监听固定时间截止导致新增交易不显示的问题，保留原有账本隔离与未来流水过滤。
 
 ## 项目定位
 
-当前产品是 Flutter 本地优先记账应用。核心账务使用 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本已支持本地 Node.js 共享后端联调。会员 catalog、订单和微信/支付宝支付协议已接入本地服务端，生产公网部署、短信、附件云存储和企业报税仍需后续配置与验收。
+当前产品是 Flutter 本地优先记账应用。核心账务使用 Drift/SQLite 持久化；个人账本保持本机私有，家庭/企业账本已支持本地 Node.js 共享后端联调。Android 自动记账采用待确认语义并覆盖微信、支付宝、云闪付和美团；本地诊断日志可在登录后上传服务端。会员 catalog、订单和微信/支付宝支付协议已接入本地服务端，生产公网部署、短信、附件云存储和企业报税仍需后续配置与验收。
 
 ## 已完成的本地能力
 
@@ -15,7 +35,8 @@
 - 目标、里程碑、贡献、调整、排序、预测和完成庆祝。
 - 收支趋势、分类构成、消费习惯、热力图和本地洞察。
 - 商户分类记忆、指纹去重和账单收件箱。
-- Android 支付通知解析与幂等自动记账。
+- Android 支付通知与无障碍自动记账：微信专用解析 + 支付宝/云闪付/美团保守通用解析，统一待确认队列、去重指纹和确认后入账。
+- 本地诊断日志：应用启动、生命周期、记账成功/失败、通知处理等事件进入脱敏环形队列，可通过已登录共享服务批量幂等上传。
 - 设备语音识别和本地规则解析。
 - CSV 流水导出。
 - 可校验的完整 SQLite 本地备份/恢复；恢复采用安全暂存，应用完全重启后切换数据库。
@@ -42,6 +63,14 @@
 - 2026-09-12 收尾补充：退款回款支持编辑/撤销并同步恢复原消费状态；分期页可按还款日批量执行到期期间；附件保存状态支持保存中、失败保留和重试，失败附件阻止流水提交。
 - 2026-09-12 后台调度补充：Android 已接入每日 `AlarmManager`、开机重排和后台 Flutter isolate，用于周期账单与分期到期流水；iOS/桌面继续使用启动或回前台补齐策略。
 - 2026-09-12 完整性收尾：通用流水软删除现在强制当前账本作用域，并阻止删除仍有退款/报销/还款或分期计划的流水；共享同步 ID 映射补齐退款、报销、分期账户引用。
+- 2026-09-13 记一笔页面按原型重构（仅动该页面）：类型页签扩为支出/收入/转账/**债务**（债务展开借入/借出/还款，复用既有 borrow/lend/repayment 与余额影响规则）；一级分类 5 列网格 + 真实子分类横滑条（`Category.parentId`，无子分类时整条隐藏）；金额支持**计算器表达式**（`+ − × ÷`、乘除优先、取整到分、未输完/除零/负数拒绝保存）；账户/报销/账本/附件/图片/日期/定期付/更多收敛为 chip；键盘常驻并新增**再记**（保存后留页连续记账）；原「更多选项」（商户/计划内/一次性/周期/标签/附件管理）与语音、AI 入口全部保留。
+- 2026-09-13 联动修正：还款（repayment）与转账一致，智能分类不再给它打默认消费分类。
+- 2026-09-13 记一笔验证：`test/amount_input_test.dart`（14 例）+ `test/quick_add_redesign_test.dart`（9 例）共 23 例通过；`flutter analyze` 无问题；Pixel 7 AVD 完成 12 张截图验收（含 320dp × 字号 1.6），模拟器上发现并修复备注行挤压、子分类条 2.4px 溢出、金额行横向溢出三个真实缺陷。详见 [`2026-09-13-quick-add-prototype-redesign.md`](2026-09-13-quick-add-prototype-redesign.md)。
+- 2026-09-13 未完成：记一笔右上角「编辑」按钮经确认本轮不实现；会员页存在既有的 `pumpAndSettle` 超时失败（与本轮无关）。
+- 2026-09-17 投资管理 MVP：`investment_assets` / `investment_holdings` / `investment_transactions` / `investment_snapshots` 四表 + `InvestmentDao`；`/profile/investments` 路由组；四类资产共用 `InvestmentOverviewPage` / `InvestmentDetailPage` / `InvestmentAddPage`，模板组件 `InvestmentSummaryCard`、`InvestmentCategoryCard`、`HoldingItem`、`ProfitText`、`QuoteStatus`、`InvestmentChart`、`TransactionItem`。
+- 2026-09-17 投资口径：买入投资**不写入** `transactions`，因此不会被计为消费支出，也不会减少净资产；`InvestmentRepository` 接口已按「资产转换」而非「收支」建立，账户余额打通留待产品确认后实施。
+- 2026-09-17 投资 snapshot 策略：用户当天第一次打开投资管理时懒写入当天快照，无后台定时任务；空组合不写入任何行。
+- 2026-09-18 Android 收尾：首页编辑入口的 modal 层级、记一笔备注行和周期账单编辑联动已修复，详见 [Android 自动记账与诊断日志收尾](2026-09-18-android-autobookkeeping-diagnostics.md)。
 
 ## 当前未完成或未联调
 
@@ -52,7 +81,10 @@
 - 第三方广告 SDK、后台 placement、Rewarded 和 Splash。
 - iOS 真机、签名和发布验收；当前 `flutter build ios --no-codesign` 被既有 `Application not configured for iOS` 配置问题阻断。
 - 账本抽屉计划中的阶段二仅完成独立附件记录和旧 metadata 迁移；版本化数据库＋附件文件备份、押金/结算、模板以及阶段三同步能力尚未完成。
-- 微信无障碍自动记账 MVP 目前只完成识别、目录查询和后台保存适配；悬浮层只展示识别结果并可关闭，完整的前台确认卡片和真实微信版本联调仍未完成。
+- Android 自动记账已完成四类付款应用的保守识别、待确认队列、悬浮层/系统通知回退和本地单测；不同支付 App 版本、无障碍节点、浮窗权限、后台进程存活仍未真机联调，京东/拼多多/抖音尚未接入。
+- 第三方 Crashlytics / Sentry / Firebase 尚未接入；当前只有本地脱敏诊断环形队列和自建服务端上传接口，不能替代公网崩溃平台与生产监控。
+- 投资管理真实行情 API 未接入（当前是 `MockMarketDataProvider`，代码完成但未实际联调）；`RedisQuoteCache` 只有接口占位，未实现 Redis 客户端调用。
+- 投资买入尚未与账户余额联动（银行卡余额不会因买入而减少），投资资产也未计入资产总览净资产；两者都会改动既有被测试锁定的口径，需产品确认后实施。
 
 ## 当前架构风险
 
@@ -63,13 +95,103 @@
 5. Release 构建仍收到 `speech_to_text` 使用 Kotlin Gradle Plugin 的未来兼容性 warning；当前构建成功，后续需等待插件迁移到 Built-in Kotlin。
 6. 当前账本创建顺序的兼容排序使用 SQLite `rowid` 作为同时间戳的 tie-breaker；后续若需要跨导入/跨设备保持业务创建序号，应在账本模型中增加显式稳定序号并纳入同步协议。
 7. 交易详情的系统文件打开依赖 Android/iOS 系统处理器；iOS 尚未完成可编译项目配置和真机验证。独立附件记录已完成，但附件文件内容尚未纳入备份/同步。
+8. 自动记账解析器需要真实 Android 通知和页面样本持续校准；当前测试验证的是规则边界与队列幂等，不代表已覆盖所有支付 App 版本。
+9. 诊断事件上传已具备认证、脱敏、批量和幂等，但服务端仍是本地联调形态，没有公网 TLS、保留策略、告警和监控后台。
 
 ## 实际验证结果
+
+### 2026-09-18 Android 自动记账与诊断日志本轮实际执行
 
 ```text
 flutter analyze
 → No issues found
 
+flutter test --reporter compact
+→ All tests passed（408 项）
+
+cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug
+→ BUILD SUCCESSFUL；应用模块 lint 无 error
+
+cd server && npm run typecheck && npm test && npm run build
+→ typecheck、11 项服务端测试、TypeScript build 全部通过
+```
+
+本轮未连接 Android 实体设备或模拟器；`adb devices` 无设备。因此未声称真实支付通知文案、无障碍节点、系统浮窗、通知权限和后台存活已验收。
+
+### 2026-09-17 投资管理 MVP 本轮实际执行
+
+```text
+dart run build_runner build
+→ Built with build_runner/aot；app_database.g.dart 重新生成并包含 4 张投资表与 InvestmentDao
+
+flutter analyze lib/
+→ No issues found
+
+flutter test（投资管理新增用例 + 受影响的回归子集，共 113 项）
+→ All tests passed
+   · investment_domain_test（17）investment_repository_test（14）
+     investment_market_test（16）investment_flow_test（12）
+     investment_responsive_test（4）= 63
+   · privacy_amount_test + home_amount_visibility_test = 8
+   · asset_management_test / asset_overview_layout_test /
+     asset_overview_interaction_test / home_asset_card_test /
+     home_asset_scope_test / app_scaffold_navigation_test = 17
+   · recurring_schedule_regression_test /
+     transaction_attachment_repository_test / budget_and_management_test /
+     book_scope_test / home_redesign_domain_test = 20
+   · membership_feature_prompt_test / asset_visual_qa_test /
+     product_visual_regression_test /
+     asset_membership_prototype_capture_test = 5（抽查）
+
+响应式测试实际查出并已修复 3 处真实溢出缺陷（320dp × 字号 1.6）：
+   1. 持仓列表行 HoldingItem / HoldingMiniRow 的尾部金额列无宽度约束，
+      PrivacyAmount 的 FittedBox 拿不到上界 → 用 LayoutBuilder + 46% 上限修复；
+   2. 分类汇总卡「累计收益」行、详情页「累计收益」行、交易记录行、
+      详情页涨跌列的非弹性子项 → 改为 Flexible / ConstrainedBox；
+   3. ProfitText 在 1.6 字号下自然宽度超过所在半栏 → 与 InvestmentAmountText
+      一致地包一层 scaleDown FittedBox，并按左右对齐传入 alignment。
+```
+
+全量回归（排除 3 个会员页相关测试文件后，83 个测试文件）：
+
+```text
+flutter test --reporter compact <83 个测试文件>
+→ 354 个测试全部通过，EXIT=0
+```
+
+Debug APK 构建：
+
+```text
+flutter build apk --debug
+→ ✓ Built build/app/outputs/flutter-apk/app-debug.apk
+   （221,615,858 bytes；Gradle assembleDebug 53.7s；无 warning / error 输出）
+```
+
+### 全量测试中 5 项既有失败（与本轮投资管理改动无关）
+
+`flutter test`（全部 86 个文件）跑出 5 项失败，**全部集中在会员页**，且都在本轮未改动的文件里：
+
+| 失败用例 | 原因 |
+| --- | --- |
+| `home_header_cards_test.dart: header cards interaction and layout at 320.0` | `membership_page.dart:376` 的 Column 在 320dp 下溢出 6.6px |
+| `widget_test.dart: membership navigation closes the ledger drawer` | 找不到「会员与数据安全」标题 |
+| `widget_test.dart: quick add and membership share the same back-button target` | `pumpAndSettle` 超时 |
+| `widget_test.dart: opens account, category and budget management pages` | `pumpAndSettle` 超时 |
+| `membership_page_ui_test.dart: membership page stays usable at 320.0 scale 1.0 / 1.6` | 1.0 溢出；1.6 `pumpAndSettle` 超时导致整轮挂起 |
+
+判定依据（不是猜测）：
+
+1. 失败点全部指向 `lib/features/membership/presentation/membership_page.dart`，而本轮**没有修改任何 membership 文件**。
+2. 该文件在工作区中本就有**未提交的大量改动**（`git diff --stat`：`membership_page.dart` 892 行、`membership_visuals.dart` 1081 行），是上一轮「开通会员页原型复刻」留下的在途改动。
+3. `CURRENT_STATUS.md` 早在 2026-09-13 就记录过「会员页存在既有的 `pumpAndSettle` 超时失败（与本轮无关）」。
+
+因此本轮用「83 个文件 / 354 项」的干净全量结果作为回归证据，会员页 5 项失败保持原样、未修改、未掩盖。
+
+本轮未连接 Android 物理设备或模拟器，未做截图验收，未虚报 UI 验收结论。
+
+### 历史轮次（2026-09-14 及更早）
+
+```text
 flutter test --reporter compact
 → All tests passed（230 个）
 
@@ -92,7 +214,7 @@ server: npm run typecheck && npm test && npm run build
 → typecheck、2 个真实 HTTP 测试及 1 个关联完整性测试、TypeScript build 全部通过
 ```
 
-本轮 APK：`build/app/outputs/flutter-apk/app-debug.apk`；Debug 构建包含 Android `AlarmManager` 后台周期账单/分期处理入口。本轮未连接 Android 物理设备，未虚报安装验收。
+历史 APK：`build/app/outputs/flutter-apk/app-debug.apk`；Debug 构建包含 Android `AlarmManager` 后台周期账单/分期处理入口。历史轮次未连接 Android 物理设备，未虚报安装验收。
 
 此前交易详情切片的历史 Release APK 曾在 Pixel 7 Android emulator 安装并打开首页、流水列表和交易详情页；本次阶段二 Release APK 未安装：
 [首页截图](../../qa/home-book-icon-2026-09-09.png) · [立体书架抽屉截图](../../qa/bookshelf-book-icon-2026-09-09.png) · [系统桌面图标截图](../../qa/launcher-book-icon-2026-09-09.png)。这是本地 Pixel 7 模拟器证据，不是物理手机验收。

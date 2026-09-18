@@ -10,7 +10,7 @@ export class Store {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
     let version = this.db.pragma('user_version', { simple: true }) as number;
-    check(version <= 2, '服务端数据库版本过新', 500);
+    check(version <= 3, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {
       this.db.exec(`
         CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -32,6 +32,25 @@ export class Store {
         this.db.exec('ALTER TABLE books ADD COLUMN asset_source_book_id TEXT');
       }
       this.db.pragma('user_version = 2');
+    }
+    if (version < 3) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS diagnostic_events(
+          user_id TEXT NOT NULL REFERENCES users(id),
+          event_id TEXT NOT NULL,
+          occurred_at INTEGER NOT NULL,
+          level TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          screen TEXT,
+          message TEXT,
+          data_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(user_id,event_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_diagnostic_events_user_time
+          ON diagnostic_events(user_id, occurred_at);
+      `);
+      this.db.pragma('user_version = 3');
     }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
   }
@@ -242,6 +261,12 @@ export class Store {
         check(account && account.data.is_archived === 0, '周期账单账户不存在或已归档');
       }
       if (d.category_id) check(categories.has(String(d.category_id)), '周期账单分类不属于本账本');
+      const schedule = d.schedule_json ? JSON.parse(String(d.schedule_json)) as Record<string, unknown> : {};
+      if (schedule.subcategory_id) {
+        const child = categories.get(String(schedule.subcategory_id));
+        check(child && child.data.parent_id === d.category_id, '周期账单二级分类不匹配');
+      }
+      if (d.end_date != null) check(Number(d.end_date) >= Number(d.start_date), '周期结束日期不能早于生效日期');
       check(Number.isSafeInteger(Number(d.amount_in_cents)) && Number(d.amount_in_cents) > 0, '周期账单金额无效');
       if (d.cycle === 'custom') check(Number.isSafeInteger(Number(d.custom_interval_days)) && Number(d.custom_interval_days) > 0, '自定义周期无效');
     }
