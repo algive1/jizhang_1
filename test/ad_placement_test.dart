@@ -88,6 +88,58 @@ void main() {
     );
   });
 
+  test('third-party ads stay off for paid plans even if ad_free is missing', () {
+    final paidWithoutEntitlement = MembershipSnapshot(
+      membership: Membership(
+        userId: 'user',
+        plan: MembershipPlan.pro,
+        status: MembershipStatus.active,
+        updatedAt: now,
+      ),
+      entitlements: const [],
+      quotas: const [],
+    );
+    expect(
+      policy.isEligible(
+        placement: native,
+        membership: paidWithoutEntitlement,
+        route: '/',
+        now: now,
+        userCreatedAt: DateTime(2020),
+        deliveredToday: 0,
+      ),
+      isFalse,
+    );
+  });
+
+  test('splash remains capped at one impression even if config asks for more', () {
+    const splash = PlacementConfig(
+      id: 'splash-hard-cap',
+      surface: PlacementSurface.splash,
+      format: AdFormat.splash,
+      contentType: PlacementContentType.thirdParty,
+      title: '测试',
+      description: '测试',
+      enabled: true,
+      targetAudience: PlacementAudience.free,
+      dailyLimit: 5,
+      priority: 1,
+      provider: 'fake',
+      contentCategory: AdContentCategory.financialEducation,
+    );
+    expect(
+      policy.isEligible(
+        placement: splash,
+        membership: _membership(now: now),
+        route: '/splash',
+        now: now,
+        userCreatedAt: DateTime(2020),
+        deliveredToday: 1,
+      ),
+      isFalse,
+    );
+  });
+
   test('unsafe financial categories are always rejected', () {
     final unsafe = PlacementConfig(
       id: native.id,

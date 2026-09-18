@@ -36,6 +36,10 @@ class PlacementPolicy {
   }) {
     if (!placement.enabled || isProtectedRoute(route)) return false;
     if (membership.has(EntitlementKey.adFree, now: now)) return false;
+    if (placement.contentType == PlacementContentType.thirdParty &&
+        membership.membership.plan != MembershipPlan.free) {
+      return false;
+    }
     if (!placement.targets(membership.membership.plan)) return false;
     if (!isContentAllowed(placement.contentCategory)) return false;
     if (placement.startAt != null && now.isBefore(placement.startAt!)) {
@@ -47,9 +51,11 @@ class PlacementPolicy {
     if (placement.dailyLimit <= 0 || deliveredToday >= placement.dailyLimit) {
       return false;
     }
-    if (placement.format == AdFormat.splash &&
-        now.difference(userCreatedAt) < const Duration(hours: 24)) {
-      return false;
+    if (placement.format == AdFormat.splash) {
+      if (deliveredToday >= 1) return false;
+      if (now.difference(userCreatedAt) < const Duration(hours: 24)) {
+        return false;
+      }
     }
     return true;
   }

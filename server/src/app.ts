@@ -15,6 +15,7 @@ import { registerPersonalCloudRoutes } from './personal_cloud.js';
 import { registerAppUpdateRoutes } from './app_update.js';
 import { registerAnalyticsRoutes } from './analytics.js';
 import { registerPushRoutes } from './push.js';
+import { registerAdConfigRoutes } from './ads.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
 const deviceNameField = z.string().trim().min(1).max(80).optional();
@@ -66,6 +67,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
     return {user,token,expiresAt};
   };
   registerAppUpdateRoutes(app);
+  registerAdConfigRoutes(app);
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
