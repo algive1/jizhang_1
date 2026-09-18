@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,7 +28,9 @@ class PersonalCloudBackupService {
   final MembershipRepository membership;
   final LocalBackupService localBackup;
 
-  Future<({String userId, DeviceDataBinding binding})> _context() async {
+  Future<({String userId, DeviceDataBinding binding})> _context({
+    bool requireEnabled = true,
+  }) async {
     await session.initialize();
     final userId = session.userId;
     if (userId == null) throw StateError('请先登录');
@@ -41,7 +44,7 @@ class PersonalCloudBackupService {
     if (binding.boundUserId != userId) {
       throw StateError('本地数据尚未绑定当前账号');
     }
-    if (!binding.cloudSyncEnabled) {
+    if (requireEnabled && !binding.cloudSyncEnabled) {
       throw StateError('请先启用云同步通道');
     }
     return (userId: userId, binding: binding);
@@ -84,6 +87,58 @@ class PersonalCloudBackupService {
     );
     return result;
   }
+  Future<PersonalCloudRestoreResult> downloadAndPrepareRestore() async {
+    final context = await _context(requireEnabled: false);
+    final response = await api.request('/sync/snapshot/download');
+    if (response['encoding'] != 'gzip+base64') {
+      throw const FormatException('云端备份编码不受支持');
+    }
+
+    final encoded = response['snapshot'] as String?;
+    final canonicalDatasetId = response['datasetId'] as String?;
+    final revision = response['revision'] as int? ?? 0;
+    if (encoded == null || canonicalDatasetId == null || revision <= 0) {
+      throw const FormatException('云端备份信息不完整');
+    }
+
+    late Uint8List databaseBytes;
+    try {
+      final compressed = base64Decode(encoded);
+      databaseBytes = Uint8List.fromList(gzip.decode(compressed));
+    } on Object catch (error) {
+      throw FormatException('云端备份无法解压：$error');
+    }
+
+    LocalBackupService.validateBackupBytes(databaseBytes);
+    await localBackup.restoreDatabase(databaseBytes);
+
+    return PersonalCloudRestoreResult(
+      datasetId: canonicalDatasetId,
+      revision: revision,
+      snapshotSize: response['snapshotSize'] as int?,
+      updatedAt: response['updatedAt'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (response['updatedAt'] as int) * 1000,
+            )
+          : null,
+    );
+  }
+
+}
+
+
+class PersonalCloudRestoreResult {
+  const PersonalCloudRestoreResult({
+    required this.datasetId,
+    required this.revision,
+    required this.snapshotSize,
+    required this.updatedAt,
+  });
+
+  final String datasetId;
+  final int revision;
+  final int? snapshotSize;
+  final DateTime? updatedAt;
 }
 
 final personalCloudBackupServiceProvider = Provider<PersonalCloudBackupService>(
