@@ -50,6 +50,7 @@ jobs:
           test/account_cloud_attachment_restore_test.dart
           test/app_update_service_test.dart
           test/product_analytics_test.dart
+          test/push_registration_service_test.dart
 
   server-core:
     name: Server core checks
