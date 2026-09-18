@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
+import '../application/personal_cloud_bootstrap_service.dart';
 
 class DatasetBindingPage extends ConsumerWidget {
   const DatasetBindingPage({super.key});
@@ -66,7 +67,9 @@ class DatasetBindingPage extends ConsumerWidget {
                       _StatusRow(
                         icon: Icons.cloud_outlined,
                         title: value.cloudSyncEnabled ? '云同步已启用' : '云同步未启用',
-                        subtitle: '当前阶段只建立绑定关系，不执行上传、下载或合并。',
+                        subtitle: value.cloudSyncEnabled
+                            ? '云同步通道已建立；首次账务上传仍需后续单独确认。'
+                            : '尚未建立个人云同步通道。登录和绑定都不会自动上传数据。',
                       ),
                     ],
                   ),
@@ -83,14 +86,32 @@ class DatasetBindingPage extends ConsumerWidget {
                   onPressed: () => _bind(context, ref),
                   child: Text('绑定到 ${account.preferredName}'),
                 )
-              else if (isCurrent)
-                const Card(
+              else if (isCurrent) ...[
+                Card(
                   child: ListTile(
-                    leading: Icon(Icons.check_circle_outline),
-                    title: Text('绑定关系已建立'),
-                    subtitle: Text('下一阶段接入个人云同步时会继续使用这条绑定关系。'),
+                    leading: const Icon(Icons.check_circle_outline),
+                    title: const Text('绑定关系已建立'),
+                    subtitle: Text(
+                      value.cloudSyncEnabled
+                          ? '个人云数据集已经登记，可检查云端状态。'
+                          : '可以继续建立云同步通道；此操作仍不会上传账务数据。',
+                    ),
                   ),
-                )
+                ),
+                const SizedBox(height: 10),
+                if (!value.cloudSyncEnabled)
+                  FilledButton.icon(
+                    onPressed: () => _bootstrapCloud(context, ref),
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('启用云同步通道'),
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: () => _showCloudStatus(context, ref),
+                    icon: const Icon(Icons.cloud_done_outlined),
+                    label: const Text('检查云端状态'),
+                  ),
+              ]
               else
                 const Card(
                   child: ListTile(
@@ -104,6 +125,124 @@ class DatasetBindingPage extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  static Future<void> _bootstrapCloud(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('启用云同步通道？'),
+        content: const Text(
+          '本步骤只在服务器登记你的个人云数据集，不上传账本、流水或附件。真正首次上传会在下一步再次确认。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final result = await ref
+          .read(personalCloudBootstrapServiceProvider)
+          .bootstrap();
+      if (!context.mounted) return;
+      if (!result.datasetMatches) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('云端已有个人数据'),
+            content: const Text(
+              '这个账号已经有另一份云端数据。当前本地数据不会被上传或覆盖；后续需要选择恢复或合并。',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('知道了'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      ref.invalidate(datasetBindingProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('云同步通道已建立，尚未上传账务数据')),
+      );
+    } on CloudSyncMembershipRequired {
+      if (!context.mounted) return;
+      final upgrade = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('云同步是会员功能'),
+          content: const Text('开通有效会员后即可建立个人云同步通道。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('查看会员'),
+            ),
+          ],
+        ),
+      );
+      if (upgrade == true && context.mounted) {
+        context.push('/profile/membership');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
+
+  static Future<void> _showCloudStatus(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final status = await ref
+          .read(personalCloudBootstrapServiceProvider)
+          .status();
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('个人云同步状态'),
+          content: Text(
+            status.datasetMatches
+                ? '云端数据集已登记。版本 ${status.revision}，'
+                    '${status.hasSnapshot ? '已有云端备份。' : '尚未上传首份账务备份。'}'
+                : '账号云端存在另一份数据集，当前设备需要先恢复或合并。',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
   }
 
   static Future<void> _bind(BuildContext context, WidgetRef ref) async {
