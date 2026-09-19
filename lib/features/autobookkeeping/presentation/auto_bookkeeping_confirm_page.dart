@@ -101,18 +101,20 @@ class _AutoBookkeepingConfirmPageState
   }
 
   Future<void> _refreshScreenshot(String fingerprint) async {
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted || _saving || _closing) return;
-    final refreshed = await ref
-        .read(autoBookkeepingPendingBridgeProvider)
-        .getPending();
-    if (!mounted ||
-        refreshed == null ||
-        refreshed.fingerprint != fingerprint ||
-        refreshed.screenshotPath == null) {
-      return;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!mounted || _saving || _closing) return;
+      final refreshed = await ref
+          .read(autoBookkeepingPendingBridgeProvider)
+          .getPending();
+      if (!mounted || refreshed == null || refreshed.fingerprint != fingerprint) {
+        return;
+      }
+      if (refreshed.screenshotPath != null) {
+        setState(() => _candidate = refreshed);
+        return;
+      }
     }
-    setState(() => _candidate = refreshed);
   }
 
   Future<void> _completePending({bool keepScreenshot = false}) async {
@@ -208,6 +210,7 @@ class _AutoBookkeepingConfirmPageState
             );
 
       var screenshotAttached = screenshotPath == null || matchedRefund == null;
+      var screenshotWarning = false;
       if (matchedRefund != null && screenshotPath != null) {
         try {
           await ref
@@ -220,6 +223,7 @@ class _AutoBookkeepingConfirmPageState
           screenshotAttached = true;
         } on Object {
           screenshotAttached = false;
+          screenshotWarning = true;
         }
       }
 
@@ -246,7 +250,15 @@ class _AutoBookkeepingConfirmPageState
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       context.pop();
-      messenger.showSnackBar(const SnackBar(content: Text('已保存到本地账本')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            screenshotWarning
+                ? '流水已保存，但支付截图未能附加'
+                : '已保存到本地账本',
+          ),
+        ),
+      );
     } on Object catch (error) {
       if (!mounted) return;
       setState(() {
