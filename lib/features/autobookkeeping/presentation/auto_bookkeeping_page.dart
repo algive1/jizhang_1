@@ -26,6 +26,8 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool? _notificationGranted;
   bool? _paymentNotificationAccessGranted;
   bool _paymentNotificationEnabled = false;
+  bool _accessibilityConnected = false;
+  bool _foregroundRunning = false;
   bool _enabled = false;
   bool _shortcutAvailable = false;
   bool _loading = true;
@@ -69,20 +71,19 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
     }
     final bridge = ref.read(autoBookkeepingSettingsProvider);
     final paymentBridge = ref.read(paymentNotificationBridgeProvider);
-    final accessibility = await bridge.isAccessibilityGranted();
-    final overlay = await bridge.isOverlayGranted();
-    final notification = await bridge.isNotificationGranted();
-    final enabled = await bridge.isEnabled();
+    final status = await bridge.runtimeStatus();
     final paymentAccess = await paymentBridge.isAccessGranted();
-    final paymentEnabled = paymentAccess && await paymentBridge.isEnabled();
+    final paymentEnabled = await paymentBridge.isEnabled();
     if (!mounted) return;
     setState(() {
-      _accessibilityGranted = accessibility;
-      _overlayGranted = overlay;
-      _notificationGranted = notification;
+      _accessibilityGranted = status.accessibilityGranted;
+      _accessibilityConnected = status.accessibilityConnected;
+      _overlayGranted = status.overlayGranted;
+      _notificationGranted = status.notificationGranted;
+      _foregroundRunning = status.foregroundRunning;
       _paymentNotificationAccessGranted = paymentAccess;
       _paymentNotificationEnabled = paymentEnabled;
-      _enabled = enabled;
+      _enabled = status.enabled;
       _loading = false;
     });
   }
@@ -210,12 +211,43 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                           subtitle: Text(
                             !_enabled
                                 ? '已关闭'
-                                : _notificationGranted == true
-                                ? '已开启 · 系统通知栏会显示运行状态'
-                                : '已开启 · 通知权限未允许',
+                                : _foregroundRunning &&
+                                      _accessibilityConnected &&
+                                      _notificationGranted == true
+                                ? '已开启 · 后台服务运行中 · 常驻通知可见'
+                                : '已开启 · 运行条件不完整，请检查下方状态',
                           ),
                           value: _enabled,
                           onChanged: _toggle,
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _foregroundRunning && _accessibilityConnected
+                                ? Icons.check_circle_outline
+                                : Icons.error_outline,
+                            color:
+                                _foregroundRunning && _accessibilityConnected
+                                ? context.appPrimary
+                                : AppColors.warning,
+                          ),
+                          title: const Text('运行状态'),
+                          subtitle: Text(
+                            !_enabled
+                                ? '自动记账未开启'
+                                : _foregroundRunning &&
+                                      _accessibilityConnected
+                                ? '前台服务与无障碍服务均已运行'
+                                : !_accessibilityConnected
+                                ? '无障碍权限存在，但服务尚未连接或已被系统停止'
+                                : '前台常驻服务未运行，请检查通知权限和运行日志',
+                          ),
+                          trailing: TextButton(
+                            onPressed: () =>
+                                context.push('/profile/autobookkeeping/logs'),
+                            child: const Text('诊断'),
+                          ),
                         ),
                         const Divider(height: 1),
                         _PermissionRow(
