@@ -23,8 +23,12 @@ import java.util.Date
 import java.util.Locale
 
 class PaymentNotificationListenerService : NotificationListenerService() {
-    private val ruleRegistry = AutoBookkeepingRuleRegistry.builtIn()
-    private val realtimeParser = PaymentNotificationCandidateParser(ruleRegistry)
+    private val ruleRegistry by lazy {
+        AutoBookkeepingRuleRegistry.load(this)
+    }
+    private val realtimeParser by lazy {
+        PaymentNotificationCandidateParser(ruleRegistry)
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onListenerConnected() {
