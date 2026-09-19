@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
@@ -185,8 +186,20 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private fun ensureOverlayService() {
         val enabled = AutoBookkeepingSettings.enabled(this)
         val overlayGranted = AutoBookkeepingOverlayPermission.isGranted(this)
-        if (!enabled || !overlayGranted || AutoBillOverlayService.instance != null) {
-            Log.i(TAG, "overlay start skipped: enabled=$enabled overlayGranted=$overlayGranted running=${AutoBillOverlayService.instance != null}")
+        val notificationAvailable =
+            AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+        if (
+            !enabled ||
+            !overlayGranted ||
+            !notificationAvailable ||
+            AutoBillOverlayService.instance != null
+        ) {
+            Log.i(
+                TAG,
+                "overlay start skipped: enabled=$enabled overlayGranted=$overlayGranted " +
+                    "notificationAvailable=$notificationAvailable " +
+                    "running=${AutoBillOverlayService.instance != null}",
+            )
             return
         }
         runCatching {
