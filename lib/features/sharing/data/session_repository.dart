@@ -383,6 +383,27 @@ class SessionRepository {
     return nextRecoveryKey;
   }
 
+  Future<void> deleteAccount({required String password}) async {
+    await initialize();
+    await api.request(
+      '/account',
+      method: 'DELETE',
+      body: {
+        'password': password,
+        'confirmation': 'DELETE',
+      },
+    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await database.ensureDataBindingSchema();
+    await database.customStatement(
+      'UPDATE device_data_binding SET '
+      'bound_user_id=NULL,cloud_sync_enabled=0,bound_at=NULL,last_sync_at=NULL,'
+      'last_cloud_revision=0,last_seen_remote_revision=0,updated_at=? WHERE id=1',
+      [now],
+    );
+    await invalidate();
+  }
+
   /// 服务端登出，并清理本地会话。
   ///
   /// 本地清理一定会执行；撤销服务端 Session 是尽力而为：网络不可用时不能把

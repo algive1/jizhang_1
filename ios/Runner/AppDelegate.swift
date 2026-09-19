@@ -3,15 +3,17 @@ import UIKit
 import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UNUserNotificationCenterDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var navigationChannel: FlutterMethodChannel?
   private var pendingNotificationRoute: String?
+  private var apnsDeviceToken: String?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
+    apnsDeviceToken = UserDefaults.standard.string(forKey: "haohao.apns.deviceToken")
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -22,6 +24,31 @@ import UserNotifications
       name: "jizhang/navigation",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
+
+    let pushChannel = FlutterMethodChannel(
+      name: "jizhang/push",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    pushChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "currentToken" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      if let token = self?.apnsDeviceToken, !token.isEmpty {
+        result([
+          "platform": "ios",
+          "provider": "apns",
+          "token": token,
+        ])
+        return
+      }
+      DispatchQueue.main.async {
+        UIApplication.shared.registerForRemoteNotifications()
+      }
+      // APNs registration is asynchronous. A later foreground registration
+      // attempt will return the token after didRegisterForRemoteNotifications.
+      result(nil)
+    }
     if let route = pendingNotificationRoute {
       pendingNotificationRoute = nil
       emitNotificationRoute(route)
@@ -229,6 +256,29 @@ import UserNotifications
     }
   }
 
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    apnsDeviceToken = token
+    UserDefaults.standard.set(token, forKey: "haohao.apns.deviceToken")
+    super.application(
+      application,
+      didRegisterForRemoteNotificationsWithDeviceToken: deviceToken
+    )
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    super.application(
+      application,
+      didFailToRegisterForRemoteNotificationsWithError: error
+    )
+  }
+
   private func scheduleRecurringNotification(
     _ rawArguments: Any?,
     result: @escaping FlutterResult
@@ -267,7 +317,7 @@ import UserNotifications
     }
   }
 
-  func userNotificationCenter(
+  override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -275,7 +325,7 @@ import UserNotifications
     completionHandler([.banner, .sound])
   }
 
-  func userNotificationCenter(
+  override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void

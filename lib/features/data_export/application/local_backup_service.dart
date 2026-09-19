@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -8,6 +11,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/security/database_encryption_key_store.dart';
 
 typedef DocumentsDirectoryResolver = Future<Directory> Function();
 
@@ -37,15 +41,228 @@ class LocalBackupService {
   final AppDatabase _database;
   final DocumentsDirectoryResolver _documentsDirectory;
 
+  static const encryptedArchiveFormat = 'haohao-local-backup-v2';
+  static const _backupKdfIterations = 310000;
+  static const _maxArchiveBytes = 256 * 1024 * 1024;
+
+  /// Returns a plaintext SQLite snapshot for cloud/package compatibility.
+  ///
+  /// The live database is encrypted at rest. We checkpoint it, copy it to a
+  /// temporary file, decrypt only that copy, read the snapshot and immediately
+  /// delete the temporary plaintext file.
   Future<Uint8List> exportDatabase() async {
     await _database.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
     final databaseFile = await _databaseFile();
     if (!await databaseFile.exists()) {
       throw StateError('本地数据库文件不存在');
     }
-    final bytes = await databaseFile.readAsBytes();
-    validateBackupBytes(bytes);
-    return Uint8List.fromList(bytes);
+
+    final raw = await databaseFile.readAsBytes();
+    if (_hasSqliteHeader(raw)) {
+      // Test databases and legacy databases may still be plaintext.
+      validateBackupBytes(Uint8List.fromList(raw));
+      return Uint8List.fromList(raw);
+    }
+
+    final key = await DatabaseEncryptionKeyStore().loadOrCreate();
+    final temporary = File(
+      '${databaseFile.path}.backup-export-${DateTime.now().microsecondsSinceEpoch}.sqlite',
+    );
+    await databaseFile.copy(temporary.path);
+    Database? snapshot;
+    try {
+      snapshot = sqlite3.open(temporary.path);
+      final escaped = key.replaceAll("'", "''");
+      snapshot.execute("PRAGMA key = '$escaped'");
+      snapshot.select('SELECT count(*) FROM sqlite_master');
+      snapshot.execute("PRAGMA rekey = ''");
+      snapshot.close();
+      snapshot = null;
+      final bytes = Uint8List.fromList(await temporary.readAsBytes());
+      validateBackupBytes(bytes);
+      return bytes;
+    } finally {
+      snapshot?.close();
+      await _deleteIfExists(temporary);
+    }
+  }
+
+  Future<Uint8List> exportEncryptedArchive({
+    required String password,
+  }) async {
+    final normalizedPassword = password.trim();
+    if (normalizedPassword.length < 8) {
+      throw const FormatException('备份密码至少需要 8 个字符');
+    }
+    final databaseBytes = await exportDatabase();
+    final attachmentRows = await _database.customSelect(
+      'SELECT id,path,name FROM transaction_attachments '
+      'WHERE deleted_at IS NULL ORDER BY id',
+    ).get();
+
+    final attachments = <Map<String, Object?>>[];
+    for (final row in attachmentRows) {
+      final id = row.read<String>('id');
+      final path = row.read<String>('path');
+      final name = row.read<String>('name');
+      Uint8List? content;
+      if (path.isNotEmpty) {
+        final file = File(path);
+        if (await file.exists()) {
+          content = Uint8List.fromList(await file.readAsBytes());
+        }
+      }
+      attachments.add({
+        'id': id,
+        'name': name,
+        'content': content == null ? null : base64Encode(content),
+      });
+    }
+
+    final clearPackage = utf8.encode(jsonEncode({
+      'format': 'haohao-local-package-v2',
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+      'database': base64Encode(databaseBytes),
+      'attachments': attachments,
+    }));
+    final compressed = gzip.encode(clearPackage);
+    if (compressed.length > _maxArchiveBytes) {
+      throw const FormatException('完整备份过大，请先清理不需要的附件后重试');
+    }
+
+    final salt = _secureRandomBytes(16);
+    final nonce = _secureRandomBytes(12);
+    final kdf = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: _backupKdfIterations,
+      bits: 256,
+    );
+    final secretKey = await kdf.deriveKey(
+      secretKey: SecretKey(utf8.encode(normalizedPassword)),
+      nonce: salt,
+    );
+    final secretBox = await AesGcm.with256bits().encrypt(
+      compressed,
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+    final container = {
+      'format': encryptedArchiveFormat,
+      'kdf': 'pbkdf2-hmac-sha256',
+      'iterations': _backupKdfIterations,
+      'cipher': 'aes-256-gcm',
+      'salt': base64Encode(salt),
+      'nonce': base64Encode(secretBox.nonce),
+      'mac': base64Encode(secretBox.mac.bytes),
+      'payload': base64Encode(secretBox.cipherText),
+    };
+    return Uint8List.fromList(utf8.encode(jsonEncode(container)));
+  }
+
+  Future<void> restoreEncryptedArchive(
+    Uint8List bytes, {
+    required String password,
+  }) async {
+    if (bytes.length > _maxArchiveBytes * 2) {
+      throw const FormatException('备份文件过大');
+    }
+    try {
+      final raw = jsonDecode(utf8.decode(bytes));
+      if (raw is! Map) throw const FormatException('备份格式无效');
+      final container = raw.cast<String, dynamic>();
+      if (container['format'] != encryptedArchiveFormat ||
+          container['kdf'] != 'pbkdf2-hmac-sha256' ||
+          container['cipher'] != 'aes-256-gcm') {
+        throw const FormatException('不是受支持的好好记账加密备份');
+      }
+      final iterations = container['iterations'];
+      if (iterations is! int || iterations < 100000 || iterations > 1000000) {
+        throw const FormatException('备份密钥参数无效');
+      }
+      final salt = base64Decode(container['salt'] as String);
+      final nonce = base64Decode(container['nonce'] as String);
+      final mac = base64Decode(container['mac'] as String);
+      final payload = base64Decode(container['payload'] as String);
+      final kdf = Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: iterations,
+        bits: 256,
+      );
+      final secretKey = await kdf.deriveKey(
+        secretKey: SecretKey(utf8.encode(password.trim())),
+        nonce: salt,
+      );
+      final compressed = await AesGcm.with256bits().decrypt(
+        SecretBox(payload, nonce: nonce, mac: Mac(mac)),
+        secretKey: secretKey,
+      );
+      final unpacked = gzip.decode(compressed);
+      if (unpacked.length > _maxArchiveBytes * 4) {
+        throw const FormatException('备份解压后过大');
+      }
+      final packageRaw = jsonDecode(utf8.decode(unpacked));
+      if (packageRaw is! Map) throw const FormatException('备份内容无效');
+      final package = packageRaw.cast<String, dynamic>();
+      if (package['format'] != 'haohao-local-package-v2' ||
+          package['database'] is! String ||
+          package['attachments'] is! List) {
+        throw const FormatException('备份内容不完整');
+      }
+      final databaseBytes = Uint8List.fromList(
+        base64Decode(package['database'] as String),
+      );
+      validateBackupBytes(databaseBytes);
+      final attachments = <PendingRestoreAttachment>[];
+      for (final rawAttachment in package['attachments'] as List) {
+        if (rawAttachment is! Map) {
+          throw const FormatException('附件备份记录无效');
+        }
+        final item = rawAttachment.cast<String, dynamic>();
+        final id = item['id'];
+        final name = item['name'];
+        final content = item['content'];
+        if (id is! String || id.isEmpty || name is! String) {
+          throw const FormatException('附件备份记录不完整');
+        }
+        attachments.add(
+          PendingRestoreAttachment(
+            id: id,
+            name: name,
+            bytes: content is String
+                ? Uint8List.fromList(base64Decode(content))
+                : null,
+          ),
+        );
+      }
+      await restoreDatabase(databaseBytes);
+      await preparePendingRestoreAttachments(attachments);
+    } on SecretBoxAuthenticationError {
+      throw const FormatException('备份密码错误或文件已损坏');
+    } on FormatException {
+      rethrow;
+    } on Object catch (error) {
+      throw FormatException('备份文件无法读取：$error');
+    }
+  }
+
+  static bool isEncryptedArchive(Uint8List bytes) {
+    if (bytes.isEmpty || bytes.length > _maxArchiveBytes * 2) return false;
+    try {
+      final raw = jsonDecode(utf8.decode(bytes));
+      return raw is Map && raw['format'] == encryptedArchiveFormat;
+    } on Object {
+      return false;
+    }
+  }
+
+  static List<int> _secureRandomBytes(int length) {
+    final random = Random.secure();
+    return List<int>.generate(length, (_) => random.nextInt(256));
+  }
+
+  static bool _hasSqliteHeader(List<int> bytes) {
+    return bytes.length >= _sqliteHeader.length &&
+        String.fromCharCodes(bytes.take(_sqliteHeader.length)) == _sqliteHeader;
   }
 
   Future<void> restoreDatabase(Uint8List bytes) async {
@@ -115,8 +332,12 @@ class LocalBackupService {
           RegExp(r'[^\w.\-\u4e00-\u9fa5]'),
           '_',
         );
+        final safeId = attachment.id.replaceAll(
+          RegExp(r'[^\\w.\\-]'),
+          '_',
+        );
         final file = File(
-          p.join(attachmentDirectory.path, '${attachment.id}-$safeName'),
+          p.join(attachmentDirectory.path, '$safeId-$safeName'),
         );
         await file.writeAsBytes(bytes, flush: true);
         pending.execute(

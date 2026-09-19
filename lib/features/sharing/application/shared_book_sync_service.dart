@@ -205,7 +205,8 @@ class SharedBookSyncService {
     final delta = await api.request(
       '/books/$remote/changes?cursor=${stored['cursor']}',
     );
-    if ((delta['changes'] as List).isNotEmpty ||
+    if (delta['resetRequired'] == true ||
+        (delta['changes'] as List).isNotEmpty ||
         stored['cursor'] == 0 ||
         (await database.familyDao.findBook(local)) == null) {
       await _applySnapshot(

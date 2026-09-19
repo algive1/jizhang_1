@@ -20,7 +20,7 @@ jobs:
   flutter-core:
     name: Flutter core checks
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -35,10 +35,8 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Verify Flutter dependency lock
-        run: |
-          git diff -- pubspec.lock
-          git diff --quiet -- pubspec.lock
+      - name: Verify lockfile is current
+        run: git diff --exit-code -- pubspec.lock
 
       - name: Analyze
         run: flutter analyze
@@ -53,6 +51,7 @@ jobs:
           test/account_phase2_test.dart
           test/account_dataset_binding_test.dart
           test/account_cloud_attachment_restore_test.dart
+          test/local_backup_service_test.dart
           test/app_update_service_test.dart
           test/product_analytics_test.dart
           test/push_registration_service_test.dart
@@ -60,6 +59,35 @@ jobs:
           test/ad_placement_readiness_test.dart
           test/budget_alert_notification_service_test.dart
           test/analysis_multibook_and_annual_report_test.dart
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+  ios-native:
+    name: iOS simulator build
+    runs-on: macos-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build iOS simulator
+        run: flutter build ios --simulator --debug
+
+      - name: Verify APNs build environments
+        run: |
+          xcodebuild -project ios/Runner.xcodeproj -scheme Runner -configuration Debug -showBuildSettings | grep -q "APS_ENVIRONMENT = development"
+          xcodebuild -project ios/Runner.xcodeproj -scheme Runner -configuration Release -showBuildSettings | grep -q "APS_ENVIRONMENT = production"
 
   server-core:
     name: Server core checks

@@ -18,6 +18,7 @@ import '../../books/presentation/book_selector.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../membership/data/membership_repository.dart';
+import '../../messages/application/system_message_service.dart';
 import '../../recurring/data/recurring_bill_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -36,6 +37,7 @@ class ProfilePage extends ConsumerWidget {
     final recurring = ref.watch(recurringBillsProvider);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider);
+    final systemUnread = ref.watch(systemUnreadCountProvider).value ?? 0;
     final accountSession = ref.watch(accountSessionProvider);
     final activity = ProfileActivity(transactions.value ?? [], DateTime.now());
     void push(String route) => context.push(route);
@@ -87,9 +89,16 @@ class ProfilePage extends ConsumerWidget {
                   icon: const Icon(Icons.settings_outlined, size: 25),
                 ),
                 IconButton(
-                  tooltip: '通知',
-                  onPressed: () => push('/profile/payment-notifications'),
-                  icon: const Icon(Icons.notifications_none_outlined, size: 25),
+                  tooltip: '消息',
+                  onPressed: () async {
+                    await context.push<void>('/profile/messages');
+                    ref.invalidate(systemUnreadCountProvider);
+                  },
+                  icon: Badge(
+                    isLabelVisible: systemUnread > 0,
+                    label: Text(systemUnread > 99 ? '99+' : '$systemUnread'),
+                    child: const Icon(Icons.smart_toy_outlined, size: 25),
+                  ),
                 ),
               ],
             ),
@@ -226,12 +235,8 @@ class ProfilePage extends ConsumerWidget {
                 ProfileMenuItem(
                   Icons.help_outline,
                   '帮助与反馈',
-                  '常见问题 · 使用说明',
-                  () => _info(
-                    context,
-                    '帮助与反馈',
-                    '在首页记账，在流水中编辑或删除记录，在账户、分类和预算页管理数据。\n\n设置内可管理信用卡分期和支付提醒。当前版本没有联网客服入口；反馈时请保留发生问题的时间和页面。',
-                  ),
+                  '使用手册 · 在线工单',
+                  () => push('/profile/help'),
                 ),
                 ProfileMenuItem(
                   Icons.description_outlined,
@@ -381,7 +386,7 @@ class ProfilePage extends ConsumerWidget {
           const ListTile(title: Text('设置')),
           for (final item in [
             ('信用卡分期', '/profile/installments'),
-            ('提醒设置', '/profile/payment-notifications'),
+            ('通知设置', '/profile/notification-settings'),
             ('自动记账', '/profile/autobookkeeping'),
             ('数据与安全', '/profile/data'),
           ])
@@ -400,11 +405,7 @@ class ProfilePage extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pop(sheetContext);
-              _info(
-                context,
-                '使用手册',
-                '首页：点击“记一笔”录入收支，金额支持简单计算。\n\n流水：可按支出、收入、分类筛选，点击记录查看详情，长按可编辑分类或删除。\n\n自动记账：在自动记账页开启 Android 无障碍、悬浮窗和通知权限；微信支付成功后先确认识别结果，再保存流水。',
-              );
+              context.push('/profile/help');
             },
           ),
           ListTile(
@@ -413,11 +414,7 @@ class ProfilePage extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pop(sheetContext);
-              _info(
-                context,
-                '反馈建议',
-                '当前版本尚未接入在线反馈提交。遇到问题时，请记下发生时间、所在页面、操作步骤和是否可以稳定复现，便于后续排查。',
-              );
+              context.push('/profile/feedback');
             },
           ),
           ListTile(
@@ -426,11 +423,7 @@ class ProfilePage extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pop(sheetContext);
-              _info(
-                context,
-                '关于好好记账',
-                '好好记账\n版本 1.0.0+1\n\n一款以本地优先为基础的个人记账应用。账本、分类和流水默认保存在本机；共享、会员和自动记账能力会根据对应权限和系统能力工作。',
-              );
+              context.push('/profile/about');
             },
           ),
         ],

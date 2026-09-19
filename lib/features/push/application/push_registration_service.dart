@@ -124,6 +124,23 @@ class PushRegistrationService {
     }
   }
 
+  Future<bool> unregisterCurrentDevice() async {
+    try {
+      final userId = await authenticatedUserId();
+      if (userId == null) return false;
+      final deviceId = (await settings.get(deviceIdKey))?.trim();
+      if (deviceId == null ||
+          !RegExp(r'^[a-f0-9]{32}$').hasMatch(deviceId)) {
+        return true;
+      }
+      await api.request('/push/devices/$deviceId', method: 'DELETE');
+      _lastAttemptAt = null;
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<String> _deviceId() async {
     final existing = (await settings.get(deviceIdKey))?.trim();
     if (existing != null && RegExp(r'^[a-f0-9]{32}$').hasMatch(existing)) {

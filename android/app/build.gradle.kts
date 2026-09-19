@@ -10,6 +10,15 @@ val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.isFile
 
+fun appConfig(name: String): String =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: ""
+
+fun buildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+
 if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use(keystoreProperties::load)
     val requiredKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
@@ -33,7 +42,7 @@ android {
         applicationId = "com.algive.jizhang_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -41,6 +50,14 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        buildConfigField("String", "FIREBASE_APP_ID", buildConfigString(appConfig("FIREBASE_APP_ID")))
+        buildConfigField("String", "FIREBASE_API_KEY", buildConfigString(appConfig("FIREBASE_API_KEY")))
+        buildConfigField("String", "FIREBASE_PROJECT_ID", buildConfigString(appConfig("FIREBASE_PROJECT_ID")))
+        buildConfigField("String", "FIREBASE_SENDER_ID", buildConfigString(appConfig("FIREBASE_SENDER_ID")))
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {
@@ -71,6 +88,9 @@ android {
 dependencies {
     testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core:1.18.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }
 
 kotlin {

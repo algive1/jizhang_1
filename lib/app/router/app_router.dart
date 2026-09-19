@@ -27,6 +27,13 @@ import '../../features/investments/presentation/investment_detail_page.dart';
 import '../../features/investments/presentation/investment_overview_page.dart';
 import '../../features/intelligence/presentation/bill_inbox_page.dart';
 import '../../features/notifications/presentation/payment_notification_page.dart';
+import '../../features/notifications/presentation/notification_settings_page.dart';
+import '../../features/messages/presentation/message_center_page.dart';
+import '../../features/support/presentation/feedback_page.dart';
+import '../../features/support/presentation/help_page.dart';
+import '../../features/support/presentation/about_page.dart';
+import '../../features/support/presentation/support_tickets_page.dart';
+import '../../features/support/presentation/support_ticket_detail_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_logs_page.dart';
@@ -204,6 +211,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'family',
                 builder: (context, state) => const FamilyPage(),
+              ),
+              GoRoute(
+                path: 'messages',
+                builder: (context, state) => const MessageCenterPage(),
+              ),
+              GoRoute(
+                path: 'notification-settings',
+                builder: (context, state) => const NotificationSettingsPage(),
+              ),
+              GoRoute(
+                path: 'help',
+                builder: (context, state) => const HelpPage(),
+              ),
+              GoRoute(
+                path: 'feedback',
+                builder: (context, state) => const FeedbackPage(),
+              ),
+              GoRoute(
+                path: 'support-tickets',
+                builder: (context, state) => const SupportTicketsPage(),
+                routes: [
+                  GoRoute(
+                    path: ':ticketId',
+                    builder: (context, state) => SupportTicketDetailPage(
+                      ticketId: state.pathParameters['ticketId']!,
+                    ),
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: 'about',
+                builder: (context, state) => const AboutPage(),
               ),
               GoRoute(
                 path: 'payment-notifications',

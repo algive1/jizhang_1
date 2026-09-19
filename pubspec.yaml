@@ -24,7 +24,7 @@ version: 1.0.0+1
 hooks:
   user_defines:
     sqlite3:
-      source: sqlite3
+      source: sqlite3mc
       url_pattern: https://github.com/simolus3/sqlite3.dart/releases/download/$RELEASE_TAG/$FILENAME
 
 environment:
@@ -53,9 +53,11 @@ dependencies:
   sqlite3: ^3.5.2
   speech_to_text: ^7.4.0
   flutter_secure_storage: ^10.0.0
+  local_auth: ^3.0.2
+  cryptography: ^2.9.0
+  cryptography_flutter: ^2.3.4
   wechat_kit: ^6.0.2
   alipay_kit: ^6.0.0
-  alipay_kit_ios: ^6.0.1
   in_app_purchase: ^3.2.3
   image_picker: ^1.2.3
   open_filex: ^4.7.0
@@ -98,9 +100,9 @@ flutter:
     - assets/images/membership/
     - assets/config/
 
-# Payment SDKs are deliberately configured with merchant-console values at
-# release time. The iOS plugins use these values to register URL schemes and
-# universal links; they are not secrets.
+# Android WeChat/Alipay SDKs use merchant-console values at release time.
+# iOS membership purchase is StoreKit-only and intentionally does not bundle
+# the Alipay iOS implementation.
 wechat_kit:
   app_id: YOUR_WECHAT_APP_ID
   universal_link: https://YOUR_DOMAIN.example/universal_link/jizhang/wechat/
