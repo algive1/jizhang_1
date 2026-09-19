@@ -143,6 +143,22 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
  const invalid={...tx(book,'outsider-payer',100),user_id:outsider.user.id};
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',invalid)]}})).statusCode,400);
 
+ // Historical payer attribution must survive membership changes. The owner
+ // recorded this row, so the owner may still edit it after the payer leaves,
+ // provided the payer attribution itself is not changed.
+ assert.equal((await app.inject({method:'DELETE',url:`/api/v1/books/${book}/members/${member.user.id}`,headers:{authorization:`Bearer ${owner.token}`}})).statusCode,200);
+ const retained={...stored,note:'payer left but history remains',version:stored.version};
+ const retainedEdit=await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[{operationId:randomUUID(),kind:'transactions',id:'for-member',action:'update',expectedVersion:stored.version,data:retained}]}});
+ assert.equal(retainedEdit.statusCode,200);
+ const retainedStored=(retainedEdit.json() as any).entities.find((e:any)=>e.kind==='transactions'&&e.id==='for-member').data;
+ assert.equal(retainedStored.user_id,member.user.id);
+ const reassigned={...tx(book,'departed-payer',100),user_id:member.user.id};
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',reassigned)]}})).statusCode,400);
+
+ // Rejoin so the same member can participate in the ownership lifecycle below.
+ const reinvite=(await app.inject({method:'POST',url:`/api/v1/books/${book}/invitations`,headers:{authorization:`Bearer ${owner.token}`},payload:{}})).json() as any;
+ assert.equal((await app.inject({method:'POST',url:'/api/v1/invitations/accept',headers:{authorization:`Bearer ${member.token}`},payload:{code:reinvite.code}})).statusCode,200);
+
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${member.token}`},payload:{userId:member.user.id}})).statusCode,403);
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${owner.token}`},payload:{userId:member.user.id}})).statusCode,200);
  const changed=(await app.inject({method:'GET',url:`/api/v1/books/${book}/changes?cursor=0`,headers:{authorization:`Bearer ${member.token}`}})).json() as any;
