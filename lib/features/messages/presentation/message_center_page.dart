@@ -70,6 +70,7 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
         // Opening the message is still useful while offline.
       }
     }
+    if (!mounted) return;
     if (message.route case final route? when route.startsWith('/')) {
       if (mounted) context.push(route);
     } else {
@@ -117,7 +118,7 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
-            ? const ListView(
+            ? ListView(
                 children: [
                   SizedBox(height: 220),
                   Center(child: CircularProgressIndicator()),
