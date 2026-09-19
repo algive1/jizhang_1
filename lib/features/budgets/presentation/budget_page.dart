@@ -57,7 +57,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
               FilledButton.icon(
                 onPressed: () =>
                     _setBudget(context, ref, existing: total?.budget),
-                icon: const Icon(Icons.edit_outlined),
+                icon: Icon(Icons.edit_outlined),
                 label: Text(total == null ? '设置' : '调整'),
               ),
             ],
@@ -67,7 +67,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
             AppCard(
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.savings_outlined,
                     color: context.appPrimary,
                     size: 44,
@@ -96,8 +96,8 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                     ref,
                     selectableCategories: categories,
                   ),
-                  icon: const Icon(Icons.add),
-                  label: const Text('添加'),
+                  icon: Icon(Icons.add),
+                  label: Text('添加'),
                 ),
             ],
           ),
@@ -475,7 +475,7 @@ class _BudgetStat extends StatelessWidget {
         FittedBox(
           child: Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
       ],
