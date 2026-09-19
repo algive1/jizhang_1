@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
@@ -11,6 +10,7 @@ import '../../../core/widgets/transaction_tile.dart';
 import '../data/account_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AccountDetailPage extends ConsumerStatefulWidget {
   const AccountDetailPage({required this.accountId, super.key});
@@ -74,7 +74,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go('/profile/assets'),
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
                 tooltip: '返回资产总览',
               ),
               Expanded(
@@ -87,22 +87,22 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   account.type.label,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
                 const SizedBox(height: 5),
                 MoneyText(
                   account.balance,
                   currency: account.currency,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primaryDark,
+                    color: context.appPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -148,7 +148,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
             const AppCard(
               child: Text(
                 '暂无该账户流水',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             )
           else
@@ -227,7 +227,7 @@ class _Metric extends StatelessWidget {
     children: [
       Text(
         label,
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 12, color: context.appSecondaryText),
       ),
       MoneyText(
         value,
