@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_theme_definition.dart';
 
 abstract final class AppTheme {
-  static ThemeData light() {
+  static ThemeData light([AppThemeDefinition theme = BuiltInThemes.freshGreen]) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
+      seedColor: theme.primary,
       brightness: Brightness.light,
-      surface: AppColors.surface,
+      surface: theme.surface,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme.copyWith(
-        primary: AppColors.primary,
+        primary: theme.primary,
         onPrimary: Colors.white,
-        secondary: AppColors.primaryDark,
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
+        secondary: theme.primaryDark,
+        surface: theme.surface,
+        onSurface: theme.textPrimary,
         error: AppColors.warning,
       ),
-      scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'PingFang SC',
+      scaffoldBackgroundColor: theme.background,
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
           color: AppColors.textPrimary,
@@ -76,7 +76,7 @@ abstract final class AppTheme {
         space: 1,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: theme.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -92,18 +92,18 @@ abstract final class AppTheme {
         constraints: const BoxConstraints(minHeight: 52),
         labelStyle: const TextStyle(fontSize: 14),
         errorMaxLines: 3,
-        fillColor: AppColors.surfaceSoft,
+        fillColor: theme.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.divider),
+          borderSide: const BorderSide(color: theme.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.divider),
+          borderSide: const BorderSide(color: theme.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: theme.primary, width: 1.5),
         ),
       ),
     );
