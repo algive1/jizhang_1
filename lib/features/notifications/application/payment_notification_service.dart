@@ -361,11 +361,19 @@ class PaymentNotificationParser {
   }
 
   String? _orderIdFor(String content) {
-    final match = RegExp(
-      r'(?:订单号|交易单号|交易号|流水号|支付单号)[：:\s]*([A-Za-z0-9_-]{6,64})',
-    )
-        .firstMatch(content);
-    return match?.group(1);
+    const labels = ['订单号', '交易单号', '交易号', '流水号', '支付单号'];
+    final idPattern = RegExp(r'^([A-Za-z0-9_-]{6,64})');
+    for (final label in labels) {
+      final index = content.indexOf(label);
+      if (index < 0) continue;
+      var tail = content.substring(index + label.length).trimLeft();
+      if (tail.startsWith('：') || tail.startsWith(':')) {
+        tail = tail.substring(1).trimLeft();
+      }
+      final value = idPattern.firstMatch(tail)?.group(1);
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
   }
 
   String? _identifierSuffixFor(String content) {
