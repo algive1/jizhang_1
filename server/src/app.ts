@@ -2,6 +2,7 @@ import { registerAssistantPolicy } from './assistant_policy.js';
 import Fastify from 'fastify';
 import { registerMembershipCatalog } from './membership_catalog.js';
 import { registerPaymentRoutes } from './payment.js';
+import { registerAppleIapRoutes } from './apple_iap.js';
 import { registerDiagnosticsRoutes } from './diagnostics.js';
 import rateLimit from '@fastify/rate-limit';
 import rawBody from 'fastify-raw-body';
@@ -71,6 +72,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
+  registerAppleIapRoutes(app,store,authenticate);
   registerPersonalCloudRoutes(app,store,authenticate);
   registerDiagnosticsRoutes(app,store,authenticate);
   registerPushRoutes(app,store,authenticate);
