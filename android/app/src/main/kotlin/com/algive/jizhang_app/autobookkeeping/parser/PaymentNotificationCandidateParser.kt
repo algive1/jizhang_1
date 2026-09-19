@@ -173,25 +173,13 @@ class PaymentNotificationCandidateParser(
             ?.takeIf { it in 1..99_999_999_999L }
     }
 
-    private fun explicitPaymentMethod(content: String): String? {
-        val explicit = PAYMENT_METHOD_PATTERN.find(content)
+    private fun explicitPaymentMethod(content: String): String? =
+        PAYMENT_METHOD_PATTERN.find(content)
             ?.groupValues
             ?.getOrNull(1)
             ?.trim()
             ?.take(40)
             ?.takeIf { it.isNotBlank() }
-        if (explicit != null) return explicit
-
-        return when {
-            content.contains("支付宝") -> "支付宝"
-            content.contains("微信支付") -> "微信支付"
-            content.contains("云闪付") -> "云闪付"
-            content.contains("信用卡") -> "信用卡"
-            content.contains("储蓄卡") -> "储蓄卡"
-            content.contains("银行卡") -> "银行卡"
-            else -> null
-        }
-    }
 
     private fun counterparty(content: String): String? {
         val match = COUNTERPARTY_PATTERN.find(content)
