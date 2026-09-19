@@ -152,7 +152,7 @@ class _AutoBookkeepingConfirmPageState
                     bookId: bookId,
                     type: transactionType,
                     amount: candidate.amountInCents / 100,
-                    accountId: saved.accountId,
+                    accountId: account.id,
                     categoryId: category.id,
                     categoryName: category.name,
                     merchant: candidate.merchant,
@@ -183,7 +183,7 @@ class _AutoBookkeepingConfirmPageState
               transactionId: saved.id,
               candidate: candidate,
               bookId: bookId,
-              accountId: account.id,
+              accountId: saved.accountId,
               categoryId: category.id,
               rememberForMerchant: _rememberForMerchant,
             );
@@ -225,7 +225,7 @@ class _AutoBookkeepingConfirmPageState
   Widget _buildContent(BuildContext context) {
     final candidate = _candidate;
     if (candidate == null) {
-      return _EmptyState(message: _message ?? '没有待确认的支付记录', onClose: _close);
+      return _EmptyState(message: _message ?? '没有待确认的交易记录', onClose: _close);
     }
 
     final books = ref.watch(booksProvider).value;
