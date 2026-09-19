@@ -153,7 +153,12 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         mainHandler.postDelayed(
             {
-                val shown = AutoBillOverlayService.instance?.offer(candidate) == true
+                // Accessibility may have replaced the lower-confidence
+                // notification candidate while the foreground service was
+                // starting. Always render the current PendingStore value.
+                val current = AutoBookkeepingPendingStore.readCandidate(this)
+                    ?: return@postDelayed
+                val shown = AutoBillOverlayService.instance?.offer(current) == true
                 if (!shown) {
                     AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
                 }
