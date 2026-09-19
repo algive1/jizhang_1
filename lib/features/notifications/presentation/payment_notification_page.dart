@@ -17,7 +17,8 @@ class PaymentNotificationPage extends ConsumerStatefulWidget {
 }
 
 class _PaymentNotificationPageState
-    extends ConsumerState<PaymentNotificationPage> {
+    extends ConsumerState<PaymentNotificationPage>
+    with WidgetsBindingObserver {
   bool? _accessGranted;
   bool _enabled = false;
   bool _loading = true;
@@ -26,7 +27,19 @@ class _PaymentNotificationPageState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -56,16 +69,27 @@ class _PaymentNotificationPageState
       return;
     }
     try {
-      await bridge.setEnabled(!_enabled);
+      final nextEnabled = !_enabled;
+      if (nextEnabled && !await bridge.isNotificationGranted()) {
+        final granted = await bridge.requestNotificationPermission();
+        if (!mounted) return;
+        if (!granted) {
+          setState(
+            () => _message =
+                '请允许通知并确保自动记账通知渠道可见，然后返回本页继续开启。',
+          );
+          return;
+        }
+      }
+      await bridge.setEnabled(nextEnabled);
       if (!mounted) return;
       setState(() {
-        _enabled = !_enabled;
-        _message = _enabled ? '已开启，识别到的支付通知会先进入待确认，不会静默写入流水。' : '已关闭自动记账。';
+        _enabled = nextEnabled;
+        _message = _enabled
+            ? '已开启，系统通知监听会实时参与交易识别并进入待确认。'
+            : '已关闭支付通知兜底。';
       });
       if (_enabled) {
-        if (!await bridge.isNotificationGranted()) {
-          await bridge.requestNotificationPermission();
-        }
         await _processPending(showFeedback: true);
       }
     } on Object catch (error) {
@@ -146,12 +170,12 @@ class _PaymentNotificationPageState
                               : AppColors.warning,
                         ),
                         title: Text(
-                          _accessGranted == true ? '系统通知权限已授权' : '尚未授权系统通知权限',
+                          _accessGranted == true ? '通知读取权限已授权' : '尚未授权通知读取权限',
                         ),
                         subtitle: Text(
                           _accessGranted == true
                               ? '可在本页开启或关闭自动记账'
-                              : '需要先在 Android 系统设置中允许读取通知',
+                              : '需要先在 Android 系统设置中允许「好好记账」读取通知',
                         ),
                       ),
                       SwitchListTile(
