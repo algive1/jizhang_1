@@ -32,20 +32,13 @@ class PaymentAppParser {
         val labels = nodes.map { it.label }.filter { it.isNotBlank() }
         if (labels.none { label -> keywords.any { key -> label == key || label.startsWith("$key ") } }) return null
 
-        fun field(keys: Set<String>): String? {
-            labels.forEachIndexed { index, text ->
-                keys.sortedByDescending { it.length }.forEach { key ->
-                    if (text == key) return labels.getOrNull(index + 1)?.takeIf { it.length <= 100 }
-                    if (text.startsWith("$key：") || text.startsWith("$key:")) return text.substring(key.length + 1).trim()
-                }
-            }
-            return null
-        }
-
-        val merchant = (field(merchantKeys) ?: fallbackMerchant(labels))
+        val merchant = (CandidateFieldExtractor.field(labels, merchantKeys) ?: fallbackMerchant(labels))
             ?.takeIf { value -> value.isNotBlank() && value !in keywords && amountKeys.none { value.contains(it) } }
             ?: return null
-        val method = field(setOf("支付方式", "付款方式"))?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+        val method = CandidateFieldExtractor
+            .field(labels, setOf("支付方式", "付款方式", "支付渠道"))
+            ?.takeIf { it.isNotBlank() }
+            ?: "UNKNOWN"
         val amounts = mutableListOf<Pair<Long, Int>>()
         labels.forEachIndexed { index, label ->
             if (excluded.any { label.contains(it) }) return@forEachIndexed
@@ -65,8 +58,11 @@ class PaymentAppParser {
         val best = amounts.maxOfOrNull { it.second } ?: return null
         val winners = amounts.filter { it.second == best }.map { it.first }.distinct()
         if (winners.size != 1) return null
+        val paidAmount = winners.single()
+        val (originalAmount, discountAmount) =
+            CandidateFieldExtractor.amountBreakdown(labels, paidAmount)
         return PaymentCandidate(
-            winners.single(),
+            paidAmount,
             merchant.take(80),
             MerchantNormalizer.normalize(merchant),
             method.take(80),
@@ -75,6 +71,11 @@ class PaymentAppParser {
             if (best == 3) 1.0 else .9,
             .9,
             sourceApp,
+            orderId = CandidateFieldExtractor.orderId(labels),
+            note = CandidateFieldExtractor.note(labels),
+            originalAmountInCents = originalAmount,
+            discountAmountInCents = discountAmount,
+            identifierSuffix = CandidateFieldExtractor.identifierSuffix(method, labels),
         )
     }
 
