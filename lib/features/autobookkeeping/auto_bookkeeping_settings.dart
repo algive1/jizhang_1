@@ -12,6 +12,8 @@ class AutoBookkeepingRuntimeStatus {
     required this.notificationListenerGranted,
     required this.notificationListenerEnabled,
     required this.notificationListenerConnected,
+    required this.screenshotSupported,
+    required this.screenshotEnabled,
   });
 
   final bool enabled;
@@ -23,6 +25,8 @@ class AutoBookkeepingRuntimeStatus {
   final bool notificationListenerGranted;
   final bool notificationListenerEnabled;
   final bool notificationListenerConnected;
+  final bool screenshotSupported;
+  final bool screenshotEnabled;
 
   factory AutoBookkeepingRuntimeStatus.fromMap(Map<Object?, Object?> map) {
     bool flag(String key) => map[key] == true;
@@ -36,6 +40,8 @@ class AutoBookkeepingRuntimeStatus {
       notificationListenerGranted: flag('notificationListenerGranted'),
       notificationListenerEnabled: flag('notificationListenerEnabled'),
       notificationListenerConnected: flag('notificationListenerConnected'),
+      screenshotSupported: flag('screenshotSupported'),
+      screenshotEnabled: flag('screenshotEnabled'),
     );
   }
 }
@@ -49,6 +55,7 @@ abstract interface class AutoBookkeepingSettingsBridge {
   Future<bool> isNotificationGranted();
   Future<AutoBookkeepingRuntimeStatus> runtimeStatus();
   Future<bool> requestNotificationPermission();
+  Future<bool> setScreenshotEnabled(bool enabled);
   Future<void> setEnabled(bool enabled);
 }
 
@@ -110,6 +117,8 @@ class MethodChannelAutoBookkeepingSettings
           notificationListenerGranted: false,
           notificationListenerEnabled: false,
           notificationListenerConnected: false,
+          screenshotSupported: false,
+          screenshotEnabled: false,
         );
       }
       return AutoBookkeepingRuntimeStatus.fromMap(raw);
@@ -144,6 +153,19 @@ class MethodChannelAutoBookkeepingSettings
           false;
     } on MissingPluginException {
       throw StateError('自动记账仅支持 Android');
+    }
+  }
+
+  @override
+  Future<bool> setScreenshotEnabled(bool enabled) async {
+    try {
+      return await _channel.invokeMethod<bool>(
+            'setScreenshotEnabled',
+            enabled,
+          ) ??
+          false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
