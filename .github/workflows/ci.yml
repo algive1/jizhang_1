@@ -35,6 +35,11 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Verify Flutter dependency lock
+        run: |
+          git diff -- pubspec.lock
+          git diff --quiet -- pubspec.lock
+
       - name: Analyze
         run: flutter analyze
 
