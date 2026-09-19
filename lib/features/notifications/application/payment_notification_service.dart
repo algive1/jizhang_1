@@ -121,6 +121,7 @@ class ParsedPaymentNotification {
     required this.merchant,
     required this.occurredAt,
     required this.orderId,
+    required this.transactionType,
     this.identifierSuffix,
     this.note,
     this.originalAmount,
@@ -133,6 +134,7 @@ class ParsedPaymentNotification {
   final String? merchant;
   final DateTime occurredAt;
   final String? orderId;
+  final String transactionType;
   final String? identifierSuffix;
   final String? note;
   final double? originalAmount;
@@ -147,40 +149,55 @@ class PaymentNotificationParser {
     if (channel == null) return null;
     final content = notification.content;
 
-    if (RegExp(
-      r'收款到账|收款成功|转入|入账|到账|退款|退回|待支付|待付款|去支付|去付款|未支付|未付款|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|请支付',
-    ).hasMatch(content)) {
-      return null;
-    }
+    final transactionType = switch (content) {
+      final value when RegExp(
+        r'退款成功|退款到账|退款已到账|已退款|退款完成',
+      ).hasMatch(value) => 'REFUND',
+      final value when RegExp(
+        r'收款到账|收款成功|收款已到账|收入到账',
+      ).hasMatch(value) => 'INCOME',
+      _ => 'EXPENSE',
+    };
 
-    final hasStrongSuccess = RegExp(
-      r'支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成',
-    ).hasMatch(content);
-    final hasWalletDebit = RegExp(r'消费|扣款|支出').hasMatch(content);
-    final hasNonTransactionSignal = RegExp(
-      r'优惠券|消费券|立减券|活动提醒|付款码|收款码',
-    ).hasMatch(content);
-    if (notification.packageName == 'com.tencent.mm' &&
-        hasStrongSuccess &&
-        !RegExp(r'微信支付|支付凭证|付款凭证|服务通知').hasMatch(content)) {
-      return null;
-    }
-    if (_isMarketplaceChannel(channel)) {
-      if (!hasStrongSuccess) return null;
-    } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
-      return null;
+    if (transactionType == 'EXPENSE') {
+      if (RegExp(
+        r'转入提醒|入账提醒|到账提醒|退回失败|待支付|待付款|去支付|去付款|未支付|未付款|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|请支付',
+      ).hasMatch(content)) {
+        return null;
+      }
+
+      final hasStrongSuccess = RegExp(
+        r'支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成',
+      ).hasMatch(content);
+      final hasWalletDebit = RegExp(r'消费|扣款|支出').hasMatch(content);
+      final hasNonTransactionSignal = RegExp(
+        r'优惠券|消费券|立减券|活动提醒|付款码|收款码',
+      ).hasMatch(content);
+      if (notification.packageName == 'com.tencent.mm' &&
+          hasStrongSuccess &&
+          !RegExp(r'微信支付|支付凭证|付款凭证|服务通知').hasMatch(content)) {
+        return null;
+      }
+      if (_isMarketplaceChannel(channel)) {
+        if (!hasStrongSuccess) return null;
+      } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
+        return null;
+      }
     }
 
     final amount = _amountFor(content);
     if (amount == null || amount <= 0) return null;
+    final merchant = _merchantFor(content) ?? _counterpartyFor(content);
+    if (merchant == null) return null;
     final breakdown = _amountBreakdownFor(content, amount);
     return ParsedPaymentNotification(
       amount: amount,
       accountId: _accountFor(channel),
       channel: channel,
-      merchant: _merchantFor(content),
+      merchant: merchant,
       occurredAt: notification.postedAt,
       orderId: _orderIdFor(content),
+      transactionType: transactionType,
       identifierSuffix: _identifierSuffixFor(content),
       note: _noteFor(content),
       originalAmount: breakdown.$1,
@@ -218,7 +235,7 @@ class PaymentNotificationParser {
 
   double? _amountFor(String content) {
     final explicit = RegExp(
-      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|退款金额|收款金额|到账金额|收入金额)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (explicit.length == 1) return explicit.single;
     if (explicit.length > 1) return null;
@@ -287,9 +304,21 @@ class PaymentNotificationParser {
     return value == null || value.isEmpty ? null : value;
   }
 
+  String? _counterpartyFor(String content) {
+    final match = RegExp(
+      r'(?:来自|付款方|付款人|退款方|对方)[：:\s]*([^，。；;\n]{2,32})',
+    ).firstMatch(content);
+    final value = match?.group(1)?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (RegExp(r'[¥￥]|支付成功|付款成功|交易成功').hasMatch(value)) {
+      return null;
+    }
+    return value;
+  }
+
   String? _merchantFor(String content) {
     final explicit = RegExp(
-      r'(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店)[：:\s]+([^，。；;\n]{2,32})',
+      r'(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店|收款方)[：:\s]+([^，。；;\n]{2,32})',
     ).firstMatch(content);
     final directional = RegExp(
       r'(?:向|在)\s*([^，。；;\n]{2,32}?)(?:支付|付款|消费)',
@@ -419,7 +448,7 @@ class PaymentNotificationAutoBookkeepingService {
             timestamp: parsed.occurredAt,
             sourceApp: _sourceApp(parsed.channel),
             scene: 'PAYMENT_NOTIFICATION',
-            transactionType: 'EXPENSE',
+            transactionType: parsed.transactionType,
             orderId: parsed.orderId,
             note: parsed.note,
             originalAmountInCents: parsed.originalAmount == null
