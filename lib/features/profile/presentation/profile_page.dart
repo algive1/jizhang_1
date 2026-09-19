@@ -18,6 +18,7 @@ import '../../books/presentation/book_selector.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../membership/data/membership_repository.dart';
+import '../../messages/application/system_message_service.dart';
 import '../../recurring/data/recurring_bill_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -36,6 +37,7 @@ class ProfilePage extends ConsumerWidget {
     final recurring = ref.watch(recurringBillsProvider);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider);
+    final systemUnread = ref.watch(systemUnreadCountProvider).value ?? 0;
     final accountSession = ref.watch(accountSessionProvider);
     final activity = ProfileActivity(transactions.value ?? [], DateTime.now());
     void push(String route) => context.push(route);
@@ -87,9 +89,16 @@ class ProfilePage extends ConsumerWidget {
                   icon: const Icon(Icons.settings_outlined, size: 25),
                 ),
                 IconButton(
-                  tooltip: '通知',
-                  onPressed: () => push('/profile/messages'),
-                  icon: const Icon(Icons.notifications_none_outlined, size: 25),
+                  tooltip: '消息',
+                  onPressed: () async {
+                    await push('/profile/messages');
+                    ref.invalidate(systemUnreadCountProvider);
+                  },
+                  icon: Badge(
+                    isLabelVisible: systemUnread > 0,
+                    label: Text(systemUnread > 99 ? '99+' : '$systemUnread'),
+                    child: const Icon(Icons.smart_toy_outlined, size: 25),
+                  ),
                 ),
               ],
             ),
