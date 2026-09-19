@@ -29,6 +29,7 @@ enum EntitlementKey {
   advancedReport,
   familyBook,
   adFree,
+  customTheme,
 }
 
 /// Business capabilities whose availability can be switched by the server.
