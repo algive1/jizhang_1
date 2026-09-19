@@ -499,6 +499,5 @@ object AutoBookkeepingPendingStore {
         "JD",
         "PINDUODUO",
         "DOUYIN",
-        "PAYMENT_APP",
     )
 }
