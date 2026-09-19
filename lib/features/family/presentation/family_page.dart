@@ -125,6 +125,18 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
         ),
       ) ??
       false;
+  bool _canActOnMember({
+    required String? bookRole,
+    required String viewerUserId,
+    required Json member,
+  }) {
+    if (member['role'] == 'owner') return false;
+    final memberId = member['user_id'] as String;
+    if (memberId == viewerUserId) return true;
+    if (bookRole == 'owner') return true;
+    return bookRole == 'admin' && member['role'] == 'member';
+  }
+
   Widget _memberSpendingCard(List<TransactionRecord> transactions) {
     final now = DateTime.now();
     final spending = <String, double>{};
@@ -585,7 +597,11 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                             'admin' => '管理员',
                             _ => '普通成员',
                           }),
-                          trailing: member['role'] == 'owner'
+                          trailing: !_canActOnMember(
+                                  bookRole: book.role,
+                                  viewerUserId: user.id,
+                                  member: member,
+                                )
                               ? null
                               : AppActionMenuButton<String>(
                                   onSelected: (action) => _run(() async {
