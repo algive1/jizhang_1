@@ -4,6 +4,7 @@ import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import java.math.BigDecimal
 
 /**
@@ -11,13 +12,16 @@ import java.math.BigDecimal
  * states. It intentionally requires an exact status, a unique amount and an
  * explicit counterparty field; it never falls back to arbitrary page text.
  */
-class TransactionStatusParser {
+class TransactionStatusParser(
+    private val registry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn(),
+) {
     fun parse(
         packageName: String,
         nodes: List<ScreenNode>,
         timestamp: Long,
     ): PaymentCandidate? {
-        val sourceApp = SOURCES[packageName] ?: return null
+        val sourceApp = registry.ruleFor(packageName)?.sourceApp ?: return null
         val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
         if (labels.isEmpty()) return null
 
@@ -86,7 +90,7 @@ class TransactionStatusParser {
         packageName: String,
         nodes: List<ScreenNode>,
     ): String? {
-        if (packageName !in SOURCES) return null
+        if (registry.ruleFor(packageName) == null) return null
         val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
         val hasRefund = labels.any(::isRefundStatus)
         val hasIncome = labels.any(::isIncomeStatus)
@@ -197,17 +201,6 @@ class TransactionStatusParser {
         )
         val CURRENCY_PATTERN = Regex(
             "[¥￥]\\s*([0-9]+(?:\\.[0-9]{1,2})?)(?![0-9.])",
-        )
-        val SOURCES = mapOf(
-            "com.tencent.mm" to "WECHAT",
-            "com.eg.android.AlipayGphone" to "ALIPAY",
-            "com.unionpay" to "UNIONPAY",
-            "com.sankuai.meituan" to "MEITUAN",
-            "com.sankuai.meituan.takeout" to "MEITUAN",
-            "com.jingdong.app.mall" to "JD",
-            "com.xunmeng.pinduoduo" to "PINDUODUO",
-            "com.ss.android.ugc.aweme" to "DOUYIN",
-            "com.ss.android.ugc.aweme.mobile" to "DOUYIN",
         )
     }
 }
