@@ -161,11 +161,11 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
             : (inbox?.messages.isEmpty ?? true)
             ? ListView(
                 padding: const EdgeInsets.all(24),
-                children: const [
-                  SizedBox(height: 100),
+                children: [
+                  const SizedBox(height: 100),
                   Icon(Icons.inbox_outlined, size: 54, color: context.appSecondaryText),
-                  SizedBox(height: 12),
-                  Text('暂时没有系统消息', textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  const Text('暂时没有系统消息', textAlign: TextAlign.center),
                 ],
               )
             : ListView.separated(
