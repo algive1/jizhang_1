@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
 
+/// App-wide business sheets must sit above [AppScaffold]'s ShellRoute.
+///
+/// Keeping this helper on the root navigator prevents the four primary
+/// workspace routes from leaving their bottom navigation visible behind an
+/// active sheet. Nested sheet flows should use this helper unless they have a
+/// deliberate reason to stay inside an already isolated navigator.
 abstract final class AppBottomSheet {
   static Future<T?> show<T>({
     required BuildContext context,
