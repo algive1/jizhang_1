@@ -106,13 +106,7 @@ class SupportTicketDetail {
 }
 
 class SupportTicketService {
-  SupportTicketService({
-    required SharedApi api,
-    required AppSettingsRepository settings,
-    required SessionRepository session,
-  })  : _api = api,
-        _settings = settings,
-        _session = session;
+  SupportTicketService(this._api, this._settings, this._session);
 
   static const _installationKey = 'support.installation_id.v1';
   static const _appInfoChannel = MethodChannel('jizhang/app_update');
@@ -151,16 +145,20 @@ class SupportTicketService {
       // Desktop/tests may not provide the native channel.
     }
 
+    final body = <String, Object>{
+      'installationId': installationId,
+      'subject': subject.trim(),
+      'message': message.trim(),
+    };
+    final normalizedContact = contact?.trim();
+    if (normalizedContact != null && normalizedContact.isNotEmpty) {
+      body['contact'] = normalizedContact;
+    }
+    if (version != null) body['appVersion'] = version;
     final response = await _api.request(
       '/support/tickets',
       method: 'POST',
-      body: {
-        'installationId': installationId,
-        'subject': subject.trim(),
-        'message': message.trim(),
-        if (contact?.trim().isNotEmpty == true) 'contact': contact!.trim(),
-        if (version != null) 'appVersion': version,
-      },
+      body: body,
     );
     final id = response['id'];
     if (id is! String || id.isEmpty) {
@@ -229,8 +227,8 @@ class SupportTicketService {
 
 final supportTicketServiceProvider = Provider<SupportTicketService>((ref) {
   return SupportTicketService(
-    api: ref.watch(sharedApiProvider),
-    settings: ref.watch(appSettingsRepositoryProvider),
-    session: ref.read(sessionRepositoryProvider),
+    ref.watch(sharedApiProvider),
+    ref.watch(appSettingsRepositoryProvider),
+    ref.read(sessionRepositoryProvider),
   );
 });
