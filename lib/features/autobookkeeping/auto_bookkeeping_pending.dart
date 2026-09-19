@@ -18,6 +18,7 @@ class PendingAutoBookkeepingCandidate {
     this.originalAmountInCents,
     this.discountAmountInCents,
     this.identifierSuffix,
+    this.screenshotPath,
   });
 
   factory PendingAutoBookkeepingCandidate.fromMap(Map<Object?, Object?> map) {
@@ -40,6 +41,7 @@ class PendingAutoBookkeepingCandidate {
       originalAmountInCents: _nullableInt(map['originalAmountInCents']),
       discountAmountInCents: _nullableInt(map['discountAmountInCents']),
       identifierSuffix: _nullableText(map['identifierSuffix']),
+      screenshotPath: _nullableText(map['screenshotPath']),
     );
   }
 
@@ -56,6 +58,7 @@ class PendingAutoBookkeepingCandidate {
   final int? originalAmountInCents;
   final int? discountAmountInCents;
   final String? identifierSuffix;
+  final String? screenshotPath;
 
   static String? _nullableText(Object? value) {
     final text = value?.toString().trim();
@@ -71,7 +74,7 @@ abstract interface class AutoBookkeepingPendingBridge {
   Future<AutoBookkeepingEnqueueResult> enqueue(
     PendingAutoBookkeepingCandidate candidate,
   );
-  Future<void> complete();
+  Future<void> complete({bool keepScreenshot = false});
 }
 
 class MethodChannelAutoBookkeepingPendingBridge
@@ -135,9 +138,12 @@ class MethodChannelAutoBookkeepingPendingBridge
   }
 
   @override
-  Future<void> complete() async {
+  Future<void> complete({bool keepScreenshot = false}) async {
     try {
-      await _channel.invokeMethod<void>('complete');
+      await _channel.invokeMethod<void>(
+        'complete',
+        {'keepScreenshot': keepScreenshot},
+      );
     } on MissingPluginException {
       throw StateError('自动记账确认页仅支持 Android');
     }
