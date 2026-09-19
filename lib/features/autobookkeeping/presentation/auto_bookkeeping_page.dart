@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../auto_bookkeeping_settings.dart';
-import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingPage extends ConsumerStatefulWidget {
@@ -26,6 +25,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool? _notificationGranted;
   bool? _paymentNotificationAccessGranted;
   bool _paymentNotificationEnabled = false;
+  bool _paymentNotificationConnected = false;
   bool _accessibilityConnected = false;
   bool _foregroundRunning = false;
   bool _enabled = false;
@@ -70,10 +70,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       return;
     }
     final bridge = ref.read(autoBookkeepingSettingsProvider);
-    final paymentBridge = ref.read(paymentNotificationBridgeProvider);
     final status = await bridge.runtimeStatus();
-    final paymentAccess = await paymentBridge.isAccessGranted();
-    final paymentEnabled = await paymentBridge.isEnabled();
     if (!mounted) return;
     setState(() {
       _accessibilityGranted = status.accessibilityGranted;
@@ -81,8 +78,9 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       _overlayGranted = status.overlayGranted;
       _notificationGranted = status.notificationGranted;
       _foregroundRunning = status.foregroundRunning;
-      _paymentNotificationAccessGranted = paymentAccess;
-      _paymentNotificationEnabled = paymentEnabled;
+      _paymentNotificationAccessGranted = status.notificationListenerGranted;
+      _paymentNotificationEnabled = status.notificationListenerEnabled;
+      _paymentNotificationConnected = status.notificationListenerConnected;
       _enabled = status.enabled;
       _loading = false;
     });
@@ -297,14 +295,32 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                             }
                           },
                         ),
-                        _PermissionRow(
-                          icon: Icons.notifications_active_outlined,
-                          title: '支付通知兜底',
-                          enabled:
-                              _paymentNotificationAccessGranted == true &&
-                              _paymentNotificationEnabled,
-                          onTap: () =>
-                              context.push('/profile/payment-notifications'),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _paymentNotificationConnected
+                                ? Icons.check_circle_outline
+                                : Icons.notifications_active_outlined,
+                            color: _paymentNotificationConnected
+                                ? context.appPrimary
+                                : AppColors.warning,
+                          ),
+                          title: const Text('支付通知兜底'),
+                          subtitle: Text(
+                            _paymentNotificationAccessGranted != true
+                                ? '未授权通知读取权限'
+                                : !_paymentNotificationEnabled
+                                ? '已授权 · 未开启'
+                                : _paymentNotificationConnected
+                                ? '已开启 · 监听服务已连接'
+                                : '已开启 · 等待系统连接监听服务',
+                          ),
+                          trailing: TextButton(
+                            onPressed: () => context.push(
+                              '/profile/payment-notifications',
+                            ),
+                            child: const Text('设置'),
+                          ),
                         ),
                       ],
                     ),
