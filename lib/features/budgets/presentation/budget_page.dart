@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/budget.dart';
 import '../../../core/models/category.dart';
@@ -45,7 +46,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
             children: [
               IconButton(
                 onPressed: () => context.go('/profile'),
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
               ),
               Expanded(
                 child: Text(
@@ -68,11 +69,11 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                 children: [
                   const Icon(
                     Icons.savings_outlined,
-                    color: AppColors.primary,
+                    color: context.appPrimary,
                     size: 44,
                   ),
                   const SizedBox(height: 10),
-                  const Text('设置本月预算后，即可计算今日安心可花'),
+                  Text('设置本月预算后，即可计算今日安心可花'),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: () => _setBudget(context, ref),
@@ -105,7 +106,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
             const AppCard(
               child: Text(
                 '还没有分类预算，可以先从餐饮、交通等高频分类开始。',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             )
           else
@@ -299,9 +300,9 @@ class _TotalBudgetCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 '本月还剩',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
               const Spacer(),
               _StatusBadge(status: progress.status),
@@ -314,7 +315,7 @@ class _TotalBudgetCard extends StatelessWidget {
               style: TextStyle(
                 color: remaining < 0
                     ? AppColors.warning
-                    : AppColors.primaryDark,
+                    : context.appPrimary,
                 fontSize: 38,
                 fontWeight: FontWeight.w700,
               ),
@@ -327,8 +328,8 @@ class _TotalBudgetCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             color: progress.status == BudgetAlertStatus.exceeded
                 ? AppColors.warning
-                : AppColors.primary,
-            backgroundColor: AppColors.primarySoft,
+                : context.appPrimary,
+            backgroundColor: context.appPrimarySoft,
           ),
           const SizedBox(height: 10),
           Row(
@@ -356,8 +357,8 @@ class _TotalBudgetCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '本月还剩 ${progress.remainingDays} 天 · 目标预留 ¥${MoneyFormatter.decimal(progress.goalReservation)}',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.appSecondaryText,
               fontSize: 12,
             ),
           ),
@@ -400,10 +401,10 @@ class _CategoryBudgetCard extends StatelessWidget {
         child: Row(
           children: [
             const CircleAvatar(
-              backgroundColor: AppColors.primarySoft,
+              backgroundColor: context.appPrimarySoft,
               child: Icon(
                 Icons.category_outlined,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             ),
             const SizedBox(width: 12),
@@ -416,7 +417,7 @@ class _CategoryBudgetCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           progress.category?.name ?? '已隐藏分类',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
                       _StatusBadge(status: progress.status),
@@ -427,14 +428,14 @@ class _CategoryBudgetCard extends StatelessWidget {
                     value: progress.percentage.clamp(0, 1),
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(6),
-                    backgroundColor: AppColors.primarySoft,
+                    backgroundColor: context.appPrimarySoft,
                   ),
                   const SizedBox(height: 5),
                   Text(
                     '已用 ¥${MoneyFormatter.whole(progress.used)}  ·  '
                     '剩余 ¥${MoneyFormatter.whole(progress.remaining)}',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: context.appSecondaryText,
                       fontSize: 12,
                     ),
                   ),
@@ -468,7 +469,7 @@ class _BudgetStat extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+          style: TextStyle(color: context.appSecondaryText, fontSize: 11),
         ),
         const SizedBox(height: 2),
         FittedBox(
@@ -490,7 +491,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      BudgetAlertStatus.normal => ('正常', AppColors.primary),
+      BudgetAlertStatus.normal => ('正常', context.appPrimary),
       BudgetAlertStatus.nearLimit => ('接近预算', const Color(0xFFD58A2C)),
       BudgetAlertStatus.exceeded => ('已超预算', AppColors.warning),
     };
