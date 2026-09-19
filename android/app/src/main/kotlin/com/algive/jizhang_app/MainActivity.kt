@@ -322,6 +322,17 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(mapOf("status" to decision.name.lowercase()))
                     }
+                    "promoteScreenshot" -> {
+                        val path = call.argument<String>("path")
+                        result.success(
+                            path?.let {
+                                AutoBookkeepingPendingStore.promoteScreenshot(
+                                    this,
+                                    it,
+                                )
+                            },
+                        )
+                    }
                     "complete" -> {
                         val keepScreenshot =
                             (call.arguments as? Map<*, *>)?.get("keepScreenshot") == true
