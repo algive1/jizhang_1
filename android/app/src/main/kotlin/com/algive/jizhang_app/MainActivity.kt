@@ -9,7 +9,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
-import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -514,8 +513,14 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun isNotificationAccessGranted(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
-        return enabled.split(":").any { ComponentName.unflattenFromString(it)?.packageName == packageName }
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners",
+        ) ?: return false
+        val expected = ComponentName(this, PaymentNotificationListenerService::class.java)
+        return enabled.split(":")
+            .mapNotNull(ComponentName::unflattenFromString)
+            .any { it == expected }
     }
 
     private fun isAccessibilityGranted(): Boolean {
