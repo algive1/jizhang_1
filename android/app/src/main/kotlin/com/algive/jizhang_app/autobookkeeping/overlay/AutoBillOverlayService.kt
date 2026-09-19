@@ -153,14 +153,10 @@ class AutoBillOverlayService : Service() {
             if (!AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
                 error("status notification is not available")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForeground(
-                    AutoBookkeepingNotificationController.NOTIFICATION_ID,
-                    AutoBookkeepingNotificationController.buildNotification(this),
-                )
-            } else {
-                AutoBookkeepingNotificationController.sync(this)
-            }
+            startForeground(
+                AutoBookkeepingNotificationController.NOTIFICATION_ID,
+                AutoBookkeepingNotificationController.buildNotification(this),
+            )
         }
         if (foregroundStarted.isFailure) {
             val error = foregroundStarted.exceptionOrNull()
@@ -186,6 +182,7 @@ class AutoBillOverlayService : Service() {
         instance = null
         AutoBookkeepingDiagnostics.foregroundRunning = false
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service destroyed")
+        AutoBookkeepingNotificationController.cancelStatus(this)
         super.onDestroy()
     }
 
