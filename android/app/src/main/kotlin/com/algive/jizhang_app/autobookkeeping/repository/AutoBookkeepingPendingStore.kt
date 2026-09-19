@@ -399,6 +399,25 @@ object AutoBookkeepingPendingStore {
         runCatching { File(path).delete() }
     }
 
+    fun cleanupOrphanedScreenshots(context: Context) {
+        val validPath = readValidPayload(context)
+            ?.optString("screenshotPath")
+            .orEmpty()
+        val directory = File(
+            context.filesDir,
+            "autobookkeeping/pending_screenshots",
+        )
+        directory.listFiles()
+            ?.filter { file ->
+                file.isFile &&
+                    (validPath.isBlank() ||
+                        runCatching {
+                            file.canonicalPath != File(validPath).canonicalPath
+                        }.getOrDefault(true))
+            }
+            ?.forEach { file -> runCatching { file.delete() } }
+    }
+
     fun promoteScreenshot(
         context: Context,
         path: String,
@@ -415,6 +434,7 @@ object AutoBookkeepingPendingStore {
 
         val destination = File(directory, source.name)
         if (destination.exists()) {
+            runCatching { source.delete() }
             return destination.absolutePath
         }
         return runCatching {
