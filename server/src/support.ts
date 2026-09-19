@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { requireCondition as check } from './contract.js';
 import type { Store } from './store.js';
 
 type User = { id: string; username: string };
@@ -110,14 +111,10 @@ export function registerSupportRoutes(
         + 'created_at AS createdAt,updated_at AS updatedAt,resolved_at AS resolvedAt '
         + 'FROM support_tickets WHERE id=? AND user_id=?',
     ).get(id, user.id);
-    if (!ticket) {
-      const error = new Error('工单不存在') as Error & { statusCode?: number };
-      error.statusCode = 404;
-      throw error;
-    }
+    check(ticket, '工单不存在', 404);
     const messages = store.db.prepare(
       'SELECT id,author_type AS authorType,body,created_at AS createdAt '
-        + 'FROM support_ticket_messages WHERE ticket_id=? ORDER BY created_at ASC,id ASC',
+        + 'FROM support_ticket_messages WHERE ticket_id=? ORDER BY created_at ASC,rowid ASC',
     ).all(id);
     return { ticket, messages };
   });
@@ -134,11 +131,7 @@ export function registerSupportRoutes(
       const ticket = store.db.prepare(
         'SELECT id,status FROM support_tickets WHERE id=? AND user_id=?',
       ).get(id, user.id) as { id:string; status:string }|undefined;
-      if (!ticket) {
-        const error = new Error('工单不存在') as Error & { statusCode?: number };
-        error.statusCode = 404;
-        throw error;
-      }
+        check(ticket, '工单不存在', 404);
       const now = store.now();
       const messageId = randomUUID();
       store.db.transaction(() => {
