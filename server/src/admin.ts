@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -12,6 +12,7 @@ import {
   dispatchPushOutbox,
   ensurePushDeliverySchema,
   queuePushForAllRegisteredUsers,
+  queuePushForUser,
 } from './push_delivery.js';
 import { ensureSupportSchema } from './support.js';
 import type { Store } from './store.js';
@@ -68,7 +69,11 @@ pre{white-space:pre-wrap;background:#f7f8f4;padding:12px;border-radius:10px;over
 <div class="card"><div class="row"><input id="token" type="password" placeholder="ADMIN_TOKEN"><button onclick="saveToken()">保存令牌</button><button onclick="loadSummary()">刷新概览</button></div><p class="muted">令牌仅保存在当前浏览器 sessionStorage。</p></div>
 <div class="card"><h2>运行概览</h2><pre id="summary">尚未加载</pre></div>
 <div class="card"><h2>发布公告</h2><div class="row"><input id="title" placeholder="标题"><input id="route" placeholder="应用路由（可选）"></div><p><textarea id="body" placeholder="公告正文"></textarea></p><button onclick="publish()">发布并推送</button><pre id="publishResult"></pre></div>
-<div class="card"><h2>反馈工单</h2><button onclick="tickets()">刷新工单</button><pre id="tickets">尚未加载</pre></div>
+<div class="card"><h2>反馈工单</h2>
+<div class="row"><input id="ticketId" placeholder="工单 ID"><select id="ticketStatus"><option>open</option><option>in_progress</option><option>resolved</option><option>closed</option></select><button onclick="setTicketStatus()">更新状态</button></div>
+<p><textarea id="ticketReply" placeholder="后台回复内容"></textarea></p>
+<div class="row"><button onclick="replyTicket()">回复并推送</button><button onclick="tickets()">刷新工单</button></div>
+<pre id="tickets">尚未加载</pre></div>
 <div class="card"><h2>运维</h2><div class="row"><button onclick="maintenance()">执行留存清理</button><button onclick="pushNow()">立即处理推送队列</button></div><pre id="ops"></pre></div>
 <script>
 const tokenEl=document.getElementById('token');tokenEl.value=sessionStorage.getItem('haohao-admin-token')||'';
@@ -77,6 +82,8 @@ async function api(path,options){saveToken();const r=await fetch(path,Object.ass
 async function loadSummary(){try{document.getElementById('summary').textContent=JSON.stringify(await api('/api/v1/admin/summary'),null,2)}catch(e){document.getElementById('summary').textContent=String(e)}}
 async function publish(){try{const data=await api('/api/v1/admin/announcements',{method:'POST',body:JSON.stringify({title:document.getElementById('title').value,body:document.getElementById('body').value,route:document.getElementById('route').value||null})});document.getElementById('publishResult').textContent=JSON.stringify(data,null,2);loadSummary()}catch(e){document.getElementById('publishResult').textContent=String(e)}}
 async function tickets(){try{document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets'),null,2)}catch(e){document.getElementById('tickets').textContent=String(e)}}
+async function setTicketStatus(){try{const id=document.getElementById('ticketId').value.trim();document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets/'+id,{method:'PATCH',body:JSON.stringify({status:document.getElementById('ticketStatus').value})}),null,2);tickets()}catch(e){document.getElementById('tickets').textContent=String(e)}}
+async function replyTicket(){try{const id=document.getElementById('ticketId').value.trim();document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets/'+id+'/messages',{method:'POST',body:JSON.stringify({body:document.getElementById('ticketReply').value})}),null,2);document.getElementById('ticketReply').value='';tickets()}catch(e){document.getElementById('tickets').textContent=String(e)}}
 async function maintenance(){try{document.getElementById('ops').textContent=JSON.stringify(await api('/api/v1/admin/maintenance/run',{method:'POST',body:'{}'}),null,2)}catch(e){document.getElementById('ops').textContent=String(e)}}
 async function pushNow(){try{document.getElementById('ops').textContent=JSON.stringify(await api('/api/v1/admin/push/dispatch',{method:'POST',body:'{}'}),null,2)}catch(e){document.getElementById('ops').textContent=String(e)}}
 </script>
@@ -132,8 +139,12 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
     const { status } = z.strictObject({
       status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
     }).parse(request.body);
+    const ticket = store.db.prepare(
+      'SELECT user_id AS userId,subject FROM support_tickets WHERE id=?',
+    ).get(id) as {userId:string|null;subject:string}|undefined;
+    check(ticket, '工单不存在', 404);
     const now = store.now();
-    const result = store.db.prepare(
+    store.db.prepare(
       'UPDATE support_tickets SET status=?,updated_at=?,resolved_at=? WHERE id=?',
     ).run(
       status,
@@ -141,9 +152,54 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
       status === 'resolved' || status === 'closed' ? now : null,
       id,
     );
-    check(result.changes === 1, '工单不存在', 404);
+    if (ticket.userId) {
+      queuePushForUser(store, ticket.userId, {
+        title: '反馈工单状态更新',
+        body: `${ticket.subject} · ${status}`,
+        route: `/profile/support-tickets/${id}`,
+      });
+    }
     audit(store, 'support_ticket_status', { id, status });
     return { ok: true };
+  });
+
+  app.post('/api/v1/admin/support-tickets/:id/messages', async (request, reply) => {
+    requireAdmin(request.headers['x-admin-token']);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const { body } = z.strictObject({
+      body: z.string().trim().min(1).max(4000),
+    }).parse(request.body);
+    const ticket = store.db.prepare(
+      'SELECT user_id AS userId,subject FROM support_tickets WHERE id=?',
+    ).get(id) as {userId:string|null;subject:string}|undefined;
+    check(ticket, '工单不存在', 404);
+    const now = store.now();
+    const messageId = randomUUID();
+    store.db.transaction(() => {
+      store.db.prepare(
+        'INSERT INTO support_ticket_messages(id,ticket_id,author_type,body,created_at) '
+          + 'VALUES(?,?,\'admin\',?,?)',
+      ).run(messageId, id, body, now);
+      store.db.prepare(
+        "UPDATE support_tickets SET status=CASE WHEN status='open' THEN 'in_progress' ELSE status END,updated_at=? WHERE id=?",
+      ).run(now, id);
+    })();
+    let queued = 0;
+    if (ticket.userId) {
+      queued = queuePushForUser(store, ticket.userId, {
+        title: '好好记账客服回复',
+        body: body.length > 80 ? body.slice(0, 77) + '...' : body,
+        route: `/profile/support-tickets/${id}`,
+      });
+    }
+    audit(store, 'support_ticket_reply', { id, queued });
+    return reply.code(201).send({
+      id: messageId,
+      authorType: 'admin',
+      body,
+      createdAt: now,
+      queued,
+    });
   });
 
   app.post('/api/v1/admin/announcements', async (request) => {
