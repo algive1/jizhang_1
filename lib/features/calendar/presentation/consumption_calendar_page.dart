@@ -95,10 +95,10 @@ class _ConsumptionCalendarPageState
 
     final selected = _selectedDay == null
         ? const <TransactionRecord>[]
-        : monthTransactions
+        : (monthTransactions
               .where((item) => item.occurredAt.day == _selectedDay)
               .toList()
-      ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+          ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
 
     final maxDailyExpense = dailyExpense.values.fold<double>(
       0,
@@ -984,7 +984,7 @@ class _CalendarInlineStats extends StatelessWidget {
                   label: '最高消费日',
                   value: highestExpenseDay == null
                       ? '暂无'
-                      : highestExpenseDay.toString() + '日',
+                      : '$highestExpenseDay日',
                   helper: highestExpenseCents == null
                       ? null
                       : '¥${(highestExpenseCents! / 100).toStringAsFixed(2)}',
@@ -1364,13 +1364,19 @@ class _MonthlyOverviewCard extends StatelessWidget {
                 '本月概览',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
-              const Spacer(),
-              Text(
-                '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
-                ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.appSecondaryText,
+              const SizedBox(width: 12),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
+                    ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.appSecondaryText,
+                    ),
+                  ),
                 ),
               ),
             ],
