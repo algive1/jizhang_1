@@ -32,6 +32,15 @@ class MethodChannelPaymentNotificationBridge
   }
 
   @override
+  Future<bool> isConnected() async {
+    try {
+      return await _channel.invokeMethod<bool>('isConnected') ?? false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  @override
   Future<void> openAccessSettings() async {
     try {
       await _channel.invokeMethod<void>('openAccessSettings');
