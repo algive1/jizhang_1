@@ -328,14 +328,7 @@ class PaymentNotificationParser {
     final explicit = RegExp(
       r'(?:支付方式|付款方式|支付渠道)[：:\s]*([^，。；;\n]{2,40})',
     ).firstMatch(content)?.group(1)?.trim();
-    if (explicit != null && explicit.isNotEmpty) return explicit;
-    if (content.contains('支付宝')) return '支付宝';
-    if (content.contains('微信支付')) return '微信支付';
-    if (content.contains('云闪付')) return '云闪付';
-    if (content.contains('信用卡')) return '信用卡';
-    if (content.contains('储蓄卡')) return '储蓄卡';
-    if (content.contains('银行卡')) return '银行卡';
-    return null;
+    return explicit == null || explicit.isEmpty ? null : explicit;
   }
 
   String? _counterpartyFor(String content) {
