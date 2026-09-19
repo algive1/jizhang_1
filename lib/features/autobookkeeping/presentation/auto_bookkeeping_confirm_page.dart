@@ -354,6 +354,10 @@ class _AutoBookkeepingConfirmPageState
     'WECHAT' => '微信支付',
     'ALIPAY' => '支付宝',
     'UNIONPAY' => '云闪付',
+    'MEITUAN' => '美团',
+    'JD' => '京东',
+    'PINDUODUO' => '拼多多',
+    'DOUYIN' => '抖音',
     _ => '支付应用',
   };
 }
