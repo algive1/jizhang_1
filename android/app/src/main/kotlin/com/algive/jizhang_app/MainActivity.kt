@@ -702,7 +702,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun openAppNotificationSettings(
         result: MethodChannel.Result,
-        successValue: Boolean = true,
+        successValue: Any? = null,
     ) {
         openSystemSettings(
             result,
