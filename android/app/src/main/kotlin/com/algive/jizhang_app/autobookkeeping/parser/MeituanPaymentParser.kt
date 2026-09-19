@@ -101,13 +101,16 @@ class MeituanPaymentParser {
         if (labels.any { label -> rejectMarkers.any { marker -> label.contains(marker) } }) return null
         if (labels.none(::isSuccessLabel)) return null
 
-        val merchant = findField(labels, merchantKeys)
+        val merchant = CandidateFieldExtractor.field(labels, merchantKeys)
             ?: fallbackMerchant(labels)
             ?: return null
-        val method = findField(labels, setOf("支付方式", "付款方式", "支付渠道"))
+        val method = CandidateFieldExtractor
+            .field(labels, setOf("支付方式", "付款方式", "支付渠道"))
             ?.takeIf { it.isNotBlank() }
             ?: "UNKNOWN"
         val amount = findPaidAmount(labels) ?: return null
+        val (originalAmount, discountAmount) =
+            CandidateFieldExtractor.amountBreakdown(labels, amount)
 
         return PaymentCandidate(
             amountInCents = amount,
@@ -123,6 +126,11 @@ class MeituanPaymentParser {
             amountConfidence = 1.0,
             merchantConfidence = .92,
             sourceApp = "MEITUAN",
+            orderId = CandidateFieldExtractor.orderId(labels),
+            note = CandidateFieldExtractor.note(labels),
+            originalAmountInCents = originalAmount,
+            discountAmountInCents = discountAmount,
+            identifierSuffix = CandidateFieldExtractor.identifierSuffix(method, labels),
         )
     }
 
@@ -135,7 +143,7 @@ class MeituanPaymentParser {
         }
         if (labels.none(::isSuccessLabel)) return "NO_SUCCESS_MARKER"
         if (findPaidAmount(labels) == null) return "NO_UNIQUE_PAID_AMOUNT"
-        if (findField(labels, merchantKeys) == null && fallbackMerchant(labels) == null) {
+        if (CandidateFieldExtractor.field(labels, merchantKeys) == null && fallbackMerchant(labels) == null) {
             return "NO_MERCHANT"
         }
         return "UNSUPPORTED_LAYOUT"
@@ -143,22 +151,6 @@ class MeituanPaymentParser {
 
     private fun isSuccessLabel(label: String): Boolean =
         successMarkers.any { marker -> label == marker || label.startsWith(marker) }
-
-    private fun findField(labels: List<String>, keys: Set<String>): String? {
-        labels.forEachIndexed { index, text ->
-            keys.sortedByDescending { it.length }.forEach { key ->
-                if (text == key) {
-                    return labels.getOrNull(index + 1)
-                        ?.trim()
-                        ?.takeIf { it.isNotBlank() && it.length <= 100 }
-                }
-                if (text.startsWith("$key：") || text.startsWith("$key:")) {
-                    return text.substring(key.length + 1).trim().takeIf { it.isNotBlank() }
-                }
-            }
-        }
-        return null
-    }
 
     private fun findPaidAmount(labels: List<String>): Long? {
         val candidates = mutableListOf<Pair<Long, Int>>()
