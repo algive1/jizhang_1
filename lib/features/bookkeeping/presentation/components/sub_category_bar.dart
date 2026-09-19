@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/widgets/category_icon.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class SubCategoryBar extends StatelessWidget {
   const SubCategoryBar({
@@ -57,10 +57,10 @@ class _SubcategoryTile extends StatelessWidget {
           width: 62,
           padding: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primarySoft : Colors.transparent,
+            color: selected ? context.appPrimarySoft : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.primary : Colors.transparent,
+              color: selected ? context.appPrimary : Colors.transparent,
               width: 1.2,
             ),
           ),
@@ -81,8 +81,8 @@ class _SubcategoryTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10.5,
                   color: selected
-                      ? AppColors.primaryDark
-                      : AppColors.textSecondary,
+                      ? context.appPrimary
+                      : context.appSecondaryText,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
