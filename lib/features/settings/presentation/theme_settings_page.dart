@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
 import '../../membership/data/membership_repository.dart';
+import '../../../core/models/membership.dart';
 import '../application/theme_controller.dart';
 
 class ThemeSettingsPage extends ConsumerWidget {
@@ -14,7 +15,7 @@ class ThemeSettingsPage extends ConsumerWidget {
     final catalog = ref.watch(themeCatalogProvider);
     final preferred = ref.watch(preferredThemeProvider).value ?? BuiltInThemes.freshGreen.id;
     final member = ref.watch(membershipProvider).value;
-    final premium = member != null && member.membership.plan != MembershipPlan.free && member.membership.canUseGrantedEntitlements;
+    final premium = member != null && member.has(EntitlementKey.customTheme);
     return Scaffold(
       appBar: AppBar(title: const Text('主题外观')),
       body: catalog.when(
