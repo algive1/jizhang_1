@@ -54,12 +54,7 @@ class AutoBookkeepingLearningService {
     final merchantKey = normalizer.normalize(candidate.merchant);
     final typedKey = _typedMerchantKey(transactionType, merchantKey);
     final preferences = await _jsonMap(preferenceKey);
-    final rawPreference =
-        _map(preferences[typedKey]) ??
-        (transactionType == TransactionType.expense
-            ? _map(preferences[merchantKey]) ??
-                _map(preferences[candidate.merchant])
-            : null);
+    final rawPreference = _map(preferences[typedKey]);
 
     final rememberedBook = _text(rawPreference?['bookId']);
     final targetBook = rememberedBook ?? fallbackBookId;
@@ -122,19 +117,7 @@ class AutoBookkeepingLearningService {
 
     final typedKey = _typedMerchantKey(transactionType, merchantKey);
     final preferences = await _jsonMap(preferenceKey);
-    final previous =
-        _map(preferences[typedKey]) ??
-        (transactionType == TransactionType.expense
-            ? _map(preferences[merchantKey]) ??
-                _map(preferences[candidate.merchant])
-            : null);
-    if (transactionType == TransactionType.expense) {
-      // Migrate legacy untyped expense preferences only from the expense
-      // path. Income/refund learning must never erase an older expense choice.
-      preferences
-        ..remove(candidate.merchant)
-        ..remove(merchantKey);
-    }
+    final previous = _map(preferences[typedKey]);
     preferences[typedKey] = {
       'merchantKey': merchantKey,
       'transactionType': transactionType.name,
