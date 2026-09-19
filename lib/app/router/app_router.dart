@@ -50,6 +50,7 @@ import '../../features/calendar/presentation/consumption_calendar_page.dart';
 import '../../features/recurring/presentation/recurring_bills_page.dart';
 import '../../features/installments/presentation/installment_plans_page.dart';
 import '../../features/installments/presentation/installment_plan_detail_page.dart';
+import '../../features/finance_center/presentation/finance_center_page.dart';
 import '../../core/widgets/app_scaffold.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -257,6 +258,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => RecurringBillsPage(
                   focusBillId: state.uri.queryParameters['billId'],
                 ),
+              ),
+              GoRoute(
+                path: 'finance-center',
+                builder: (context, state) => const FinanceCenterPage(),
               ),
               GoRoute(
                 path: 'installments',
