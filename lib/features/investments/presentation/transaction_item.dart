@@ -141,7 +141,7 @@ class TransactionItem extends StatelessWidget {
 
   static Color _tint(InvestmentTransactionType type) => switch (type) {
     InvestmentTransactionType.buy => const Color(0xFFFBEDEB),
-    InvestmentTransactionType.sell => context.appPrimarySoft,
+    InvestmentTransactionType.sell => const Color(0xFFEEF4E5),
     InvestmentTransactionType.dividend => const Color(0xFFF8F0DE),
     InvestmentTransactionType.interest => const Color(0xFFEDEFF9),
   };
