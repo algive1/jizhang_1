@@ -329,7 +329,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       _error = null;
     });
     try {
-      final picked = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker().pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['csv', 'txt'],
         allowMultiple: false,
