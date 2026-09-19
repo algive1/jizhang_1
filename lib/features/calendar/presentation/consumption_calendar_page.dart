@@ -103,9 +103,6 @@ class _ConsumptionCalendarPageState
         .where((item) => item.isIncome)
         .fold<double>(0, (sum, item) => sum + item.amount);
     final balance = totalIncome - total;
-    final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
-    final elapsedDays = _isCurrentMonth ? _today.day : daysInMonth;
-    final dailyAverage = elapsedDays == 0 ? 0.0 : total / elapsedDays;
     final highest = dailyCents.entries.isEmpty
         ? null
         : dailyCents.entries.reduce((a, b) {
