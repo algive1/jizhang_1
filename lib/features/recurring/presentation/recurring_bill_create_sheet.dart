@@ -9,6 +9,7 @@ import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_date_picker.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../categories/data/category_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// Prototype-aligned form for creating a recurring bill.
 ///
@@ -187,7 +188,7 @@ class _RecurringBillCreateSheetState
               SizedBox(height: 6),
               Text(
                 widget.rulesOnly ? '记一笔中的金额、分类和账户已自动带入' : '设置后按周期自动提醒或记账',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 13, color: context.appSecondaryText),
               ),
             ],
           ),
@@ -366,17 +367,17 @@ class _RecurringBillCreateSheetState
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '当前规则',
           style: TextStyle(fontSize: 12, color: Color(0xFF77806D)),
         ),
         const SizedBox(height: 5),
         Text(
           '$_scheduleSummary · 从 ${_formatDate(_start)} 开始',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: AppColors.primaryDark,
+            color: context.appPrimary,
           ),
         ),
       ],
@@ -480,7 +481,7 @@ class _RecurringBillCreateSheetState
                   borderRadius: BorderRadius.circular(17),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 '取消',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
@@ -496,7 +497,7 @@ class _RecurringBillCreateSheetState
               key: const ValueKey('recurring-create-save'),
               onPressed: _submit,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: context.appPrimary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(17),
@@ -529,16 +530,16 @@ class _RecurringBillCreateSheetState
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: Color(0xFF9FBD72)),
+      borderSide: BorderSide(color: Color(0xFF9FBD72)),
     ),
   );
 
   InputDecoration _moneyDecoration() => _inputDecoration('0.00').copyWith(
     prefixText: '¥  ',
-    prefixStyle: const TextStyle(
+    prefixStyle: TextStyle(
       fontSize: 24,
       fontWeight: FontWeight.w700,
-      color: AppColors.textPrimary,
+      color: context.appPrimaryText,
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
   );
@@ -549,7 +550,7 @@ class _RecurringBillCreateSheetState
       alignment: Alignment.centerLeft,
       child: Text(
         label,
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 13, color: context.appSecondaryText),
       ),
     ),
   );
@@ -973,7 +974,7 @@ class _SegmentButton extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 15,
-            color: selected ? AppColors.primaryDark : AppColors.textSecondary,
+            color: selected ? context.appPrimary : context.appSecondaryText,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
           ),
         ),
@@ -1003,7 +1004,7 @@ class _CycleButton extends StatelessWidget {
       height: 44,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected ? AppColors.primarySoft : const Color(0xFFF8F9F5),
+        color: selected ? context.appPrimarySoft : const Color(0xFFF8F9F5),
         border: Border.all(
           color: selected ? const Color(0xFF91AF63) : const Color(0xFFE7E9E0),
         ),
@@ -1013,7 +1014,7 @@ class _CycleButton extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 14,
-          color: selected ? AppColors.primaryDark : AppColors.textSecondary,
+          color: selected ? context.appPrimary : context.appSecondaryText,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
         ),
       ),
@@ -1052,14 +1053,14 @@ class _SelectionRow extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 15)),
+                Text(title, style: TextStyle(fontSize: 15)),
                 if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     subtitle!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
                 ],
@@ -1080,7 +1081,7 @@ class _SelectionRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: value.isEmpty
-                          ? AppColors.textSecondary
+                          ? context.appSecondaryText
                           : const Color(0xFF5D635B),
                     ),
                   ),
@@ -1117,7 +1118,7 @@ class _SwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 58),
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       border: Border(bottom: BorderSide(color: Color(0xFFEAEBE5))),
     ),
     child: Row(
@@ -1127,13 +1128,13 @@ class _SwitchRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 15)),
+              Text(title, style: TextStyle(fontSize: 15)),
               const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
               ),
             ],
@@ -1178,15 +1179,15 @@ class _ChoiceList<T> extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ),
       if (options.isEmpty)
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Text(
             '暂无可选项，请先在当前账本添加。',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.appSecondaryText),
           ),
         )
       else
