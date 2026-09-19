@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/app_card.dart';
@@ -113,7 +113,7 @@ class _ConsumptionCalendarPageState
           });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6EC),
+      backgroundColor: context.appBackground,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -134,14 +134,14 @@ class _ConsumptionCalendarPageState
                       onPressed: _month.year == 2000
                           ? null
                           : () => _moveMonth(-1),
-                      icon: const Icon(Icons.chevron_left),
+                      icon: Icon(Icons.chevron_left),
                       tooltip: '上个月',
                     ),
                     Expanded(
                       child: Center(
                         child: Text(
                           '${_month.year}年${_month.month}月',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
@@ -165,7 +165,7 @@ class _ConsumptionCalendarPageState
                               day,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: context.appSecondaryText,
                               ),
                             ),
                           ),
@@ -189,7 +189,7 @@ class _ConsumptionCalendarPageState
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               const _CalendarLegend(),
@@ -202,7 +202,7 @@ class _ConsumptionCalendarPageState
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: _goToday,
-                child: const Text('回到今天'),
+                child: Text('回到今天'),
               ),
             ],
           ),
@@ -212,7 +212,7 @@ class _ConsumptionCalendarPageState
               if (previousRecorded != null)
                 TextButton.icon(
                   onPressed: () => _setMonth(previousRecorded),
-                  icon: const Icon(Icons.history, size: 18),
+                  icon: Icon(Icons.history, size: 18),
                   label: const Text('上个有记录月份'),
                 ),
               const Spacer(),
@@ -225,7 +225,7 @@ class _ConsumptionCalendarPageState
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final columns = constraints.maxWidth < 430 ? 2 : 4;
@@ -268,7 +268,7 @@ class _ConsumptionCalendarPageState
               },
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           if (_selectedDay != null)
             _SelectedDayHeader(
               date: DateTime(_month.year, _month.month, _selectedDay!),
@@ -281,9 +281,9 @@ class _ConsumptionCalendarPageState
               child: Column(
                 children: [
                   if (selected.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Text('当天没有流水记录', style: TextStyle(color: AppColors.textSecondary)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text('当天没有流水记录', style: TextStyle(color: context.appSecondaryText)),
                     )
                   else
                     ...selected.asMap().entries.map(
@@ -353,28 +353,28 @@ class _ConsumptionCalendarPageState
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
-            const Text(
+            Text(
               '统计范围',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(
+              leading: Icon(
                 Icons.all_inclusive,
-                color: AppColors.primary,
+                color: context.appPrimary,
               ),
-              title: const Text('全部账本'),
-              subtitle: const Text('汇总当前账号可访问的账本'),
+              title: Text('全部账本'),
+              subtitle: Text('汇总当前账号可访问的账本'),
               trailing: _bookFilterId == null
-                  ? const Icon(Icons.check, color: AppColors.primary)
+                  ? Icon(Icons.check, color: context.appPrimary)
                   : null,
               onTap: () => Navigator.pop(context, _allBooksFilterValue),
             ),
@@ -385,7 +385,7 @@ class _ConsumptionCalendarPageState
                 title: Text(book.name),
                 subtitle: Text(book.type.label),
                 trailing: _bookFilterId == book.id
-                    ? const Icon(Icons.check, color: AppColors.primary)
+                    ? Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, book.id),
               ),
@@ -424,12 +424,12 @@ class _CalendarBookFilter extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ActionChip(
         avatar: selected == null
-            ? const Icon(Icons.all_inclusive, size: 17)
+            ? Icon(Icons.all_inclusive, size: 17)
             : BookColorDot(book: selected, size: 10),
         label: Text(selected?.name ?? '全部账本'),
         onPressed: onTap,
-        side: BorderSide(color: AppColors.divider),
-        backgroundColor: AppColors.surface,
+        side: BorderSide(color: context.appDivider),
+        backgroundColor: context.appSurface,
       ),
     );
   }
@@ -472,32 +472,32 @@ class _CalendarGrid extends StatelessWidget {
       return GestureDetector(
         onTap: isFuture ? null : () => onDateTap(date),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: Duration(milliseconds: 180),
           margin: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.primary.withValues(alpha: .22)
+                ? context.appPrimary.withValues(alpha: .22)
                 : !inMonth
-                ? AppColors.background.withValues(alpha: .55)
+                ? context.appBackground.withValues(alpha: .55)
                 : amount == 0
                 ? Colors.transparent
-                : Color.lerp(AppColors.surface, AppColors.primarySoft, .25 + intensity * .45),
+                : Color.lerp(context.appSurface, context.appPrimarySoft, .25 + intensity * .45),
             borderRadius: BorderRadius.circular(12),
-            border: selected ? Border.all(color: AppColors.primary) : null,
+            border: selected ? Border.all(color: context.appPrimary) : null,
           ),
           child: Opacity(
             opacity: inMonth ? 1 : .38,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${date.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isFuture ? AppColors.textSecondary : null)),
+                Text('${date.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isFuture ? context.appSecondaryText : null)),
                 if (amount > 0 || income > 0) ...[
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       amount > 0 ? '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}' : '+¥${income.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 10, color: amount > 0 ? AppColors.primaryDark : AppColors.primary),
+                      style: TextStyle(fontSize: 10, color: amount > 0 ? context.appPrimary : context.appPrimary),
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -542,33 +542,33 @@ class _CalendarStat extends StatelessWidget {
     children: [
       Text(
         label,
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 12, color: context.appSecondaryText),
       ),
-      const SizedBox(height: 4),
+      SizedBox(height: 4),
       suffix != null
           ? Text(
               suffix!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             )
           : integer
           ? Text(
               '${value.round()}天',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             )
           : MoneyText(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             ),
     ],
@@ -591,16 +591,16 @@ class _CalendarDot extends StatelessWidget {
 class _CalendarLegend extends StatelessWidget {
   const _CalendarLegend();
   @override
-  Widget build(BuildContext context) => const Row(
+  Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       _CalendarDot(color: Color(0xFFFF7A45)),
       SizedBox(width: 5),
-      Text('支出', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text('支出', style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
       SizedBox(width: 10),
       _CalendarDot(color: Color(0xFF5BAE61)),
       SizedBox(width: 5),
-      Text('收入', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text('收入', style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
     ],
   );
 }
@@ -617,10 +617,10 @@ class _SelectedDayHeader extends StatelessWidget {
     const weekdays = ['一','二','三','四','五','六','日'];
     return Row(children: [
       Text('${date.month}月${date.day}日', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(width: 8),
-      Text('周${weekdays[date.weekday - 1]}', style: const TextStyle(color: AppColors.textSecondary)),
-      const Spacer(),
-      Text('共 ${transactions.length} 笔', style: const TextStyle(color: AppColors.textSecondary)),
+      SizedBox(width: 8),
+      Text('周${weekdays[date.weekday - 1]}', style: TextStyle(color: context.appSecondaryText)),
+      Spacer(),
+      Text('共 ${transactions.length} 笔', style: TextStyle(color: context.appSecondaryText)),
       const SizedBox(width: 12),
       Text('支出 ¥${expense.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFFFF6B35), fontWeight: FontWeight.w600)),
       const SizedBox(width: 10),

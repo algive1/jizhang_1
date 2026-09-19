@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/account_balance_effect.dart';
@@ -103,7 +103,7 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                   }
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               AssetShortcuts(
                 accountCount: selected.accounts
                     .where(
@@ -154,13 +154,13 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 onViewAll: () => context.push('/transactions'),
               ),
               if (activeBook?.usesPrimaryAssets == true)
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     '当前账本使用主账本资产；归档账户仍计入资产合计。',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -405,7 +405,7 @@ class _AccountAssetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final material = Material(
-      color: const Color(0xFFF9F9F2),
+      color: context.appBackground,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
@@ -662,15 +662,15 @@ class _RecentChangesState extends State<_RecentChanges> {
             for (var index = 0; index < visible.length; index++) ...[
               _RecentRow(record: visible[index], accountIds: accountIds),
               if (index < visible.length - 1)
-                const Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
+                Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
             ],
           if (_showTip) ...[
-            const SizedBox(height: 5),
+            SizedBox(height: 5),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFF4F6E9),
+                color: context.appSurfaceSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -917,8 +917,8 @@ class _AssetSheetFrame extends StatelessWidget {
       heightFactor: .52,
       alignment: Alignment.bottomCenter,
       child: Material(
-        key: const ValueKey('asset-sheet-frame'),
-        color: const Color(0xfff8faf1),
+        key: ValueKey('asset-sheet-frame'),
+        color: context.appSurfaceSoft,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         clipBehavior: Clip.antiAlias,
         child: Column(

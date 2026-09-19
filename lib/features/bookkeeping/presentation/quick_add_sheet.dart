@@ -28,6 +28,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/book.dart';
@@ -376,8 +377,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         child: FractionallySizedBox(
           heightFactor: 1,
           child: Material(
-            key: const ValueKey('quick-sheet-surface'),
-            color: const Color(0xFFF8F7F1),
+            key: ValueKey('quick-sheet-surface'),
+            color: context.appBackground,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -396,9 +397,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           height: 48,
                         ),
                         padding: EdgeInsets.zero,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_back_rounded,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                           size: 24,
                         ),
                       ),
@@ -544,35 +545,35 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       return Text(
         _transactionTypeLabel(_type),
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
+        style: TextStyle(
+          color: context.appSecondaryText,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
       );
     }
     if (_isEditing) {
-      return const Text(
+      return Text(
         '编辑中',
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: AppColors.textSecondary,
+          color: context.appSecondaryText,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
       );
     }
     return TextButton(
-      key: const ValueKey('quick-edit-categories'),
+      key: ValueKey('quick-edit-categories'),
       style: TextButton.styleFrom(
-        backgroundColor: AppColors.primarySoft,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appPrimarySoft,
+        foregroundColor: context.appPrimaryText,
         padding: EdgeInsets.zero,
       ),
       onPressed: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: context.appBackground,
             body: CategoryManagementPage(
               bookId: _bookId,
               onBack: () => Navigator.of(context).pop(),
@@ -592,12 +593,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Account? sourceAccount,
   }) {
     return Container(
-      key: const ValueKey('quick-detail-card'),
+      key: ValueKey('quick-detail-card'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -607,7 +608,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             onAi: _openAi,
             onVoice: _openVoice,
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           AmountInputView(
             input: input,
             currency: _currencySymbol(sourceAccount),
@@ -668,10 +669,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   key: const ValueKey('quick-book-selector'),
                   label: selectedBook?.name ?? '选择账本',
                   leading: selectedBook == null
-                      ? const Icon(
+                      ? Icon(
                           Icons.menu_book_outlined,
                           size: 16,
-                          color: AppColors.primary,
+                          color: context.appPrimary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
@@ -681,13 +682,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 )
               else
                 _QuickChip(
-                  key: const ValueKey('quick-book-selector'),
+                  key: ValueKey('quick-book-selector'),
                   label: selectedBook?.name ?? '当前账本',
                   leading: selectedBook == null
-                      ? const Icon(
+                      ? Icon(
                           Icons.menu_book_outlined,
                           size: 16,
-                          color: AppColors.primary,
+                          color: context.appPrimary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
@@ -695,7 +696,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _ChipRow(
             children: [
               _QuickChip(
@@ -735,9 +736,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               child: Text(
                 '已设置${_recurringDraft!.scheduleLabel}，点击完成会同时保存首笔流水和周期规则',
                 key: const ValueKey('quick-recurring-summary'),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -801,14 +802,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (!mounted) return;
       final selected = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         showDragHandle: true,
         builder: (context) => SafeArea(
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: Text(
                   '这笔钱由谁支付？',
@@ -829,7 +830,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     _ => '家庭成员',
                   }),
                   trailing: member['user_id'] == _payerUserId
-                      ? const Icon(Icons.check, color: AppColors.primary)
+                      ? Icon(Icons.check, color: context.appPrimary)
                       : null,
                   onTap: () => Navigator.pop(context, member),
                 ),
@@ -903,7 +904,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final selected = await showModalBottomSheet<Object>(
       context: context,
       showDragHandle: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       builder: (sheetContext) => SafeArea(
         child: ListView(
           shrinkWrap: true,
@@ -919,18 +920,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
                 TextButton.icon(
                   onPressed: () => Navigator.pop(sheetContext, 'save-current'),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('保存当前'),
+                  icon: Icon(Icons.add, size: 18),
+                  label: Text('保存当前'),
                 ),
               ],
             ),
             if (templates.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 28),
                 child: Center(
                   child: Text(
                     '还没有模板。先填写一笔常用收支，再点“保存当前”。',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   ),
                 ),
               )
@@ -1121,7 +1122,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Future<void> _pickReimbursement() async {
     final selected = await showModalBottomSheet<ReimbursementStatus>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -1133,7 +1134,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 key: ValueKey('quick-reimbursement-${status.name}'),
                 title: Text(_reimbursementLabelFor(status)),
                 trailing: status == _reimbursementStatus
-                    ? const Icon(Icons.check, color: AppColors.primary)
+                    ? Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, status),
               ),
@@ -1479,7 +1480,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         : accounts;
     final selected = await showModalBottomSheet<Account>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -2073,7 +2074,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
 /// Visual identity for one account type, shared by chips and the picker.
 (IconData, Color) _accountVisual(AccountType? type) => switch (type) {
-  AccountType.wechat => (Icons.chat_bubble_rounded, const Color(0xFF07C160)),
+  AccountType.wechat => (Icons.chat_bubble_rounded, Color(0xFF07C160)),
   AccountType.alipay => (
     Icons.account_balance_wallet_rounded,
     const Color(0xFF1677FF),
@@ -2127,7 +2128,7 @@ class _EntryTabs extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
@@ -2146,7 +2147,7 @@ class _EntryTabs extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: item.$1 == selected
-                          ? AppColors.primary
+                          ? context.appPrimary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(19),
                     ),
@@ -2159,7 +2160,7 @@ class _EntryTabs extends StatelessWidget {
                           fontSize: 14,
                           color: item.$1 == selected
                               ? Colors.white
-                              : AppColors.textSecondary,
+                              : context.appSecondaryText,
                           fontWeight: item.$1 == selected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -2196,7 +2197,7 @@ class _DebtTabs extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
@@ -2214,7 +2215,7 @@ class _DebtTabs extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: item.$1 == selected
-                          ? AppColors.primarySoft
+                          ? context.appPrimarySoft
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2225,8 +2226,8 @@ class _DebtTabs extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           color: item.$1 == selected
-                              ? AppColors.primaryDark
-                              : AppColors.textSecondary,
+                              ? context.appPrimary
+                              : context.appSecondaryText,
                           fontWeight: item.$1 == selected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -2267,23 +2268,23 @@ class _AccountPairCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
           Expanded(
             child: _AccountPairButton(
-              key: const ValueKey('quick-account-chip'),
+              key: ValueKey('quick-account-chip'),
               label: isRepayment ? '还款账户' : '转出',
               account: source,
               onTap: onSourceTap,
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Icon(
               Icons.arrow_forward_rounded,
-              color: AppColors.primary,
+              color: context.appPrimary,
               size: 18,
             ),
           ),
@@ -2322,7 +2323,7 @@ class _AccountPairButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surfaceSoft,
+          color: context.appSurfaceSoft,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -2330,12 +2331,12 @@ class _AccountPairButton extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Row(
               children: [
                 Icon(visual.$1, size: 16, color: visual.$2),
@@ -2345,10 +2346,10 @@ class _AccountPairButton extends StatelessWidget {
                     account?.displayName ?? '请选择',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                     ),
                   ),
                 ),
@@ -2382,12 +2383,12 @@ class _NoteRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.edit_outlined,
             size: 18,
-            color: AppColors.textSecondary,
+            color: context.appSecondaryText,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: TextField(
               key: const ValueKey('quick-note-field'),
@@ -2397,11 +2398,11 @@ class _NoteRow extends StatelessWidget {
               textAlignVertical: TextAlignVertical.center,
               onTapOutside: (_) =>
                   FocusManager.instance.primaryFocus?.unfocus(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: context.appPrimaryText,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 // This is an integrated row, not a standalone form field.
                 // Explicitly neutralize the app-wide 52dp outlined field theme
                 // so the note area stays borderless and compact like the
@@ -2418,7 +2419,7 @@ class _NoteRow extends StatelessWidget {
                 hintText: '添加备注...',
                 hintStyle: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
                 contentPadding: EdgeInsets.zero,
                 constraints: BoxConstraints.tightFor(height: 40),
@@ -2429,10 +2430,10 @@ class _NoteRow extends StatelessWidget {
       ),
     );
     final aiAction = _QuickChip(
-      key: const ValueKey('quick-ai-entry'),
+      key: ValueKey('quick-ai-entry'),
       label: 'AI帮我记',
       icon: Icons.auto_awesome_outlined,
-      iconColor: AppColors.primaryDark,
+      iconColor: context.appPrimary,
       selected: true,
       height: 36,
       horizontalPadding: 6,
@@ -2503,9 +2504,9 @@ class _NoteIconAction extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: context.appDivider),
             ),
-            child: Icon(icon, size: 18, color: AppColors.textSecondary),
+            child: Icon(icon, size: 18, color: context.appSecondaryText),
           ),
         ),
       ),
@@ -2575,7 +2576,7 @@ class _QuickChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primarySoft : Colors.white,
+      color: selected ? context.appPrimarySoft : Colors.white,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -2586,7 +2587,7 @@ class _QuickChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.divider,
+              color: selected ? context.appPrimary : context.appDivider,
               width: selected ? 1.2 : 1,
             ),
           ),
@@ -2602,12 +2603,12 @@ class _QuickChip extends StatelessWidget {
                   Icon(
                     icon,
                     size: 16,
-                    color: iconColor ?? AppColors.textSecondary,
+                    color: iconColor ?? context.appSecondaryText,
                   ),
                   SizedBox(width: iconGap),
                 ],
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
+                  constraints: BoxConstraints(maxWidth: 120),
                   child: Text(
                     label,
                     maxLines: 1,
@@ -2615,18 +2616,18 @@ class _QuickChip extends StatelessWidget {
                     style: TextStyle(
                       fontSize: fontSize,
                       color: selected
-                          ? AppColors.primaryDark
-                          : AppColors.textPrimary,
+                          ? context.appPrimary
+                          : context.appPrimaryText,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ),
                 if (showChevron) ...[
-                  const SizedBox(width: 2),
-                  const Icon(
+                  SizedBox(width: 2),
+                  Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                   ),
                 ],
               ],
@@ -2656,9 +2657,9 @@ class _AttachmentThumbnail extends StatelessWidget {
       );
     }
     if (attachment.status == AttachmentUploadStatus.uploading) {
-      return const DecoratedBox(
+      return DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.primarySoft,
+          color: context.appPrimarySoft,
           borderRadius: BorderRadius.all(Radius.circular(10)),
         ),
         child: Padding(
@@ -2681,14 +2682,14 @@ class _AttachmentThumbnail extends StatelessWidget {
     if (!isImage) {
       return GestureDetector(
         onTap: () => _preview(context, isImage: false),
-        child: const DecoratedBox(
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             borderRadius: BorderRadius.all(Radius.circular(10)),
           ),
           child: Icon(
             Icons.insert_drive_file_outlined,
-            color: AppColors.primary,
+            color: context.appPrimary,
           ),
         ),
       );
@@ -2700,9 +2701,9 @@ class _AttachmentThumbnail extends StatelessWidget {
         child: Image.file(
           File(attachment.path),
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) => const DecoratedBox(
-            decoration: BoxDecoration(color: AppColors.primarySoft),
-            child: Icon(Icons.broken_image_outlined, color: AppColors.primary),
+          errorBuilder: (context, error, stack) => DecoratedBox(
+            decoration: BoxDecoration(color: context.appPrimarySoft),
+            child: Icon(Icons.broken_image_outlined, color: context.appPrimary),
           ),
         ),
       ),
