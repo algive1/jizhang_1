@@ -112,26 +112,18 @@ class _ConsumptionCalendarPageState
             return a.key < b.key ? a : b;
           });
 
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6EC),
+      body: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/'),
-                icon: const Icon(Icons.arrow_back),
-                tooltip: '返回首页',
-              ),
-              Expanded(
-                child: Text(
-                  '消费日历',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ),
-            ],
+          _CalendarHeroHeader(
+            onBack: () => context.canPop() ? context.pop() : context.go('/'),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Column(
+              children: [
           AppCard(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
             child: Column(
@@ -314,6 +306,9 @@ class _ConsumptionCalendarPageState
                 ],
               ),
             ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -366,7 +361,7 @@ class _ConsumptionCalendarPageState
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
             const Text(
-              '筛选账本',
+              '统计范围',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -377,6 +372,7 @@ class _ConsumptionCalendarPageState
                 color: AppColors.primary,
               ),
               title: const Text('全部账本'),
+              subtitle: const Text('汇总当前账号可访问的账本'),
               trailing: _bookFilterId == null
                   ? const Icon(Icons.check, color: AppColors.primary)
                   : null,
@@ -630,5 +626,49 @@ class _SelectedDayHeader extends StatelessWidget {
       const SizedBox(width: 10),
       Text('收入 ¥${income.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF4F984F), fontWeight: FontWeight.w600)),
     ]);
+  }
+}
+
+
+class _CalendarHeroHeader extends StatelessWidget {
+  const _CalendarHeroHeader({required this.onBack});
+  final VoidCallback onBack;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 190,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8F8ED), Color(0xFFE4EED0), Color(0xFFCFE1B5)],
+        ),
+      ),
+      child: Stack(children: [
+        Positioned(right: -24, top: 28, child: Icon(Icons.eco_rounded, size: 150, color: Color(0x335D8E3E))),
+        Positioned(right: 62, bottom: 14, child: Icon(Icons.local_cafe_outlined, size: 58, color: Color(0x557B5A32))),
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 16, 12),
+            child: Column(children: [
+              Row(children: [
+                IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded), tooltip: '返回'),
+                Expanded(child: Text('消费日历', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
+                const SizedBox(width: 48),
+              ]),
+              const Spacer(),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(left: 34),
+                  child: Text('每一笔，\n都是生活的痕迹 🍃', style: TextStyle(fontSize: 16, height: 1.55, color: Color(0xFF536746), fontWeight: FontWeight.w500)),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ]),
+    );
   }
 }
