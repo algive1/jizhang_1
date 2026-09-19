@@ -365,7 +365,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 Text('完整本地备份', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 12),
                 Text('导出密码加密的完整备份，包含 SQLite 账本与现有附件。备份密码不会上传或保存，恢复时必须重新输入。'),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 if (databaseState.isLoading)
                   const LinearProgressIndicator()
                 else if (databaseState.hasError)
