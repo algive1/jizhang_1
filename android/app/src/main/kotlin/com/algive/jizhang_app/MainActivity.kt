@@ -719,7 +719,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun openSystemSettings(
         result: MethodChannel.Result,
         vararg intents: Intent,
-        successValue: Boolean = true,
+        successValue: Any? = null,
     ) {
         for (intent in intents) {
             val opened = runCatching {
