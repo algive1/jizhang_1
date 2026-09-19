@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
@@ -158,16 +157,16 @@ class _HomePageState extends ConsumerState<HomePage>
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.people_outline,
                         size: 16,
                         color: context.appPrimary,
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           '${(sharedState?['pending'] as List? ?? []).length} 项待同步 · ${sharedState?['error'] != null ? '需要处理' : '共享成员'}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: context.appPrimary,
                           ),
@@ -195,7 +194,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 },
               )
             else if (budgets.isLoading || goalsState.isLoading)
-              const HomeSurface(child: LinearProgressIndicator())
+              HomeSurface(child: LinearProgressIndicator())
             else if (dataReady)
               HomeSpendingGoalCard(
                 bookType: book.type,
@@ -294,7 +293,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             if (dataReady)
               HomeSurface(
                 child: Column(
@@ -321,7 +320,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Column(
                           children: [
-                            const Text(
+                            Text(
                               '每一笔小记录，都让生活更清晰',
                               style: TextStyle(
                                 color: context.appSecondaryText,
@@ -389,7 +388,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 padding: const EdgeInsets.only(left: 2, bottom: 2),
                 child: Text(
                   TransactionDateFormatter.groupLabel(entries[groupIndex].key),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: context.appSecondaryText,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -447,7 +446,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   '安心可花 · 计算依据',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 for (final item in [
                   (
                     '本月预算',
@@ -478,7 +477,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         Text(item.$1),
                         Text(
                           item.$2,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: context.appPrimaryText,
                             fontWeight: FontWeight.w600,
                           ),
@@ -584,7 +583,7 @@ class _HomeHeader extends ConsumerWidget {
           child: InkWell(
             onTap: onProfile,
             borderRadius: BorderRadius.circular(28),
-            child: const UserAvatar(radius: 20),
+            child: UserAvatar(radius: 20),
           ),
         ),
         const SizedBox(width: 10),
@@ -609,7 +608,7 @@ class _HomeHeader extends ConsumerWidget {
                               bookTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: context.appPrimaryText,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
@@ -617,8 +616,8 @@ class _HomeHeader extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 5),
-                        const Icon(
+                        SizedBox(width: 5),
+                        Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 20,
                           color: context.appPrimaryText,
@@ -628,8 +627,8 @@ class _HomeHeader extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 1),
-              const Text(
+              SizedBox(height: 1),
+              Text(
                 '记录生活  更好地生活',
                 style: TextStyle(color: context.appSecondaryText, fontSize: 11),
               ),
@@ -643,7 +642,7 @@ class _HomeHeader extends ConsumerWidget {
           tooltip: '消费日历',
           constraints: const BoxConstraints.tightFor(width: 36, height: 36),
           padding: EdgeInsets.zero,
-          icon: const Icon(
+          icon: Icon(
             Icons.calendar_month_outlined,
             color: context.appPrimaryText,
             size: 23,
@@ -653,13 +652,13 @@ class _HomeHeader extends ConsumerWidget {
           onPressed: onSearch,
           tooltip: '搜索流水',
           style: IconButton.styleFrom(
-            backgroundColor: const Color(0xFFF2EEE3),
+            backgroundColor: Color(0xFFF2EEE3),
             minimumSize: const Size(36, 36),
             maximumSize: const Size(36, 36),
             padding: EdgeInsets.zero,
             shape: const CircleBorder(),
           ),
-          icon: const Icon(
+          icon: Icon(
             Icons.search_rounded,
             color: context.appPrimaryText,
             size: 22,
@@ -685,7 +684,7 @@ class _SectionHeading extends StatelessWidget {
       Expanded(
         child: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
             color: context.appPrimaryText,
@@ -698,7 +697,7 @@ class _SectionHeading extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 5),
           child: Text(
             '$action ›',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               color: context.appSecondaryText,
             ),
@@ -740,30 +739,30 @@ class _CategoryExpense extends StatelessWidget {
               size: 44,
               monochrome: true,
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               category.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: context.appPrimaryText,
                 fontSize: 11,
               ),
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.center,
               child: Text(
                 '¥${MoneyFormatter.decimal(category.amount)}',
-                style: const TextStyle(
+                style: TextStyle(
                   color: context.appPrimaryText,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
@@ -778,7 +777,7 @@ class _CategoryExpense extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   '${(ratio * 100).round()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9,
                     color: context.appSecondaryText,
                   ),
@@ -818,17 +817,17 @@ class _InsightBanner extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(14, 12, 0, 12),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.insights_rounded,
                       size: 22,
                       color: context.appPrimary,
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             '值得关注',
                             style: TextStyle(
                               color: context.appPrimary,
@@ -836,12 +835,12 @@ class _InsightBanner extends ConsumerWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 3),
+                          SizedBox(height: 3),
                           Text(
                             insight.description,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: context.appPrimary,
                               fontSize: 11,
                             ),
@@ -856,7 +855,7 @@ class _InsightBanner extends ConsumerWidget {
           ),
           IconButton(
             tooltip: '关闭本条洞察',
-            icon: const Icon(
+            icon: Icon(
               Icons.close,
               size: 18,
               color: context.appSecondaryText,
