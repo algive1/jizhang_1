@@ -601,8 +601,6 @@ class _AutoBookkeepingConfirmPageState
   }
 
   String? _validAccountId(List<Account> accounts) {
-    if (accounts.any((item) => item.id == _accountId)) return _accountId;
-
     final suffix = _candidate?.identifierSuffix;
     if (suffix != null && suffix.isNotEmpty) {
       final suffixMatches = accounts
@@ -610,6 +608,8 @@ class _AutoBookkeepingConfirmPageState
           .toList(growable: false);
       if (suffixMatches.length == 1) return suffixMatches.single.id;
     }
+
+    if (accounts.any((item) => item.id == _accountId)) return _accountId;
 
     final method = _candidate?.paymentMethod ?? '';
     final preferredByMethod = accounts.where((item) {
