@@ -91,7 +91,7 @@ class ProfilePage extends ConsumerWidget {
                 IconButton(
                   tooltip: '消息',
                   onPressed: () async {
-                    await push('/profile/messages');
+                    await context.push<void>('/profile/messages');
                     ref.invalidate(systemUnreadCountProvider);
                   },
                   icon: Badge(
