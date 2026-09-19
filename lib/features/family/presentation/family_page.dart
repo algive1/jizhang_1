@@ -481,7 +481,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                   ),
                 ),
               ],
-              if (book!.sharedPhase != 'promoting')
+              if (book.sharedPhase != 'promoting')
                 AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
