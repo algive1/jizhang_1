@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../sharing/data/session_repository.dart';
 import '../application/system_message_service.dart';
@@ -154,7 +153,7 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
                 padding: const EdgeInsets.all(24),
                 children: [
                   const SizedBox(height: 80),
-                  const Icon(Icons.cloud_off_outlined, size: 48),
+                  Icon(Icons.cloud_off_outlined, size: 48),
                   const SizedBox(height: 12),
                   Text('消息读取失败：$_error', textAlign: TextAlign.center),
                 ],
