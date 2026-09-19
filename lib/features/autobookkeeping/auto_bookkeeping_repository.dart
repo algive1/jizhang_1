@@ -178,12 +178,17 @@ class AutoBookkeepingRepository {
         await settings.get(preferenceKey) ?? '{}',
       ) as Map<String, dynamic>;
       final merchantKey = const MerchantNormalizer().normalize(merchant);
-      final old =
-          (preferences[merchantKey] ?? preferences[merchant])
-              as Map<String, dynamic>?;
-      preferences.remove(merchant);
-      preferences.remove(merchantKey);
       final typedMerchantKey = '${transactionType.name}|$merchantKey';
+      final old =
+          (preferences[typedMerchantKey] ??
+                  (transactionType == TransactionType.expense
+                      ? preferences[merchantKey] ?? preferences[merchant]
+                      : null))
+              as Map<String, dynamic>?;
+      if (transactionType == TransactionType.expense) {
+        preferences.remove(merchant);
+        preferences.remove(merchantKey);
+      }
       preferences[typedMerchantKey] = {
         'merchantKey': merchantKey,
         'transactionType': transactionType.name,
