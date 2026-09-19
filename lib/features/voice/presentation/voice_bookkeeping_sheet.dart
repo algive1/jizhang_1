@@ -17,6 +17,7 @@ import '../../categories/data/category_repository.dart';
 import '../../intelligence/data/merchant_rule_repository.dart';
 import '../application/speech_recognition_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/widgets/app_form.dart';
 
 class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
   const VoiceBookkeepingSheet({
