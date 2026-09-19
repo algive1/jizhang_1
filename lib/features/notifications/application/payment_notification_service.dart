@@ -337,7 +337,7 @@ class PaymentNotificationAutoBookkeepingService {
           acknowledged.add(notification.id);
           continue;
         }
-        final accepted = await pendingBridge!.enqueue(
+        final enqueueResult = await pendingBridge!.enqueue(
           PendingAutoBookkeepingCandidate(
             fingerprint: stableNotificationKey(fingerprint),
             amountInCents: (parsed.amount * 100).round(),
@@ -349,11 +349,15 @@ class PaymentNotificationAutoBookkeepingService {
             transactionType: 'EXPENSE',
           ),
         );
-        if (accepted) {
-          queued++;
-          acknowledged.add(notification.id);
-        } else {
-          waiting++;
+        switch (enqueueResult) {
+          case AutoBookkeepingEnqueueResult.accepted:
+            queued++;
+            acknowledged.add(notification.id);
+          case AutoBookkeepingEnqueueResult.duplicate:
+            duplicates++;
+            acknowledged.add(notification.id);
+          case AutoBookkeepingEnqueueResult.busy:
+            waiting++;
         }
         continue;
       }
