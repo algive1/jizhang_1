@@ -1,4 +1,4 @@
-import { createPublicKey, createVerify, X509Certificate } from 'node:crypto';
+import { createVerify, X509Certificate } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
@@ -64,7 +64,7 @@ function verifyAppleJws(jws:string):Json{
   const verifier=createVerify('RSA-SHA256');
   verifier.update(`${parts[0]}.${parts[1]}`);
   verifier.end();
-  check(verifier.verify(createPublicKey(leaf.publicKey),b64url(parts[2])),'Apple 签名校验失败',400);
+  check(verifier.verify(leaf.publicKey,b64url(parts[2])),'Apple 签名校验失败',400);
   return JSON.parse(b64url(parts[1]).toString('utf8')) as Json;
 }
 
