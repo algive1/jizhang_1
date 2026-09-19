@@ -12,4 +12,6 @@ abstract interface class FamilyService {
   Future<List<FamilyInvitation>> invitations(String familyId);
   Future<void> changeRole(String familyId, String userId, FamilyRole role);
   Future<void> removeMember(String familyId, String userId);
+  Future<void> transferOwnership(String familyId, String userId);
+  Future<void> disband(String familyId);
 }
