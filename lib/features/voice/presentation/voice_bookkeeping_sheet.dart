@@ -16,6 +16,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../categories/data/category_repository.dart';
 import '../../intelligence/data/merchant_rule_repository.dart';
 import '../application/speech_recognition_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
   const VoiceBookkeepingSheet({
@@ -139,7 +140,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       child: FractionallySizedBox(
         heightFactor: .92,
         child: Material(
-          color: AppColors.background,
+          color: context.appBackground,
           clipBehavior: Clip.antiAlias,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -159,7 +160,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                   width: 38,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.divider,
+                    color: context.appDivider,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -170,7 +171,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                       widget.textOnly
                           ? Icons.auto_awesome_outlined
                           : Icons.mic_none,
-                      color: AppColors.primary,
+                      color: context.appPrimary,
                     ),
                     const SizedBox(width: 9),
                     Text(
@@ -185,8 +186,8 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                       widget.textOnly
                           ? '本机优先'
                           : (_onDevice ? '设备端优先' : '系统识别降级'),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: context.appSecondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -256,7 +257,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       '未能结构化：${_unresolved.join('、')}，请检查后再确认。',
-                      style: const TextStyle(color: AppColors.warning),
+                      style: TextStyle(color: AppColors.warning),
                     ),
                   ),
                 Expanded(
@@ -266,8 +267,8 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                             widget.textOnly
                                 ? '先在本机解析金额、时间、分类和账户，再由你确认保存'
                                 : '规则会先在本机解析金额、时间、分类和账户',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: context.appSecondaryText,
                             ),
                           ),
                         )
