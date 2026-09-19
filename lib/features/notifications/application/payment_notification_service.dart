@@ -122,6 +122,9 @@ class ParsedPaymentNotification {
     required this.occurredAt,
     required this.orderId,
     this.identifierSuffix,
+    this.note,
+    this.originalAmount,
+    this.discountAmount,
   });
 
   final double amount;
@@ -131,6 +134,9 @@ class ParsedPaymentNotification {
   final DateTime occurredAt;
   final String? orderId;
   final String? identifierSuffix;
+  final String? note;
+  final double? originalAmount;
+  final double? discountAmount;
 }
 
 class PaymentNotificationParser {
@@ -167,6 +173,7 @@ class PaymentNotificationParser {
 
     final amount = _amountFor(content);
     if (amount == null || amount <= 0) return null;
+    final breakdown = _amountBreakdownFor(content, amount);
     return ParsedPaymentNotification(
       amount: amount,
       accountId: _accountFor(channel),
@@ -175,6 +182,9 @@ class PaymentNotificationParser {
       occurredAt: notification.postedAt,
       orderId: _orderIdFor(content),
       identifierSuffix: _identifierSuffixFor(content),
+      note: _noteFor(content),
+      originalAmount: breakdown.$1,
+      discountAmount: breakdown.$2,
     );
   }
 
@@ -229,6 +239,53 @@ class PaymentNotificationParser {
 
   double? _parseAmount(RegExpMatch match) =>
       double.tryParse(match.group(1)!.replaceAll(',', '.'));
+
+  (double?, double?) _amountBreakdownFor(
+    String content,
+    double paidAmount,
+  ) {
+    double? single(RegExp pattern) {
+      final values = pattern
+          .allMatches(content)
+          .map(_parseAmount)
+          .whereType<double>()
+          .toSet();
+      return values.length == 1 ? values.single : null;
+    }
+
+    var original = single(
+      RegExp(
+        r'(?:原价|订单金额|商品金额|合计|应付金额)[^0-9]{0,8}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      ),
+    );
+    var discount = single(
+      RegExp(
+        r'(?:优惠金额|优惠|立减|红包|优惠券)[^0-9]{0,8}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      ),
+    );
+    if (original != null && original < paidAmount) original = null;
+    if (original != null && discount == null) {
+      final delta = original - paidAmount;
+      if (delta > 0) discount = delta;
+    }
+    if (discount != null && original == null) {
+      original = paidAmount + discount;
+    }
+    if (original != null &&
+        discount != null &&
+        ((original - discount) - paidAmount).abs() > .005) {
+      return (null, null);
+    }
+    return (original, discount);
+  }
+
+  String? _noteFor(String content) {
+    final match = RegExp(
+      r'(?:备注|订单备注|付款备注)[：:\s]+([^，。；;\n]{2,80})',
+    ).firstMatch(content);
+    final value = match?.group(1)?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
 
   String? _merchantFor(String content) {
     final explicit = RegExp(
@@ -363,6 +420,15 @@ class PaymentNotificationAutoBookkeepingService {
             sourceApp: _sourceApp(parsed.channel),
             scene: 'PAYMENT_NOTIFICATION',
             transactionType: 'EXPENSE',
+            orderId: parsed.orderId,
+            note: parsed.note,
+            originalAmountInCents: parsed.originalAmount == null
+                ? null
+                : (parsed.originalAmount! * 100).round(),
+            discountAmountInCents: parsed.discountAmount == null
+                ? null
+                : (parsed.discountAmount! * 100).round(),
+            identifierSuffix: parsed.identifierSuffix,
           ),
         );
         switch (enqueueResult) {
