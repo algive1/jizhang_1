@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+enum AutoBookkeepingEnqueueResult { accepted, duplicate, busy }
+
 class PendingAutoBookkeepingCandidate {
   const PendingAutoBookkeepingCandidate({
     required this.fingerprint,
@@ -43,7 +45,9 @@ class PendingAutoBookkeepingCandidate {
 
 abstract interface class AutoBookkeepingPendingBridge {
   Future<PendingAutoBookkeepingCandidate?> getPending();
-  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate);
+  Future<AutoBookkeepingEnqueueResult> enqueue(
+    PendingAutoBookkeepingCandidate candidate,
+  );
   Future<void> complete();
 }
 
@@ -67,20 +71,35 @@ class MethodChannelAutoBookkeepingPendingBridge
   }
 
   @override
-  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate) async {
+  Future<AutoBookkeepingEnqueueResult> enqueue(
+    PendingAutoBookkeepingCandidate candidate,
+  ) async {
     try {
-      return await _channel.invokeMethod<bool>('enqueue', {
-            'amountInCents': candidate.amountInCents,
-            'merchant': candidate.merchant,
-            'paymentMethod': candidate.paymentMethod,
-            'timestamp': candidate.timestamp.millisecondsSinceEpoch,
-            'sourceApp': candidate.sourceApp,
-            'scene': candidate.scene,
-            'transactionType': candidate.transactionType,
-          }) ??
-          false;
+      final raw = await _channel.invokeMethod<Object?>('enqueue', {
+        'amountInCents': candidate.amountInCents,
+        'merchant': candidate.merchant,
+        'paymentMethod': candidate.paymentMethod,
+        'timestamp': candidate.timestamp.millisecondsSinceEpoch,
+        'sourceApp': candidate.sourceApp,
+        'scene': candidate.scene,
+        'transactionType': candidate.transactionType,
+      });
+      if (raw is bool) {
+        // Backward compatibility with older native builds during hot reload.
+        return raw
+            ? AutoBookkeepingEnqueueResult.accepted
+            : AutoBookkeepingEnqueueResult.busy;
+      }
+      if (raw is Map) {
+        return switch (raw['status']?.toString()) {
+          'accepted' => AutoBookkeepingEnqueueResult.accepted,
+          'duplicate' => AutoBookkeepingEnqueueResult.duplicate,
+          _ => AutoBookkeepingEnqueueResult.busy,
+        };
+      }
+      return AutoBookkeepingEnqueueResult.busy;
     } on MissingPluginException {
-      return false;
+      return AutoBookkeepingEnqueueResult.busy;
     }
   }
 

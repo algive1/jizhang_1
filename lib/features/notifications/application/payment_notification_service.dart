@@ -142,18 +142,26 @@ class PaymentNotificationParser {
     final content = notification.content;
 
     if (RegExp(
-      r'收款到账|收款成功|转入|入账|到账|退款|退回|待支付|去支付|未支付|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|支付优惠|支付立减|预计支付|应付|付款码',
+      r'收款到账|收款成功|转入|入账|到账|退款|退回|待支付|待付款|去支付|去付款|未支付|未付款|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|请支付',
     ).hasMatch(content)) {
       return null;
     }
 
     final hasStrongSuccess = RegExp(
-      r'支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付',
+      r'支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成',
     ).hasMatch(content);
     final hasWalletDebit = RegExp(r'消费|扣款|支出').hasMatch(content);
+    final hasNonTransactionSignal = RegExp(
+      r'优惠券|消费券|立减券|活动提醒|付款码|收款码',
+    ).hasMatch(content);
+    if (notification.packageName == 'com.tencent.mm' &&
+        hasStrongSuccess &&
+        !RegExp(r'微信支付|支付凭证|付款凭证|服务通知').hasMatch(content)) {
+      return null;
+    }
     if (_isMarketplaceChannel(channel)) {
       if (!hasStrongSuccess) return null;
-    } else if (!hasStrongSuccess && !hasWalletDebit) {
+    } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
       return null;
     }
 
@@ -223,10 +231,18 @@ class PaymentNotificationParser {
       double.tryParse(match.group(1)!.replaceAll(',', '.'));
 
   String? _merchantFor(String content) {
-    final match = RegExp(r'(?:向|在|商户(?:名称)?[：:]?)[\s：:]*([^，。；;\n]{2,32})')
-        .firstMatch(content);
-    final value = match?.group(1)?.trim();
-    return value == null || value.isEmpty ? null : value;
+    final explicit = RegExp(
+      r'(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店)[：:\s]+([^，。；;\n]{2,32})',
+    ).firstMatch(content);
+    final directional = RegExp(
+      r'(?:向|在)\s*([^，。；;\n]{2,32}?)(?:支付|付款|消费)',
+    ).firstMatch(content);
+    final value = (explicit?.group(1) ?? directional?.group(1))?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (RegExp(r'[¥￥]|支付成功|付款成功|交易成功|实付金额|支付金额').hasMatch(value)) {
+      return null;
+    }
+    return value;
   }
 
   String? _orderIdFor(String content) {
@@ -337,7 +353,7 @@ class PaymentNotificationAutoBookkeepingService {
           acknowledged.add(notification.id);
           continue;
         }
-        final accepted = await pendingBridge!.enqueue(
+        final enqueueResult = await pendingBridge!.enqueue(
           PendingAutoBookkeepingCandidate(
             fingerprint: stableNotificationKey(fingerprint),
             amountInCents: (parsed.amount * 100).round(),
@@ -349,11 +365,18 @@ class PaymentNotificationAutoBookkeepingService {
             transactionType: 'EXPENSE',
           ),
         );
-        if (accepted) {
-          queued++;
-          acknowledged.add(notification.id);
-        } else {
-          waiting++;
+        switch (enqueueResult) {
+          case AutoBookkeepingEnqueueResult.accepted:
+            queued++;
+            acknowledged.add(notification.id);
+            break;
+          case AutoBookkeepingEnqueueResult.duplicate:
+            duplicates++;
+            acknowledged.add(notification.id);
+            break;
+          case AutoBookkeepingEnqueueResult.busy:
+            waiting++;
+            break;
         }
         continue;
       }

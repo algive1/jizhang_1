@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../auto_bookkeeping_settings.dart';
+import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingPage extends ConsumerStatefulWidget {
@@ -23,6 +24,8 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool? _accessibilityGranted;
   bool? _overlayGranted;
   bool? _notificationGranted;
+  bool? _paymentNotificationAccessGranted;
+  bool _paymentNotificationEnabled = false;
   bool _enabled = false;
   bool _shortcutAvailable = false;
   bool _loading = true;
@@ -65,15 +68,20 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       return;
     }
     final bridge = ref.read(autoBookkeepingSettingsProvider);
+    final paymentBridge = ref.read(paymentNotificationBridgeProvider);
     final accessibility = await bridge.isAccessibilityGranted();
     final overlay = await bridge.isOverlayGranted();
     final notification = await bridge.isNotificationGranted();
     final enabled = await bridge.isEnabled();
+    final paymentAccess = await paymentBridge.isAccessGranted();
+    final paymentEnabled = paymentAccess && await paymentBridge.isEnabled();
     if (!mounted) return;
     setState(() {
       _accessibilityGranted = accessibility;
       _overlayGranted = overlay;
       _notificationGranted = notification;
+      _paymentNotificationAccessGranted = paymentAccess;
+      _paymentNotificationEnabled = paymentEnabled;
       _enabled = enabled;
       _loading = false;
     });
@@ -231,6 +239,15 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                             '请在系统设置中允许通知，自动记账开启后才能显示常驻状态。',
                           ),
                         ),
+                        _PermissionRow(
+                          icon: Icons.notifications_active_outlined,
+                          title: '支付通知兜底',
+                          enabled:
+                              _paymentNotificationAccessGranted == true &&
+                              _paymentNotificationEnabled,
+                          onTap: () =>
+                              context.push('/profile/payment-notifications'),
+                        ),
                       ],
                     ),
                   ),
@@ -255,6 +272,13 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 trailing: Icon(Icons.chevron_right),
                 onTap: () => context.push('/profile/autobookkeeping/logs'),
               ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppCard(
+            child: Text(
+              '双通道说明：无障碍负责实时读取支付成功页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度支付通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
+              style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
           const SizedBox(height: 10),

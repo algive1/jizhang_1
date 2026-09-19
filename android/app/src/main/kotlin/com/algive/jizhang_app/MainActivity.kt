@@ -24,6 +24,7 @@ import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
+import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
 import java.io.File
 
 class MainActivity : FlutterFragmentActivity() {
@@ -245,8 +246,8 @@ class MainActivity : FlutterFragmentActivity() {
                             result.error("INVALID_CANDIDATE", "自动记账候选数据无效", null)
                             return@setMethodCallHandler
                         }
-                        val accepted = AutoBookkeepingPendingStore.enqueueIfAbsent(this, candidate)
-                        if (accepted) {
+                        val decision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
+                        if (decision == PendingEnqueueDecision.ACCEPTED) {
                             val shown = AutoBillOverlayService.instance?.offer(candidate) == true
                             if (!shown) {
                                 AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
@@ -256,8 +257,14 @@ class MainActivity : FlutterFragmentActivity() {
                                 "notification_candidate_queued",
                                 "payment notification queued for confirmation",
                             )
+                        } else {
+                            AutoBookkeepingLogStore.record(
+                                this,
+                                "notification_candidate_${decision.name.lowercase()}",
+                                "payment notification was not queued",
+                            )
                         }
-                        result.success(accepted)
+                        result.success(mapOf("status" to decision.name.lowercase()))
                     }
                     "complete" -> {
                         AutoBookkeepingPendingStore.complete(this)

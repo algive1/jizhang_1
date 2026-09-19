@@ -57,6 +57,34 @@ void main() {
     },
   );
 
+  test('微信普通聊天里提到支付成功不会被当成支付通知', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'wechat-chat',
+        packageName: 'com.tencent.mm',
+        title: '小王',
+        text: '我刚支付成功 ¥20.00，商户：便利店',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    );
+    expect(parsed, isNull);
+  });
+
+  test('完成态通知包含优惠信息仍可识别', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'discounted-payment',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功，原价 ¥40.00，优惠券 ¥4.00，实付金额 ¥36.00，商户：测试餐厅',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.amount, 36.00);
+    expect(parsed.merchant, '测试餐厅');
+  });
+
   test('商城待支付和支付提醒不会被解析成已发生流水', () {
     final parser = const PaymentNotificationParser();
     for (final text in <String>[
@@ -81,7 +109,7 @@ void main() {
     }
   });
 
-  test('美团付款通知可解析但必须通过目标账户和待确认队列', () {
+  test('美团完成态付款通知可以进入待确认解析', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
         id: 'meituan-1',
@@ -181,6 +209,38 @@ void main() {
     expect(result.queued, 0);
     expect(pending.candidates, isEmpty);
     expect(bridge.acknowledged, ['unknown-merchant']);
+  });
+
+  test('跨来源重复通知会确认清理而不是永久留在队列', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'duplicate-notification',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功 ¥36.00，商户：测试餐厅',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge(
+      result: AutoBookkeepingEnqueueResult.duplicate,
+    );
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.duplicates, 1);
+    expect(result.waiting, 0);
+    expect(bridge.acknowledged, ['duplicate-notification']);
   });
 
   test('Android notification path queues for confirmation instead of saving silently', () async {
@@ -403,12 +463,19 @@ class _FakeBridge implements PaymentNotificationBridge {
 }
 
 class _FakePendingBridge implements AutoBookkeepingPendingBridge {
+  _FakePendingBridge({
+    this.result = AutoBookkeepingEnqueueResult.accepted,
+  });
+
+  final AutoBookkeepingEnqueueResult result;
   final candidates = <PendingAutoBookkeepingCandidate>[];
 
   @override
-  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate) async {
+  Future<AutoBookkeepingEnqueueResult> enqueue(
+    PendingAutoBookkeepingCandidate candidate,
+  ) async {
     candidates.add(candidate);
-    return true;
+    return result;
   }
 
   @override

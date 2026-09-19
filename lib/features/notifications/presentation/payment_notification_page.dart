@@ -82,7 +82,7 @@ class _PaymentNotificationPageState
       setState(
         () => _message = result.created == 0 && result.queued == 0
             ? '没有新的可识别支付通知。'
-            : '待确认 ${result.queued} 笔，历史重复 ${result.duplicates} 笔，等待账户或权限处理 ${result.waiting} 笔。',
+            : '待确认 ${result.queued} 笔，历史重复 ${result.duplicates} 笔，暂被其他待确认流水占用 ${result.waiting} 笔。',
       );
     } on Object catch (error) {
       if (mounted) setState(() => _message = '处理通知失败：$error');
@@ -123,7 +123,7 @@ class _PaymentNotificationPageState
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '支持微信、支付宝、云闪付和美团付款通知；金额与商户会先在本机解析、去重并进入待确认，不会静默写入流水。',
+                  '支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度付款通知；金额与商户会先在本机解析、去重并进入待确认，不会静默写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -182,7 +182,7 @@ class _PaymentNotificationPageState
           const SizedBox(height: 14),
           AppCard(
             child: Text(
-              '隐私说明：通知只在本机转换为待确认数据，确认或忽略后才会清理。收款、到账、退款等入账类通知不会按支出处理。',
+              '隐私说明：只有明确完成态、金额和商户均可确认的付款通知才会进入待确认；待支付、营销提醒、收款、到账和退款等通知会直接过滤。解析与去重均在本机完成。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
