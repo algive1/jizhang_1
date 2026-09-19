@@ -30,6 +30,15 @@ class _ConsumptionCalendarPageState
   String? _bookFilterId;
 
   @override
+  void initState() {
+    super.initState();
+    // Calendar scope starts from the app's active ledger, but remains local to
+    // this page. Changing it must never switch the global active ledger.
+    _bookFilterId = ref.read(activeBookIdProvider);
+    _selectedDay = _today.day;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final all =
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
@@ -39,31 +48,32 @@ class _ConsumptionCalendarPageState
         : all.where((item) => item.bookId == _bookFilterId).toList();
     final monthTransactions = filtered.where((item) {
       final date = item.occurredAt;
-      return _isConsumption(item) &&
+      return item.deletedAt == null &&
           date.year == _month.year &&
           date.month == _month.month &&
           !date.isAfter(_today);
     }).toList();
     final daily = <int, double>{};
+    final dailyIncome = <int, double>{};
     final dailyCents = <int, int>{};
     for (final item in monthTransactions) {
-      final cents = (item.netExpenseAmount * 100).round();
-      daily.update(
-        item.occurredAt.day,
-        (value) => value + item.netExpenseAmount,
-        ifAbsent: () => item.netExpenseAmount,
-      );
-      dailyCents.update(
-        item.occurredAt.day,
-        (value) => value + cents,
-        ifAbsent: () => cents,
-      );
+      if (_isConsumption(item)) {
+        final cents = (item.netExpenseAmount * 100).round();
+        daily.update(item.occurredAt.day, (v) => v + item.netExpenseAmount,
+            ifAbsent: () => item.netExpenseAmount);
+        dailyCents.update(item.occurredAt.day, (v) => v + cents,
+            ifAbsent: () => cents);
+      } else if (item.isIncome) {
+        dailyIncome.update(item.occurredAt.day, (v) => v + item.amount,
+            ifAbsent: () => item.amount);
+      }
     }
     final selected = _selectedDay == null
         ? const <TransactionRecord>[]
         : monthTransactions
               .where((item) => item.occurredAt.day == _selectedDay)
-              .toList();
+              .toList()
+      ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
     final maxDaily = daily.values.fold<double>(
       0,
       (max, value) => value > max ? value : max,
@@ -86,10 +96,13 @@ class _ConsumptionCalendarPageState
     final nextRecorded = recordMonths
         .where((item) => item.isAfter(_month))
         .firstOrNull;
-    final total = monthTransactions.fold<double>(
-      0,
-      (sum, item) => sum + item.netExpenseAmount,
-    );
+    final total = monthTransactions
+        .where(_isConsumption)
+        .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
+    final totalIncome = monthTransactions
+        .where((item) => item.isIncome)
+        .fold<double>(0, (sum, item) => sum + item.amount);
+    final balance = totalIncome - total;
     final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
     final elapsedDays = _isCurrentMonth ? _today.day : daysInMonth;
     final dailyAverage = elapsedDays == 0 ? 0.0 : total / elapsedDays;
@@ -174,6 +187,7 @@ class _ConsumptionCalendarPageState
                 _CalendarGrid(
                   month: _month,
                   daily: daily,
+                  dailyIncome: dailyIncome,
                   maxDaily: maxDaily,
                   selectedDay: _selectedDay,
                   onDayTap: (day) => setState(() => _selectedDay = day),
@@ -222,7 +236,11 @@ class _ConsumptionCalendarPageState
                     ),
                     SizedBox(
                       width: itemWidth,
-                      child: _CalendarStat(label: '日均支出', value: dailyAverage),
+                      child: _CalendarStat(label: '月收入', value: totalIncome),
+                    ),
+                    SizedBox(
+                      width: itemWidth,
+                      child: _CalendarStat(label: '结余', value: balance),
                     ),
                     SizedBox(
                       width: itemWidth,
@@ -349,7 +367,7 @@ class _ConsumptionCalendarPageState
     if (!mounted || selected == null) return;
     setState(() {
       _bookFilterId = selected == _allBooksFilterValue ? null : selected;
-      _selectedDay = null;
+      // Keep month/day stable so users can compare the same date across books.
     });
   }
 
@@ -391,6 +409,7 @@ class _CalendarGrid extends StatelessWidget {
   const _CalendarGrid({
     required this.month,
     required this.daily,
+    required this.dailyIncome,
     required this.maxDaily,
     required this.selectedDay,
     required this.onDayTap,
@@ -398,6 +417,7 @@ class _CalendarGrid extends StatelessWidget {
 
   final DateTime month;
   final Map<int, double> daily;
+  final Map<int, double> dailyIncome;
   final double maxDaily;
   final int? selectedDay;
   final ValueChanged<int> onDayTap;
@@ -442,17 +462,32 @@ class _CalendarGrid extends StatelessWidget {
                   '$day',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                if (amount > 0) ...[
+                if (amount > 0 || (dailyIncome[day] ?? 0) > 0) ...[
                   const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.primaryDark,
+                  if (amount > 0)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.primaryDark),
+                      ),
+                    )
+                  else
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '+¥${dailyIncome[day]!.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.primary),
                       ),
                     ),
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (amount > 0) const _CalendarDot(color: Color(0xFFFF7A45)),
+                      if (amount > 0 && (dailyIncome[day] ?? 0) > 0) const SizedBox(width: 3),
+                      if ((dailyIncome[day] ?? 0) > 0) const _CalendarDot(color: Color(0xFF5BAE61)),
+                    ],
                   ),
                 ],
               ],
@@ -521,5 +556,17 @@ class _CalendarStat extends StatelessWidget {
               ),
             ),
     ],
+  );
+}
+
+
+class _CalendarDot extends StatelessWidget {
+  const _CalendarDot({required this.color});
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 6,
+    height: 6,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
   );
 }
