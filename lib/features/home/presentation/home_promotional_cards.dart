@@ -150,7 +150,7 @@ class HomeProCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const HomeCrownIcon(color: context.appPrimary),
+                      HomeCrownIcon(color: context.appPrimary),
                       const SizedBox(width: 5),
                       Text(
                         '升级为 Pro',
@@ -190,7 +190,7 @@ class HomeProCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Positioned(
+            Positioned(
               right: 14,
               top: 48,
               child: Icon(
