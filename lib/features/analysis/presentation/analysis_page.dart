@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/widgets/app_card.dart';
@@ -60,20 +61,20 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                   onSharePdf: () => _share(context, 'pdf', snapshot, scope),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   '统计范围',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 7),
                 _AnalysisScopeSelector(selected: scope),
                 const SizedBox(height: 14),
-                const Text(
+                Text(
                   '统计周期',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -301,7 +302,7 @@ class _AnalysisScopeSelector extends ConsumerWidget {
             label: Text(scope.label),
             selected: scope == selected,
             showCheckmark: false,
-            selectedColor: AppColors.primarySoft,
+            selectedColor: context.appPrimarySoft,
             onSelected: (_) =>
                 ref.read(analysisScopeProvider.notifier).select(scope),
           ),
@@ -331,9 +332,9 @@ class _ExportReportCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.auto_graph_outlined,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -349,8 +350,8 @@ class _ExportReportCard extends StatelessWidget {
               '$scopeLabel · ${snapshot.currency} · '
               '${snapshot.range.start.year}/${snapshot.range.start.month}/${snapshot.range.start.day}'
               '—${end.year}/${end.month}/${end.day}',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
@@ -382,7 +383,7 @@ class _ExportReportCard extends StatelessWidget {
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 '主要支出',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
@@ -416,7 +417,7 @@ class _ExportReportCard extends StatelessWidget {
                   child: Text(
                     '• ${insight.description}',
                     style: const TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       fontSize: 12,
                     ),
                   ),
@@ -443,8 +444,8 @@ class _ReportMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
+          style: TextStyle(
+            color: context.appSecondaryText,
             fontSize: 12,
           ),
         ),
@@ -477,11 +478,11 @@ class _PeriodSelector extends ConsumerWidget {
                 selected: period == selected,
                 onSelected: (_) =>
                     ref.read(analysisPeriodProvider.notifier).select(period),
-                selectedColor: AppColors.primarySoft,
+                selectedColor: context.appPrimarySoft,
                 side: BorderSide(
                   color: period == selected
-                      ? AppColors.primary
-                      : AppColors.divider,
+                      ? context.appPrimary
+                      : context.appDivider,
                 ),
                 showCheckmark: false,
               ),
@@ -504,7 +505,7 @@ class _OverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '日常消费',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
@@ -520,7 +521,7 @@ class _OverviewCard extends StatelessWidget {
                       '${change.abs().toStringAsFixed(1)}%'
                 : '共 ${snapshot.transactionCount} 笔 · ${_rangeLabel(snapshot)}上期暂无可比数据',
             style: TextStyle(
-              color: change > 0 ? AppColors.warning : AppColors.textSecondary,
+              color: change > 0 ? AppColors.warning : context.appSecondaryText,
             ),
           ),
           if (snapshot.excludedLargeExpense > 0) ...[
@@ -529,13 +530,13 @@ class _OverviewCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.surfaceSoft,
+                color: context.appSurfaceSoft,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '另有 ${snapshot.currency} ${MoneyFormatter.decimal(snapshot.excludedLargeExpense)} '
                 '重大一次性/资产支出，未计入日常趋势。',
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ),
           ],
@@ -572,7 +573,7 @@ class _InsightSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '洞察',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
@@ -583,12 +584,12 @@ class _InsightSection extends StatelessWidget {
             border: Border.all(
               color: insight.severity == AnalysisInsightSeverity.important
                   ? AppColors.warning.withValues(alpha: .45)
-                  : AppColors.divider,
+                  : context.appDivider,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.lightbulb_outline, color: AppColors.primary),
+                Icon(Icons.lightbulb_outline, color: context.appPrimary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -596,13 +597,13 @@ class _InsightSection extends StatelessWidget {
                     children: [
                       Text(
                         insight.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 5),
                       Text(
                         insight.description,
                         style: const TextStyle(
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                           height: 1.45,
                         ),
                       ),
@@ -633,14 +634,14 @@ class _SpendingHeatmap extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '7×24 消费热力图',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 5),
           const Text(
             '颜色越深，日常消费金额越高',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.appSecondaryText),
           ),
           const SizedBox(height: 12),
           const Row(
@@ -666,8 +667,8 @@ class _SpendingHeatmap extends StatelessWidget {
                       width: 34,
                       child: Text(
                         weekdays[day],
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appSecondaryText,
                           fontSize: 12,
                         ),
                       ),
@@ -686,8 +687,8 @@ class _SpendingHeatmap extends StatelessWidget {
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
                                       color: Color.lerp(
-                                        AppColors.surfaceSoft,
-                                        AppColors.primary,
+                                        context.appSurfaceSoft,
+                                        context.appPrimary,
                                         maximum == 0
                                             ? 0
                                             : (values[day][hour] / maximum)
@@ -725,7 +726,7 @@ class _TimeSegments extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '时段分布',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
@@ -741,7 +742,7 @@ class _TimeSegments extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceSoft,
+                    color: context.appSurfaceSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -769,7 +770,7 @@ class _CategoryTrends extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '分类趋势',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
@@ -777,14 +778,14 @@ class _CategoryTrends extends StatelessWidget {
           if (trends.isEmpty)
             const Text(
               '当前周期暂无支出',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: context.appSecondaryText),
             )
           else
             for (final trend in trends.take(6)) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.circle, size: 10, color: AppColors.primary),
+                  Icon(Icons.circle, size: 10, color: context.appPrimary),
                   const SizedBox(width: 9),
                   Expanded(
                     child: Column(
@@ -796,7 +797,7 @@ class _CategoryTrends extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 trend.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -811,7 +812,7 @@ class _CategoryTrends extends StatelessWidget {
                           '${trend.currentCount} 笔 · 均价 $currency ${MoneyFormatter.decimal(trend.currentAverage)} · '
                           '${trend.attribution.label}驱动',
                           style: const TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.appSecondaryText,
                             fontSize: 12,
                           ),
                         ),
@@ -855,14 +856,14 @@ class _BaselineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '个人行为基线',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 5),
           const Text(
             '只依据你的本地流水计算',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.appSecondaryText),
           ),
           const SizedBox(height: 12),
           for (final baseline in baselines)
@@ -878,8 +879,8 @@ class _BaselineCard extends StatelessWidget {
                   ),
                   Text(
                     '深夜 ${baseline.lateNightDailyCount.toStringAsFixed(2)} 次/天',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: context.appSecondaryText,
                       fontSize: 12,
                     ),
                   ),
