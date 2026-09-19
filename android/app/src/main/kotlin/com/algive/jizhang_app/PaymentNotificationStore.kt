@@ -47,6 +47,7 @@ object PaymentNotificationStore {
                 "title" to item.optString("title"),
                 "text" to item.optString("text"),
                 "postedAt" to item.optString("postedAt"),
+                "postedAtMillis" to item.optLong("postedAtMillis", 0L).toString(),
             )
         }
     }
