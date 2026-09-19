@@ -158,7 +158,17 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
         _enabled = enabled;
         _message = enabled ? '已开启。识别到可信交易结果后会先确认，再保存流水。' : '已关闭自动记账。';
       });
-      if (enabled) await _load();
+      if (enabled) {
+        for (var attempt = 0; attempt < 4; attempt++) {
+          await _load();
+          if (!mounted || (_foregroundRunning && _accessibilityConnected)) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
+      } else {
+        await _load();
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
     }
