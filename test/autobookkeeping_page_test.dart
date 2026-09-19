@@ -25,8 +25,24 @@ void main() {
     expect(find.text('悬浮窗权限'), findsOneWidget);
     expect(find.text('常驻通知权限'), findsOneWidget);
     expect(find.text('支付通知兜底'), findsOneWidget);
+    expect(find.text('保存支付结果截图'), findsOneWidget);
     expect(find.textContaining('常驻通知'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  test('pending candidate keeps optional screenshot metadata', () {
+    final candidate = PendingAutoBookkeepingCandidate.fromMap({
+      'fingerprint': 'screen-1',
+      'amountInCents': 1880,
+      'merchant': '测试商户',
+      'paymentMethod': '支付宝',
+      'timestamp': DateTime(2026, 9, 20, 12).millisecondsSinceEpoch,
+      'sourceApp': 'ALIPAY',
+      'scene': 'ALIPAY_PAYMENT_SUCCESS',
+      'transactionType': 'EXPENSE',
+      'screenshotPath': '/data/user/0/app/files/payment.png',
+    });
+    expect(candidate.screenshotPath, '/data/user/0/app/files/payment.png');
   });
 
   testWidgets('没有待确认支付时不会显示空的确认账单', (tester) async {
