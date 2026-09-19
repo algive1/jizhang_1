@@ -240,7 +240,8 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     final familyTransactionsState = book != null && book.type == BookType.family
         ? ref.watch(transactionsByBookProvider(book.id))
         : const AsyncValue<List<TransactionRecord>>.data(<TransactionRecord>[]);
-    final familyTransactions = familyTransactionsState.value ?? const <TransactionRecord>[];
+    final familyTransactions =
+        familyTransactionsState.value ?? const <TransactionRecord>[];
     if (user != null &&
         book?.sharedId != null &&
         book!.sharedPhase != 'promoting' &&
