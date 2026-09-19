@@ -30,6 +30,9 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool _foregroundRunning = false;
   bool _screenshotSupported = false;
   bool _screenshotEnabled = false;
+  int _ruleSchemaVersion = 0;
+  String _ruleVersions = '';
+  String _ruleSource = 'unknown';
   bool _enabled = false;
   bool _shortcutAvailable = false;
   bool _loading = true;
@@ -85,6 +88,9 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       _paymentNotificationConnected = status.notificationListenerConnected;
       _screenshotSupported = status.screenshotSupported;
       _screenshotEnabled = status.screenshotEnabled;
+      _ruleSchemaVersion = status.ruleSchemaVersion;
+      _ruleVersions = status.ruleVersions;
+      _ruleSource = status.ruleSource;
       _enabled = status.enabled;
       _loading = false;
     });
@@ -383,6 +389,19 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 subtitle: Text('查看最近一次交易识别和弹窗处理结果'),
                 trailing: Icon(Icons.chevron_right),
                 onTap: () => context.push('/profile/autobookkeeping/logs'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.rule_folder_outlined),
+              title: const Text('页面识别规则'),
+              subtitle: Text(
+                _ruleVersions.isEmpty
+                    ? '规则服务尚未连接；开启无障碍服务后会显示当前规则版本'
+                    : 'schema v$_ruleSchemaVersion · $_ruleVersions · ${_ruleSource == 'asset' ? '随 App 发布规则' : '内置回退规则'}',
               ),
             ),
           ),
