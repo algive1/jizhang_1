@@ -69,11 +69,12 @@ class MethodChannelPaymentNotificationBridge
   }
 
   @override
-  Future<void> requestNotificationPermission() async {
+  Future<bool> requestNotificationPermission() async {
     try {
-      await _channel.invokeMethod<void>('requestNotificationPermission');
+      return await _channel.invokeMethod<bool>('requestNotificationPermission') ??
+          false;
     } on MissingPluginException {
-      // Unsupported platforms do not need a native notification permission.
+      return false;
     }
   }
 
