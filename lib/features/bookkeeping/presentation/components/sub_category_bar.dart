@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/category.dart';
 import '../../../../core/widgets/category_icon.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../../../app/theme/app_theme_tokens.dart';
 
 class SubCategoryBar extends StatelessWidget {
   const SubCategoryBar({
