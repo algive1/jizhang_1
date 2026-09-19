@@ -27,6 +27,10 @@ class RefundService {
     required double amount,
     required Category category,
     DateTime? occurredAt,
+    String? transactionId,
+    String? note,
+    String? metadataJson,
+    TransactionSource source = TransactionSource.manual,
   }) async {
     if (original.bookId != bookId) throw ArgumentError('流水不属于当前账本');
     if (!original.isExpense) throw ArgumentError('只有消费流水可以登记退款');
@@ -48,7 +52,7 @@ class RefundService {
     final now = occurredAt ?? DateTime.now();
     final cumulative = previous + amount;
     final refund = TransactionRecord(
-      id: 'refund-${original.id}-${newEntityId()}',
+      id: transactionId ?? 'refund-${original.id}-${newEntityId()}',
       bookId: bookId,
       userId: _database.currentActor,
       type: TransactionType.refund,
@@ -58,12 +62,13 @@ class RefundService {
       categoryId: category.id,
       categoryName: category.name,
       merchant: original.merchant,
-      note: '退款：${original.displayTitle}',
+      note: note ?? '退款：${original.displayTitle}',
       occurredAt: now,
       createdAt: now,
       updatedAt: now,
       relatedTransactionId: original.id,
-      source: TransactionSource.manual,
+      source: source,
+      metadataJson: metadataJson,
       createdBy: _database.currentActor,
       updatedBy: _database.currentActor,
     );
