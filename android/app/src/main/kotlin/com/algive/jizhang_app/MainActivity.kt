@@ -656,7 +656,11 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        AutoBookkeepingNotificationController.sync(this)
+        if (ready) {
+            AutoBookkeepingNotificationController.sync(this)
+        } else {
+            AutoBookkeepingNotificationController.cancelStatus(this)
+        }
     }
 
     private fun hasRuntimeNotificationPermission(): Boolean =
