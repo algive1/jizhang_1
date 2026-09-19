@@ -168,7 +168,10 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    ListTile(
+                    Semantics(
+                      button: true,
+                      label: '目标日期，点击选择',
+                      child: ListTile(
                       tileColor: context.appSurfaceSoft,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -183,6 +186,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                         style: TextStyle(color: context.appPrimary),
                       ),
                       onTap: _pickTargetDate,
+                    ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
