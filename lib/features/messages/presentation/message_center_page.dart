@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../sharing/data/session_repository.dart';
 import '../application/system_message_service.dart';
 
@@ -109,7 +110,7 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
     final inbox = _inbox;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('消息中心'),
+        title: Text('消息中心'),
         actions: [
           if ((inbox?.unread ?? 0) > 0)
             TextButton(onPressed: _readAll, child: const Text('全部已读')),
@@ -163,7 +164,7 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
                 padding: const EdgeInsets.all(24),
                 children: const [
                   SizedBox(height: 100),
-                  Icon(Icons.inbox_outlined, size: 54, color: AppColors.textSecondary),
+                  Icon(Icons.inbox_outlined, size: 54, color: context.appSecondaryText),
                   SizedBox(height: 12),
                   Text('暂时没有系统消息', textAlign: TextAlign.center),
                 ],
@@ -181,8 +182,8 @@ class _MessageCenterPageState extends ConsumerState<MessageCenterPage> {
                             ? Icons.mark_email_read_outlined
                             : Icons.mark_email_unread_rounded,
                         color: message.isRead
-                            ? AppColors.textSecondary
-                            : AppColors.primary,
+                            ? context.appSecondaryText
+                            : context.appPrimary,
                       ),
                       title: Text(
                         message.title,
