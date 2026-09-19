@@ -1201,8 +1201,8 @@ LazyDatabase _openConnection() {
         // WAL lets readers proceed while another isolate is writing. A busy
         // timeout makes short write/write overlaps wait instead of failing
         // immediately with SQLITE_BUSY.
-        database.execute('PRAGMA journal_mode = WAL');
         database.execute('PRAGMA busy_timeout = 5000');
+        database.execute('PRAGMA journal_mode = WAL');
         database.execute('PRAGMA foreign_keys = ON');
       },
     );
