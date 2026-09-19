@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_assets.dart';
 import 'app_card.dart';
 import 'money_text.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class TransactionSummaryCard extends StatelessWidget {
   const TransactionSummaryCard({
