@@ -248,7 +248,7 @@ class ProfilePage extends ConsumerWidget {
                 ProfileMenuItem(
                   Icons.checkroom_outlined,
                   '个性化设置',
-                  '主题、字体、图标',
+                  '主题外观',
                   () => push('/profile/appearance'),
                 ),
                 ProfileMenuItem(
