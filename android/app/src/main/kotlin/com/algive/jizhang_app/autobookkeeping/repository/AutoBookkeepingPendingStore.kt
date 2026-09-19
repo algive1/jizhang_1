@@ -334,10 +334,8 @@ object AutoBookkeepingPendingStore {
     private val SUPPORTED_TRANSACTION_TYPES = setOf(
         "EXPENSE",
         "INCOME",
-        "TRANSFER",
         "REFUND",
         "REIMBURSEMENT",
-        "REPAYMENT",
     )
 
     private val SUPPORTED_SOURCE_APPS = setOf(
