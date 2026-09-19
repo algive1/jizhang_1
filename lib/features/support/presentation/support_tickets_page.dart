@@ -76,7 +76,7 @@ class _SupportTicketsPageState extends ConsumerState<SupportTicketsPage> {
         body: RefreshIndicator(
           onRefresh: _load,
           child: _loading
-              ? const ListView(
+              ? ListView(
                   children: [
                     SizedBox(height: 220),
                     Center(child: CircularProgressIndicator()),
