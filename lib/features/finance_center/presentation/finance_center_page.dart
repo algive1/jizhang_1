@@ -119,10 +119,13 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
     switch (_tab) {
       case 0:
         await _editInvoice(newInvoice(_bookId));
+        return;
       case 1:
         await _editTax(newTaxFiling(_bookId));
+        return;
       default:
         await _editStatement(newStatement(_bookId));
+        return;
     }
   }
 
@@ -344,7 +347,7 @@ class _FutureList<T> extends StatelessWidget {
       if (snapshot.hasError) {
         return AppCard(child: Text('读取失败：${snapshot.error}'));
       }
-      final values = snapshot.data ?? const <T>[];
+      final values = snapshot.data ?? <T>[];
       if (values.isEmpty) {
         return AppCard(
           child: Padding(
