@@ -249,7 +249,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
         children: [
           AppSelect<String>(
             initialValue: _original.id,
-            decoration: const InputDecoration(labelText: '原始消费'),
+            decoration: appFieldDecoration('原始消费'),
             items: widget.expenses
                 .map(
                   (item) => DropdownMenuItem(
@@ -275,7 +275,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
           ),
           AppSelect<String>(
             initialValue: _creditAccountId,
-            decoration: const InputDecoration(labelText: '信用卡账户'),
+            decoration: appFieldDecoration('信用卡账户'),
             items: widget.accounts
                 .map(
                   (account) => DropdownMenuItem(
@@ -288,7 +288,7 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
           ),
           AppSelect<String>(
             initialValue: _repaymentAccountId,
-            decoration: const InputDecoration(labelText: '还款账户'),
+            decoration: appFieldDecoration('还款账户'),
             items: widget.accounts
                 .map(
                   (account) => DropdownMenuItem(
@@ -302,17 +302,17 @@ class _InstallmentDialogState extends State<_InstallmentDialog> {
           TextField(
             controller: _periods,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: '总期数'),
+            decoration: appFieldDecoration('总期数'),
           ),
           TextField(
             controller: _fee,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: '每期手续费'),
+            decoration: appFieldDecoration('每期手续费'),
           ),
           TextField(
             controller: _dueDay,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: '还款日（1-31）'),
+            decoration: appFieldDecoration('还款日（1-31）'),
           ),
         ],
       ),
