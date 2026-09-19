@@ -8,20 +8,20 @@ import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
 import org.json.JSONObject
 import kotlin.math.abs
 
-/**
- * Keeps one payment candidate between native capture sources and Flutter.
- *
- * There is still a single visible confirmation slot, but the slot is no longer
- * "first writer wins": an accessibility payment-success result can replace a
- * lower-confidence notification candidate. Cross-source observations of the
- * same payment are also deduplicated before they reach the overlay.
- */
 enum class PendingEnqueueDecision {
     ACCEPTED,
     DUPLICATE,
     BUSY,
 }
 
+/**
+ * Keeps one payment candidate between native capture sources and Flutter.
+ *
+ * There is still a single visible confirmation slot, but it is no longer
+ * "first writer wins": a high-confidence accessibility payment-success result
+ * can replace a lower-confidence notification candidate. Cross-source
+ * observations of the same payment are deduplicated before reaching the UI.
+ */
 object AutoBookkeepingPendingStore {
     private const val PREFS = "autobookkeeping.pending"
     private const val KEY_PENDING = "pending"
@@ -36,10 +36,16 @@ object AutoBookkeepingPendingStore {
     private const val HANDLED_TTL_MILLIS = 10 * 60 * 1000L
     private const val CROSS_SOURCE_MATCH_MILLIS = 2 * 60 * 1000L
 
+    private const val PRIORITY_NOTIFICATION = 1
+    private const val PRIORITY_ACCESSIBILITY = 2
+
     fun enqueueIfAbsent(context: Context, candidate: PaymentCandidate): Boolean =
         enqueueDecision(context, candidate) == PendingEnqueueDecision.ACCEPTED
 
-    fun enqueueDecision(context: Context, candidate: PaymentCandidate): PendingEnqueueDecision {
+    fun enqueueDecision(
+        context: Context,
+        candidate: PaymentCandidate,
+    ): PendingEnqueueDecision {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val incoming = payload(candidate, now)
@@ -49,42 +55,53 @@ object AutoBookkeepingPendingStore {
             if (isInvalidLegacyNotification(pending)) {
                 preferences.edit().remove(KEY_PENDING).apply()
             } else {
-            val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
-            if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
-                preferences.edit().remove(KEY_PENDING).apply()
-            } else {
-                val sameTransaction = isLikelySameTransaction(pending, incoming)
-                val existingPriority = pending.optInt(KEY_PRIORITY, priorityFor(pending.optString("scene")))
-                val incomingPriority = incoming.optInt(KEY_PRIORITY)
+                val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
+                if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
+                    preferences.edit().remove(KEY_PENDING).apply()
+                } else {
+                    val sameTransaction = isLikelySameTransaction(pending, incoming)
+                    val existingPriority = pending.optInt(
+                        KEY_PRIORITY,
+                        priorityFor(pending.optString("scene")),
+                    )
+                    val incomingPriority = incoming.optInt(KEY_PRIORITY)
 
-                if (sameTransaction) {
+                    if (sameTransaction) {
+                        if (incomingPriority > existingPriority) {
+                            preferences.edit()
+                                .putString(KEY_PENDING, incoming.toString())
+                                .apply()
+                            return PendingEnqueueDecision.ACCEPTED
+                        }
+                        return PendingEnqueueDecision.DUPLICATE
+                    }
+
+                    // A low-confidence notification must never block a real
+                    // payment-success page for the whole pending TTL.
                     if (incomingPriority > existingPriority) {
-                        preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
+                        preferences.edit()
+                            .putString(KEY_PENDING, incoming.toString())
+                            .apply()
                         return PendingEnqueueDecision.ACCEPTED
                     }
-                    return PendingEnqueueDecision.DUPLICATE
+                    return PendingEnqueueDecision.BUSY
                 }
-
-                // A low-confidence notification must never block a real
-                // accessibility payment-success page for up to 30 minutes.
-                if (incomingPriority > existingPriority) {
-                    preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
-                    return PendingEnqueueDecision.ACCEPTED
-                }
-                return PendingEnqueueDecision.BUSY
-            }
             }
         }
 
         val fingerprint = incoming.optString(KEY_FINGERPRINT)
         val handledFingerprint = preferences.getString(KEY_HANDLED_FINGERPRINT, null)
         val handledAt = preferences.getLong(KEY_HANDLED_AT, 0L)
-        if (handledFingerprint == fingerprint && now - handledAt <= HANDLED_TTL_MILLIS) {
+        if (
+            handledFingerprint == fingerprint &&
+            now - handledAt <= HANDLED_TTL_MILLIS
+        ) {
             return PendingEnqueueDecision.DUPLICATE
         }
 
         val handledPayload = parse(preferences.getString(KEY_HANDLED_PAYLOAD, null))
-        if (handledPayload != null &&
+        if (
+            handledPayload != null &&
             now - handledAt <= HANDLED_TTL_MILLIS &&
             isLikelySameTransaction(handledPayload, incoming)
         ) {
@@ -103,18 +120,30 @@ object AutoBookkeepingPendingStore {
         val timestamp = (arguments["timestamp"] as? Number)?.toLong() ?: return null
         val sourceApp = (arguments["sourceApp"] as? String)?.trim().orEmpty()
         val scene = (arguments["scene"] as? String)?.trim().orEmpty()
-        if (amount !in 1..99_999_999_999L || merchant.isBlank() ||
-            merchant.length > 80 || paymentMethod.length > 80 ||
-            sourceApp !in SUPPORTED_SOURCE_APPS || scene.length !in 1..80 ||
+
+        if (
+            amount !in 1..99_999_999_999L ||
+            merchant.isBlank() ||
+            merchant.length > 80 ||
+            paymentMethod.length > 80 ||
+            sourceApp !in SUPPORTED_SOURCE_APPS ||
+            scene.length !in 1..80 ||
             timestamp <= 0L
-        ) return null
+        ) {
+            return null
+        }
+
         return PaymentCandidate(
             amountInCents = amount,
             merchantRaw = merchant,
             merchantNormalized = MerchantNormalizer.normalize(merchant).take(80),
             paymentMethod = paymentMethod,
             timestamp = timestamp,
-            scene = PaymentScene(sourceApp = sourceApp, scene = scene, confidence = .9),
+            scene = PaymentScene(
+                sourceApp = sourceApp,
+                scene = scene,
+                confidence = .9,
+            ),
             amountConfidence = 1.0,
             merchantConfidence = .9,
             sourceApp = sourceApp,
@@ -122,17 +151,7 @@ object AutoBookkeepingPendingStore {
     }
 
     fun readCandidate(context: Context): PaymentCandidate? {
-        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val value = parse(preferences.getString(KEY_PENDING, null)) ?: return null
-        if (isInvalidLegacyNotification(value)) {
-            complete(context, remember = false)
-            return null
-        }
-        val createdAt = value.optLong(KEY_CREATED_AT, 0L)
-        if (createdAt <= 0L || System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS) {
-            complete(context, remember = false)
-            return null
-        }
+        val value = readValidPayload(context) ?: return null
         return candidateFromMap(
             mapOf(
                 "amountInCents" to value.optLong("amountInCents"),
@@ -146,19 +165,7 @@ object AutoBookkeepingPendingStore {
     }
 
     fun read(context: Context): Map<String, Any>? {
-        val value = parse(
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_PENDING, null),
-        ) ?: return null
-        if (isInvalidLegacyNotification(value)) {
-            complete(context, remember = false)
-            return null
-        }
-        val createdAt = value.optLong(KEY_CREATED_AT, 0L)
-        if (createdAt <= 0L || System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS) {
-            complete(context, remember = false)
-            return null
-        }
+        val value = readValidPayload(context) ?: return null
         return mapOf(
             KEY_FINGERPRINT to value.optString(KEY_FINGERPRINT),
             "amountInCents" to value.optLong("amountInCents"),
@@ -176,13 +183,37 @@ object AutoBookkeepingPendingStore {
         val value = parse(preferences.getString(KEY_PENDING, null))
         val fingerprint = value?.optString(KEY_FINGERPRINT).orEmpty()
         val editor = preferences.edit().remove(KEY_PENDING)
-        if (remember && value != null && fingerprint.isNotBlank()) {
+
+        if (
+            remember &&
+            value != null &&
+            !isInvalidLegacyNotification(value) &&
+            fingerprint.isNotBlank()
+        ) {
             editor
                 .putString(KEY_HANDLED_FINGERPRINT, fingerprint)
                 .putString(KEY_HANDLED_PAYLOAD, value.toString())
                 .putLong(KEY_HANDLED_AT, System.currentTimeMillis())
         }
+
         editor.apply()
+    }
+
+    private fun readValidPayload(context: Context): JSONObject? {
+        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val value = parse(preferences.getString(KEY_PENDING, null)) ?: return null
+        val createdAt = value.optLong(KEY_CREATED_AT, 0L)
+
+        if (
+            isInvalidLegacyNotification(value) ||
+            createdAt <= 0L ||
+            System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS
+        ) {
+            complete(context, remember = false)
+            return null
+        }
+
+        return value
     }
 
     private fun payload(candidate: PaymentCandidate, now: Long): JSONObject =
@@ -199,7 +230,11 @@ object AutoBookkeepingPendingStore {
             .put("transactionType", candidate.transactionType)
 
     private fun priorityFor(scene: String): Int =
-        if (scene == "PAYMENT_NOTIFICATION") PRIORITY_NOTIFICATION else PRIORITY_ACCESSIBILITY
+        if (scene == "PAYMENT_NOTIFICATION") {
+            PRIORITY_NOTIFICATION
+        } else {
+            PRIORITY_ACCESSIBILITY
+        }
 
     /**
      * Cross-source duplicate matching intentionally ignores paymentMethod and
@@ -207,17 +242,27 @@ object AutoBookkeepingPendingStore {
      * accessibility page. Marketplace notifications often say "美团外卖"
      * while the payment page exposes the actual store name.
      */
-    private fun isLikelySameTransaction(first: JSONObject, second: JSONObject): Boolean {
+    private fun isLikelySameTransaction(
+        first: JSONObject,
+        second: JSONObject,
+    ): Boolean {
         if (first.optString("sourceApp") != second.optString("sourceApp")) return false
         if (first.optLong("amountInCents") != second.optLong("amountInCents")) return false
+
         val firstAt = first.optLong("timestamp", 0L)
         val secondAt = second.optLong("timestamp", 0L)
-        if (firstAt <= 0L || secondAt <= 0L || abs(firstAt - secondAt) > CROSS_SOURCE_MATCH_MILLIS) {
+        if (
+            firstAt <= 0L ||
+            secondAt <= 0L ||
+            abs(firstAt - secondAt) > CROSS_SOURCE_MATCH_MILLIS
+        ) {
             return false
         }
 
-        val firstNotification = first.optString("scene") == "PAYMENT_NOTIFICATION"
-        val secondNotification = second.optString("scene") == "PAYMENT_NOTIFICATION"
+        val firstNotification =
+            first.optString("scene") == "PAYMENT_NOTIFICATION"
+        val secondNotification =
+            second.optString("scene") == "PAYMENT_NOTIFICATION"
         if (firstNotification != secondNotification) return true
 
         val firstMerchant = MerchantNormalizer.normalize(first.optString("merchant"))
@@ -234,9 +279,6 @@ object AutoBookkeepingPendingStore {
     private fun parse(raw: String?): JSONObject? = raw?.let {
         runCatching { JSONObject(it) }.getOrNull()
     }
-
-    private const val PRIORITY_NOTIFICATION = 1
-    private const val PRIORITY_ACCESSIBILITY = 2
 
     private val SUPPORTED_SOURCE_APPS = setOf(
         "WECHAT",
