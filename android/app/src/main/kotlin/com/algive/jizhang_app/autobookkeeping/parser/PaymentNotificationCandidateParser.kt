@@ -45,6 +45,13 @@ class PaymentNotificationCandidateParser {
         val amount = amountInCents(content) ?: return null
         val merchant = merchant(content) ?: return null
         val paymentMethod = PAYMENT_METHODS[packageName] ?: "支付应用"
+        val originalAmount = labeledAmount(content, ORIGINAL_AMOUNT_PATTERN)
+        val discountAmount = labeledAmount(content, DISCOUNT_AMOUNT_PATTERN)
+        val normalizedBreakdown = normalizeBreakdown(
+            paidAmount = amount,
+            originalAmount = originalAmount,
+            discountAmount = discountAmount,
+        )
 
         return PaymentCandidate(
             amountInCents = amount,
@@ -60,6 +67,19 @@ class PaymentNotificationCandidateParser {
             amountConfidence = .95,
             merchantConfidence = .90,
             sourceApp = source,
+            orderId = ORDER_ID_PATTERN.find(content)?.groupValues?.getOrNull(1),
+            note = NOTE_PATTERN.find(content)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.take(160),
+            originalAmountInCents = normalizedBreakdown.first,
+            discountAmountInCents = normalizedBreakdown.second,
+            identifierSuffix = IDENTIFIER_SUFFIX_PATTERN.find(content)?.let { match ->
+                match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
+                    ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+            },
         )
     }
 
@@ -80,6 +100,36 @@ class PaymentNotificationCandidateParser {
             .mapNotNull { amountToCents(it.groupValues[1]) }
             .toSet()
         return currency.singleOrNull()
+    }
+
+    private fun labeledAmount(content: String, pattern: Regex): Long? {
+        val values = pattern.findAll(content)
+            .mapNotNull { amountToCents(it.groupValues[1]) }
+            .toSet()
+        return values.singleOrNull()
+    }
+
+    private fun normalizeBreakdown(
+        paidAmount: Long,
+        originalAmount: Long?,
+        discountAmount: Long?,
+    ): Pair<Long?, Long?> {
+        var original = originalAmount?.takeIf { it >= paidAmount }
+        var discount = discountAmount?.takeIf { it >= 0L }
+        if (original != null && discount == null) {
+            (original - paidAmount).takeIf { it > 0L }?.let { discount = it }
+        }
+        if (discount != null && original == null) {
+            original = paidAmount + discount
+        }
+        if (
+            original != null &&
+            discount != null &&
+            original - discount != paidAmount
+        ) {
+            return null to null
+        }
+        return original to discount
     }
 
     private fun amountToCents(raw: String): Long? {
@@ -158,6 +208,25 @@ class PaymentNotificationCandidateParser {
                 "([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
         )
         val CURRENCY_AMOUNT_PATTERN = Regex("[¥￥]\\s*([0-9]+(?:[.,][0-9]{1,2})?)")
+
+        val ORDER_ID_PATTERN = Regex(
+            "(?:订单号|交易单号|交易号|流水号|支付单号)[：:\\s]*([A-Za-z0-9_-]{6,64})",
+        )
+        val IDENTIFIER_SUFFIX_PATTERN = Regex(
+            "(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,8}([0-9]{4})|" +
+                "(?:银行卡|信用卡|储蓄卡)[^0-9]{0,8}([0-9]{4})(?![0-9])",
+        )
+        val NOTE_PATTERN = Regex(
+            "(?:备注|订单备注|付款备注)[：:\\s]+([^，。；;\\n]{2,80})",
+        )
+        val ORIGINAL_AMOUNT_PATTERN = Regex(
+            "(?:原价|订单金额|商品金额|合计|应付金额)[^0-9]{0,8}(?:¥|￥)?\\s*" +
+                "([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
+        )
+        val DISCOUNT_AMOUNT_PATTERN = Regex(
+            "(?:优惠金额|优惠|立减|红包|优惠券)[^0-9]{0,8}(?:¥|￥)?\\s*" +
+                "([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
+        )
 
         val EXPLICIT_MERCHANT_PATTERN = Regex(
             "(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店|收款方)" +
