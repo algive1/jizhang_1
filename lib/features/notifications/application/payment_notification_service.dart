@@ -643,7 +643,7 @@ String _sourceApp(String channel) => switch (channel) {
   'jd' => 'JD',
   'pinduoduo' => 'PINDUODUO',
   'douyin' => 'DOUYIN',
-  _ => 'PAYMENT_APP',
+  _ => throw StateError('unsupported payment notification channel: $channel'),
 };
 
 String _displayPaymentMethod(String channel) => switch (channel) {
