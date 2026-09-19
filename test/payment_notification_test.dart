@@ -72,6 +72,30 @@ void main() {
     expect(parsed.accountId, isNull);
   });
 
+  test('京东、拼多多、抖音付款通知均进入待确认渠道', () {
+    final parser = const PaymentNotificationParser();
+    final cases = <String, String>{
+      'com.jingdong.app.mall': 'jd',
+      'com.xunmeng.pinduoduo': 'pinduoduo',
+      'com.ss.android.ugc.aweme': 'douyin',
+      'com.ss.android.ugc.aweme.mobile': 'douyin',
+    };
+    for (final entry in cases.entries) {
+      final parsed = parser.parse(
+        PaymentNotification(
+          id: entry.key,
+          packageName: entry.key,
+          title: '支付通知',
+          text: '支付成功 ¥18.80，商户：测试商户',
+          postedAt: DateTime(2026, 9, 19, 9),
+        ),
+      );
+      expect(parsed, isNotNull, reason: entry.key);
+      expect(parsed!.channel, entry.value);
+      expect(parsed.accountId, isNull);
+    }
+  });
+
   test('Android notification path queues for confirmation instead of saving silently', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
