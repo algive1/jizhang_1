@@ -387,11 +387,40 @@ object AutoBookkeepingPendingStore {
             second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
         if (firstNotification != secondNotification) {
             // The same marketplace payment may be observed from the merchant
-            // app page and from the underlying Alipay/WeChat notification.
-            return sameSource || sameMerchant
+            // app page and from the underlying Alipay/WeChat/UnionPay
+            // notification. Merchant labels often differ, so also correlate
+            // the page's explicit payment method with the other source app.
+            val samePaymentRail =
+                paymentMethodMatchesSource(
+                    first.optString("paymentMethod"),
+                    second.optString("sourceApp"),
+                ) ||
+                    paymentMethodMatchesSource(
+                        second.optString("paymentMethod"),
+                        first.optString("sourceApp"),
+                    )
+            return sameSource || sameMerchant || samePaymentRail
         }
 
         return sameSource && sameMerchant
+    }
+
+    private fun paymentMethodMatchesSource(
+        paymentMethod: String,
+        sourceApp: String,
+    ): Boolean {
+        val normalized = paymentMethod.trim()
+        if (normalized.isEmpty()) return false
+        return when (sourceApp) {
+            "ALIPAY" -> normalized.contains("支付宝")
+            "WECHAT" -> normalized.contains("微信")
+            "UNIONPAY" ->
+                normalized.contains("云闪付") ||
+                    normalized.contains("银行卡") ||
+                    normalized.contains("信用卡") ||
+                    normalized.contains("储蓄卡")
+            else -> false
+        }
     }
 
     private fun isInvalidLegacyNotification(value: JSONObject): Boolean {
