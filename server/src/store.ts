@@ -434,9 +434,9 @@ export class Store {
       this.db.prepare("UPDATE members SET role='admin' WHERE book_id=? AND user_id=?").run(book,actor);
       this.db.prepare("UPDATE members SET role='owner' WHERE book_id=? AND user_id=?").run(book,target);
       this.db.prepare('UPDATE books SET owner_user_id=?,updated_at=?,version=version+1 WHERE id=?').run(target,this.now(),book);
-      const data={previous_owner_user_id:actor,owner_user_id:target};
-      this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,'members',target,0,0,JSON.stringify(data),actor,this.now());
-      return {ok:true,owner_user_id:target};
+      const canonical={...this.book(book),family_id:book};
+      this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,'books',book,canonical.version,0,JSON.stringify(canonical),actor,this.now());
+      return {ok:true,owner_user_id:target,version:canonical.version};
     })();
   }
   disband(book:string,actor:string) {
