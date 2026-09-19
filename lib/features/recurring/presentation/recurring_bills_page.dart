@@ -165,7 +165,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             ),
           ),
           if (bills.isEmpty)
-            const AppCard(
+            AppCard(
               child: Text(
                 '还没有周期账单，添加房租、订阅或固定收入',
                 style: TextStyle(color: context.appSecondaryText),
