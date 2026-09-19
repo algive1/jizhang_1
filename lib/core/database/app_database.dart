@@ -715,6 +715,10 @@ class AppDatabase extends _$AppDatabase {
       return super.transaction(action, requireNew: requireNew);
     }
     return super.transaction(
+      // batch_id lives in a shared row, but this update and the whole action
+      // run inside the same SQLite write transaction. SQLite serializes
+      // writers, so another connection cannot overwrite batch_id until this
+      // transaction commits or rolls back.
       () => runZoned(() async {
         await customStatement('UPDATE sync_control SET batch_id=? WHERE id=1', [
           newEntityId(),
