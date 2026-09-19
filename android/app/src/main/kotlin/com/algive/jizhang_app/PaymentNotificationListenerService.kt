@@ -42,6 +42,31 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "notification_listener_disconnected",
             "notification listener disconnected",
         )
+        val enabled = getSharedPreferences(
+            PaymentNotificationStore.PREFS_NAME,
+            MODE_PRIVATE,
+        ).getBoolean(KEY_ENABLED, false)
+        if (enabled) {
+            mainHandler.postDelayed(
+                {
+                    runCatching {
+                        requestRebind(
+                            android.content.ComponentName(
+                                this,
+                                PaymentNotificationListenerService::class.java,
+                            ),
+                        )
+                    }.onFailure { error ->
+                        AutoBookkeepingLogStore.record(
+                            this,
+                            "notification_listener_rebind_failed",
+                            error.javaClass.simpleName,
+                        )
+                    }
+                },
+                LISTENER_REBIND_DELAY_MS,
+            )
+        }
         super.onListenerDisconnected()
     }
 
@@ -207,6 +232,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         private const val KEY_ENABLED = "enabled"
         private const val OVERLAY_START_GRACE_MS = 350L
+        private const val LISTENER_REBIND_DELAY_MS = 1000L
 
         private val SUPPORTED_PACKAGES = setOf(
             "com.tencent.mm",
