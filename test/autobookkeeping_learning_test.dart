@@ -84,6 +84,106 @@ void main() {
     expect(classification.categoryId, category.id);
   });
 
+  test('refund memory never contaminates expense classification', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+
+    final transactions = DriftTransactionRepository(database);
+    final rules = DriftMerchantRuleRepository(
+      database,
+      transactions,
+      const MerchantClassificationService(),
+    );
+    final learning = AutoBookkeepingLearningService(
+      DriftAppSettingsRepository(database),
+      rules,
+    );
+    final categories = await database.categoryDao.getActive();
+    final expenseCategory = categories.firstWhere(
+      (item) => item.type == 'expense' && item.bookId == SeedIds.personalBook,
+    );
+    final incomeCategory = categories.firstWhere(
+      (item) => item.type == 'income' && item.bookId == SeedIds.personalBook,
+    );
+    final now = DateTime(2026, 9, 20, 13);
+
+    final refundRecord = TransactionRecord(
+      id: 'auto-refund-learning',
+      bookId: SeedIds.personalBook,
+      userId: SeedIds.localUser,
+      type: TransactionType.refund,
+      amount: 28,
+      accountId: SeedIds.alipayAccount,
+      categoryId: incomeCategory.id,
+      merchant: '测试餐厅',
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+      source: TransactionSource.auto,
+    );
+    await transactions.create(refundRecord);
+    final refundCandidate = PendingAutoBookkeepingCandidate(
+      fingerprint: 'refund-memory',
+      amountInCents: 2800,
+      merchant: '测试餐厅',
+      paymentMethod: '支付宝',
+      timestamp: now,
+      sourceApp: 'ALIPAY',
+      scene: 'PAYMENT_NOTIFICATION_REFUND',
+      transactionType: 'REFUND',
+    );
+    await learning.remember(
+      transactionId: refundRecord.id,
+      candidate: refundCandidate,
+      bookId: SeedIds.personalBook,
+      accountId: SeedIds.alipayAccount,
+      categoryId: incomeCategory.id,
+      rememberForMerchant: true,
+    );
+
+    final refundRecommendation = await learning.recommend(
+      candidate: refundCandidate,
+      fallbackBookId: SeedIds.personalBook,
+      transactionType: TransactionType.refund,
+    );
+    expect(refundRecommendation.categoryId, incomeCategory.id);
+
+    final expenseCandidate = PendingAutoBookkeepingCandidate(
+      fingerprint: 'expense-after-refund',
+      amountInCents: 3600,
+      merchant: '测试餐厅',
+      paymentMethod: '支付宝',
+      timestamp: now.add(const Duration(days: 1)),
+      sourceApp: 'ALIPAY',
+      scene: 'ALIPAY_PAYMENT_SUCCESS',
+      transactionType: 'EXPENSE',
+    );
+    final expenseRecommendation = await learning.recommend(
+      candidate: expenseCandidate,
+      fallbackBookId: SeedIds.personalBook,
+      transactionType: TransactionType.expense,
+    );
+    expect(expenseRecommendation.categoryId, isNot(incomeCategory.id));
+
+    final expenseClassification = await rules.classify(
+      merchant: '测试餐厅',
+      userId: SeedIds.localUser,
+      transactionType: TransactionType.expense,
+    );
+    expect(expenseClassification.categoryId, isNot(incomeCategory.id));
+    if (expenseClassification.categoryId != null) {
+      final resolved = await database.categoryDao.findById(
+        expenseClassification.categoryId!,
+      );
+      expect(resolved?.type, 'expense');
+    }
+
+    // Keep the variable used so this test also asserts a valid expense
+    // category exists in a seeded personal book.
+    expect(expenseCategory.type, 'expense');
+  });
+
   test('payment method mapping helps a new merchant choose account', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
