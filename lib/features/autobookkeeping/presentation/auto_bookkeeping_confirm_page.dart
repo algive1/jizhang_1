@@ -152,7 +152,7 @@ class _AutoBookkeepingConfirmPageState
                     bookId: bookId,
                     type: transactionType,
                     amount: candidate.amountInCents / 100,
-                    accountId: account.id,
+                    accountId: saved.accountId,
                     categoryId: category.id,
                     categoryName: category.name,
                     merchant: candidate.merchant,
@@ -366,10 +366,27 @@ class _AutoBookkeepingConfirmPageState
                         child: Text(account.displayName),
                       ),
                   ],
-                  onChanged: _saving || selectedBook == null
+                  onChanged:
+                      _saving ||
+                          selectedBook == null ||
+                          _matchedRefundOriginal?.bookId == selectedBookId
                       ? null
                       : (value) => setState(() => _accountId = value),
                 ),
+                if (_matchedRefundOriginal?.bookId == selectedBookId)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '退款将原路返回原消费账户',
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedCategoryId,
