@@ -41,7 +41,10 @@ class AppleMembershipPurchaseService {
     await session.initialize();
     if (session.user == null) throw StateError('请先登录后再开通会员');
     final items = await products();
-    final product = items.where((item) => item.id == productId).firstOrNull;
+    ProductDetails? product;
+    for (final item in items) {
+      if (item.id == productId) { product = item; break; }
+    }
     if (product == null) throw StateError('App Store 会员商品尚未配置');
     await start();
     final launched = await _iap.buyNonConsumable(
