@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'features/autobookkeeping/auto_bookkeeping_background.dart';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'dart:io';
 import 'app/app.dart';
 import 'core/database/app_database.dart';
 import 'core/database/database_seeder.dart';
+import 'core/diagnostics/crash_reporter.dart';
 import 'core/models/recurring_bill.dart';
 import 'features/bookkeeping/application/quick_bookkeeping_service.dart';
 import 'features/installments/data/installment_plan_repository.dart';
@@ -24,16 +26,29 @@ import 'features/sharing/data/shared_api.dart';
 import 'features/transactions/data/transactions_repository.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('zh_CN');
-  // A staged restore must be applied before runApp creates the foreground
-  // database. Background FlutterEngine entrypoints deliberately skip this so
-  // they can never replace a database that the foreground engine is using.
-  final documents = await getApplicationDocumentsDirectory();
-  await AppDatabase.applyPendingRestore(
-    File(p.join(documents.path, AppDatabase.databaseFileName)),
-  );
-  runApp(const ProviderScope(child: JizhangApp()));
+  GlobalCrashReporter.install();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeDateFormatting('zh_CN');
+    // A staged restore must be applied before runApp creates the foreground
+    // database. Background FlutterEngine entrypoints deliberately skip this so
+    // they can never replace a database that the foreground engine is using.
+    final documents = await getApplicationDocumentsDirectory();
+    await AppDatabase.applyPendingRestore(
+      File(p.join(documents.path, AppDatabase.databaseFileName)),
+    );
+    runApp(
+      const ProviderScope(
+        child: CrashReporterBootstrap(child: JizhangApp()),
+      ),
+    );
+  }, (error, stack) {
+    GlobalCrashReporter.capture(
+      error,
+      kind: 'zone_error',
+      fatal: true,
+    );
+  });
 }
 
 @pragma('vm:entry-point')
