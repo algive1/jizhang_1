@@ -718,6 +718,17 @@ class DriftInvestmentRepository implements InvestmentRepository {
     if (existing != null) return;
     final portfolio = await getPortfolio();
     if (portfolio.isEmpty) return;
+    final marketPositions = portfolio.positions.where(
+      (position) => position.holding.asset.priceSource == PriceSource.market,
+    );
+    // A daily history point must never be fabricated from average cost when
+    // the real provider is unavailable. Manual assets are allowed because
+    // their current price is explicitly user-entered.
+    if (marketPositions.any(
+      (position) => position.quote == null || position.quote!.isStale,
+    )) {
+      return;
+    }
     await _dao.upsertSnapshot(
       InvestmentSnapshotEntriesCompanion.insert(
         bookId: bookId,
