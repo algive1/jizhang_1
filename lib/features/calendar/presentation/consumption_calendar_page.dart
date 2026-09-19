@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/book.dart';
+import '../../../core/models/family.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/book_color_dot.dart';
@@ -190,7 +191,7 @@ class _ConsumptionCalendarPageState
                           month: _month,
                           dates: _viewMode == _CalendarViewMode.month
                               ? _monthDates(_month)
-                              : _weekDates(_selectedDate),
+                              : _weekDates(selectedDate),
                           dailyExpense: dailyExpense,
                           dailyIncome: dailyIncome,
                           dailyOther: dailyOther,
@@ -983,7 +984,7 @@ class _CalendarInlineStats extends StatelessWidget {
                   label: '最高消费日',
                   value: highestExpenseDay == null
                       ? '暂无'
-                      : '${highestExpenseDay}日',
+                      : '$highestExpenseDay日',
                   helper: highestExpenseCents == null
                       ? null
                       : '¥${(highestExpenseCents! / 100).toStringAsFixed(2)}',
