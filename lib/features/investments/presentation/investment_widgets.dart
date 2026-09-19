@@ -76,7 +76,7 @@ class ProfitText extends StatelessWidget {
 Color profitColor(double value) {
   if (value > 0) return AppColors.expense;
   if (value < 0) return AppColors.success;
-  return context.appSecondaryText;
+  return AppColors.textSecondary;
 }
 
 /// Money amount with an explicit sign, reusing the app-wide privacy mask so a
