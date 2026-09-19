@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -33,6 +34,7 @@ class MainActivity : FlutterFragmentActivity() {
     private val fileChannelName = "jizhang/file_opener"
     private var navigationChannel: MethodChannel? = null
     private var pendingNotificationPermissionResult: MethodChannel.Result? = null
+    private var pendingNotificationPermissionRequiresAutoStatus = false
 
     override fun onResume() {
         super.onResume()
@@ -46,9 +48,15 @@ class MainActivity : FlutterFragmentActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
-            val granted = isNotificationGranted()
+            val granted =
+                if (pendingNotificationPermissionRequiresAutoStatus) {
+                    isAutoBookkeepingNotificationGranted()
+                } else {
+                    isAppNotificationGranted()
+                }
             pendingNotificationPermissionResult?.success(granted)
             pendingNotificationPermissionResult = null
+            pendingNotificationPermissionRequiresAutoStatus = false
             reconcileAutoBookkeepingRuntime()
         }
     }
@@ -181,9 +189,9 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(null)
                     }
-                    "isNotificationGranted" -> result.success(isNotificationGranted())
+                    "isNotificationGranted" -> result.success(isAppNotificationGranted())
                     "requestNotificationPermission" -> {
-                        requestNotificationPermission(result)
+                        requestNotificationPermission(result, requireAutoStatus = false)
                     }
                     "getPending" -> result.success(PaymentNotificationStore.read(this))
                     "acknowledge" -> {
@@ -214,7 +222,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 AutoBookkeepingDiagnostics.accessibilityConnected,
                             "overlayGranted" to
                                 AutoBookkeepingOverlayPermission.isGranted(this),
-                            "notificationGranted" to isNotificationGranted(),
+                            "notificationGranted" to isAutoBookkeepingNotificationGranted(),
                             "foregroundRunning" to
                                 AutoBookkeepingDiagnostics.foregroundRunning,
                             "notificationListenerGranted" to
@@ -233,9 +241,9 @@ class MainActivity : FlutterFragmentActivity() {
                             "ruleSource" to AutoBookkeepingDiagnostics.ruleSource,
                         ),
                     )
-                    "isNotificationGranted" -> result.success(isNotificationGranted())
+                    "isNotificationGranted" -> result.success(isAutoBookkeepingNotificationGranted())
                     "requestNotificationPermission" -> {
-                        requestNotificationPermission(result)
+                        requestNotificationPermission(result, requireAutoStatus = true)
                     }
                     "setScreenshotEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
@@ -479,7 +487,7 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/budget_notifications")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "isGranted" -> result.success(isNotificationGranted())
+                    "isGranted" -> result.success(isAppNotificationGranted())
                     "requestPermission" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -640,12 +648,25 @@ class MainActivity : FlutterFragmentActivity() {
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
 
-    private fun isNotificationGranted(): Boolean =
+    private fun isAppNotificationGranted(): Boolean =
         hasRuntimeNotificationPermission() &&
+            NotificationManagerCompat.from(this).areNotificationsEnabled()
+
+    private fun isAutoBookkeepingNotificationGranted(): Boolean =
+        isAppNotificationGranted() &&
             AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
 
-    private fun requestNotificationPermission(result: MethodChannel.Result) {
-        if (isNotificationGranted()) {
+    private fun requestNotificationPermission(
+        result: MethodChannel.Result,
+        requireAutoStatus: Boolean,
+    ) {
+        val alreadyGranted =
+            if (requireAutoStatus) {
+                isAutoBookkeepingNotificationGranted()
+            } else {
+                isAppNotificationGranted()
+            }
+        if (alreadyGranted) {
             result.success(true)
             return
         }
@@ -658,6 +679,7 @@ class MainActivity : FlutterFragmentActivity() {
                 return
             }
             pendingNotificationPermissionResult = result
+            pendingNotificationPermissionRequiresAutoStatus = requireAutoStatus
             requestPermissions(
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
                 NOTIFICATION_PERMISSION_REQUEST,
@@ -665,9 +687,9 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
 
-        // Permission is granted but notifications or the status channel were
-        // disabled in system settings. Open the app's notification settings;
-        // the Flutter page re-checks the state when the user returns.
+        // Runtime permission exists, but app notifications or (for automatic
+        // bookkeeping) the dedicated status channel were disabled in system
+        // settings. The Flutter page re-checks when the user returns.
         openAppNotificationSettings(result, successValue = false)
     }
 
