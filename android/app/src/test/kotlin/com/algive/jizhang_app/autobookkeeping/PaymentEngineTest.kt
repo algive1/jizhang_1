@@ -183,6 +183,49 @@ class PaymentEngineTest {
         assertEquals("晚餐", candidate?.note)
     }
 
+    @Test fun accessibilityParserDetectsRefundAndIncomePages() {
+        val refund = PaymentSceneDetector().detect(
+            "com.eg.android.AlipayGphone",
+            nodes(
+                "退款成功",
+                "退款方",
+                "测试餐厅",
+                "退款金额",
+                "28.50",
+                "订单号",
+                "ORDER_REFUND_123",
+            ),
+            100000,
+        )
+        assertEquals("REFUND", refund?.transactionType)
+        assertEquals(2850L, refund?.amountInCents)
+        assertEquals("测试餐厅", refund?.merchantRaw)
+        assertEquals("ORDER_REFUND_123", refund?.orderId)
+
+        val income = PaymentSceneDetector().detect(
+            "com.tencent.mm",
+            nodes(
+                "收款到账",
+                "来自张三",
+                "￥88.00",
+            ),
+            100000,
+        )
+        assertEquals("INCOME", income?.transactionType)
+        assertEquals(8800L, income?.amountInCents)
+        assertEquals("张三", income?.merchantRaw)
+    }
+
+    @Test fun accessibilityTypedParserRejectsMissingCounterparty() {
+        val result = PaymentSceneDetector().inspect(
+            "com.eg.android.AlipayGphone",
+            nodes("退款成功", "退款金额", "28.50"),
+            100000,
+        )
+        assertNull(result.candidate)
+        assertEquals("NO_COUNTERPARTY", result.rejectionReason)
+    }
+
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
