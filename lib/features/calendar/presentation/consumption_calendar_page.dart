@@ -286,11 +286,7 @@ class _ConsumptionCalendarPageState
   int _dateKey(DateTime date) =>
       date.year * 10000 + date.month * 100 + date.day;
 
-  bool _isFutureDate(DateTime date) {
-    final day = DateTime(date.year, date.month, date.day);
-    final today = _today;
-    return day.isAfter(DateTime(today.year, today.month, today.day));
-  }
+  bool _isFutureDate(DateTime date) => date.isAfter(_today);
 
   /// Keep the calendar aligned with the app's consumption-expense flag while
   /// excluding fully offset or refunded records whose net expense is not positive.
