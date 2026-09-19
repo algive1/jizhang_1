@@ -280,7 +280,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                         ),
                       ),
                     if (showDecoration)
-                      const Positioned(
+                      Positioned(
                         right: 102,
                         top: 45,
                         child: Text(
