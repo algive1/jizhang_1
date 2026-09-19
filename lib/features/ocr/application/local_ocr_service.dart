@@ -19,7 +19,7 @@ class LocalOcrService {
     );
     final text = value?['text']?.toString().trim() ?? '';
     if (text.isEmpty) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'OCR_EMPTY',
         message: '未从图片中识别到文字',
       );
