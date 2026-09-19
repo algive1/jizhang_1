@@ -71,8 +71,8 @@ class AccessibilityTreeReader {
     }
 
     private companion object {
-        const val MAX_NODES = 240
-        const val MAX_DEPTH = 18
-        const val MAX_CHILDREN_PER_NODE = 80
+        const val MAX_NODES = 480
+        const val MAX_DEPTH = 24
+        const val MAX_CHILDREN_PER_NODE = 120
     }
 }
