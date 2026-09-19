@@ -38,6 +38,7 @@ class TransactionRecord {
     required this.createdAt,
     required this.updatedAt,
     this.userId,
+    this.payerUserId,
     this.categoryId,
     this.categoryName,
     this.categoryIcon,
@@ -74,6 +75,9 @@ class TransactionRecord {
   final String id;
   final String bookId;
   final String? userId;
+  /// Member this transaction is attributed to for family spending statistics.
+  /// [createdBy] remains the audit identity of the member who recorded it.
+  final String? payerUserId;
   final TransactionType type;
   final double amount;
   final String currency;
@@ -183,6 +187,7 @@ class TransactionRecord {
 
   TransactionRecord copyWith({
     TransactionType? type,
+    Object? payerUserId = _copyWithUnset,
     double? amount,
     String? currency,
     String? categoryId,
@@ -218,6 +223,9 @@ class TransactionRecord {
       id: id,
       bookId: bookId,
       userId: userId,
+      payerUserId: identical(payerUserId, _copyWithUnset)
+          ? this.payerUserId
+          : payerUserId as String?,
       type: type ?? this.type,
       amount: amount ?? this.amount,
       currency: currency ?? this.currency,
