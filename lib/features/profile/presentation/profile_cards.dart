@@ -7,9 +7,6 @@ import '../../../core/widgets/user_avatar.dart';
 import '../data/profile_stats.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
-const profileCream = Color(0xFFF7F7ED);
-const profileSurface = Color(0xFFFFFEF9);
-
 class ProfileHero extends StatelessWidget {
   const ProfileHero({
     super.key,
