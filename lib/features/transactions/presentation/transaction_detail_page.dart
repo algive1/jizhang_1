@@ -328,7 +328,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           Row(
             children: [
               Text('附件', style: Theme.of(context).textTheme.titleMedium),
@@ -342,13 +342,13 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
           ),
           const SizedBox(height: 8),
           if (_attachmentsLoading && attachments.isEmpty)
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(18),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (attachments.isEmpty &&
               !legacyMetadata.hasMalformedAttachments)
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(18),
               child: Text(
                 '暂无附件。需要补充时可点击右上角编辑流水。',
@@ -568,7 +568,7 @@ class _AttachmentTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    SizedBox(height: 3),
                     Text(
                       attachment.isImage
                           ? '点击缩略图预览'
