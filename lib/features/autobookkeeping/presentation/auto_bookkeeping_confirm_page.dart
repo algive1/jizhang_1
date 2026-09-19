@@ -121,7 +121,7 @@ class _AutoBookkeepingConfirmPageState
               source: TransactionSource.auto,
               userCorrected: true,
               metadata: {
-                'paymentChannel': _paymentChannel(candidate.sourceApp),
+                'paymentChannel': _paymentChannel(candidate),
                 if (candidate.orderId != null) 'orderId': candidate.orderId,
                 if (candidate.identifierSuffix != null)
                   'cardLastFour': candidate.identifierSuffix,
@@ -425,6 +425,21 @@ class _AutoBookkeepingConfirmPageState
       if (suffixMatches.length == 1) return suffixMatches.single.id;
     }
 
+    final method = _candidate?.paymentMethod ?? '';
+    final preferredByMethod = accounts.where((item) {
+      if (method.contains('支付宝')) return item.type == AccountType.alipay;
+      if (method.contains('微信')) return item.type == AccountType.wechat;
+      if (method.contains('银行卡') ||
+          method.contains('信用卡') ||
+          method.contains('储蓄卡') ||
+          method.contains('云闪付')) {
+        return item.type == AccountType.debitCard ||
+            item.type == AccountType.creditCard;
+      }
+      return false;
+    }).firstOrNull;
+    if (preferredByMethod != null) return preferredByMethod.id;
+
     final preferred = accounts.where((item) {
       final source = _candidate?.sourceApp;
       return switch (source) {
@@ -473,16 +488,27 @@ class _AutoBookkeepingConfirmPageState
     _ => AppColors.expense,
   };
 
-  String _paymentChannel(String source) => switch (source) {
-    'WECHAT' => 'wechat',
-    'ALIPAY' => 'alipay',
-    'UNIONPAY' => 'bank',
-    'MEITUAN' => 'meituan',
-    'JD' => 'jd',
-    'PINDUODUO' => 'pinduoduo',
-    'DOUYIN' => 'douyin',
-    _ => 'payment_app',
-  };
+  String _paymentChannel(PendingAutoBookkeepingCandidate candidate) {
+    final method = candidate.paymentMethod;
+    if (method.contains('支付宝')) return 'alipay';
+    if (method.contains('微信')) return 'wechat';
+    if (method.contains('银行卡') ||
+        method.contains('信用卡') ||
+        method.contains('储蓄卡') ||
+        method.contains('云闪付')) {
+      return 'bank';
+    }
+    return switch (candidate.sourceApp) {
+      'WECHAT' => 'wechat',
+      'ALIPAY' => 'alipay',
+      'UNIONPAY' => 'bank',
+      'MEITUAN' => 'meituan',
+      'JD' => 'jd',
+      'PINDUODUO' => 'pinduoduo',
+      'DOUYIN' => 'douyin',
+      _ => 'payment_app',
+    };
+  }
 
   String _sourceLabel(String source) => switch (source) {
     'WECHAT' => '微信支付',
