@@ -255,7 +255,7 @@ export function registerMarketDataRoutes(
       return { source: provider.name, results: await provider.search(query.q, query.type, query.limit) };
     } catch (error) {
       if (error instanceof MarketDataUnavailable) {
-        return app.httpErrors?.serviceUnavailable?.(error.message) ?? Promise.reject(Object.assign(error, { statusCode: 503 }));
+        throw Object.assign(error, { statusCode: 503 });
       }
       throw error;
     }
