@@ -309,6 +309,7 @@ class DriftTransactionRepository implements TransactionRepository {
       id: entity.id,
       bookId: entity.bookId,
       userId: entity.userId,
+      payerUserId: entity.payerUserId,
       type: TransactionType.values.byName(entity.type),
       amount: entity.amountInCents / 100,
       currency: entity.currency,
@@ -364,6 +365,11 @@ class DriftTransactionRepository implements TransactionRepository {
         transaction.userId == null || transaction.userId == 'user-local'
             ? _database.currentActor
             : transaction.userId,
+      ),
+      payerUserId: Value(
+        transaction.payerUserId == null || transaction.payerUserId == 'user-local'
+            ? _database.currentActor
+            : transaction.payerUserId,
       ),
       type: Value(transaction.type.name),
       amountInCents: Value(_toCents(transaction.amount)),
