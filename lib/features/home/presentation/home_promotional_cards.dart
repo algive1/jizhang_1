@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/dashboard_snapshot.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class HomeCrownIcon extends StatelessWidget {
   const HomeCrownIcon({this.color = const Color(0xFFC49A43), super.key});
@@ -40,16 +40,16 @@ class HomeInsightCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.eco_outlined,
-                        color: AppColors.primaryDark,
+                        color: context.appPrimary,
                         size: 22,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         '值得关注',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -81,9 +81,9 @@ class HomeInsightCard extends StatelessWidget {
                               amountHidden
                                   ? '${insight.timeLabel}  金额已隐藏'
                                   : '${insight.timeLabel}  ¥${MoneyFormatter.whole(insight.amount)}，较平时 ${insight.increasePercent == null ? '样本不足' : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent}%'}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
-                                color: AppColors.textPrimary,
+                                color: context.appPrimaryText,
                               ),
                             ),
                             const SizedBox(height: 5),
@@ -91,9 +91,9 @@ class HomeInsightCard extends StatelessWidget {
                               insight.description,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: context.appSecondaryText,
                                 height: 1.35,
                               ),
                             ),
@@ -105,9 +105,9 @@ class HomeInsightCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
               size: 26,
             ),
           ],
@@ -150,42 +150,42 @@ class HomeProCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const HomeCrownIcon(color: AppColors.primaryDark),
+                      const HomeCrownIcon(color: context.appPrimary),
                       const SizedBox(width: 5),
-                      const Text(
+                      Text(
                         '升级为 Pro',
                         style: TextStyle(
-                          color: AppColors.primaryDark,
+                          color: context.appPrimary,
                           fontSize: 14,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     '让账本多一份安全感',
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Pro 将提供自动云备份、多设备同步与无广告体验。',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       fontSize: 11,
                     ),
                   ),
                   FilledButton(
                     onPressed: onTap,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.appPrimary,
                       minimumSize: const Size(84, 30),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
-                    child: const Text('了解 Pro'),
+                    child: Text('了解 Pro'),
                   ),
                 ],
               ),
@@ -195,7 +195,7 @@ class HomeProCard extends StatelessWidget {
               top: 48,
               child: Icon(
                 Icons.chevron_right,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
                 size: 24,
               ),
             ),
