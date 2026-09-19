@@ -33,6 +33,7 @@ import '../../../core/models/account.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
 import '../../categories/presentation/category_management_page.dart';
+import '../../family/data/shared_family_service.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
@@ -125,6 +126,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   String? _subcategoryId;
   String? _accountId;
   String? _destinationAccountId;
+  String? _payerUserId;
+  String? _payerLabel;
   DateTime _occurredAt = DateTime.now();
   bool _isPlanned = false;
   bool _isOneTime = true;
@@ -181,6 +184,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _subcategoryId = transaction.subcategoryId;
     _accountId = transaction.accountId;
     _destinationAccountId = transaction.destinationAccountId;
+    _payerUserId = transaction.userId;
     _occurredAt = transaction.occurredAt;
     _isPlanned = transaction.isPlanned;
     _isOneTime = transaction.isOneTime;
@@ -622,6 +626,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   showChevron: true,
                   onTap: _pickReimbursement,
                 ),
+              if (selectedBook?.type == BookType.family &&
+                  selectedBook?.isShared == true)
+                _QuickChip(
+                  key: const ValueKey('quick-family-payer-chip'),
+                  label: _payerLabel ?? '本人付款',
+                  icon: Icons.person_outline_rounded,
+                  selected: true,
+                  showChevron: true,
+                  onTap: () => _chooseFamilyPayer(selectedBook!),
+                ),
               if (!_isEditing)
                 _QuickChip(
                   key: const ValueKey('quick-book-selector'),
@@ -711,6 +725,67 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ],
       ),
     );
+  }
+
+  Future<void> _chooseFamilyPayer(LedgerBook book) async {
+    final sharedId = book.sharedId;
+    if (sharedId == null) return;
+    try {
+      final service = ref.read(familyServiceProvider);
+      final members = await service.memberDetails(sharedId);
+      if (!mounted) return;
+      final selected = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  '这笔钱由谁支付？',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final member in members)
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.person_outline_rounded),
+                  ),
+                  title: Text(
+                    (member['display_name'] as String?)?.trim().isNotEmpty == true
+                        ? member['display_name'] as String
+                        : member['username'] as String,
+                  ),
+                  subtitle: Text(switch (member['role']) {
+                    'owner' => '所有者',
+                    'admin' => '管理员',
+                    _ => '家庭成员',
+                  }),
+                  trailing: member['user_id'] == _payerUserId
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: () => Navigator.pop(context, member),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null || !mounted) return;
+      final name =
+          (selected['display_name'] as String?)?.trim().isNotEmpty == true
+          ? selected['display_name'] as String
+          : selected['username'] as String;
+      setState(() {
+        _payerUserId = selected['user_id'] as String;
+        _payerLabel = '$name付款';
+      });
+    } on Object {
+      if (mounted) _showMessage('家庭成员加载失败，请稍后重试');
+    }
   }
 
   String get _reimbursementLabel =>
@@ -1440,6 +1515,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       final categoryUnchanged = persisted?.categoryId == selectedCategory?.id;
       final request = QuickBookkeepingRequest(
         bookId: bookId,
+        payerUserId: _payerUserId,
         type: _type,
         amount: _amount.amount!,
         metadata: {
