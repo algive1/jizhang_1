@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import '../../account/application/account_auth_gate.dart';
 import '../../account/application/account_pending_intent.dart';
 import '../../sharing/data/session_repository.dart';
 import '../data/membership_catalog.dart';
+import '../data/apple_purchase_service.dart';
 import '../data/membership_repository.dart';
 import '../data/payment_service.dart';
 import '../domain/commercial_service_contracts.dart';
@@ -99,6 +101,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                             topInset: statusBarHeight,
                             onBack: _goBack,
                             onRecords: _openRecords,
+                            onRestore: Platform.isIOS ? _restoreApplePurchases : null,
                           ),
                           const MembershipHero(),
                           Transform.translate(
@@ -182,11 +185,39 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
 
   void _openRecords() => context.push('/profile/membership/records');
 
+  Future<void> _restoreApplePurchases() async {
+    try {
+      await ref.read(appleMembershipPurchaseServiceProvider).restore();
+      _refreshMembershipStatus();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在恢复 App Store 购买记录')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
   void _openAgreement() => context.push('/profile/membership/agreement');
 
   Future<void> _purchase(MembershipProduct product) async {
     if (_isPaying) return;
     final channel = _selectedChannel;
+    if (Platform.isIOS) {
+      final appleProductId = switch (product.id) {
+        'monthly' => 'haohaojizhang.membership.monthly',
+        'quarterly' => 'haohaojizhang.membership.quarterly',
+        'yearly' => 'haohaojizhang.membership.yearly',
+        _ => null,
+      };
+      if (appleProductId == null) return;
+      setState(() => _isPaying = true);
+      try {
+        await ref.read(appleMembershipPurchaseServiceProvider).buy(appleProductId);
+      } catch (error) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+      } finally {
+        if (mounted) setState(() => _isPaying = false);
+      }
+      return;
+    }
     final intent = AccountPendingIntent(
       id: 'membership:${product.id}:${channel.name}',
       action: AccountPendingAction.membershipPurchase,
@@ -352,11 +383,13 @@ class _MemberHeader extends StatelessWidget {
     required this.topInset,
     required this.onBack,
     required this.onRecords,
+    this.onRestore,
   });
 
   final double topInset;
   final VoidCallback onBack;
   final VoidCallback onRecords;
+  final VoidCallback? onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -404,6 +437,12 @@ class _MemberHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onRestore != null)
+            Positioned(
+              right: 88,
+              top: topInset + 5,
+              child: TextButton(onPressed: onRestore, child: const Text('恢复购买', style: TextStyle(fontSize: 11))),
+            ),
           Positioned(
             right: 12,
             top: topInset + 5,
