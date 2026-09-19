@@ -58,7 +58,6 @@ dependencies:
   cryptography_flutter: ^2.3.4
   wechat_kit: ^6.0.2
   alipay_kit: ^6.0.0
-  alipay_kit_ios: ^6.0.1
   in_app_purchase: ^3.2.3
   image_picker: ^1.2.3
   open_filex: ^4.7.0
@@ -99,9 +98,9 @@ flutter:
     - assets/images/membership/
     - assets/config/
 
-# Payment SDKs are deliberately configured with merchant-console values at
-# release time. The iOS plugins use these values to register URL schemes and
-# universal links; they are not secrets.
+# Android WeChat/Alipay SDKs use merchant-console values at release time.
+# iOS membership purchase is StoreKit-only and intentionally does not bundle
+# the Alipay iOS implementation.
 wechat_kit:
   app_id: YOUR_WECHAT_APP_ID
   universal_link: https://YOUR_DOMAIN.example/universal_link/jizhang/wechat/
