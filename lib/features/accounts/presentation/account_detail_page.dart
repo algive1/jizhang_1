@@ -145,7 +145,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           ),
           const SizedBox(height: 12),
           if (transactions.isEmpty)
-            const AppCard(
+            AppCard(
               child: Text(
                 '暂无该账户流水',
                 style: TextStyle(color: context.appSecondaryText),
