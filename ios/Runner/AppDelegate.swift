@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Flutter
 import UIKit
 import UserNotifications
@@ -7,6 +8,9 @@ import UserNotifications
   private var navigationChannel: FlutterMethodChannel?
   private var pendingNotificationRoute: String?
   private var apnsDeviceToken: String?
+  private let financeTaskIdentifier = "com.algive.jizhang.finance.refresh"
+  private var backgroundFinanceEngine: FlutterEngine?
+  private var backgroundFinanceChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -14,6 +18,17 @@ import UserNotifications
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
     apnsDeviceToken = UserDefaults.standard.string(forKey: "haohao.apns.deviceToken")
+    BGTaskScheduler.shared.register(
+      forTaskWithIdentifier: financeTaskIdentifier,
+      using: nil
+    ) { [weak self] task in
+      guard let refreshTask = task as? BGAppRefreshTask else {
+        task.setTaskCompleted(success: false)
+        return
+      }
+      self?.handleFinanceRefresh(refreshTask)
+    }
+    scheduleFinanceRefresh()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -97,6 +112,27 @@ import UserNotifications
             }
           }
         }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let financeSchedulerChannel = FlutterMethodChannel(
+      name: "jizhang/finance_scheduler",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    financeSchedulerChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "APP_DELEGATE_UNAVAILABLE", message: nil, details: nil))
+        return
+      }
+      switch call.method {
+      case "schedule":
+        self.scheduleFinanceRefresh()
+        result(nil)
+      case "cancel":
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: self.financeTaskIdentifier)
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -267,6 +303,92 @@ import UserNotifications
       emitNotificationRoute(route)
     }
     completionHandler()
+  }
+
+  private func scheduleFinanceRefresh() {
+    let request = BGAppRefreshTaskRequest(identifier: financeTaskIdentifier)
+    // iOS decides the exact execution time. Six hours keeps the daily finance
+    // task eligible without pretending BGTaskScheduler is an exact alarm.
+    request.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 60 * 60)
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      // Foreground resume processing remains the fallback when iOS declines a
+      // background request (for example, Background App Refresh is disabled).
+    }
+  }
+
+  private func handleFinanceRefresh(_ task: BGAppRefreshTask) {
+    // BGAppRefresh requests are one-shot. Schedule the next opportunity before
+    // running this one so a process termination cannot silently stop the chain.
+    scheduleFinanceRefresh()
+
+    let engine = FlutterEngine(
+      name: "haohao-finance-background",
+      project: nil,
+      allowHeadlessExecution: true
+    )
+    backgroundFinanceEngine = engine
+    guard engine.run(withEntrypoint: "scheduledFinanceMain") else {
+      backgroundFinanceEngine = nil
+      task.setTaskCompleted(success: false)
+      return
+    }
+    GeneratedPluginRegistrant.register(with: engine)
+
+    let channel = FlutterMethodChannel(
+      name: "jizhang/finance_scheduler",
+      binaryMessenger: engine.binaryMessenger
+    )
+    backgroundFinanceChannel = channel
+    var didFinish = false
+
+    func finish(_ success: Bool) {
+      guard !didFinish else { return }
+      didFinish = true
+      channel.setMethodCallHandler(nil)
+      backgroundFinanceChannel = nil
+      backgroundFinanceEngine?.destroyContext()
+      backgroundFinanceEngine = nil
+      task.setTaskCompleted(success: success)
+    }
+
+    task.expirationHandler = {
+      DispatchQueue.main.async {
+        finish(false)
+      }
+    }
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "APP_DELEGATE_UNAVAILABLE", message: nil, details: nil))
+        finish(false)
+        return
+      }
+      switch call.method {
+      case "scheduleReminder":
+        self.scheduleRecurringNotification(call.arguments, result: result)
+      case "cancelReminder":
+        guard let arguments = call.arguments as? [String: Any],
+              let id = arguments["id"] as? String,
+              !id.isEmpty else {
+          result(FlutterError(code: "INVALID_REMINDER", message: "周期账单提醒 ID 为空", details: nil))
+          return
+        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+          withIdentifiers: [id]
+        )
+        result(nil)
+      case "completed":
+        result(nil)
+        finish(true)
+      case "failed":
+        result(nil)
+        finish(false)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func emitNotificationRoute(_ route: String) {
