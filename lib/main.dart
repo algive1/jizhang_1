@@ -14,9 +14,13 @@ import 'core/database/database_seeder.dart';
 import 'core/models/recurring_bill.dart';
 import 'features/bookkeeping/application/quick_bookkeeping_service.dart';
 import 'features/installments/data/installment_plan_repository.dart';
+import 'features/investments/data/http_market_data_provider.dart';
+import 'features/investments/data/investment_repository.dart';
+import 'features/investments/data/quote_cache.dart';
 import 'features/recurring/application/recurring_bill_notification_service.dart';
 import 'features/recurring/data/recurring_bill_repository.dart';
 import 'features/settings/data/app_settings_repository.dart';
+import 'features/sharing/data/shared_api.dart';
 import 'features/transactions/data/transactions_repository.dart';
 
 Future<void> main() async {
@@ -46,8 +50,10 @@ Future<void> scheduledFinanceMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('jizhang/finance_scheduler');
   AppDatabase? database;
+  SharedApi? marketApi;
   try {
     database = AppDatabase();
+    marketApi = SharedApi();
     await DatabaseSeeder(database).seedIfNeeded();
     final books = await (database.select(
       database.bookEntries,
@@ -82,6 +88,23 @@ Future<void> scheduledFinanceMain() async {
         bookId: book.id,
       ).processDueRepayments();
     }
+
+    // Investment snapshots piggyback on the same daily isolate instead of
+    // creating a second scheduler that could race the finance database. Books
+    // that share a main asset book are collapsed to one idempotent write.
+    final assetBookIds = <String>{
+      for (final book in books) book.assetSourceBookId ?? book.id,
+    };
+    final market = HttpMarketDataProvider(marketApi);
+    for (final assetBookId in assetBookIds) {
+      await DriftInvestmentRepository(
+        database,
+        market,
+        bookId: assetBookId,
+        cache: MemoryQuoteCache(),
+      ).ensureTodaySnapshot();
+    }
+
     // Read the complete table for notification cleanup as well. This also
     // cancels reminders belonging to books archived since the last sync.
     allBills
@@ -101,6 +124,7 @@ Future<void> scheduledFinanceMain() async {
       // There is no foreground UI to receive a second error here.
     }
   } finally {
+    marketApi?.close();
     await database?.close();
   }
 }
