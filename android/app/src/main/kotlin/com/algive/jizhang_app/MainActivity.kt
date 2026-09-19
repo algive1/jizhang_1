@@ -223,11 +223,25 @@ class MainActivity : FlutterFragmentActivity() {
                                 notificationPreferences().getBoolean(KEY_ENABLED, false),
                             "notificationListenerConnected" to
                                 PaymentNotificationListenerService.connected,
+                            "screenshotSupported" to
+                                AutoBookkeepingSettings.screenshotSupported(),
+                            "screenshotEnabled" to
+                                AutoBookkeepingSettings.screenshotEnabled(this),
                         ),
                     )
                     "isNotificationGranted" -> result.success(isNotificationGranted())
                     "requestNotificationPermission" -> {
                         requestNotificationPermission(result)
+                    }
+                    "setScreenshotEnabled" -> {
+                        val enabled = call.arguments as? Boolean ?: false
+                        AutoBookkeepingSettings.setScreenshotEnabled(this, enabled)
+                        AutoBookkeepingLogStore.record(
+                            this,
+                            "screenshot_setting_changed",
+                            "enabled=${AutoBookkeepingSettings.screenshotEnabled(this)}",
+                        )
+                        result.success(AutoBookkeepingSettings.screenshotEnabled(this))
                     }
                     "setEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
@@ -305,7 +319,12 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(mapOf("status" to decision.name.lowercase()))
                     }
                     "complete" -> {
-                        AutoBookkeepingPendingStore.complete(this)
+                        val keepScreenshot =
+                            (call.arguments as? Map<*, *>)?.get("keepScreenshot") == true
+                        AutoBookkeepingPendingStore.complete(
+                            this,
+                            keepScreenshot = keepScreenshot,
+                        )
                         result.success(null)
                     }
                     else -> result.notImplemented()
