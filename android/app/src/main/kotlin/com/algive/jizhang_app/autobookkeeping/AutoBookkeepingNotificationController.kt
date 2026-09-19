@@ -24,21 +24,35 @@ object AutoBookkeepingNotificationController {
     private const val RESULT_NOTIFICATION_ID = 2402
     private const val CONFIRM_NOTIFICATION_ID = 2403
 
+    fun statusNotificationsAvailable(context: Context): Boolean {
+        createChannel(context)
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(CHANNEL_ID)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                return false
+            }
+        }
+        return true
+    }
+
     fun sync(context: Context) {
         val manager = NotificationManagerCompat.from(context)
         if (!AutoBookkeepingSettings.enabled(context)) {
             manager.cancel(NOTIFICATION_ID)
             return
         }
-        if (!manager.areNotificationsEnabled()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        createChannel(context)
+        if (!statusNotificationsAvailable(context)) return
         manager.notify(NOTIFICATION_ID, buildNotification(context))
     }
 
