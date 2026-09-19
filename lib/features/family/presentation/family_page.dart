@@ -138,7 +138,8 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     required Json member,
   }) {
     if (member['role'] == 'owner') return false;
-    final memberId = member['user_id'] as String;
+    final memberId = member['user_id'] as String?;
+    if (memberId == null || memberId.isEmpty) return false;
     if (memberId == viewerUserId) return true;
     if (bookRole == 'owner') return true;
     return bookRole == 'admin' && member['role'] == 'member';
