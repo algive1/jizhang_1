@@ -487,7 +487,7 @@ class _HomeAssetMetric extends StatelessWidget {
         child: Icon(
           icon,
           size: compact ? 18 : 24,
-          color: const Color(0x2F6F8D3D),
+          color: context.appPrimary.withValues(alpha: .18),
         ),
       ),
     ],
