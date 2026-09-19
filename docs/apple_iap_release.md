@@ -13,6 +13,7 @@ Configure the App Store Server Notifications V2 production and sandbox URL as:
 
 ## Server environment
 - `APPLE_BUNDLE_ID`: the exact iOS bundle identifier.
+- `APPLE_ENVIRONMENT`: `Production` on production servers and `Sandbox` on sandbox servers. Do not mix environments in one entitlement database.
 - `APPLE_ROOT_CA_PATHS`: comma-separated local paths to trusted Apple root certificate files downloaded from Apple PKI.
 
 The server intentionally fails closed when no trusted Apple root CA is configured. Do not disable certificate-chain validation.
