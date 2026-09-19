@@ -81,7 +81,7 @@ abstract final class GlobalCrashReporter {
     if (_buffer.length > 20) _buffer.removeAt(0);
   }
 
-  static List<_BufferedCrash> takeBuffered() {
+  static List<_BufferedCrash> _takeBuffered() {
     if (_buffer.isEmpty) return const [];
     final copy = List<_BufferedCrash>.from(_buffer);
     _buffer.clear();
@@ -99,7 +99,7 @@ abstract final class GlobalCrashReporter {
           '[email]',
         )
         .replaceAll(
-          RegExp(r'(?i)(token|password|authorization|bearer)\s*[:=]?\s*[^\s,;]+'),
+          RegExp(r'(token|password|authorization|bearer)\s*[:=]?\s*[^\s,;]+', caseSensitive: false),
           r'$1=[redacted]',
         )
         .replaceAll(RegExp(r'\b\d{8,}\b'), '[number]');
@@ -150,7 +150,7 @@ class _CrashReporterBootstrapState
     _draining = true;
     try {
       final service = ref.read(operationLogServiceProvider);
-      for (final event in GlobalCrashReporter.takeBuffered()) {
+      for (final event in GlobalCrashReporter._takeBuffered()) {
         await service.record(
           kind: event.kind,
           level: 'error',
