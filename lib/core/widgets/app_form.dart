@@ -114,6 +114,23 @@ class AppSelect<T> extends StatelessWidget {
   }
 }
 
+InputDecoration appFieldDecoration(
+  String label, {
+  String? hintText,
+  Widget? prefixIcon,
+  Widget? suffixIcon,
+  String? prefixText,
+  String? helperText,
+}) => InputDecoration(
+  labelText: label,
+  hintText: hintText,
+  prefixIcon: prefixIcon,
+  suffixIcon: suffixIcon,
+  prefixText: prefixText,
+  helperText: helperText,
+  floatingLabelBehavior: FloatingLabelBehavior.never,
+);
+
 class AppInput extends TextFormField {
   AppInput({
     super.key,
