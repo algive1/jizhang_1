@@ -75,6 +75,8 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
         notificationListenerGranted: false,
         notificationListenerEnabled: false,
         notificationListenerConnected: false,
+        screenshotSupported: true,
+        screenshotEnabled: false,
       );
 
 
@@ -86,6 +88,9 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
 
   @override
   Future<bool> requestNotificationPermission() async => false;
+
+  @override
+  Future<bool> setScreenshotEnabled(bool enabled) async => enabled;
 
   @override
   Future<void> setEnabled(bool enabled) async {}
