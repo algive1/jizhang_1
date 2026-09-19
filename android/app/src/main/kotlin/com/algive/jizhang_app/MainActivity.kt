@@ -9,7 +9,10 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
@@ -20,7 +23,7 @@ import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "jizhang/payment_notifications"
     private val fileChannelName = "jizhang/file_opener"
     private var navigationChannel: MethodChannel? = null
@@ -43,6 +46,50 @@ class MainActivity : FlutterActivity() {
             "jizhang/navigation",
         )
         dispatchPendingRoute()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/push")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "currentToken" -> {
+                        val cached = getSharedPreferences(PUSH_PREFS, MODE_PRIVATE)
+                            .getString(PUSH_TOKEN_KEY, null)
+                        if (!cached.isNullOrBlank()) {
+                            result.success(
+                                mapOf(
+                                    "platform" to "android",
+                                    "provider" to "fcm",
+                                    "token" to cached,
+                                ),
+                            )
+                            return@setMethodCallHandler
+                        }
+                        val messaging = firebaseMessagingOrNull()
+                        if (messaging == null) {
+                            result.success(null)
+                            return@setMethodCallHandler
+                        }
+                        messaging.token.addOnCompleteListener { task ->
+                            if (!task.isSuccessful || task.result.isNullOrBlank()) {
+                                result.success(null)
+                            } else {
+                                val token = task.result
+                                getSharedPreferences(PUSH_PREFS, MODE_PRIVATE)
+                                    .edit()
+                                    .putString(PUSH_TOKEN_KEY, token)
+                                    .apply()
+                                result.success(
+                                    mapOf(
+                                        "platform" to "android",
+                                        "provider" to "fcm",
+                                        "token" to token,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/app_update")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -358,7 +405,9 @@ class MainActivity : FlutterActivity() {
         }
 
     private fun dispatchPendingRoute() {
-        val route = intent?.getStringExtra(OPEN_ROUTE_EXTRA) ?: return
+        val route = intent?.getStringExtra(OPEN_ROUTE_EXTRA)
+            ?: intent?.getStringExtra("route")
+            ?: return
         intent?.removeExtra(OPEN_ROUTE_EXTRA)
         window.decorView.postDelayed({
             navigationChannel?.invokeMethod("openRoute", route)
@@ -367,9 +416,31 @@ class MainActivity : FlutterActivity() {
 
     private fun notificationPreferences() = getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE)
 
+    private fun firebaseMessagingOrNull(): FirebaseMessaging? {
+        if (BuildConfig.FIREBASE_APP_ID.isBlank() ||
+            BuildConfig.FIREBASE_API_KEY.isBlank() ||
+            BuildConfig.FIREBASE_PROJECT_ID.isBlank() ||
+            BuildConfig.FIREBASE_SENDER_ID.isBlank()
+        ) {
+            return null
+        }
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            val options = FirebaseOptions.Builder()
+                .setApplicationId(BuildConfig.FIREBASE_APP_ID)
+                .setApiKey(BuildConfig.FIREBASE_API_KEY)
+                .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
+                .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
+                .build()
+            FirebaseApp.initializeApp(this, options)
+        }
+        return FirebaseMessaging.getInstance()
+    }
+
     companion object {
         const val OPEN_ROUTE_EXTRA = "open_route"
         private const val KEY_ENABLED = "enabled"
         private const val NOTIFICATION_PERMISSION_REQUEST = 2402
+        const val PUSH_PREFS = "haohao_push"
+        const val PUSH_TOKEN_KEY = "fcm_token"
     }
 }
