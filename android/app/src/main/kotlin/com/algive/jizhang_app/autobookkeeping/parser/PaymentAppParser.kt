@@ -13,8 +13,12 @@ class PaymentAppParser {
         "com.unionpay" to "UNIONPAY",
         "com.sankuai.meituan" to "MEITUAN",
         "com.sankuai.meituan.takeout" to "MEITUAN",
+        "com.jingdong.app.mall" to "JD",
+        "com.xunmeng.pinduoduo" to "PINDUODUO",
+        "com.ss.android.ugc.aweme" to "DOUYIN",
+        "com.ss.android.ugc.aweme.mobile" to "DOUYIN",
     )
-    private val keywords = setOf("支付成功", "付款成功", "交易成功", "已支付", "支付完成")
+    private val keywords = setOf("支付成功", "付款成功", "交易成功", "已支付", "支付完成", "付款完成", "订单支付成功")
     private val merchantKeys = setOf("收款方", "商户", "商户名称", "商家", "店铺", "门店")
     private val amountKeys = setOf("实付", "实付金额", "付款金额", "支付金额", "实际支付", "消费金额", "扣款金额")
     private val excluded = setOf("优惠", "余额", "订单", "时间", "积分", "原价", "商品金额", "合计", "立减", "红包")
