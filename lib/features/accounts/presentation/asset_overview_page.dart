@@ -277,12 +277,12 @@ class _Header extends StatelessWidget {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        const Text(
+        Text(
           '资产总览',
           style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,
-            color: assetInk,
+            color: context.appPrimaryText,
           ),
         ),
         Align(
@@ -317,7 +317,7 @@ class _Header extends StatelessWidget {
                 ),
                 child: Text(
                   selectedCurrency ?? currencies.first,
-                  style: const TextStyle(fontSize: 11, color: assetInk),
+                  style: TextStyle(fontSize: 11, color: context.appPrimaryText),
                 ),
               ),
             ),
@@ -640,10 +640,10 @@ class _RecentChangesState extends State<_RecentChanges> {
                       ),
                       labelStyle: TextStyle(
                         fontSize: 10,
-                        color: _filter == filter ? Colors.white : assetMuted,
+                        color: _filter == filter ? Colors.white : context.appSecondaryText,
                       ),
-                      backgroundColor: assetCream,
-                      selectedColor: const Color(0xff83a25d),
+                      backgroundColor: context.appSurfaceSoft,
+                      selectedColor: context.appPrimary,
                     ),
                   ),
               ],
@@ -651,11 +651,11 @@ class _RecentChangesState extends State<_RecentChanges> {
           ),
           const SizedBox(height: 2),
           if (filtered.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(8),
+            Padding(
+              padding: const EdgeInsets.all(8),
               child: Text(
                 '暂无近期资产变动',
-                style: TextStyle(fontSize: 12, color: assetMuted),
+                style: TextStyle(fontSize: 12, color: context.appSecondaryText),
               ),
             )
           else
