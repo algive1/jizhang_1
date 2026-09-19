@@ -509,6 +509,7 @@ class _SearchResultRow extends StatelessWidget {
         ),
       ),
     ),
+    ),
   );
 }
 
@@ -843,7 +844,10 @@ class _DateField extends StatelessWidget {
   final VoidCallback onPick;
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: '买入日期，点击选择',
+    child: InkWell(
     key: const ValueKey('investment-form-date'),
     onTap: onPick,
     borderRadius: BorderRadius.circular(16),
