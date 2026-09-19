@@ -128,21 +128,25 @@ class AutoBookkeepingLearningService {
             ? _map(preferences[merchantKey]) ??
                 _map(preferences[candidate.merchant])
             : null);
-    preferences
-      ..remove(candidate.merchant)
-      ..remove(merchantKey)
-      ..[typedKey] = {
-        'merchantKey': merchantKey,
-        'transactionType': transactionType.name,
-        'merchantDisplay': candidate.merchant,
-        'categoryId': categoryId,
-        if (subcategoryId != null) 'subcategoryId': subcategoryId,
-        'accountId': accountId,
-        'bookId': bookId,
-        'tags': tags,
-        'useCount': ((previous?['useCount'] as num?)?.toInt() ?? 0) + 1,
-        'lastUsedAt': DateTime.now().millisecondsSinceEpoch,
-      };
+    if (transactionType == TransactionType.expense) {
+      // Migrate legacy untyped expense preferences only from the expense
+      // path. Income/refund learning must never erase an older expense choice.
+      preferences
+        ..remove(candidate.merchant)
+        ..remove(merchantKey);
+    }
+    preferences[typedKey] = {
+      'merchantKey': merchantKey,
+      'transactionType': transactionType.name,
+      'merchantDisplay': candidate.merchant,
+      'categoryId': categoryId,
+      if (subcategoryId != null) 'subcategoryId': subcategoryId,
+      'accountId': accountId,
+      'bookId': bookId,
+      'tags': tags,
+      'useCount': ((previous?['useCount'] as num?)?.toInt() ?? 0) + 1,
+      'lastUsedAt': DateTime.now().millisecondsSinceEpoch,
+    };
     await _settings.set(preferenceKey, jsonEncode(preferences));
 
     if (candidate.paymentMethod != 'UNKNOWN') {
