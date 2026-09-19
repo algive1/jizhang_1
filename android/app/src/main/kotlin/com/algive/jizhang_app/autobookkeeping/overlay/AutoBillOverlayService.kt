@@ -11,6 +11,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.PaymentNotificationListenerService
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
@@ -79,6 +80,8 @@ class AutoBillOverlayService : Service() {
                     AutoBookkeepingLogStore.record(context, "overlay_ignored", "user ignored candidate")
                     AutoBookkeepingPendingStore.complete(context)
                     remove()
+                    PaymentNotificationListenerService.instance
+                        ?.retryStoredNotifications()
                 })
                 addView(action("去确认") { openConfirmation(candidate) })
             })
