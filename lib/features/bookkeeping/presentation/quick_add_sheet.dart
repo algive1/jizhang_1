@@ -798,9 +798,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     child: Icon(Icons.person_outline_rounded),
                   ),
                   title: Text(
-                    (member['display_name'] as String?)?.trim().isNotEmpty == true
-                        ? member['display_name'] as String
-                        : member['username'] as String,
+                    _familyMemberName(member),
                   ),
                   subtitle: Text(switch (member['role']) {
                     'owner' => '所有者',
@@ -819,7 +817,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (selected == null || !mounted) return;
       final name = _familyMemberName(selected);
       setState(() {
-        _payerUserId = selected['user_id'] as String;
+        final selectedId = selected['user_id'] as String?;
+        if (selectedId == null || selectedId.isEmpty) return;
+        _payerUserId = selectedId;
         _payerLabel = '$name付款';
       });
     } on Object {
