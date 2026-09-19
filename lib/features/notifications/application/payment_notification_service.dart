@@ -353,11 +353,14 @@ class PaymentNotificationAutoBookkeepingService {
           case AutoBookkeepingEnqueueResult.accepted:
             queued++;
             acknowledged.add(notification.id);
+            break;
           case AutoBookkeepingEnqueueResult.duplicate:
             duplicates++;
             acknowledged.add(notification.id);
+            break;
           case AutoBookkeepingEnqueueResult.busy:
             waiting++;
+            break;
         }
         continue;
       }
