@@ -41,7 +41,7 @@ export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
     const books=store.db.prepare('SELECT b.id,b.name,b.type,m.role FROM members m JOIN books b ON b.id=m.book_id WHERE m.user_id=? ORDER BY b.updated_at DESC').all(userId) as Array<{id:string;name:string;type:string;role:string}>;
     const transactions=[];
     for(const book of books){
-      const rows=store.db.prepare(`SELECT entity_id AS id,data_json AS dataJson,version FROM entities
+      const rows=store.db.prepare(`SELECT id,data_json AS dataJson,version FROM entities
         WHERE book_id=? AND kind='transactions' AND deleted=0 ORDER BY version DESC LIMIT 500`).all(book.id) as any[];
       transactions.push({book,...{transactions:rows.map(r=>({id:r.id,version:r.version,data:JSON.parse(r.dataJson)}))}});
     }
@@ -56,7 +56,7 @@ export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
     const books=store.db.prepare('SELECT book_id FROM members WHERE user_id=?').all(userId) as Array<{book_id:string}>;
     const result=[];
     for(const {book_id} of books){
-      const assets=store.db.prepare(`SELECT kind,entity_id AS id,data_json AS dataJson,version FROM entities
+      const assets=store.db.prepare(`SELECT kind,id,data_json AS dataJson,version FROM entities
         WHERE book_id=? AND kind IN ('investment_accounts','investment_holdings','investment_transactions') AND deleted=0 ORDER BY kind,version DESC LIMIT 1000`).all(book_id) as any[];
       if(assets.length) result.push({bookId:book_id,items:assets.map(r=>({kind:r.kind,id:r.id,version:r.version,data:JSON.parse(r.dataJson)}))});
     }
