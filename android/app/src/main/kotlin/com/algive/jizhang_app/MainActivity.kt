@@ -13,9 +13,9 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.common.InputImage
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
@@ -376,6 +376,44 @@ class MainActivity : FlutterFragmentActivity() {
                     "cancel" -> {
                         FinanceScheduler.cancel(applicationContext)
                         result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/budget_notifications")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isGranted" -> result.success(isNotificationGranted())
+                    "requestPermission" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            requestPermissions(
+                                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                                NOTIFICATION_PERMISSION_REQUEST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    "show" -> {
+                        val id = call.argument<String>("id")
+                        val title = call.argument<String>("title")
+                        val body = call.argument<String>("body")
+                        val route = call.argument<String>("route")
+                        if (id.isNullOrBlank() || title.isNullOrBlank() ||
+                            body.isNullOrBlank() || route.isNullOrBlank()
+                        ) {
+                            result.error("INVALID_BUDGET_ALERT", "预算预警参数不完整", null)
+                        } else {
+                            BudgetNotificationScheduler.show(
+                                applicationContext,
+                                id,
+                                title,
+                                body,
+                                route,
+                            )
+                            result.success(null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

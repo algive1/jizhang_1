@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_action_sheet.dart';
 import '../../../core/widgets/app_form.dart';
@@ -12,6 +14,7 @@ import '../../../core/models/budget.dart';
 import '../../../core/models/category.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../categories/data/category_repository.dart';
+import '../application/budget_alert_notification_service.dart';
 import '../data/budget_repository.dart';
 
 class BudgetPage extends ConsumerStatefulWidget {
@@ -164,6 +167,9 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         monthKey: monthKey,
         amount: result.$1,
         categoryId: isCategoryBudget ? result.$2 : null,
+      );
+      unawaited(
+        ref.read(budgetAlertNotificationServiceProvider).requestPermission(),
       );
     } catch (error) {
       if (context.mounted) {

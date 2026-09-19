@@ -96,6 +96,62 @@ void main() {
     );
   });
 
+  test('family payer attribution is explicit and stable across edits', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+    final occurredAt = DateTime(2026, 9, 19, 12);
+
+    final selectedPayer = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: SeedIds.cashAccount,
+        occurredAt: occurredAt,
+        payerUserId: 'family-member-a',
+      ),
+    );
+    expect(selectedPayer.userId, 'family-member-a');
+
+    final preserved = await service.update(
+      selectedPayer,
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 20,
+        accountId: SeedIds.cashAccount,
+        occurredAt: occurredAt,
+      ),
+    );
+    expect(preserved.userId, 'family-member-a');
+
+    final changed = await service.update(
+      preserved,
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 22,
+        accountId: SeedIds.cashAccount,
+        occurredAt: occurredAt,
+        payerUserId: 'family-member-b',
+      ),
+    );
+    expect(changed.userId, 'family-member-b');
+
+    final defaultPayer = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 8,
+        accountId: SeedIds.cashAccount,
+        occurredAt: occurredAt,
+      ),
+    );
+    expect(defaultPayer.userId, SeedIds.localUser);
+  });
+
   test('saved records reload with category title and note title', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);

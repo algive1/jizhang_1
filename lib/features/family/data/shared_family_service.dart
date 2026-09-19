@@ -126,8 +126,9 @@ class SharedFamilyService implements FamilyService {
   @override
   Future<void> disband(String familyId) async {
     await _request('/books/$familyId/disband', method: 'POST', body: {});
-    // The server has already archived the shared book. Do not immediately
-    // push local drafts back into a book that is intentionally read-only.
+    // The server has already archived the shared book. Revoke local access
+    // without running normal sync, because normal sync may flush pending drafts.
+    await sync.revokeLocalAccess(familyId);
   }
 
   @override

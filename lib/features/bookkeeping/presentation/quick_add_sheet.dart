@@ -33,6 +33,7 @@ import '../../../core/models/account.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
 import '../../categories/presentation/category_management_page.dart';
+import '../../family/data/shared_family_service.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
@@ -126,6 +127,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   String? _subcategoryId;
   String? _accountId;
   String? _destinationAccountId;
+  String? _payerUserId;
+  String? _payerLabel;
+  bool _payerLabelLoading = false;
   DateTime _occurredAt = DateTime.now();
   bool _isPlanned = false;
   bool _isOneTime = true;
@@ -182,6 +186,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _subcategoryId = transaction.subcategoryId;
     _accountId = transaction.accountId;
     _destinationAccountId = transaction.destinationAccountId;
+    _payerUserId = transaction.userId;
+    if (_payerUserId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePayerLabel());
+    }
     _occurredAt = transaction.occurredAt;
     _isPlanned = transaction.isPlanned;
     _isOneTime = transaction.isOneTime;
@@ -645,6 +653,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   showChevron: true,
                   onTap: _pickReimbursement,
                 ),
+              if (selectedBook?.type == BookType.family &&
+                  selectedBook?.isShared == true)
+                _QuickChip(
+                  key: const ValueKey('quick-family-payer-chip'),
+                  label: _payerLabel ?? (_payerUserId == null ? '本人付款' : '付款成员'),
+                  icon: Icons.person_outline_rounded,
+                  selected: true,
+                  showChevron: true,
+                  onTap: () => _chooseFamilyPayer(selectedBook!),
+                ),
               if (!_isEditing)
                 _QuickChip(
                   key: const ValueKey('quick-book-selector'),
@@ -734,6 +752,102 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ],
       ),
     );
+  }
+
+  String _familyMemberName(Map<String, dynamic> member) {
+    final displayName = (member['display_name'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final username = (member['username'] as String?)?.trim();
+    if (username != null && username.isNotEmpty) return username;
+    final userId = (member['user_id'] as String?)?.trim();
+    return userId == null || userId.isEmpty ? '家庭成员' : userId;
+  }
+
+  Future<void> _restorePayerLabel() async {
+    if (_payerLabelLoading || _payerUserId == null || !mounted) return;
+    final books = ref.read(booksProvider).value ?? const <LedgerBook>[];
+    final book = books.where((item) => item.id == _bookId).firstOrNull;
+    if (book == null || book.type != BookType.family || !book.isShared) return;
+    _payerLabelLoading = true;
+    try {
+      final members = await ref
+          .read(familyServiceProvider)
+          .memberDetails(book.sharedId!);
+      if (!mounted) return;
+      final payer = members
+          .where((member) => member['user_id'] == _payerUserId)
+          .firstOrNull;
+      setState(() {
+        if (payer == null) {
+          _payerLabel = '已退出成员付款';
+        } else {
+          _payerLabel = '${_familyMemberName(payer)}付款';
+        }
+      });
+    } on Object {
+      // Attribution itself remains intact. A temporary member-list failure must
+      // never rewrite an existing transaction's payer.
+    } finally {
+      _payerLabelLoading = false;
+    }
+  }
+
+  Future<void> _chooseFamilyPayer(LedgerBook book) async {
+    final sharedId = book.sharedId;
+    if (sharedId == null) return;
+    try {
+      final service = ref.read(familyServiceProvider);
+      final members = await service.memberDetails(sharedId);
+      if (!mounted) return;
+      final selected = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  '这笔钱由谁支付？',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final member in members)
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.person_outline_rounded),
+                  ),
+                  title: Text(
+                    _familyMemberName(member),
+                  ),
+                  subtitle: Text(switch (member['role']) {
+                    'owner' => '所有者',
+                    'admin' => '管理员',
+                    _ => '家庭成员',
+                  }),
+                  trailing: member['user_id'] == _payerUserId
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: () => Navigator.pop(context, member),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null || !mounted) return;
+      final name = _familyMemberName(selected);
+      setState(() {
+        final selectedId = selected['user_id'] as String?;
+        if (selectedId == null || selectedId.isEmpty) return;
+        _payerUserId = selectedId;
+        _payerLabel = '$name付款';
+      });
+    } on Object {
+      if (mounted) _showMessage('家庭成员加载失败，请稍后重试');
+    }
   }
 
   String get _reimbursementLabel =>
@@ -1330,6 +1444,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _subcategoryId = null;
       _accountId = null;
       _destinationAccountId = null;
+      // Payer attribution belongs to a specific shared family ledger.
+      // Never carry it across ledger switches.
+      _payerUserId = null;
+      _payerLabel = null;
     });
   }
 
@@ -1674,6 +1792,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       final categoryUnchanged = persisted?.categoryId == selectedCategory?.id;
       final request = QuickBookkeepingRequest(
         bookId: bookId,
+        payerUserId:
+            ref
+                    .read(booksProvider)
+                    .value
+                    ?.where((book) => book.id == bookId)
+                    .firstOrNull
+                    ?.type ==
+                BookType.family
+            ? _payerUserId
+            : null,
         type: _type,
         amount: _amount.amount!,
         metadata: {
