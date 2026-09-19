@@ -32,6 +32,11 @@ class AutoBookkeepingRepository {
     final preferences = jsonDecode(
       await db.appSettingsDao.getValue(preferenceKey) ?? '{}',
     ) as Map<String, dynamic>;
+    final merchantKey = const MerchantNormalizer().normalize(merchant);
+    final preference =
+        preferences['expense|$merchantKey'] ??
+        preferences[merchantKey] ??
+        preferences[merchant];
     return {
       'books': books
           .map(
@@ -56,7 +61,6 @@ class AutoBookkeepingRepository {
           )
           .toList(),
       'categories': categories
-          .where((c) => c.type == 'expense')
           .map(
             (c) => {
               'id': c.id,
@@ -66,7 +70,7 @@ class AutoBookkeepingRepository {
             },
           )
           .toList(),
-      'preference': preferences[merchant],
+      'preference': preference,
       'mappings': jsonDecode(
         await db.appSettingsDao.getValue('autobookkeeping.accounts.v1') ?? '{}',
       ),
