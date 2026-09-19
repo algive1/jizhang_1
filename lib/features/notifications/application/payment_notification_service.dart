@@ -326,7 +326,9 @@ class PaymentNotificationParser {
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     if (value == null || value.isEmpty) return null;
-    if (RegExp(r'[¥￥]|支付成功|付款成功|交易成功').hasMatch(value)) {
+    if (RegExp(
+      r'[¥￥]|支付成功|付款成功|交易成功|实付金额|支付金额',
+    ).hasMatch(value)) {
       return null;
     }
     return value;
@@ -348,14 +350,16 @@ class PaymentNotificationParser {
   }
 
   String? _orderIdFor(String content) {
-    final match = RegExp(r'(?:订单号|交易单号|流水号)[：:\s]*([A-Za-z0-9_-]{6,64})')
+    final match = RegExp(
+      r'(?:订单号|交易单号|交易号|流水号|支付单号)[：:\s]*([A-Za-z0-9_-]{6,64})',
+    )
         .firstMatch(content);
     return match?.group(1);
   }
 
   String? _identifierSuffixFor(String content) {
     final match = RegExp(
-      r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,6}([0-9]{4})|(?:银行卡|信用卡|微信|支付宝)[\s_-]?([0-9]{4})',
+      r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,8}([0-9]{4})|(?:银行卡|信用卡|储蓄卡)[^0-9]{0,8}([0-9]{4})(?![0-9])',
     ).firstMatch(content);
     return match?.group(1) ?? match?.group(2);
   }
@@ -463,7 +467,11 @@ class PaymentNotificationAutoBookkeepingService {
             paymentMethod: _displayPaymentMethod(parsed.channel),
             timestamp: parsed.occurredAt,
             sourceApp: _sourceApp(parsed.channel),
-            scene: 'PAYMENT_NOTIFICATION',
+            scene: switch (parsed.transactionType) {
+              'REFUND' => 'PAYMENT_NOTIFICATION_REFUND',
+              'INCOME' => 'PAYMENT_NOTIFICATION_INCOME',
+              _ => 'PAYMENT_NOTIFICATION',
+            },
             transactionType: parsed.transactionType,
             orderId: parsed.orderId,
             note: parsed.note,
