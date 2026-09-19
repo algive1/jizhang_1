@@ -5,9 +5,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
+import { applePlanForProductId } from './apple_iap.js';
 import type { Store } from './store.js';
 
-export type PaymentChannel = 'wechat' | 'alipay' | 'apple';
+export type PaymentChannel = 'wechat' | 'alipay';
 type User = { id: string; username: string };
 type Authenticate = (header: string | undefined) => User;
 type OrderRow = {
@@ -175,7 +176,7 @@ function membershipCurrent(store: Store, userId: string) {
   if (apple) {
     return {
       membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
-      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: true, externalSubscriptionId: apple.transaction_id },
+      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
       entitlements: ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
       quotas: [],
     };
