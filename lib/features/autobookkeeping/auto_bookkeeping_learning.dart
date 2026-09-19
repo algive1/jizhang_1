@@ -69,18 +69,12 @@ class AutoBookkeepingLearningService {
     final tags = _stringList(rawPreference?['tags']);
     final useCount = (rawPreference?['useCount'] as num?)?.toInt() ?? 0;
 
-    final classification = transactionType == TransactionType.expense
-        ? await _merchantRules.classify(
-            merchant: candidate.merchant,
-            userId: SeedIds.localUser,
-            transactionType: transactionType,
-            bookId: targetBook,
-          )
-        : ClassificationResult(
-            categoryId: null,
-            source: ClassificationSource.pending,
-            confidence: 0,
-          );
+    final classification = await _merchantRules.classify(
+      merchant: candidate.merchant,
+      userId: SeedIds.localUser,
+      transactionType: transactionType,
+      bookId: targetBook,
+    );
 
     var accountId = rememberedAccount;
     if (accountId == null && candidate.paymentMethod != 'UNKNOWN') {
