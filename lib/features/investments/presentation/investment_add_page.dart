@@ -144,7 +144,7 @@ class _Header extends StatelessWidget {
               color: context.appPrimaryText,
               tooltip: '返回',
             ),
-            const Expanded(
+            Expanded(
               child: Text(
                 '添加投资',
                 textAlign: TextAlign.center,
@@ -353,7 +353,7 @@ class _SearchHint extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
-    child: const Column(
+    child: Column(
       children: [
         Icon(Icons.travel_explore, size: 26, color: context.appPrimary),
         SizedBox(height: 8),
@@ -382,7 +382,7 @@ class _SearchEmpty extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
-    child: const Column(
+    child: Column(
       children: [
         Icon(Icons.search_off, size: 26, color: context.appSecondaryText),
         SizedBox(height: 8),
@@ -417,7 +417,7 @@ class _SearchError extends StatelessWidget {
     child: Column(
       children: [
         Icon(Icons.cloud_off_outlined, size: 26, color: AppColors.warning),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Text(
           message,
           textAlign: TextAlign.center,
@@ -469,7 +469,7 @@ class _SearchResultRow extends StatelessWidget {
                       color: context.appPrimaryText,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Row(
                     children: [
                       Text(
@@ -490,7 +490,7 @@ class _SearchResultRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -727,7 +727,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             controller: _note,
             decoration: const InputDecoration(labelText: '备注（可选）'),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           FilledButton(
             key: const ValueKey('investment-form-submit'),
             onPressed: widget.saving ? null : _save,
@@ -795,7 +795,7 @@ class _SelectedBanner extends StatelessWidget {
     child: Row(
       children: [
         InvestmentTypeAvatar(type: type, size: 32),
-        const SizedBox(width: 9),
+        SizedBox(width: 9),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
