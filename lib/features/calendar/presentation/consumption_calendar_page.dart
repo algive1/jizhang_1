@@ -10,6 +10,7 @@ import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/money_text.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../books/data/book_repository.dart';
+import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../../core/models/book.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
@@ -193,10 +194,21 @@ class _ConsumptionCalendarPageState
             ),
           ),
           const SizedBox(height: 10),
-          _CalendarBookFilter(
-            books: books,
-            selectedBookId: _bookFilterId,
-            onTap: _openBookFilter,
+          Row(
+            children: [
+              const _CalendarLegend(),
+              const Spacer(),
+              _CalendarBookFilter(
+                books: books,
+                selectedBookId: _bookFilterId,
+                onTap: _openBookFilter,
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _goToday,
+                child: const Text('回到今天'),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -267,30 +279,35 @@ class _ConsumptionCalendarPageState
               style: Theme.of(context).textTheme.titleLarge,
             ),
           if (_selectedDay != null) const SizedBox(height: 8),
-          if (_selectedDay != null && selected.isEmpty)
-            const AppCard(
-              child: Text(
-                '当天没有消费记录',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            )
-          else if (_selectedDay != null)
+          if (_selectedDay != null)
             AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Column(
-                children: selected
-                    .asMap()
-                    .entries
-                    .map(
+                children: [
+                  if (selected.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text('当天没有流水记录', style: TextStyle(color: AppColors.textSecondary)),
+                    )
+                  else
+                    ...selected.asMap().entries.map(
                       (entry) => TransactionTile(
                         transaction: entry.value,
                         showDate: false,
                         showDivider: entry.key != selected.length - 1,
-                        onTap: () =>
-                            openTransactionDetail(context, entry.value),
+                        onTap: () => openTransactionDetail(context, entry.value),
                       ),
-                    )
-                    .toList(),
+                    ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _addForSelectedDate,
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('记一笔'),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
@@ -313,8 +330,24 @@ class _ConsumptionCalendarPageState
 
   void _setMonth(DateTime month) => setState(() {
     _month = DateTime(month.year, month.month);
-    _selectedDay = null;
+    _selectedDay = _isCurrentMonth ? _today.day : null;
   });
+
+  void _goToday() => setState(() {
+    _month = DateTime(_today.year, _today.month);
+    _selectedDay = _today.day;
+  });
+
+  Future<void> _addForSelectedDate() async {
+    final day = _selectedDay ?? (_isCurrentMonth ? _today.day : 1);
+    final selectedDate = DateTime(_month.year, _month.month, day);
+    final initialBookId = _bookFilterId ?? ref.read(activeBookIdProvider);
+    await showQuickAddSheet(
+      context,
+      initialOccurredAt: selectedDate,
+      initialBookId: initialBookId,
+    );
+  }
 
   Future<void> _openBookFilter() async {
     final books = ref.read(booksProvider).value ?? const <LedgerBook>[];
@@ -565,5 +598,23 @@ class _CalendarDot extends StatelessWidget {
     width: 6,
     height: 6,
     decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
+}
+
+
+class _CalendarLegend extends StatelessWidget {
+  const _CalendarLegend();
+  @override
+  Widget build(BuildContext context) => const Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _CalendarDot(color: Color(0xFFFF7A45)),
+      SizedBox(width: 5),
+      Text('支出', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      SizedBox(width: 10),
+      _CalendarDot(color: Color(0xFF5BAE61)),
+      SizedBox(width: 5),
+      Text('收入', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    ],
   );
 }
