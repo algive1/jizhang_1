@@ -25,6 +25,26 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private val realtimeParser = PaymentNotificationCandidateParser()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        connected = true
+        AutoBookkeepingLogStore.record(
+            this,
+            "notification_listener_connected",
+            "notification listener connected",
+        )
+    }
+
+    override fun onListenerDisconnected() {
+        connected = false
+        AutoBookkeepingLogStore.record(
+            this,
+            "notification_listener_disconnected",
+            "notification listener disconnected",
+        )
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(statusBarNotification: StatusBarNotification) {
         val packageName = statusBarNotification.packageName
         if (packageName !in SUPPORTED_PACKAGES) return
@@ -175,11 +195,16 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        connected = false
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
     companion object {
+        @Volatile
+        var connected: Boolean = false
+            private set
+
         private const val KEY_ENABLED = "enabled"
         private const val OVERLAY_START_GRACE_MS = 350L
 
