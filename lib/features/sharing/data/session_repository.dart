@@ -383,6 +383,19 @@ class SessionRepository {
     return nextRecoveryKey;
   }
 
+  Future<void> deleteAccount({required String password}) async {
+    await initialize();
+    await api.request(
+      '/account',
+      method: 'DELETE',
+      body: {
+        'password': password,
+        'confirmation': 'DELETE',
+      },
+    );
+    await invalidate();
+  }
+
   /// 服务端登出，并清理本地会话。
   ///
   /// 本地清理一定会执行；撤销服务端 Session 是尽力而为：网络不可用时不能把
