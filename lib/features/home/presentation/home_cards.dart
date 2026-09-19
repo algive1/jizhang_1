@@ -73,19 +73,19 @@ class HomeMonthlySummary extends StatelessWidget {
                     IconButton(
                       tooltip: '上个月',
                       onPressed: onPrevious,
-                      icon: const Icon(Icons.chevron_left, size: 20),
+                      icon: Icon(Icons.chevron_left, size: 20),
                     ),
                   TextButton(
-                    key: const ValueKey('home-year-picker'),
+                    key: ValueKey('home-year-picker'),
                     onPressed: onYear,
                     style: TextButton.styleFrom(
                       foregroundColor: context.appPrimaryText,
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      minimumSize: const Size(64, 44),
+                      minimumSize: Size(64, 44),
                     ),
                     child: Text(
                       '${snapshot.month.year}年',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
@@ -97,11 +97,11 @@ class HomeMonthlySummary extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: context.appPrimary,
                       padding: const EdgeInsets.symmetric(horizontal: 2),
-                      minimumSize: const Size(44, 44),
+                      minimumSize: Size(44, 44),
                     ),
                     child: Text(
                       '${snapshot.month.month}月⌄',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
@@ -152,7 +152,7 @@ class HomeMonthlySummary extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: context.appSecondaryText,
               fontSize: 11,
             ),
@@ -230,7 +230,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
         // number the full line so it stays readable and cannot overlap.
         final showDecoration = !largeText && realAmountText.runes.length <= 8;
         return Container(
-          key: const ValueKey('home-spending-card'),
+          key: ValueKey('home-spending-card'),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
@@ -326,7 +326,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                               : widget.bookType.spendingLabel,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: context.appPrimaryText,
                                             fontSize: 17,
                                             fontWeight: FontWeight.w700,
@@ -368,7 +368,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Row(
@@ -436,7 +436,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const Text(
+                                        Text(
                                           '收支结余',
                                           style: TextStyle(
                                             color: context.appSecondaryText,
@@ -457,7 +457,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                                   : '设置本月预算后计算 ›',
                                               maxLines: 1,
                                               softWrap: false,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: context.appSecondaryText,
                                                 fontSize: 12,
                                               ),
@@ -471,7 +471,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                           WrapCrossAlignment.center,
                                       spacing: 6,
                                       children: [
-                                        const Text(
+                                        Text(
                                           '收支结余',
                                           style: TextStyle(
                                             color: context.appSecondaryText,
@@ -482,7 +482,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                           widget.snapshot.hasBudget
                                               ? '¥${MoneyFormatter.whole(widget.snapshot.forecastBalance)}  |  还有 ${widget.snapshot.remainingDays} 天'
                                               : '设置本月预算后计算 ›',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: context.appSecondaryText,
                                             fontSize: 12,
                                           ),
@@ -583,8 +583,8 @@ class _EmptyGoalLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      const Icon(Icons.flag_outlined, color: context.appPrimary, size: 21),
-      const SizedBox(width: 8),
+      Icon(Icons.flag_outlined, color: context.appPrimary, size: 21),
+      SizedBox(width: 8),
       Expanded(
         child: Text(
           bookType == BookType.enterprise
@@ -592,10 +592,10 @@ class _EmptyGoalLabel extends StatelessWidget {
               : bookType == BookType.family
               ? '设一个家庭目标'
               : '设一个正在努力的目标',
-          style: const TextStyle(fontSize: 13, color: context.appPrimaryText),
+          style: TextStyle(fontSize: 13, color: context.appPrimaryText),
         ),
       ),
-      const Icon(Icons.chevron_right, color: context.appPrimary),
+      Icon(Icons.chevron_right, color: context.appPrimary),
     ],
   );
 }
@@ -626,7 +626,7 @@ class _HomeGoalTimeline extends StatelessWidget {
               color: context.appPrimary,
               size: 19,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Expanded(
               child: Row(
                 children: [
@@ -635,7 +635,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                       goal.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: context.appPrimaryText,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -668,7 +668,7 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2D9),
+                color: Color(0xFFEAF2D9),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFDCE8C1)),
               ),
@@ -676,7 +676,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 child: Text(
                   '${goal.progressPercent}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: context.appPrimary,
                     fontSize: 12,
                   ),
@@ -685,7 +685,7 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 1),
+        SizedBox(height: 1),
         SizedBox(
           height: MediaQuery.textScalerOf(context).scale(27),
           width: double.infinity,
@@ -699,7 +699,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                     text: amountHidden
                         ? '¥••••'
                         : '¥${MoneyFormatter.whole(goal.currentAmount)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xFF709A34),
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -750,7 +750,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                                 height: 26,
                                 child: Center(
                                   child: amount == goal.targetAmount
-                                      ? const SizedBox(width: 16, height: 16)
+                                      ? SizedBox(width: 16, height: 16)
                                       : Container(
                                           width: current ? 20 : 16,
                                           height: current ? 20 : 16,
@@ -762,12 +762,12 @@ class _HomeGoalTimeline extends StatelessWidget {
                                             border: Border.all(
                                               color: done || current
                                                   ? context.appPrimary
-                                                  : const Color(0xFFD7DCCB),
+                                                  : Color(0xFFD7DCCB),
                                               width: current ? 3 : 2,
                                             ),
                                           ),
                                           child: done
-                                              ? const Icon(
+                                              ? Icon(
                                                   Icons.check,
                                                   size: 14,
                                                   color: Colors.white,
@@ -791,7 +791,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                                         ),
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 amountHidden
                                     ? '¥••••\n${amount == goal.currentAmount
