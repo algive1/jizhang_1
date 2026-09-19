@@ -2086,7 +2086,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     const Color(0xFFEF789E),
   ),
   AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
-  _ => (Icons.account_balance_wallet_outlined, AppColors.textSecondary),
+  _ => (Icons.account_balance_wallet_outlined, const Color(0xFF747A70)),
 };
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
