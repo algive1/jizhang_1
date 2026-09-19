@@ -28,6 +28,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/book.dart';
@@ -377,7 +378,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           heightFactor: 1,
           child: Material(
             key: const ValueKey('quick-sheet-surface'),
-            color: const Color(0xFFF8F7F1),
+            color: context.appBackground,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -398,7 +399,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         padding: EdgeInsets.zero,
                         icon: const Icon(
                           Icons.arrow_back_rounded,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                           size: 24,
                         ),
                       ),
@@ -545,7 +546,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         _transactionTypeLabel(_type),
         textAlign: TextAlign.center,
         style: const TextStyle(
-          color: AppColors.textSecondary,
+          color: context.appSecondaryText,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -556,7 +557,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         '编辑中',
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: AppColors.textSecondary,
+          color: context.appSecondaryText,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -565,14 +566,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return TextButton(
       key: const ValueKey('quick-edit-categories'),
       style: TextButton.styleFrom(
-        backgroundColor: AppColors.primarySoft,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appPrimarySoft,
+        foregroundColor: context.appPrimaryText,
         padding: EdgeInsets.zero,
       ),
       onPressed: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: context.appBackground,
             body: CategoryManagementPage(
               bookId: _bookId,
               onBack: () => Navigator.of(context).pop(),
@@ -597,7 +598,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -671,7 +672,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       ? const Icon(
                           Icons.menu_book_outlined,
                           size: 16,
-                          color: AppColors.primary,
+                          color: context.appPrimary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
@@ -687,7 +688,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       ? const Icon(
                           Icons.menu_book_outlined,
                           size: 16,
-                          color: AppColors.primary,
+                          color: context.appPrimary,
                         )
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
@@ -737,7 +738,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 key: const ValueKey('quick-recurring-summary'),
                 style: const TextStyle(
                   fontSize: 12,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -801,7 +802,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (!mounted) return;
       final selected = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         showDragHandle: true,
         builder: (context) => SafeArea(
           child: ListView(
@@ -829,7 +830,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     _ => '家庭成员',
                   }),
                   trailing: member['user_id'] == _payerUserId
-                      ? const Icon(Icons.check, color: AppColors.primary)
+                      ? const Icon(Icons.check, color: context.appPrimary)
                       : null,
                   onTap: () => Navigator.pop(context, member),
                 ),
@@ -903,7 +904,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final selected = await showModalBottomSheet<Object>(
       context: context,
       showDragHandle: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       builder: (sheetContext) => SafeArea(
         child: ListView(
           shrinkWrap: true,
@@ -930,7 +931,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 child: Center(
                   child: Text(
                     '还没有模板。先填写一笔常用收支，再点“保存当前”。',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   ),
                 ),
               )
@@ -1121,7 +1122,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Future<void> _pickReimbursement() async {
     final selected = await showModalBottomSheet<ReimbursementStatus>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -1133,7 +1134,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 key: ValueKey('quick-reimbursement-${status.name}'),
                 title: Text(_reimbursementLabelFor(status)),
                 trailing: status == _reimbursementStatus
-                    ? const Icon(Icons.check, color: AppColors.primary)
+                    ? const Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, status),
               ),
@@ -1479,7 +1480,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         : accounts;
     final selected = await showModalBottomSheet<Account>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -2085,7 +2086,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     const Color(0xFFEF789E),
   ),
   AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
-  _ => (Icons.account_balance_wallet_outlined, AppColors.textSecondary),
+  _ => (Icons.account_balance_wallet_outlined, context.appSecondaryText),
 };
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
@@ -2127,7 +2128,7 @@ class _EntryTabs extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
@@ -2146,7 +2147,7 @@ class _EntryTabs extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: item.$1 == selected
-                          ? AppColors.primary
+                          ? context.appPrimary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(19),
                     ),
@@ -2159,7 +2160,7 @@ class _EntryTabs extends StatelessWidget {
                           fontSize: 14,
                           color: item.$1 == selected
                               ? Colors.white
-                              : AppColors.textSecondary,
+                              : context.appSecondaryText,
                           fontWeight: item.$1 == selected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -2196,7 +2197,7 @@ class _DebtTabs extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
@@ -2214,7 +2215,7 @@ class _DebtTabs extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: item.$1 == selected
-                          ? AppColors.primarySoft
+                          ? context.appPrimarySoft
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2225,8 +2226,8 @@ class _DebtTabs extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           color: item.$1 == selected
-                              ? AppColors.primaryDark
-                              : AppColors.textSecondary,
+                              ? context.appPrimary
+                              : context.appSecondaryText,
                           fontWeight: item.$1 == selected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -2267,7 +2268,7 @@ class _AccountPairCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Row(
         children: [
@@ -2283,7 +2284,7 @@ class _AccountPairCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Icon(
               Icons.arrow_forward_rounded,
-              color: AppColors.primary,
+              color: context.appPrimary,
               size: 18,
             ),
           ),
@@ -2322,7 +2323,7 @@ class _AccountPairButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surfaceSoft,
+          color: context.appSurfaceSoft,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -2331,7 +2332,7 @@ class _AccountPairButton extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
@@ -2348,7 +2349,7 @@ class _AccountPairButton extends StatelessWidget {
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                     ),
                   ),
                 ),
@@ -2385,7 +2386,7 @@ class _NoteRow extends StatelessWidget {
           const Icon(
             Icons.edit_outlined,
             size: 18,
-            color: AppColors.textSecondary,
+            color: context.appSecondaryText,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -2399,7 +2400,7 @@ class _NoteRow extends StatelessWidget {
                   FocusManager.instance.primaryFocus?.unfocus(),
               style: const TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: context.appPrimaryText,
               ),
               decoration: const InputDecoration(
                 // This is an integrated row, not a standalone form field.
@@ -2418,7 +2419,7 @@ class _NoteRow extends StatelessWidget {
                 hintText: '添加备注...',
                 hintStyle: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
                 contentPadding: EdgeInsets.zero,
                 constraints: BoxConstraints.tightFor(height: 40),
@@ -2432,7 +2433,7 @@ class _NoteRow extends StatelessWidget {
       key: const ValueKey('quick-ai-entry'),
       label: 'AI帮我记',
       icon: Icons.auto_awesome_outlined,
-      iconColor: AppColors.primaryDark,
+      iconColor: context.appPrimary,
       selected: true,
       height: 36,
       horizontalPadding: 6,
@@ -2503,9 +2504,9 @@ class _NoteIconAction extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: context.appDivider),
             ),
-            child: Icon(icon, size: 18, color: AppColors.textSecondary),
+            child: Icon(icon, size: 18, color: context.appSecondaryText),
           ),
         ),
       ),
@@ -2575,7 +2576,7 @@ class _QuickChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primarySoft : Colors.white,
+      color: selected ? context.appPrimarySoft : Colors.white,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -2586,7 +2587,7 @@ class _QuickChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.divider,
+              color: selected ? context.appPrimary : context.appDivider,
               width: selected ? 1.2 : 1,
             ),
           ),
@@ -2602,7 +2603,7 @@ class _QuickChip extends StatelessWidget {
                   Icon(
                     icon,
                     size: 16,
-                    color: iconColor ?? AppColors.textSecondary,
+                    color: iconColor ?? context.appSecondaryText,
                   ),
                   SizedBox(width: iconGap),
                 ],
@@ -2615,8 +2616,8 @@ class _QuickChip extends StatelessWidget {
                     style: TextStyle(
                       fontSize: fontSize,
                       color: selected
-                          ? AppColors.primaryDark
-                          : AppColors.textPrimary,
+                          ? context.appPrimary
+                          : context.appPrimaryText,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
@@ -2626,7 +2627,7 @@ class _QuickChip extends StatelessWidget {
                   const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                   ),
                 ],
               ],
@@ -2658,7 +2659,7 @@ class _AttachmentThumbnail extends StatelessWidget {
     if (attachment.status == AttachmentUploadStatus.uploading) {
       return const DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.primarySoft,
+          color: context.appPrimarySoft,
           borderRadius: BorderRadius.all(Radius.circular(10)),
         ),
         child: Padding(
@@ -2683,12 +2684,12 @@ class _AttachmentThumbnail extends StatelessWidget {
         onTap: () => _preview(context, isImage: false),
         child: const DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             borderRadius: BorderRadius.all(Radius.circular(10)),
           ),
           child: Icon(
             Icons.insert_drive_file_outlined,
-            color: AppColors.primary,
+            color: context.appPrimary,
           ),
         ),
       );
@@ -2701,8 +2702,8 @@ class _AttachmentThumbnail extends StatelessWidget {
           File(attachment.path),
           fit: BoxFit.cover,
           errorBuilder: (context, error, stack) => const DecoratedBox(
-            decoration: BoxDecoration(color: AppColors.primarySoft),
-            child: Icon(Icons.broken_image_outlined, color: AppColors.primary),
+            decoration: BoxDecoration(color: context.appPrimarySoft),
+            child: Icon(Icons.broken_image_outlined, color: context.appPrimary),
           ),
         ),
       ),
