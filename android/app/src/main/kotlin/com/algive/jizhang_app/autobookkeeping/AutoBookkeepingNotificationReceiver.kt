@@ -12,6 +12,6 @@ class AutoBookkeepingNotificationReceiver : BroadcastReceiver() {
         AutoBookkeepingSettings.setEnabled(context, false)
         context.stopService(Intent(context, AutoBillOverlayService::class.java))
         AutoBookkeepingPendingStore.complete(context, remember = false)
-        AutoBookkeepingNotificationController.sync(context)
+        AutoBookkeepingNotificationController.cancelStatus(context)
     }
 }
