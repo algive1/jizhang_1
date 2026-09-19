@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/amount_input.dart';
-import '../../../../app/theme/app_theme_tokens.dart';
+import '../../../../../app/theme/app_theme_tokens.dart';
 
 class AmountInputView extends StatelessWidget {
   const AmountInputView({
