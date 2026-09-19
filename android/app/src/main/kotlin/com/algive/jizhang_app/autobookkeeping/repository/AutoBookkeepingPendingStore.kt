@@ -344,7 +344,25 @@ object AutoBookkeepingPendingStore {
     ): Boolean {
         val sameSource =
             first.optString("sourceApp") == second.optString("sourceApp")
-        if (first.optLong("amountInCents") != second.optLong("amountInCents")) return false
+        if (
+            first.optString("transactionType", "EXPENSE") !=
+            second.optString("transactionType", "EXPENSE")
+        ) {
+            return false
+        }
+        if (first.optLong("amountInCents") != second.optLong("amountInCents")) {
+            return false
+        }
+
+        val firstOrderId = first.optString("orderId").trim()
+        val secondOrderId = second.optString("orderId").trim()
+        if (
+            firstOrderId.isNotBlank() &&
+            secondOrderId.isNotBlank() &&
+            firstOrderId == secondOrderId
+        ) {
+            return true
+        }
 
         val firstAt = first.optLong("timestamp", 0L)
         val secondAt = second.optLong("timestamp", 0L)
