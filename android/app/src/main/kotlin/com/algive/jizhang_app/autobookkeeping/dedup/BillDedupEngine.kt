@@ -6,8 +6,22 @@ import kotlin.math.abs
 
 enum class DedupResult { NOT_DUPLICATE, POSSIBLE_DUPLICATE, DUPLICATE }
 object BillFingerprint {
-    fun of(c: PaymentCandidate): String = hash("${identity(c)}|${c.timestamp / 60000}")
-    fun identity(c: PaymentCandidate): String = listOf(c.sourceApp, c.amountInCents, c.merchantNormalized, c.paymentMethod, c.transactionType).joinToString("|")
+    fun of(c: PaymentCandidate): String {
+        val order = c.orderId?.trim().orEmpty()
+        if (order.isNotEmpty()) {
+            return hash(listOf(c.sourceApp, "order", order, c.transactionType).joinToString("|"))
+        }
+        return hash("${identity(c)}|${c.timestamp / 60000}")
+    }
+
+    fun identity(c: PaymentCandidate): String = listOf(
+        c.sourceApp,
+        c.amountInCents,
+        c.merchantNormalized,
+        c.paymentMethod,
+        c.transactionType,
+        c.orderId.orEmpty(),
+    ).joinToString("|")
     fun hash(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 }
 class BillDedupEngine {
