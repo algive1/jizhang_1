@@ -123,7 +123,7 @@ class _PaymentNotificationPageState
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度付款通知；金额与商户会先在本机解析、去重并进入待确认，不会静默写入流水。',
+                  '支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度交易通知；支出、明确收款和明确退款会在本机解析、去重后进入待确认，不会静默写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -182,7 +182,7 @@ class _PaymentNotificationPageState
           const SizedBox(height: 14),
           AppCard(
             child: Text(
-              '隐私说明：只有明确完成态、金额和商户均可确认的付款通知才会进入待确认；待支付、营销提醒、收款、到账和退款等通知会直接过滤。解析与去重均在本机完成。',
+              '隐私说明：只有明确完成态、金额和交易对方均可确认的通知才会进入待确认。待支付、营销提醒以及信息不完整的收款/退款会直接过滤；解析与去重均在本机完成。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
