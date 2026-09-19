@@ -145,6 +145,10 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
 
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${member.token}`},payload:{userId:member.user.id}})).statusCode,403);
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${owner.token}`},payload:{userId:member.user.id}})).statusCode,200);
+ const changed=(await app.inject({method:'GET',url:`/api/v1/books/${book}/changes?cursor=0`,headers:{authorization:`Bearer ${member.token}`}})).json() as any;
+ const bookChange=changed.changes.filter((e:any)=>e.kind==='books').at(-1);
+ assert.equal(bookChange.data.owner_user_id,member.user.id);
+ assert.equal(bookChange.deleted,false);
  const members=(await app.inject({method:'GET',url:`/api/v1/books/${book}/members`,headers:{authorization:`Bearer ${member.token}`}})).json() as any;
  assert.equal(members.members.find((m:any)=>m.user_id===member.user.id).role,'owner');
  assert.equal(members.members.find((m:any)=>m.user_id===owner.user.id).role,'admin');
