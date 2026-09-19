@@ -27,6 +27,7 @@ class QuickBookkeepingRequest {
     required this.accountId,
     this.transactionId,
     this.bookId,
+    this.payerUserId,
     required this.occurredAt,
     this.destinationAccountId,
     this.categoryId,
@@ -60,6 +61,8 @@ class QuickBookkeepingRequest {
   final String accountId;
   final String? transactionId;
   final String? bookId;
+  /// Shared-family attribution. Null means the current recorder.
+  final String? payerUserId;
   final String? destinationAccountId;
   final String? categoryId;
   final String? subcategoryId;
@@ -396,7 +399,7 @@ class QuickBookkeepingService {
           existing?.bookId ??
           request.bookId ??
           (activeBookId?.call() ?? SeedIds.personalBook),
-      userId: existing?.userId ?? SeedIds.localUser,
+      userId: request.payerUserId ?? existing?.userId ?? SeedIds.localUser,
       type: request.type,
       amount: request.amount,
       currency: request.currency,

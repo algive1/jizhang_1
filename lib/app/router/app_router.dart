@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/analysis/presentation/analysis_page.dart';
+import '../../features/analysis/presentation/annual_report_page.dart';
 import '../../features/account/presentation/account_center_page.dart';
 import '../../features/account/presentation/account_login_page.dart';
 import '../../features/account/presentation/account_recovery_page.dart';
@@ -117,6 +118,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/analysis',
             builder: (context, state) =>
                 AnalysisPage(month: _queryMonth(state.uri)),
+            routes: [
+              GoRoute(
+                path: 'annual-report',
+                builder: (context, state) => const AnnualReportPage(),
+              ),
+            ],
           ),
           GoRoute(
             path: '/goals',

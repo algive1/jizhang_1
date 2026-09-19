@@ -102,6 +102,73 @@ import UserNotifications
       }
     }
 
+    let budgetNotificationChannel = FlutterMethodChannel(
+      name: "jizhang/budget_notifications",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    budgetNotificationChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "isGranted":
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+          result(
+            settings.authorizationStatus == .authorized ||
+            settings.authorizationStatus == .provisional
+          )
+        }
+      case "requestPermission":
+        UNUserNotificationCenter.current().requestAuthorization(
+          options: [.alert, .sound, .badge]
+        ) { granted, error in
+          if let error {
+            result(FlutterError(
+              code: "NOTIFICATION_PERMISSION",
+              message: error.localizedDescription,
+              details: nil
+            ))
+          } else {
+            result(granted)
+          }
+        }
+      case "show":
+        guard let arguments = call.arguments as? [String: Any],
+              let id = arguments["id"] as? String,
+              let title = arguments["title"] as? String,
+              let body = arguments["body"] as? String,
+              let route = arguments["route"] as? String,
+              !id.isEmpty, !title.isEmpty, !body.isEmpty, !route.isEmpty else {
+          result(FlutterError(
+            code: "INVALID_BUDGET_ALERT",
+            message: "预算预警参数不完整",
+            details: nil
+          ))
+          return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["route": route]
+        let request = UNNotificationRequest(
+          identifier: id,
+          content: content,
+          trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+          if let error {
+            result(FlutterError(
+              code: "BUDGET_ALERT",
+              message: error.localizedDescription,
+              details: nil
+            ))
+          } else {
+            result(nil)
+          }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let recurringNotificationChannel = FlutterMethodChannel(
       name: "jizhang/recurring_notifications",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()

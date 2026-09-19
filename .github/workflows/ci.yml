@@ -57,6 +57,8 @@ jobs:
           test/push_registration_service_test.dart
           test/ad_placement_test.dart
           test/ad_placement_readiness_test.dart
+          test/budget_alert_notification_service_test.dart
+          test/analysis_multibook_and_annual_report_test.dart
 
       - name: Build Android debug APK
         run: flutter build apk --debug
