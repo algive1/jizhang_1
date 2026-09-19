@@ -43,6 +43,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         Diagnostics.ruleVersions = ruleRegistry.versionsSummary()
         Diagnostics.ruleSource =
             if (ruleRegistry.loadedFromAsset) "asset" else "built_in"
+        AutoBookkeepingPendingStore.cleanupOrphanedScreenshots(this)
         ensureOverlayService()
         AutoBookkeepingLogStore.record(
             this,
