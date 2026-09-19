@@ -117,3 +117,39 @@ test('账号安全：恢复密钥、改密与设备会话',async(t)=>{
  assert.equal(logoutAll.statusCode,200);
  assert.equal((await app.inject({method:'GET',url:'/api/v1/auth/me',headers:{authorization:`Bearer ${recoveredBody.token}`}})).statusCode,401);
 });
+
+
+test('家庭第一阶段：付款归属、所有权转让与解散生命周期',async(t)=>{
+ const {app}=await createApp(':memory:');await app.ready();t.after(()=>app.close());
+ async function register(username:string) {
+   const res=await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username,password:'local-test-password'}});
+   return res.json() as any;
+ }
+ const owner=await register('phase_owner');
+ const member=await register('phase_member');
+ const outsider=await register('phase_outsider');
+ const book='phase-'+randomUUID();
+ assert.equal((await app.inject({method:'POST',url:'/api/v1/books',headers:{authorization:`Bearer ${owner.token}`},payload:{id:book,name:'我们家',type:'family',entities:[{kind:'accounts',id:'cash',data:account(book)}]}})).statusCode,200);
+ const invitation=(await app.inject({method:'POST',url:`/api/v1/books/${book}/invitations`,headers:{authorization:`Bearer ${owner.token}`},payload:{}})).json() as any;
+ assert.equal((await app.inject({method:'POST',url:'/api/v1/invitations/accept',headers:{authorization:`Bearer ${member.token}`},payload:{code:invitation.code}})).statusCode,200);
+
+ const attributed={...tx(book,'for-member',500),payer_user_id:member.user.id};
+ const mutation=await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',attributed)]}});
+ assert.equal(mutation.statusCode,200);
+ const stored=(mutation.json() as any).entities.find((e:any)=>e.kind==='transactions'&&e.id==='for-member').data;
+ assert.equal(stored.created_by,owner.user.id);
+ assert.equal(stored.payer_user_id,member.user.id);
+
+ const invalid={...tx(book,'outsider-payer',100),payer_user_id:outsider.user.id};
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',invalid)]}})).statusCode,400);
+
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${member.token}`},payload:{userId:member.user.id}})).statusCode,403);
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${owner.token}`},payload:{userId:member.user.id}})).statusCode,200);
+ const members=(await app.inject({method:'GET',url:`/api/v1/books/${book}/members`,headers:{authorization:`Bearer ${member.token}`}})).json() as any;
+ assert.equal(members.members.find((m:any)=>m.user_id===member.user.id).role,'owner');
+ assert.equal(members.members.find((m:any)=>m.user_id===owner.user.id).role,'admin');
+
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/disband`,headers:{authorization:`Bearer ${owner.token}`},payload:{}})).statusCode,403);
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/disband`,headers:{authorization:`Bearer ${member.token}`},payload:{}})).statusCode,200);
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${member.token}`},payload:{operations:[op('transactions',tx(book,'after-disband'))]}})).statusCode,403);
+});
