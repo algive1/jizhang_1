@@ -205,7 +205,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text('家庭消费 ¥${MoneyFormatter.decimal(total)}',
-              style: const TextStyle(color: context.appSecondaryText)),
+              style: TextStyle(color: context.appSecondaryText)),
           const SizedBox(height: 12),
           if (rows.isEmpty)
             Text('暂无成员消费记录')
@@ -214,15 +214,15 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Row(children: [
-                  const Icon(Icons.person_outline_rounded, size: 20),
+                  Icon(Icons.person_outline_rounded, size: 20),
                   const SizedBox(width: 8),
                   Expanded(child: Text(row.name)),
                   Text('¥${MoneyFormatter.decimal(row.amount)}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                 ]),
               ),
           const SizedBox(height: 4),
-          const Text('按流水付款成员归属统计；记录人和付款人可以不同。',
+          Text('按流水付款成员归属统计；记录人和付款人可以不同。',
               style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
         ],
       ),
@@ -273,7 +273,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
               ),
             ],
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 12, bottom: 4),
             child: Row(
               children: [
@@ -400,7 +400,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                         if (user.preferredName != user.username)
                           Text(
                             '@${user.username}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: context.appSecondaryText,
                             ),
