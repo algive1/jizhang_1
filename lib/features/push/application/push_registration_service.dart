@@ -124,6 +124,50 @@ class PushRegistrationService {
     }
   }
 
+  Future<bool> unregisterCurrentDevice() async {
+    try {
+      final userId = await authenticatedUserId();
+      if (userId == null) return false;
+      final deviceId = (await settings.get(deviceIdKey))?.trim();
+      if (deviceId == null ||
+          !RegExp(r'^[a-f0-9]{32}
+    final existing = (await settings.get(deviceIdKey))?.trim();
+    if (existing != null && RegExp(r'^[a-f0-9]{32}$').hasMatch(existing)) {
+      return existing;
+    }
+    final created = newEntityId();
+    await settings.set(deviceIdKey, created);
+    return created;
+  }
+}
+
+final pushTokenProvider = Provider<PushTokenProvider>(
+  (ref) => const MethodChannelPushTokenProvider(),
+);
+
+final pushRegistrationServiceProvider = Provider<PushRegistrationService>((ref) {
+  return PushRegistrationService(
+    api: ref.watch(sharedApiProvider),
+    settings: ref.watch(appSettingsRepositoryProvider),
+    tokenProvider: ref.watch(pushTokenProvider),
+    authenticatedUserId: () async {
+      final session = ref.read(sessionRepositoryProvider);
+      await session.initialize();
+      return session.userId;
+    },
+  );
+});
+).hasMatch(deviceId)) {
+        return true;
+      }
+      await api.request('/push/devices/$deviceId', method: 'DELETE');
+      _lastAttemptAt = null;
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<String> _deviceId() async {
     final existing = (await settings.get(deviceIdKey))?.trim();
     if (existing != null && RegExp(r'^[a-f0-9]{32}$').hasMatch(existing)) {
