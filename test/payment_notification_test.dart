@@ -509,6 +509,9 @@ class _FakeBridge implements PaymentNotificationBridge {
   Future<bool> isAccessGranted() async => true;
 
   @override
+  Future<bool> isConnected() async => true;
+
+  @override
   Future<void> openAccessSettings() async {}
 
   @override
