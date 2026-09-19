@@ -29,6 +29,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         connected = true
         AutoBookkeepingLogStore.record(
             this,
@@ -39,6 +40,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         connected = false
+        instance = null
         AutoBookkeepingLogStore.record(
             this,
             "notification_listener_disconnected",
@@ -142,6 +144,58 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         }
     }
 
+    fun retryStoredNotifications() {
+        if (!connected) return
+        val enabled = getSharedPreferences(
+            PaymentNotificationStore.PREFS_NAME,
+            MODE_PRIVATE,
+        ).getBoolean(KEY_ENABLED, false)
+        if (!enabled) return
+
+        for (raw in PaymentNotificationStore.read(this)) {
+            val packageName = raw["packageName"].orEmpty()
+            val title = raw["title"].orEmpty()
+            val text = raw["text"].orEmpty()
+            val timestamp = raw["postedAtMillis"]
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?: continue
+            val candidate = realtimeParser.parse(
+                packageName = packageName,
+                title = title,
+                text = text,
+                timestamp = timestamp,
+            ) ?: run {
+                PaymentNotificationStore.acknowledge(
+                    this,
+                    listOfNotNull(raw["id"]),
+                )
+                continue
+            }
+            val id = raw["id"].orEmpty()
+            when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
+                PendingEnqueueDecision.ACCEPTED -> {
+                    if (id.isNotEmpty()) {
+                        PaymentNotificationStore.acknowledge(this, listOf(id))
+                    }
+                    AutoBookkeepingLogStore.record(
+                        this,
+                        "notification_candidate_recovered",
+                        "source=${candidate.sourceApp}",
+                    )
+                    showRealtimeCandidate(candidate)
+                    return
+                }
+                PendingEnqueueDecision.DUPLICATE -> {
+                    if (id.isNotEmpty()) {
+                        PaymentNotificationStore.acknowledge(this, listOf(id))
+                    }
+                }
+                PendingEnqueueDecision.BUSY -> return
+            }
+        }
+    }
+
     private fun notificationText(extras: android.os.Bundle): String {
         val parts = linkedSetOf<String>()
         extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
@@ -224,6 +278,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         connected = false
+        if (instance === this) instance = null
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -231,6 +286,10 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     companion object {
         @Volatile
         var connected: Boolean = false
+            private set
+
+        @Volatile
+        var instance: PaymentNotificationListenerService? = null
             private set
 
         private const val KEY_ENABLED = "enabled"
