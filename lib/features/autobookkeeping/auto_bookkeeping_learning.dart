@@ -52,9 +52,14 @@ class AutoBookkeepingLearningService {
     required TransactionType transactionType,
   }) async {
     final merchantKey = normalizer.normalize(candidate.merchant);
+    final typedKey = _typedMerchantKey(transactionType, merchantKey);
     final preferences = await _jsonMap(preferenceKey);
     final rawPreference =
-        _map(preferences[merchantKey]) ?? _map(preferences[candidate.merchant]);
+        _map(preferences[typedKey]) ??
+        (transactionType == TransactionType.expense
+            ? _map(preferences[merchantKey]) ??
+                _map(preferences[candidate.merchant])
+            : null);
 
     final rememberedBook = _text(rawPreference?['bookId']);
     final targetBook = rememberedBook ?? fallbackBookId;
@@ -64,12 +69,18 @@ class AutoBookkeepingLearningService {
     final tags = _stringList(rawPreference?['tags']);
     final useCount = (rawPreference?['useCount'] as num?)?.toInt() ?? 0;
 
-    final classification = await _merchantRules.classify(
-      merchant: candidate.merchant,
-      userId: SeedIds.localUser,
-      transactionType: transactionType,
-      bookId: targetBook,
-    );
+    final classification = transactionType == TransactionType.expense
+        ? await _merchantRules.classify(
+            merchant: candidate.merchant,
+            userId: SeedIds.localUser,
+            transactionType: transactionType,
+            bookId: targetBook,
+          )
+        : ClassificationResult(
+            categoryId: null,
+            source: ClassificationSource.pending,
+            confidence: 0,
+          );
 
     var accountId = rememberedAccount;
     if (accountId == null && candidate.paymentMethod != 'UNKNOWN') {
@@ -102,23 +113,33 @@ class AutoBookkeepingLearningService {
   }) async {
     if (!rememberForMerchant) return;
 
-    await _merchantRules.correctTransaction(
-      transactionId: transactionId,
-      categoryId: categoryId,
-      subcategoryId: subcategoryId,
-      rememberForMerchant: true,
-    );
+    final transactionType = _transactionType(candidate.transactionType);
+    if (transactionType == TransactionType.expense) {
+      await _merchantRules.correctTransaction(
+        transactionId: transactionId,
+        categoryId: categoryId,
+        subcategoryId: subcategoryId,
+        rememberForMerchant: true,
+      );
+    }
 
     final merchantKey = normalizer.normalize(candidate.merchant);
     if (merchantKey.isEmpty) return;
 
+    final typedKey = _typedMerchantKey(transactionType, merchantKey);
     final preferences = await _jsonMap(preferenceKey);
     final previous =
-        _map(preferences[merchantKey]) ?? _map(preferences[candidate.merchant]);
+        _map(preferences[typedKey]) ??
+        (transactionType == TransactionType.expense
+            ? _map(preferences[merchantKey]) ??
+                _map(preferences[candidate.merchant])
+            : null);
     preferences
       ..remove(candidate.merchant)
-      ..[merchantKey] = {
+      ..remove(merchantKey)
+      ..[typedKey] = {
         'merchantKey': merchantKey,
+        'transactionType': transactionType.name,
         'merchantDisplay': candidate.merchant,
         'categoryId': categoryId,
         if (subcategoryId != null) 'subcategoryId': subcategoryId,
@@ -136,6 +157,18 @@ class AutoBookkeepingLearningService {
       await _settings.set(accountMappingKey, jsonEncode(mappings));
     }
   }
+
+  String _typedMerchantKey(
+    TransactionType type,
+    String merchantKey,
+  ) => '${type.name}|$merchantKey';
+
+  TransactionType _transactionType(String value) => switch (value) {
+    'INCOME' => TransactionType.income,
+    'REFUND' => TransactionType.refund,
+    'REIMBURSEMENT' => TransactionType.reimbursement,
+    _ => TransactionType.expense,
+  };
 
   Future<Map<String, dynamic>> _jsonMap(String key) async {
     final raw = await _settings.get(key);
