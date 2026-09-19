@@ -409,7 +409,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                   style: TextStyle(
                                     color: widget.snapshot.availableAmount < 0
                                         ? AppColors.expense
-                                        : const Color(0xFF709A34),
+                                        : context.appPrimary,
                                     fontSize: widget.snapshot.hasBudget
                                         ? 39
                                         : 23,
