@@ -15,25 +15,26 @@ import 'package:jizhang_app/features/transactions/data/transactions_repository.d
 
 void main() {
   test(
-    'incoming receipt, refund, or ambiguous actual amounts are rejected',
+    'high-confidence income/refund are typed while ambiguous amounts are rejected',
     () {
       final parser = const PaymentNotificationParser();
-      expect(
-        parser.parse(
-          PaymentNotification(
-            id: 'incoming',
-            packageName: 'com.tencent.mm',
-            title: '微信支付',
-            text: '收款到账 ¥28.50，来自便利店',
-            postedAt: DateTime(2026, 9, 8, 9),
-          ),
+      final income = parser.parse(
+        PaymentNotification(
+          id: 'incoming',
+          packageName: 'com.tencent.mm',
+          title: '微信支付',
+          text: '收款到账 ¥28.50，来自便利店',
+          postedAt: DateTime(2026, 9, 8, 9),
         ),
-        isNull,
       );
+      expect(income, isNotNull);
+      expect(income!.transactionType, 'INCOME');
+      expect(income.merchant, '便利店');
+
       expect(
         parser.parse(
           PaymentNotification(
-            id: 'refund',
+            id: 'refund-without-counterparty',
             packageName: 'com.eg.android.AlipayGphone',
             title: '支付宝',
             text: '退款成功 ¥28.50',
@@ -42,6 +43,20 @@ void main() {
         ),
         isNull,
       );
+
+      final refund = parser.parse(
+        PaymentNotification(
+          id: 'refund',
+          packageName: 'com.eg.android.AlipayGphone',
+          title: '支付宝',
+          text: '退款成功 ¥28.50，退款方：测试餐厅',
+          postedAt: DateTime(2026, 9, 8, 9),
+        ),
+      );
+      expect(refund, isNotNull);
+      expect(refund!.transactionType, 'REFUND');
+      expect(refund.merchant, '测试餐厅');
+
       expect(
         parser.parse(
           PaymentNotification(
@@ -83,6 +98,9 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.amount, 36.00);
     expect(parsed.merchant, '测试餐厅');
+    expect(parsed.transactionType, 'EXPENSE');
+    expect(parsed.originalAmount, 40.00);
+    expect(parsed.discountAmount, 4.00);
   });
 
   test('商城待支付和支付提醒不会被解析成已发生流水', () {
@@ -243,6 +261,36 @@ void main() {
     expect(bridge.acknowledged, ['duplicate-notification']);
   });
 
+  test('income notification keeps transaction type in pending candidate', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'income-pending',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text: '收款到账 ¥88.00，来自张三',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(pending.candidates.single.transactionType, 'INCOME');
+    expect(pending.candidates.single.merchant, '张三');
+  });
+
   test('Android notification path queues for confirmation instead of saving silently', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
@@ -291,6 +339,7 @@ void main() {
     expect(parsed!.amount, 28.50);
     expect(parsed.accountId, SeedIds.alipayAccount);
     expect(parsed.orderId, '202609080001');
+    expect(parsed.transactionType, 'EXPENSE');
   });
 
   test(
