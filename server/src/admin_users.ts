@@ -42,7 +42,7 @@ export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
     const transactions=[];
     for(const book of books){
       const rows=store.db.prepare(`SELECT id,data_json AS dataJson,version FROM entities
-        WHERE book_id=? AND kind='transactions' AND deleted=0 ORDER BY version DESC LIMIT 500`).all(book.id) as any[];
+        WHERE book_id=? AND kind='transactions' AND deleted=0 ORDER BY CAST(json_extract(data_json,'$.occurred_at') AS INTEGER) DESC,version DESC LIMIT 500`).all(book.id) as any[];
       transactions.push({book,...{transactions:rows.map(r=>({id:r.id,version:r.version,data:JSON.parse(r.dataJson)}))}});
     }
     auditAdmin(store,principal,'sensitive_ledger_read',{permission:'users.sensitive.read',targetType:'user',targetId:userId,reason,details:{bookCount:books.length}});
