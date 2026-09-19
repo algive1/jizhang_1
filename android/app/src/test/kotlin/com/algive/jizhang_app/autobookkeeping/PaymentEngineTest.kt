@@ -86,6 +86,45 @@ class PaymentEngineTest {
         assertEquals("PAYMENT_NOTIFICATION", candidate?.scene?.scene)
     }
 
+    @Test fun nativeNotificationParserKeepsEnrichedFields() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "支付成功，原价 ￥40.00，优惠券 ￥4.00，实付金额 ￥36.00，商户：测试餐厅，订单号：ORDER_123456，尾号 3316，备注：晚餐",
+            100000,
+        )
+        assertEquals(3600L, candidate?.amountInCents)
+        assertEquals(4000L, candidate?.originalAmountInCents)
+        assertEquals(400L, candidate?.discountAmountInCents)
+        assertEquals("ORDER_123456", candidate?.orderId)
+        assertEquals("3316", candidate?.identifierSuffix)
+        assertEquals("晚餐", candidate?.note)
+    }
+
+    @Test fun nativeNotificationParserClassifiesIncomeAndRefund() {
+        val parser = PaymentNotificationCandidateParser()
+        val income = parser.parse(
+            "com.tencent.mm",
+            "微信支付",
+            "收款到账 ￥88.00，来自张三",
+            100000,
+        )
+        assertEquals("INCOME", income?.transactionType)
+        assertEquals("张三", income?.merchantRaw)
+        assertEquals("PAYMENT_NOTIFICATION_INCOME", income?.scene?.scene)
+
+        val refund = parser.parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "退款成功 ￥28.50，退款方：测试餐厅",
+            100000,
+        )
+        assertEquals("REFUND", refund?.transactionType)
+        assertEquals(2850L, refund?.amountInCents)
+        assertEquals("测试餐厅", refund?.merchantRaw)
+        assertEquals("PAYMENT_NOTIFICATION_REFUND", refund?.scene?.scene)
+    }
+
     @Test fun nativeNotificationParserRejectsPendingAndWechatChat() {
         val parser = PaymentNotificationCandidateParser()
         assertNull(
@@ -114,6 +153,36 @@ class PaymentEngineTest {
         )
     }
 
+    @Test fun pageParserExtractsOrderDiscountNoteAndSuffix() {
+        val candidate = PaymentAppParser().parse(
+            "com.eg.android.AlipayGphone",
+            nodes(
+                "支付成功",
+                "商户",
+                "测试餐厅",
+                "原价",
+                "￥40.00",
+                "优惠",
+                "￥4.00",
+                "实付金额",
+                "￥36.00",
+                "订单号",
+                "ORDER_123456",
+                "支付方式",
+                "招商银行储蓄卡 尾号3316",
+                "备注",
+                "晚餐",
+            ),
+            100000,
+        )
+        assertEquals(3600L, candidate?.amountInCents)
+        assertEquals(4000L, candidate?.originalAmountInCents)
+        assertEquals(400L, candidate?.discountAmountInCents)
+        assertEquals("ORDER_123456", candidate?.orderId)
+        assertEquals("3316", candidate?.identifierSuffix)
+        assertEquals("晚餐", candidate?.note)
+    }
+
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
@@ -128,10 +197,19 @@ class PaymentEngineTest {
                     "timestamp" to 100000L,
                     "sourceApp" to source,
                     "scene" to "PAYMENT_NOTIFICATION",
+                    "transactionType" to "REFUND",
+                    "orderId" to "ORDER_123456",
+                    "note" to "测试备注",
+                    "originalAmountInCents" to 2000L,
+                    "discountAmountInCents" to 120L,
+                    "identifierSuffix" to "3316",
                 ),
             )
             assertNotNull(source, candidate)
             assertEquals(source, candidate?.sourceApp)
+            assertEquals("REFUND", candidate?.transactionType)
+            assertEquals("ORDER_123456", candidate?.orderId)
+            assertEquals("3316", candidate?.identifierSuffix)
         }
     }
 
@@ -150,5 +228,10 @@ class PaymentEngineTest {
         assertEquals(DedupResult.POSSIBLE_DUPLICATE, engine.check(c.copy(timestamp = 160000)))
         assertEquals(DedupResult.NOT_DUPLICATE, engine.check(c.copy(timestamp = 500001)))
         assertNotEquals(BillFingerprint.of(c), BillFingerprint.of(c.copy(paymentMethod = "银行卡")))
+        val ordered = c.copy(orderId = "ORDER_123456")
+        assertEquals(
+            BillFingerprint.of(ordered),
+            BillFingerprint.of(ordered.copy(timestamp = 900000)),
+        )
     }
 }
