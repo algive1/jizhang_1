@@ -195,6 +195,15 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
     const p=z.object({id:identifier,userId:identifier}).parse(req.params);
     return store.memberChange(p.id,authenticate(req.headers.authorization).id,p.userId);
   });
+  app.post('/api/v1/books/:id/transfer-ownership',async(req)=>{
+    const id=bookId(req.params);const user=authenticate(req.headers.authorization);
+    const {userId}=z.strictObject({userId:identifier}).parse(req.body);
+    return store.transferOwnership(id,user.id,userId);
+  });
+  app.post('/api/v1/books/:id/disband',async(req)=>{
+    const id=bookId(req.params);const user=authenticate(req.headers.authorization);
+    return store.disband(id,user.id);
+  });
   app.post('/api/v1/books/:id/invitations',async(req)=>store.invite(bookId(req.params),authenticate(req.headers.authorization).id));
   app.get('/api/v1/books/:id/invitations',async(req)=>{
     const id=bookId(req.params);store.manager(id,authenticate(req.headers.authorization).id);
