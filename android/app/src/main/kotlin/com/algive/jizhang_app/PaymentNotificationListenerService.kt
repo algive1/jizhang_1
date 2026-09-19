@@ -107,7 +107,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 .put("packageName", packageName)
                 .put("title", title)
                 .put("text", text)
-                .put("postedAt", postedAt(statusBarNotification.postTime)),
+                .put("postedAt", postedAt(statusBarNotification.postTime))
+                .put("postedAtMillis", statusBarNotification.postTime),
         )
 
         when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
