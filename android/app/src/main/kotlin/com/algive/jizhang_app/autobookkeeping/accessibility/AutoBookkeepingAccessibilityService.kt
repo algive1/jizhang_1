@@ -277,7 +277,17 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         AutoBookkeepingLogStore.record(this, "scan", message)
     }
 
-    override fun onInterrupt() { handler.removeCallbacks(scan); scheduled = false; Diagnostics.error = "无障碍服务已中断" }
+    override fun onInterrupt() {
+        handler.removeCallbacks(scan)
+        scheduled = false
+        Diagnostics.accessibilityConnected = false
+        Diagnostics.error = "无障碍服务已中断"
+        AutoBookkeepingLogStore.record(
+            this,
+            "service_interrupted",
+            "accessibility service interrupted",
+        )
+    }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); Diagnostics.accessibilityConnected = false; super.onDestroy() }
 
     private companion object {
