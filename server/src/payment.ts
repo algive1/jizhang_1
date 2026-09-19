@@ -171,14 +171,63 @@ function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
   }
 }
 
+const memberEntitlementKeys = [
+  'automaticBookkeeping',
+  'cloudSync',
+  'multiDevice',
+  'aiAnalysis',
+  'voiceAi',
+  'ocr',
+  'advancedReport',
+  'familyBook',
+  'dataExport',
+  'basicBackup',
+  'adFree',
+] as const;
+
+function assistantQuotas(store: Store, userId: string) {
+  try {
+    const policyRow = store.db.prepare(
+      'SELECT data_json FROM assistant_policy WHERE id=1',
+    ).get() as { data_json: string } | undefined;
+    if (!policyRow) return [];
+    const policy = JSON.parse(policyRow.data_json) as {
+      memberDailyLimit?: number;
+    };
+    const limit = Number(policy.memberDailyLimit ?? 0);
+    if (!Number.isInteger(limit) || limit <= 0) return [];
+    const now = store.now();
+    const day = new Date((now + 8 * 3600) * 1000).toISOString().slice(0, 10);
+    const used =
+      (store.db.prepare(
+        'SELECT used FROM assistant_usage WHERE user_id=? AND day=?',
+      ).get(userId, day) as { used: number } | undefined)?.used ?? 0;
+    const periodStart = Math.floor(
+      new Date(`${day}T00:00:00+08:00`).getTime() / 1000,
+    );
+    const periodEnd = periodStart + 86400;
+    return ['voiceAi', 'ocr', 'aiAnalysis'].map(key => ({
+      key,
+      limit,
+      used: Math.min(limit, Math.max(0, used)),
+      periodStart,
+      periodEnd,
+    }));
+  } catch {
+    // Membership remains usable if the assistant tables are temporarily
+    // unavailable during a migration. Model endpoints still enforce limits.
+    return [];
+  }
+}
+
 function membershipCurrent(store: Store, userId: string) {
   const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
   if (apple) {
     return {
       membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
       subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
-      entitlements: ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
-      quotas: [],
+      entitlements: memberEntitlementKeys.map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
+      quotas: assistantQuotas(store, userId),
     };
   }
   const subscription = store.db.prepare('SELECT * FROM membership_subscriptions WHERE user_id=?').get(userId) as { user_id: string; product_id: string; provider: PaymentChannel; order_id: string; started_at: number; expires_at: number; updated_at: number } | undefined;
@@ -188,8 +237,8 @@ function membershipCurrent(store: Store, userId: string) {
   return {
     membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
     subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
-    quotas: [],
+    entitlements: status === 'active' ? memberEntitlementKeys.map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
+    quotas: status === 'active' ? assistantQuotas(store, userId) : [],
   };
 }
 
