@@ -13,6 +13,11 @@ class PendingAutoBookkeepingCandidate {
     required this.sourceApp,
     required this.scene,
     required this.transactionType,
+    this.orderId,
+    this.note,
+    this.originalAmountInCents,
+    this.discountAmountInCents,
+    this.identifierSuffix,
   });
 
   factory PendingAutoBookkeepingCandidate.fromMap(Map<Object?, Object?> map) {
@@ -30,6 +35,11 @@ class PendingAutoBookkeepingCandidate {
       sourceApp: map['sourceApp']?.toString() ?? 'UNKNOWN',
       scene: map['scene']?.toString() ?? 'PAYMENT_SUCCESS',
       transactionType: map['transactionType']?.toString() ?? 'EXPENSE',
+      orderId: _nullableText(map['orderId']),
+      note: _nullableText(map['note']),
+      originalAmountInCents: _nullableInt(map['originalAmountInCents']),
+      discountAmountInCents: _nullableInt(map['discountAmountInCents']),
+      identifierSuffix: _nullableText(map['identifierSuffix']),
     );
   }
 
@@ -41,6 +51,19 @@ class PendingAutoBookkeepingCandidate {
   final String sourceApp;
   final String scene;
   final String transactionType;
+  final String? orderId;
+  final String? note;
+  final int? originalAmountInCents;
+  final int? discountAmountInCents;
+  final String? identifierSuffix;
+
+  static String? _nullableText(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  static int? _nullableInt(Object? value) =>
+      value is num && value.toInt() > 0 ? value.toInt() : null;
 }
 
 abstract interface class AutoBookkeepingPendingBridge {
@@ -83,6 +106,14 @@ class MethodChannelAutoBookkeepingPendingBridge
         'sourceApp': candidate.sourceApp,
         'scene': candidate.scene,
         'transactionType': candidate.transactionType,
+        if (candidate.orderId != null) 'orderId': candidate.orderId,
+        if (candidate.note != null) 'note': candidate.note,
+        if (candidate.originalAmountInCents != null)
+          'originalAmountInCents': candidate.originalAmountInCents,
+        if (candidate.discountAmountInCents != null)
+          'discountAmountInCents': candidate.discountAmountInCents,
+        if (candidate.identifierSuffix != null)
+          'identifierSuffix': candidate.identifierSuffix,
       });
       if (raw is bool) {
         // Backward compatibility with older native builds during hot reload.
