@@ -42,7 +42,11 @@ class WeChatPaymentParser(val rule: PaymentRule = PaymentRule()) {
             merchantNormalized = MerchantNormalizer.normalize(merchant),
             paymentMethod = method.take(80),
             timestamp = timestamp,
-            scene = PaymentScene(confidence = if (method != "UNKNOWN") .98 else .9),
+            scene = PaymentScene(
+                sourceApp = "WECHAT",
+                scene = rule.scene,
+                confidence = if (method != "UNKNOWN") .98 else .9,
+            ),
             amountConfidence = if (best == 3) 1.0 else .92,
             merchantConfidence = .92,
             orderId = CandidateFieldExtractor.orderId(labels),
@@ -54,18 +58,22 @@ class WeChatPaymentParser(val rule: PaymentRule = PaymentRule()) {
     }
 
     private fun fallbackMerchant(labels: List<String>): String? {
-        val genericLabels = setOf(
-            "微信",
-            "微信支付",
-            "转账",
-            "红包",
-            "扫一扫",
-            "完成",
-            "返回",
-            "更多",
-            "查看账单",
-            "账单详情",
-        )
+        val genericLabels = if (rule.fallbackMerchantBlockedLabels.isEmpty()) {
+            setOf(
+                "微信",
+                "微信支付",
+                "转账",
+                "红包",
+                "扫一扫",
+                "完成",
+                "返回",
+                "更多",
+                "查看账单",
+                "账单详情",
+            )
+        } else {
+            rule.fallbackMerchantBlockedLabels
+        }
         return labels.firstOrNull { label ->
             label.length in 2..80 &&
                 label !in genericLabels &&
