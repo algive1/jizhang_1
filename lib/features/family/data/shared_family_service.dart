@@ -118,6 +118,18 @@ class SharedFamilyService implements FamilyService {
   }
 
   @override
+  Future<void> transferOwnership(String familyId, String userId) async {
+    await _request('/books/$familyId/transfer-ownership', method: 'POST', body: {'userId': userId});
+    await sync.sync();
+  }
+
+  @override
+  Future<void> disband(String familyId) async {
+    await _request('/books/$familyId/disband', method: 'POST', body: {});
+    await sync.sync();
+  }
+
+  @override
   Future<void> removeMember(String familyId, String userId) async {
     await _request(
       '/books/$familyId/members/$userId',
