@@ -214,7 +214,7 @@ class _Header extends StatelessWidget {
           color: context.appPrimaryText,
           tooltip: '返回资产总览',
         ),
-        const Expanded(
+        Expanded(
           child: Text(
             '投资管理',
             textAlign: TextAlign.center,
@@ -370,7 +370,7 @@ class _TrendSection extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   '投资资产趋势',
                   maxLines: 1,
@@ -453,7 +453,7 @@ class _PositionsList extends StatelessWidget {
             onTap: () => onOpenHolding(positions[i].holding.id),
           ),
           if (i != positions.length - 1)
-            const Divider(height: 1, color: context.appDivider),
+            Divider(height: 1, color: context.appDivider),
         ],
       ],
     ),
@@ -487,7 +487,7 @@ class _CategoryTab extends StatelessWidget {
           InvestmentEmptyState(type: type, onAdd: onAdd)
         else ...[
           _CategorySummaryCard(summary: summary, hidden: hidden),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           InvestmentSectionHeader(
             title: '持仓列表',
             trailing: TextButton.icon(
@@ -540,7 +540,7 @@ class _CategorySummaryCard extends StatelessWidget {
           Row(
             children: [
               InvestmentTypeAvatar(type: type, size: 34),
-              const SizedBox(width: 9),
+              SizedBox(width: 9),
               Expanded(
                 child: Text(
                   '${type.label}总资产',
@@ -560,7 +560,7 @@ class _CategorySummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -571,7 +571,7 @@ class _CategorySummaryCard extends StatelessWidget {
               color: context.appPrimaryText,
             ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           // Both the amount and the rate are Flexible: a big position or a
           // 1.6 text scale shrinks them instead of breaking the card.
           Row(
@@ -580,7 +580,7 @@ class _CategorySummaryCard extends StatelessWidget {
                 '累计收益',
                 style: TextStyle(fontSize: 11, color: context.appSecondaryText),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Flexible(
                 child: InvestmentAmountText(
                   summary.profit,
