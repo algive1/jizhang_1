@@ -31,8 +31,12 @@ class AutoBillOverlayService : Service() {
             return false
         }
         if (root != null) {
-            AutoBookkeepingLogStore.record(this, "overlay_duplicate", "overlay already visible")
-            return true
+            // enqueueIfAbsent only allows this path when the pending candidate
+            // was replaced (for example, accessibility superseded a lower
+            // confidence notification). Refresh the visible card so it matches
+            // the candidate Flutter will read from PendingStore.
+            AutoBookkeepingLogStore.record(this, "overlay_replaced", "refresh visible confirmation candidate")
+            remove()
         }
 
         val box = LinearLayout(this).apply {
