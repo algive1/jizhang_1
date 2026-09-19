@@ -509,7 +509,6 @@ class _SearchResultRow extends StatelessWidget {
         ),
       ),
     ),
-    ),
   );
 }
 
