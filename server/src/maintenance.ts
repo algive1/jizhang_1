@@ -14,7 +14,7 @@ export function retentionPolicy() {
     adminAuditDays: days('ADMIN_AUDIT_RETENTION_DAYS', 365),
     pushOutboxDays: days('PUSH_OUTBOX_RETENTION_DAYS', 30),
     analyticsDays: days('ANALYTICS_RETENTION_DAYS', 180),
-    syncTombstoneDays: days('SYNC_TOMBSTONE_RETENTION_DAYS', 0),
+    syncTombstoneDays: days('SYNC_TOMBSTONE_RETENTION_DAYS', 90),
   };
 }
 
@@ -71,11 +71,50 @@ export function runRetention(store: Store) {
     );
   }
 
-  // Shared-ledger changes are cursor-based replication history. Pruning them
-  // without a per-device acknowledged cursor can make a long-offline device
-  // miss a deletion forever. Therefore tombstones are retained indefinitely
-  // by default. A non-zero setting is intentionally reported but not applied
-  // until an acknowledgement watermark is implemented.
+  let syncRetention: {
+    books: number;
+    changes: number;
+    tombstones: number;
+  } = { books: 0, changes: 0, tombstones: 0 };
+  if (policy.syncTombstoneDays > 0) {
+    const syncCutoff = cutoff(now, policy.syncTombstoneDays);
+    const floors = store.db.prepare(
+      'SELECT book_id,MAX(seq) AS floor FROM changes '
+        + 'WHERE created_at<? GROUP BY book_id'
+    ).all(syncCutoff) as Array<{book_id:string;floor:number|null}>;
+    const upsertFloor = store.db.prepare(
+      'INSERT INTO sync_retention(book_id,reset_before_cursor,updated_at) '
+        + 'VALUES(?,?,?) ON CONFLICT(book_id) DO UPDATE SET '
+        + 'reset_before_cursor=MAX(sync_retention.reset_before_cursor,excluded.reset_before_cursor),'
+        + 'updated_at=excluded.updated_at'
+    );
+    const pruneTombstones = store.db.prepare(
+      'DELETE FROM entities WHERE book_id=? AND deleted=1 AND EXISTS ('
+        + 'SELECT 1 FROM changes c WHERE c.book_id=entities.book_id '
+        + 'AND c.kind=entities.kind AND c.entity_id=entities.id '
+        + 'AND c.deleted=1 AND c.created_at<?'
+        + ')'
+    );
+    const pruneChanges = store.db.prepare(
+      'DELETE FROM changes WHERE book_id=? AND created_at<?'
+    );
+    store.db.transaction(() => {
+      for (const row of floors) {
+        if (row.floor == null) continue;
+        upsertFloor.run(row.book_id, row.floor, now);
+        syncRetention.tombstones += pruneTombstones.run(
+          row.book_id,
+          syncCutoff,
+        ).changes;
+        syncRetention.changes += pruneChanges.run(
+          row.book_id,
+          syncCutoff,
+        ).changes;
+        syncRetention.books += 1;
+      }
+    })();
+  }
+
   safeRun(
     'expiredInvitations',
     "DELETE FROM invitations WHERE status<>'pending' OR expires_at<?",
@@ -86,10 +125,11 @@ export function runRetention(store: Store) {
     ranAt: now,
     policy,
     deleted,
-    syncTombstonesPruned: false,
+    syncRetention,
+    syncTombstonesPruned: policy.syncTombstoneDays > 0,
     syncTombstoneReason:
       policy.syncTombstoneDays === 0
-        ? 'retained indefinitely'
-        : 'retained because no safe per-device acknowledgement watermark exists',
+        ? 'retained indefinitely by configuration'
+        : 'pruned with a retained cursor floor; older clients are forced to full snapshot reconciliation',
   };
 }
