@@ -156,12 +156,13 @@ void main() {
     );
     await transactions.create(original);
 
-    final categoryEntity = (await database.categoryDao.getActive()).firstWhere(
+    final incomeCategories = (await database.categoryDao.getActive()).where(
       (item) =>
-          item.bookId == SeedIds.personalBook &&
-          item.type == 'income' &&
-          item.name.contains('退款'),
-      orElse: () => (database.categoryDao.getActive() as dynamic),
+          item.bookId == SeedIds.personalBook && item.type == 'income',
+    );
+    final categoryEntity = incomeCategories.firstWhere(
+      (item) => item.name.contains('退款'),
+      orElse: () => incomeCategories.first,
     );
     final category = Category(
       id: categoryEntity.id,
