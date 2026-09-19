@@ -369,7 +369,7 @@ class _TransactionsToolbar extends StatelessWidget {
               tooltip: '筛选流水',
             ),
             if (hasCategoryFilter)
-              const Positioned(
+              Positioned(
                 right: 6,
                 top: 5,
                 child: CircleAvatar(
