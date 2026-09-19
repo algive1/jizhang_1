@@ -42,7 +42,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('没有待确认的支付记录'), findsOneWidget);
+    expect(find.text('没有待确认的交易记录'), findsOneWidget);
     expect(find.text('确认并完成'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -70,7 +70,7 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
   Future<void> openOverlaySettings() async {}
 
   @override
-  Future<void> requestNotificationPermission() async {}
+  Future<bool> requestNotificationPermission() async => false;
 
   @override
   Future<void> setEnabled(bool enabled) async {}
