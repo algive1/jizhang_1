@@ -59,12 +59,16 @@ class QuickAddSheet extends ConsumerStatefulWidget {
     this.initialTransaction,
     this.copyFrom,
     this.initialType = TransactionType.expense,
+    this.initialOccurredAt,
+    this.initialBookId,
   });
 
   final TransactionType initialType;
 
   final TransactionRecord? initialTransaction;
   final TransactionRecord? copyFrom;
+  final DateTime? initialOccurredAt;
+  final String? initialBookId;
 
   @override
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
@@ -81,6 +85,8 @@ Future<void> showQuickAddSheet(
   TransactionRecord? initialTransaction,
   TransactionRecord? copyFrom,
   TransactionType initialType = TransactionType.expense,
+  DateTime? initialOccurredAt,
+  String? initialBookId,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -91,6 +97,8 @@ Future<void> showQuickAddSheet(
       initialTransaction: initialTransaction,
       copyFrom: copyFrom,
       initialType: initialType,
+      initialOccurredAt: initialOccurredAt,
+      initialBookId: initialBookId,
     ),
   );
 }
@@ -142,8 +150,19 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         _type == TransactionType.repayment) {
       _debtType = _type;
     }
-    _bookId = transaction?.bookId ?? ref.read(activeBookIdProvider);
+    _bookId = transaction?.bookId ?? widget.initialBookId ?? ref.read(activeBookIdProvider);
     if (transaction == null) {
+      final initialDate = widget.initialOccurredAt;
+      if (initialDate != null) {
+        final now = DateTime.now();
+        _occurredAt = DateTime(
+          initialDate.year,
+          initialDate.month,
+          initialDate.day,
+          now.hour,
+          now.minute,
+        );
+      }
       return;
     }
     final formula = _decodeMetadata(transaction.metadataJson)['formula'];
