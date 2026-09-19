@@ -103,9 +103,9 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
           ),
           const SizedBox(height: 8),
           if (overview.categories.isEmpty)
-            const AppCard(
+            AppCard(
               child: Text(
-                '还没有分类预算，可以先从餐饮、交通等高频分类开始。',
+                '还没有分类预算，可以先从餐饮、交通等高频分类开始。'
                 style: TextStyle(color: context.appSecondaryText),
               ),
             )
@@ -400,7 +400,7 @@ class _CategoryBudgetCard extends StatelessWidget {
         borderRadius: 18,
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               backgroundColor: context.appPrimarySoft,
               child: Icon(
                 Icons.category_outlined,
