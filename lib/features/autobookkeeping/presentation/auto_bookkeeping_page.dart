@@ -371,7 +371,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                                   setState(() {
                                     _screenshotEnabled = actual;
                                     _message = actual
-                                        ? '支付截图已开启。截图只保存在本机，确认保存后才作为账单附件保留。'
+                                        ? '支付截图已开启。识别与临时截图只在本机处理；确认保留后会成为普通账单附件，若已开启云备份，会按现有附件规则备份。'
                                         : '支付截图已关闭。';
                                   });
                                 },
@@ -432,7 +432,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const SizedBox(height: 10),
           AppCard(
             child: Text(
-              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成。支付截图默认关闭，开启后也只保存在本机，忽略或过期会自动删除，确认保存后才作为账单附件保留。',
+              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成。支付截图默认关闭，临时截图只在本机保存，忽略或过期会自动删除；用户确认保留后会成为普通账单附件，若已开启云备份，会随其他附件按现有规则备份。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
