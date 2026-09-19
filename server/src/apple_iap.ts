@@ -48,6 +48,9 @@ function ensureSchema(store:Store){
       received_at INTEGER NOT NULL
     );
   `);
+  const columns=store.db.prepare('PRAGMA table_info(apple_notifications)').all() as Array<{name:string}>;
+  if(!columns.some(column=>column.name==='signed_at')) store.db.exec('ALTER TABLE apple_notifications ADD COLUMN signed_at INTEGER');
+  if(!columns.some(column=>column.name==='original_transaction_id')) store.db.exec('ALTER TABLE apple_notifications ADD COLUMN original_transaction_id TEXT');
 }
 
 function b64url(value:string){return Buffer.from(value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'='),'base64');}
