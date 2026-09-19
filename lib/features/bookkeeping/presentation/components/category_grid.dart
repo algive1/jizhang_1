@@ -2,9 +2,9 @@ import 'sub_category_bar.dart';
 
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/widgets/category_icon.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class CategoryGrid extends StatelessWidget {
   const CategoryGrid({
@@ -70,7 +70,7 @@ class CategoryGrid extends StatelessWidget {
                     Container(
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft.withValues(alpha: .5),
+                        color: context.appPrimarySoft.withValues(alpha: .5),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: SubCategoryBar(
@@ -126,7 +126,7 @@ class _CategoryTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             decoration: BoxDecoration(
-              color: selected ? AppColors.primarySoft : Colors.transparent,
+              color: selected ? context.appPrimarySoft : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -159,8 +159,8 @@ class _CategoryTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: selected
-                        ? AppColors.primaryDark
-                        : AppColors.textPrimary,
+                        ? context.appPrimary
+                        : context.appPrimaryText,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
