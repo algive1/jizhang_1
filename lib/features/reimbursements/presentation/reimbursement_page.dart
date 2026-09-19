@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
@@ -274,14 +273,14 @@ class _ReimbursementCard extends StatelessWidget {
                 MoneyText(
                   -transaction.amount,
                   showSign: true,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
             const SizedBox(height: 7),
             Text(
               '${transaction.occurredAt.month}月${transaction.occurredAt.day}日 · ${transaction.displayCategoryLabel}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: context.appSecondaryText,
               ),
