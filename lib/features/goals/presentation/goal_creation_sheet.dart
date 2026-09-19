@@ -123,7 +123,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                     const SizedBox(height: 12),
                     AppSelect<GoalType>(
                       initialValue: _type,
-                      decoration: const InputDecoration(labelText: '目标类型'),
+                      decoration: appFieldDecoration('目标类型'),
                       items: GoalType.values
                           .map(
                             (type) => DropdownMenuItem(
@@ -188,7 +188,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                     TextField(
                       controller: _descriptionController,
                       maxLines: 2,
-                      decoration: const InputDecoration(labelText: '目标描述（可选）'),
+                      decoration: appFieldDecoration('目标描述（可选）'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
