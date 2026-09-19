@@ -16,6 +16,7 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../membership/data/membership_repository.dart';
 import '../data/book_repository.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class BookSelectorButton extends ConsumerWidget {
