@@ -261,7 +261,7 @@ class PaymentNotificationParser {
     if (explicit.length > 1) return null;
 
     final status = RegExp(
-      r'(?:支付|付款|消费|扣款)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成|消费|扣款|支出)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (status.length == 1) return status.single;
     if (status.length > 1) return null;
