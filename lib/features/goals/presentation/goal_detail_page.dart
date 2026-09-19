@@ -75,7 +75,7 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
                   const SizedBox(height: 12),
                 ],
                 GoalProgressCard(goal: goal),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 AppCard(
                   padding: const EdgeInsets.all(6),
                   child: Material(
@@ -444,14 +444,14 @@ class _MilestoneListDialogState extends State<_MilestoneListDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('用逗号分隔中间节点；最终目标节点会始终保留。'),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         TextField(
           controller: _controller,
           autofocus: true,
           maxLines: 3,
           decoration: const InputDecoration(hintText: '20000, 40000, 60000'),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Text(
           '最终节点 ¥${widget.targetAmount.toStringAsFixed(2)}（不可删除）',
           style: TextStyle(color: context.appPrimary),
@@ -567,7 +567,7 @@ class _GoalIntro extends StatelessWidget {
                   size: 42,
                 ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,7 +576,7 @@ class _GoalIntro extends StatelessWidget {
                 goal.name,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 5),
+              SizedBox(height: 5),
               Text(
                 goal.goalType.label,
                 style: TextStyle(color: context.appPrimary),
@@ -677,7 +677,7 @@ class _StatCard extends StatelessWidget {
           Row(
             children: [
               Icon(icon, color: context.appPrimary, size: 19),
-              const SizedBox(width: 5),
+              SizedBox(width: 5),
               Expanded(
                 child: Text(
                   label,
@@ -691,7 +691,7 @@ class _StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           FittedBox(
             child: Text(
               value,
@@ -727,7 +727,7 @@ class _NextMilestoneCard extends StatelessWidget {
             size: 40,
             color: context.appPrimary,
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -742,7 +742,7 @@ class _NextMilestoneCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   next == null
                       ? '成果会一直保留在已完成目标中。'
@@ -771,12 +771,12 @@ class _ForecastCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('存入速度预测', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 5),
+          SizedBox(height: 5),
           Text(
             '仅根据所选窗口内已发生的存入和取出记录计算；初始金额、调整和未来日期不会影响速度。',
             style: TextStyle(color: context.appSecondaryText, fontSize: 12),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: forecasts.map((forecast) {
               final date = forecast.estimatedCompletionDate;
@@ -944,7 +944,7 @@ class _CompletedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppCard(
+    return AppCard(
       color: Color(0xFFE9EFD8),
       child: Row(
         children: [
@@ -1045,7 +1045,7 @@ class _CelebrationOverlayState extends State<_CelebrationOverlay>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   Text(
                     widget.goalCompleted
                         ? '目标完成 🎉'
