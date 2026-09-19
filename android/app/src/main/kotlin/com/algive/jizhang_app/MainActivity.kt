@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -31,10 +32,25 @@ class MainActivity : FlutterFragmentActivity() {
     private val channelName = "jizhang/payment_notifications"
     private val fileChannelName = "jizhang/file_opener"
     private var navigationChannel: MethodChannel? = null
+    private var pendingNotificationPermissionResult: MethodChannel.Result? = null
 
     override fun onResume() {
         super.onResume()
         AutoBookkeepingNotificationController.sync(this)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            val granted = isNotificationGranted()
+            pendingNotificationPermissionResult?.success(granted)
+            pendingNotificationPermissionResult = null
+            AutoBookkeepingNotificationController.sync(this)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -135,28 +151,38 @@ class MainActivity : FlutterFragmentActivity() {
                 when (call.method) {
                     "isAccessGranted" -> result.success(isNotificationAccessGranted())
                     "openAccessSettings" -> {
-                        startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-                        result.success(null)
+                        openNotificationListenerSettings(result)
                     }
                     "isEnabled" -> result.success(notificationPreferences().getBoolean(KEY_ENABLED, false))
                     "setEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
+                        if (enabled && !isNotificationAccessGranted()) {
+                            result.error(
+                                "NOTIFICATION_ACCESS_REQUIRED",
+                                "请先允许「好好记账」读取通知",
+                                null,
+                            )
+                            return@setMethodCallHandler
+                        }
                         notificationPreferences().edit()
                             .putBoolean(KEY_ENABLED, enabled)
                             .apply()
+                        if (enabled) {
+                            runCatching {
+                                android.service.notification.NotificationListenerService
+                                    .requestRebind(
+                                        ComponentName(
+                                            this,
+                                            PaymentNotificationListenerService::class.java,
+                                        ),
+                                    )
+                            }
+                        }
                         result.success(null)
                     }
                     "isNotificationGranted" -> result.success(isNotificationGranted())
                     "requestNotificationPermission" -> {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            requestPermissions(
-                                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                                NOTIFICATION_PERMISSION_REQUEST,
-                            )
-                        }
-                        result.success(null)
+                        requestNotificationPermission(result)
                     }
                     "getPending" -> result.success(PaymentNotificationStore.read(this))
                     "acknowledge" -> {
@@ -172,18 +198,11 @@ class MainActivity : FlutterFragmentActivity() {
                 when (call.method) {
                     "isAccessibilityGranted" -> result.success(isAccessibilityGranted())
                     "openAccessibilitySettings" -> {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        result.success(null)
+                        openAccessibilitySettings(result)
                     }
                     "isOverlayGranted" -> result.success(AutoBookkeepingOverlayPermission.isGranted(this))
                     "openOverlaySettings" -> {
-                        startActivity(
-                            Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:$packageName"),
-                            ),
-                        )
-                        result.success(null)
+                        openOverlaySettings(result)
                     }
                     "isEnabled" -> result.success(AutoBookkeepingSettings.enabled(this))
                     "isNotificationGranted" -> result.success(isNotificationGranted())
@@ -206,6 +225,16 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         if (enabled && !AutoBookkeepingOverlayPermission.isGranted(this)) {
                             result.error("OVERLAY_REQUIRED", "请先允许悬浮窗权限", null)
+                            return@setMethodCallHandler
+                        }
+                        if (enabled &&
+                            !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+                        ) {
+                            result.error(
+                                "NOTIFICATION_REQUIRED",
+                                "请先允许通知并确保「自动记账状态」通知渠道未被关闭",
+                                null,
+                            )
                             return@setMethodCallHandler
                         }
                         AutoBookkeepingSettings.setEnabled(this, enabled)
@@ -504,12 +533,107 @@ class MainActivity : FlutterFragmentActivity() {
         return enabled.split(":").any { ComponentName.unflattenFromString(it) == expected }
     }
 
-    private fun isNotificationGranted(): Boolean =
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            true
-        } else {
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    private fun isNotificationGranted(): Boolean {
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            return false
         }
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestNotificationPermission(result: MethodChannel.Result) {
+        if (isNotificationGranted()) {
+            result.success(true)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            openAppNotificationSettings(result)
+            return
+        }
+        if (pendingNotificationPermissionResult != null) {
+            result.error("PERMISSION_REQUEST_BUSY", "通知权限请求正在处理中", null)
+            return
+        }
+        pendingNotificationPermissionResult = result
+        requestPermissions(
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST,
+        )
+    }
+
+    private fun openAccessibilitySettings(result: MethodChannel.Result) {
+        openSystemSettings(
+            result,
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+    }
+
+    private fun openOverlaySettings(result: MethodChannel.Result) {
+        openSystemSettings(
+            result,
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName"),
+            ),
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+    }
+
+    private fun openNotificationListenerSettings(result: MethodChannel.Result) {
+        val component = ComponentName(this, PaymentNotificationListenerService::class.java)
+        val detailIntent = Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS")
+            .putExtra(
+                "android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME",
+                component.flattenToString(),
+            )
+        openSystemSettings(
+            result,
+            detailIntent,
+            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+    }
+
+    private fun openAppNotificationSettings(result: MethodChannel.Result) {
+        openSystemSettings(
+            result,
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+    }
+
+    private fun openSystemSettings(
+        result: MethodChannel.Result,
+        vararg intents: Intent,
+    ) {
+        for (intent in intents) {
+            val opened = runCatching {
+                startActivity(intent)
+                true
+            }.getOrDefault(false)
+            if (opened) {
+                result.success(true)
+                return
+            }
+        }
+        result.error("SETTINGS_UNAVAILABLE", "无法打开对应的系统设置页面", null)
+    }
 
     private fun dispatchPendingRoute() {
         val route = intent?.getStringExtra(OPEN_ROUTE_EXTRA)
