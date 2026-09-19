@@ -406,9 +406,11 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
   final candidates = <PendingAutoBookkeepingCandidate>[];
 
   @override
-  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate) async {
+  Future<AutoBookkeepingEnqueueResult> enqueue(
+    PendingAutoBookkeepingCandidate candidate,
+  ) async {
     candidates.add(candidate);
-    return true;
+    return AutoBookkeepingEnqueueResult.accepted;
   }
 
   @override
