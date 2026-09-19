@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../data/category_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class CategoryManagementPage extends ConsumerStatefulWidget {
   const CategoryManagementPage({super.key, this.bookId, this.onBack});
@@ -125,10 +125,10 @@ class _CategoryManagementPageState
               );
             }),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '默认分类归档后仅隐藏，不会物理删除；历史流水仍保留原分类。',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 12),
           ),
         ],
       ),
@@ -341,10 +341,10 @@ class _CategoryRow extends StatelessWidget {
                 Flexible(child: Text(category.name)),
                 if (category.isDefault) ...[
                   const SizedBox(width: 6),
-                  const Text(
+                  Text(
                     '默认',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       fontSize: 10,
                     ),
                   ),
