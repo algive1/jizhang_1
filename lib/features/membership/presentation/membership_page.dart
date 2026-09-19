@@ -515,10 +515,11 @@ class _CatalogContent extends StatelessWidget {
         const SizedBox(height: 12),
         MemberTestimonials(onMore: onMore),
         const SizedBox(height: 12),
-        PaymentMethodSection(
-          selected: selectedChannel,
-          onSelect: onSelectChannel,
-        ),
+        if (!Platform.isIOS)
+          PaymentMethodSection(
+            selected: selectedChannel,
+            onSelect: onSelectChannel,
+          ),
       ],
     );
   }
