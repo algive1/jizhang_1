@@ -1201,7 +1201,7 @@ class _AllBooksSheetState extends ConsumerState<_AllBooksSheet> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '全部账本',
                         style: TextStyle(
@@ -1285,7 +1285,7 @@ class _AllBookListRow extends StatelessWidget {
       BookType.enterprise => Icons.business,
     };
     final iconColor = switch (book.type) {
-      BookType.personal => context.appPrimary,
+      BookType.personal => AppColors.primary,
       BookType.family => const Color(0xFF976537),
       BookType.enterprise => const Color(0xFF44677E),
     };
@@ -1426,7 +1426,7 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '新建账本',
                       style: TextStyle(
@@ -1585,7 +1585,7 @@ IconData _bookTypeIcon(BookType type) => switch (type) {
 };
 
 Color _bookTypeColor(BookType type) => switch (type) {
-  BookType.personal => context.appPrimary,
+  BookType.personal => AppColors.primary,
   BookType.family => const Color(0xFF976537),
   BookType.enterprise => const Color(0xFF44677E),
 };
@@ -2038,7 +2038,7 @@ class _BookCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (book.type) {
-      BookType.personal => context.appPrimary,
+      BookType.personal => AppColors.primary,
       BookType.family => const Color(0xFF976537),
       BookType.enterprise => const Color(0xFF44677E),
     };
