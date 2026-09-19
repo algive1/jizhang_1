@@ -74,6 +74,7 @@ abstract interface class AutoBookkeepingPendingBridge {
   Future<AutoBookkeepingEnqueueResult> enqueue(
     PendingAutoBookkeepingCandidate candidate,
   );
+  Future<String?> promoteScreenshot(String path);
   Future<void> complete({bool keepScreenshot = false});
 }
 
@@ -134,6 +135,18 @@ class MethodChannelAutoBookkeepingPendingBridge
       return AutoBookkeepingEnqueueResult.busy;
     } on MissingPluginException {
       return AutoBookkeepingEnqueueResult.busy;
+    }
+  }
+
+  @override
+  Future<String?> promoteScreenshot(String path) async {
+    try {
+      return await _channel.invokeMethod<String>(
+        'promoteScreenshot',
+        {'path': path},
+      );
+    } on MissingPluginException {
+      return null;
     }
   }
 
