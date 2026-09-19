@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 import 'app/app.dart';
 import 'core/database/app_database.dart';
@@ -19,6 +22,13 @@ import 'features/transactions/data/transactions_repository.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('zh_CN');
+  // A staged restore must be applied before runApp creates the foreground
+  // database. Background FlutterEngine entrypoints deliberately skip this so
+  // they can never replace a database that the foreground engine is using.
+  final documents = await getApplicationDocumentsDirectory();
+  await AppDatabase.applyPendingRestore(
+    File(p.join(documents.path, AppDatabase.databaseFileName)),
+  );
   runApp(const ProviderScope(child: JizhangApp()));
 }
 
