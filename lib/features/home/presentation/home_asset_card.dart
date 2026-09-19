@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/privacy_amount.dart';
 import '../../accounts/domain/asset_overview.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// A compact summary of real account balances. Different currencies stay
 /// separate; detailed accounts remain on `/profile/assets`.
@@ -143,7 +143,7 @@ class HomeAssetCard extends StatelessWidget {
                         Text(
                           '账面净资产',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.appSecondaryText,
                             fontSize: compact ? 9 : 11,
                           ),
                         ),
@@ -161,8 +161,8 @@ class HomeAssetCard extends StatelessWidget {
                         if (groups.length > 1)
                           Text(
                             '另有 ${groups.length - 1} 种币种 · 分开统计',
-                            style: const TextStyle(
-                              color: AppColors.primaryDark,
+                            style: TextStyle(
+                              color: context.appPrimary,
                               fontSize: 9,
                             ),
                           ),
@@ -236,7 +236,7 @@ class _AssetHeader extends StatelessWidget {
         ),
         child: Icon(
           Icons.account_balance_wallet_outlined,
-          color: AppColors.primaryDark,
+          color: context.appPrimary,
           size: compact ? 15 : 18,
         ),
       ),
@@ -245,7 +245,7 @@ class _AssetHeader extends StatelessWidget {
         child: Text(
           '我的净资产',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appPrimaryText,
             fontSize: compact ? 14 : 16,
             fontWeight: FontWeight.w700,
           ),
@@ -267,7 +267,7 @@ class _AssetHeader extends StatelessWidget {
           amountHidden
               ? Icons.visibility_off_outlined
               : Icons.visibility_outlined,
-          color: AppColors.textSecondary,
+          color: context.appSecondaryText,
           size: compact ? 15 : 18,
         ),
       ),
@@ -281,7 +281,7 @@ class _AssetHeader extends StatelessWidget {
             '${overview.currency} · ${_assetAccountCount(overview)} 个账户',
             maxLines: 1,
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
               fontSize: compact ? 9 : 11,
             ),
           ),
@@ -290,7 +290,7 @@ class _AssetHeader extends StatelessWidget {
       const SizedBox(width: 1),
       Icon(
         Icons.chevron_right,
-        color: AppColors.textSecondary,
+        color: context.appSecondaryText,
         size: compact ? 16 : 19,
       ),
     ],
@@ -394,11 +394,11 @@ class _StateCard extends StatelessWidget {
             Container(
               width: 38,
               height: 38,
-              decoration: const BoxDecoration(
-                color: AppColors.primarySoft,
+              decoration: BoxDecoration(
+                color: context.appPrimarySoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: AppColors.primaryDark, size: 20),
+              child: Icon(icon, color: context.appPrimary, size: 20),
             ),
             const SizedBox(width: 11),
             Expanded(
@@ -408,7 +408,7 @@ class _StateCard extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -416,8 +416,8 @@ class _StateCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: context.appSecondaryText,
                       fontSize: 11,
                     ),
                   ),
@@ -427,8 +427,8 @@ class _StateCard extends StatelessWidget {
             if (actionLabel != null)
               Text(
                 '$actionLabel ›',
-                style: const TextStyle(
-                  color: AppColors.primaryDark,
+                style: TextStyle(
+                  color: context.appPrimary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -469,7 +469,7 @@ class _HomeAssetMetric extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
                 fontSize: compact ? 9 : 11,
               ),
             ),
@@ -516,7 +516,7 @@ class _HomeAssetMoney extends StatelessWidget {
         : '${currency.toUpperCase()} ';
     final prefix = amount < 0 ? '-' : '';
     final style = TextStyle(
-      color: prominent ? AppColors.primaryDark : AppColors.textPrimary,
+      color: prominent ? context.appPrimary : context.appPrimaryText,
       fontSize: prominent ? (compact ? 22 : 26) : (compact ? 13 : 16),
       fontWeight: FontWeight.w700,
       height: 1,
