@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/app_database.dart';
@@ -10,10 +11,12 @@ import '../../../core/utils/entity_id.dart';
 import '../../books/data/book_repository.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../sharing/data/shared_api.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_holding.dart';
 import '../domain/investment_portfolio.dart';
 import '../domain/investment_quote.dart';
+import 'http_market_data_provider.dart';
 import 'investment_config.dart';
 import 'market_data_provider.dart';
 import 'quote_cache.dart';
@@ -812,17 +815,21 @@ class ApiInvestmentRepository implements InvestmentRepository {
 
 // ------------------------------------------------------------------ providers
 
-/// The quote cache the whole app shares. Swap the body for a Redis-backed
-/// implementation to move caching off the device.
+/// Device-local stale-while-revalidate cache. Shared Redis caching lives on
+/// the server; the mobile app never receives Redis credentials.
 final quoteCacheProvider = Provider<QuoteCache>((ref) => MemoryQuoteCache());
 
-/// Market data source. Mock today; point this at a real provider to go live.
-///
-/// The vendor API key must never reach the client: a real implementation calls
-/// the app's own server, which holds the key and its own shared cache.
-final marketDataProviderProvider = Provider<MarketDataProvider>(
-  (ref) => MockMarketDataProvider(),
-);
+/// Release builds always use the app server's real-market proxy. Debug and test
+/// builds retain the deterministic mock only as an explicit development
+/// fallback when no local server is running.
+final marketDataProviderProvider = Provider<MarketDataProvider>((ref) {
+  final real = HttpMarketDataProvider(ref.watch(sharedApiProvider));
+  if (kReleaseMode) return real;
+  return DevelopmentMarketDataProvider(
+    primary: real,
+    fallback: MockMarketDataProvider(),
+  );
+});
 
 final investmentRepositoryProvider = Provider<InvestmentRepository>((ref) {
   return DriftInvestmentRepository(
