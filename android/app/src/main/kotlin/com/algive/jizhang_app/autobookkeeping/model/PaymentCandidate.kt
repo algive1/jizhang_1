@@ -40,6 +40,7 @@ data class TransactionCandidate(
     val originalAmountInCents: Long? = null,
     val discountAmountInCents: Long? = null,
     val identifierSuffix: String? = null,
+    val screenshotPath: String? = null,
 ) {
     fun toMap(): Map<String, Any> = buildMap {
         put("amountInCents", amountInCents)
@@ -54,6 +55,7 @@ data class TransactionCandidate(
         originalAmountInCents?.let { put("originalAmountInCents", it) }
         discountAmountInCents?.let { put("discountAmountInCents", it) }
         identifierSuffix?.let { put("identifierSuffix", it) }
+        screenshotPath?.let { put("screenshotPath", it) }
     }
 }
 
