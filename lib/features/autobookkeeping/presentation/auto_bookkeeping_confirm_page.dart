@@ -18,6 +18,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
+import '../auto_bookkeeping_learning.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
@@ -35,6 +36,8 @@ class _AutoBookkeepingConfirmPageState
   String? _accountId;
   String? _categoryId;
   String? _message;
+  AutoBookkeepingRecommendation? _recommendation;
+  bool _rememberForMerchant = true;
   bool _loading = true;
   bool _saving = false;
   bool _closing = false;
@@ -50,9 +53,23 @@ class _AutoBookkeepingConfirmPageState
       final candidate = await ref
           .read(autoBookkeepingPendingBridgeProvider)
           .getPending();
+      AutoBookkeepingRecommendation? recommendation;
+      if (candidate != null) {
+        recommendation = await ref
+            .read(autoBookkeepingLearningServiceProvider)
+            .recommend(
+              candidate: candidate,
+              fallbackBookId: ref.read(activeBookIdProvider),
+              transactionType: _transactionTypeFor(candidate.transactionType),
+            );
+      }
       if (!mounted) return;
       setState(() {
         _candidate = candidate;
+        _recommendation = recommendation;
+        _bookId = recommendation?.bookId;
+        _accountId = recommendation?.accountId;
+        _categoryId = recommendation?.categoryId;
         _loading = false;
       });
     } on Object catch (error) {
@@ -87,32 +104,62 @@ class _AutoBookkeepingConfirmPageState
       _message = null;
     });
     try {
-      await ref
+      final saved = await ref
           .read(quickBookkeepingServiceProvider)
           .save(
             QuickBookkeepingRequest(
               transactionId: 'auto-${candidate.fingerprint}',
               bookId: bookId,
-              type: TransactionType.expense,
+              type: _transactionTypeFor(candidate.transactionType),
               amount: candidate.amountInCents / 100,
               accountId: account.id,
               categoryId: category.id,
               categoryName: category.name,
               merchant: candidate.merchant,
+              note: candidate.note,
               occurredAt: candidate.timestamp,
               source: TransactionSource.auto,
               userCorrected: true,
               metadata: {
+                'paymentChannel': _paymentChannel(candidate.sourceApp),
+                if (candidate.orderId != null) 'orderId': candidate.orderId,
+                if (candidate.identifierSuffix != null)
+                  'cardLastFour': candidate.identifierSuffix,
                 'autobookkeeping': {
                   'fingerprint': candidate.fingerprint,
                   'sourceApp': candidate.sourceApp,
                   'scene': candidate.scene,
                   'paymentMethod': candidate.paymentMethod,
+                  'transactionType': candidate.transactionType,
+                  if (candidate.orderId != null)
+                    'orderId': candidate.orderId,
+                  if (candidate.identifierSuffix != null)
+                    'identifierSuffix': candidate.identifierSuffix,
+                  if (candidate.originalAmountInCents != null)
+                    'originalAmountInCents': candidate.originalAmountInCents,
+                  if (candidate.discountAmountInCents != null)
+                    'discountAmountInCents': candidate.discountAmountInCents,
                   'confirmedIn': 'autobookkeeping_confirm_page',
                 },
               },
             ),
           );
+      try {
+        await ref
+            .read(autoBookkeepingLearningServiceProvider)
+            .remember(
+              transactionId: saved.id,
+              candidate: candidate,
+              bookId: bookId,
+              accountId: account.id,
+              categoryId: category.id,
+              rememberForMerchant: _rememberForMerchant,
+            );
+      } on Object {
+        // Learning is a secondary local enhancement. A successful transaction
+        // must never be rolled back or shown as failed because memory could
+        // not be updated.
+      }
       await _completePending();
       await BookkeepingFeedback.notifySuccess(count: 1);
       if (!mounted) return;
@@ -171,12 +218,14 @@ class _AutoBookkeepingConfirmPageState
     if (accounts == null || categories == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final expenseCategories = categories
-        .where((item) => item.type == CategoryType.expense)
+    final transactionType = _transactionTypeFor(candidate.transactionType);
+    final categoryType = _categoryTypeFor(transactionType);
+    final selectableCategories = categories
+        .where((item) => item.type == categoryType)
         .where((item) => item.parentId == null)
         .toList(growable: false);
     final selectedAccountId = _validAccountId(accounts);
-    final selectedCategoryId = _validCategoryId(expenseCategories);
+    final selectedCategoryId = _validCategoryId(selectableCategories);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
@@ -224,6 +273,22 @@ class _AutoBookkeepingConfirmPageState
                 '${_sourceLabel(candidate.sourceApp)} · ${DateFormat('yyyy-MM-dd HH:mm').format(candidate.timestamp)}',
                 style: TextStyle(color: context.appSecondaryText),
               ),
+              if (candidate.originalAmountInCents != null &&
+                  candidate.originalAmountInCents! > candidate.amountInCents) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '原价 ¥${(candidate.originalAmountInCents! / 100).toStringAsFixed(2)}'
+                  '${candidate.discountAmountInCents == null ? '' : ' · 优惠 ¥${(candidate.discountAmountInCents! / 100).toStringAsFixed(2)}'}',
+                  style: TextStyle(color: context.appSecondaryText),
+                ),
+              ],
+              if (_recommendation?.learnedFromMerchant == true) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '已按该商户历史选择预填',
+                  style: TextStyle(color: context.appPrimary),
+                ),
+              ],
             ],
           ),
         ),
@@ -266,9 +331,13 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedCategoryId,
-                  decoration: const InputDecoration(labelText: '支出分类'),
+                  decoration: InputDecoration(
+                    labelText: categoryType == CategoryType.income
+                        ? '收入分类'
+                        : '支出分类',
+                  ),
                   items: [
-                    for (final category in expenseCategories)
+                    for (final category in selectableCategories)
                       DropdownMenuItem(
                         value: category.id,
                         child: Text(category.name),
@@ -277,6 +346,18 @@ class _AutoBookkeepingConfirmPageState
                   onChanged: _saving || selectedBook == null
                       ? null
                       : (value) => setState(() => _categoryId = value),
+                ),
+                const SizedBox(height: 6),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('记住这个商户的选择'),
+                  subtitle: const Text('下次自动带出账本、账户和分类'),
+                  value: _rememberForMerchant,
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(
+                          () => _rememberForMerchant = value,
+                        ),
                 ),
               ],
             ),
@@ -298,7 +379,7 @@ class _AutoBookkeepingConfirmPageState
                   final account = accounts
                       .where((item) => item.id == selectedAccountId)
                       .firstOrNull;
-                  final category = expenseCategories
+                  final category = selectableCategories
                       .where((item) => item.id == selectedCategoryId)
                       .firstOrNull;
                   if (account == null || category == null) {
@@ -332,6 +413,15 @@ class _AutoBookkeepingConfirmPageState
 
   String? _validAccountId(List<Account> accounts) {
     if (accounts.any((item) => item.id == _accountId)) return _accountId;
+
+    final suffix = _candidate?.identifierSuffix;
+    if (suffix != null && suffix.isNotEmpty) {
+      final suffixMatches = accounts
+          .where((item) => item.identifierSuffix == suffix)
+          .toList(growable: false);
+      if (suffixMatches.length == 1) return suffixMatches.single.id;
+    }
+
     final preferred = accounts.where((item) {
       final source = _candidate?.sourceApp;
       return switch (source) {
@@ -349,6 +439,32 @@ class _AutoBookkeepingConfirmPageState
     if (categories.any((item) => item.id == _categoryId)) return _categoryId;
     return categories.firstOrNull?.id;
   }
+
+  TransactionType _transactionTypeFor(String type) => switch (type) {
+    'INCOME' => TransactionType.income,
+    'REFUND' => TransactionType.refund,
+    'REIMBURSEMENT' => TransactionType.reimbursement,
+    _ => TransactionType.expense,
+  };
+
+  CategoryType _categoryTypeFor(TransactionType type) => switch (type) {
+    TransactionType.income ||
+    TransactionType.refund ||
+    TransactionType.reimbursement ||
+    TransactionType.borrow => CategoryType.income,
+    _ => CategoryType.expense,
+  };
+
+  String _paymentChannel(String source) => switch (source) {
+    'WECHAT' => 'wechat',
+    'ALIPAY' => 'alipay',
+    'UNIONPAY' => 'bank',
+    'MEITUAN' => 'meituan',
+    'JD' => 'jd',
+    'PINDUODUO' => 'pinduoduo',
+    'DOUYIN' => 'douyin',
+    _ => 'payment_app',
+  };
 
   String _sourceLabel(String source) => switch (source) {
     'WECHAT' => '微信支付',
