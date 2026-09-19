@@ -186,7 +186,7 @@ void main() {
     expect(expenseCategory.type, 'expense');
   });
 
-  test('refund learning preserves legacy expense preference', () async {
+  test('refund learning preserves independent expense preference', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -211,7 +211,7 @@ void main() {
     await settings.set(
       AutoBookkeepingLearningService.preferenceKey,
       jsonEncode({
-        merchantKey: {
+        'expense|$merchantKey': {
           'merchantKey': merchantKey,
           'merchantDisplay': merchant,
           'categoryId': expenseCategory.id,
@@ -244,7 +244,7 @@ void main() {
 
     final expenseRecommendation = await learning.recommend(
       candidate: PendingAutoBookkeepingCandidate(
-        fingerprint: 'expense-after-legacy-refund',
+        fingerprint: 'expense-after-refund',
         amountInCents: 2000,
         merchant: merchant,
         paymentMethod: '微信支付',
