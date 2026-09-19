@@ -216,8 +216,7 @@ class _ConsumptionCalendarPageState
                         canGoNext: !_isCurrentMonth,
                         onPrevious: () => _moveMonth(-1),
                         onNext: () => _moveMonth(1),
-                        onModeChanged: (mode) =>
-                            setState(() => _viewMode = mode),
+                        onModeChanged: _setViewMode,
                       ),
                       const SizedBox(height: 6),
                       if (_viewMode != _CalendarViewMode.stats) ...[
@@ -315,6 +314,13 @@ class _ConsumptionCalendarPageState
     final start = anchor.subtract(Duration(days: anchor.weekday - 1));
     return List.generate(7, (index) => start.add(Duration(days: index)));
   }
+
+  void _setViewMode(_CalendarViewMode mode) => setState(() {
+    _viewMode = mode;
+    if (mode == _CalendarViewMode.week && _selectedDay == null) {
+      _selectedDay = 1;
+    }
+  });
 
   void _moveMonth(int delta) {
     if (delta > 0 && _isCurrentMonth) return;
@@ -563,7 +569,8 @@ class _CalendarToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 330;
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final compact = constraints.maxWidth < 330 || textScale > 1.2;
         if (compact) {
           return Column(
             children: [
