@@ -51,6 +51,10 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "com.unionpay",
             "com.sankuai.meituan",
             "com.sankuai.meituan.takeout",
+            "com.jingdong.app.mall",
+            "com.xunmeng.pinduoduo",
+            "com.ss.android.ugc.aweme",
+            "com.ss.android.ugc.aweme.mobile",
         )
         // Only retain outgoing-payment notifications. In particular, "收款"
         // used to make incoming receipts become fake expenses.

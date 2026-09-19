@@ -91,6 +91,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-messaging")
+    // Bundled Chinese OCR model: works fully on-device without a first-run download.
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }
 
 kotlin {

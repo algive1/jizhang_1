@@ -2,10 +2,11 @@ import 'dart:async';
 
 import '../domain/investment_quote.dart';
 
-/// Storage contract for shared market quotes.
+/// Device-side storage contract for recently used market quotes.
 ///
-/// Business code depends only on this interface, so moving from the MVP's
-/// in-process map to Redis is a one-line provider swap and never a UI change.
+/// Cross-user Redis caching is implemented by the server market proxy. The
+/// mobile app intentionally keeps only this short-lived process cache so Redis
+/// credentials never reach an APK or IPA.
 ///
 /// Keys are always *per security*, never per user:
 /// `quote:stock:CN:600519` is fetched once and served to every user holding
@@ -95,43 +96,4 @@ class _CacheEntry {
   final DateTime expiresAt;
 
   bool isExpired(DateTime now) => !now.isBefore(expiresAt);
-}
-
-/// Placeholder for the production cache. It implements the same contract but
-/// fails loudly rather than silently behaving like a memory cache, so a
-/// half-configured deployment cannot masquerade as a working one.
-///
-/// To go live: implement `get`/`set`/`getMany` with your Redis client, add the
-/// connection settings to the server config, and switch
-/// `quoteCacheProvider` to return it. Nothing else changes.
-class RedisQuoteCache implements QuoteCache {
-  const RedisQuoteCache({required this.client});
-
-  /// The Redis client, injected so this file needs no Redis dependency yet.
-  final Object? client;
-
-  Never _unimplemented() => throw UnimplementedError(
-    'RedisQuoteCache 尚未接入。请实现 get/set/getMany 后在 '
-    'quoteCacheProvider 中替换 MemoryQuoteCache。',
-  );
-
-  @override
-  Future<InvestmentQuote?> get(String key) async => _unimplemented();
-
-  @override
-  Future<Map<String, InvestmentQuote>> getMany(List<String> keys) async =>
-      _unimplemented();
-
-  @override
-  Future<void> set(
-    String key,
-    InvestmentQuote quote, {
-    Duration? ttl,
-  }) async => _unimplemented();
-
-  @override
-  Future<void> remove(String key) async => _unimplemented();
-
-  @override
-  Future<void> clear() async => _unimplemented();
 }

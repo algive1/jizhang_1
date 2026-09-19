@@ -1,12 +1,58 @@
+import Vision
+import BackgroundTasks
+import AppIntents
 import Flutter
 import UIKit
 import UserNotifications
+
+@available(iOS 16.0, *)
+struct HaoHaoBookkeepingShortcutIntent: AppIntent {
+  static var title: LocalizedStringResource = "记一笔到好好记账"
+  static var description = IntentDescription("把一段账单文字发送到好好记账，打开后确认再保存。")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "账单文字")
+  var text: String
+
+  func perform() async throws -> some IntentResult {
+    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else {
+      throw NSError(
+        domain: "HaoHaoBookkeepingShortcut",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "账单文字不能为空"]
+      )
+    }
+    let defaults = UserDefaults.standard
+    defaults.set(value, forKey: "haohao.shortcut.pendingText")
+    defaults.set(false, forKey: "haohao.shortcut.routeSent")
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct HaoHaoBookkeepingShortcuts: AppShortcutsProvider {
+  static var appShortcuts: [AppShortcut] {
+    AppShortcut(
+      intent: HaoHaoBookkeepingShortcutIntent(),
+      phrases: [
+        "用\(.applicationName)记账",
+        "在\(.applicationName)记一笔"
+      ],
+      shortTitle: "记一笔",
+      systemImageName: "plus.circle"
+    )
+  }
+}
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var navigationChannel: FlutterMethodChannel?
   private var pendingNotificationRoute: String?
   private var apnsDeviceToken: String?
+  private let financeTaskIdentifier = "com.algive.jizhang.finance.refresh"
+  private var backgroundFinanceEngine: FlutterEngine?
+  private var backgroundFinanceChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -14,6 +60,17 @@ import UserNotifications
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
     apnsDeviceToken = UserDefaults.standard.string(forKey: "haohao.apns.deviceToken")
+    BGTaskScheduler.shared.register(
+      forTaskWithIdentifier: financeTaskIdentifier,
+      using: nil
+    ) { [weak self] task in
+      guard let refreshTask = task as? BGAppRefreshTask else {
+        task.setTaskCompleted(success: false)
+        return
+      }
+      self?.handleFinanceRefresh(refreshTask)
+    }
+    scheduleFinanceRefresh()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -169,6 +226,50 @@ import UserNotifications
       }
     }
 
+    let shortcutChannel = FlutterMethodChannel(
+      name: "jizhang/ios_shortcut",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    shortcutChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "takePendingText":
+        let defaults = UserDefaults.standard
+        let text = defaults.string(forKey: "haohao.shortcut.pendingText")
+        defaults.removeObject(forKey: "haohao.shortcut.pendingText")
+        defaults.set(false, forKey: "haohao.shortcut.routeSent")
+        result(text)
+      case "isAvailable":
+        if #available(iOS 16.0, *) {
+          result(true)
+        } else {
+          result(false)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let financeSchedulerChannel = FlutterMethodChannel(
+      name: "jizhang/finance_scheduler",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    financeSchedulerChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "APP_DELEGATE_UNAVAILABLE", message: nil, details: nil))
+        return
+      }
+      switch call.method {
+      case "schedule":
+        self.scheduleFinanceRefresh()
+        result(nil)
+      case "cancel":
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: self.financeTaskIdentifier)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let recurringNotificationChannel = FlutterMethodChannel(
       name: "jizhang/recurring_notifications",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
@@ -202,6 +303,57 @@ import UserNotifications
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let ocrChannel = FlutterMethodChannel(
+      name: "jizhang/local_ocr",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    ocrChannel.setMethodCallHandler { call, result in
+      guard call.method == "recognize" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let arguments = call.arguments as? [String: Any],
+            let path = arguments["path"] as? String,
+            !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let image = UIImage(contentsOfFile: path),
+            let cgImage = image.cgImage else {
+        result(FlutterError(
+          code: "INVALID_IMAGE",
+          message: "OCR image cannot be loaded",
+          details: nil
+        ))
+        return
+      }
+
+      DispatchQueue.global(qos: .userInitiated).async {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["zh-Hans", "en-US"]
+        request.usesLanguageCorrection = true
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+          try handler.perform([request])
+          let lines = (request.results ?? []).compactMap {
+            $0.topCandidates(1).first?.string
+          }
+          DispatchQueue.main.async {
+            result([
+              "text": lines.joined(separator: "\n"),
+              "blocks": lines,
+            ])
+          }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(
+              code: "OCR_FAILED",
+              message: error.localizedDescription,
+              details: nil
+            ))
+          }
+        }
       }
     }
 
@@ -253,6 +405,17 @@ import UserNotifications
           }
         }
       }
+    }
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    let defaults = UserDefaults.standard
+    let pending = defaults.string(forKey: "haohao.shortcut.pendingText")
+    let routeSent = defaults.bool(forKey: "haohao.shortcut.routeSent")
+    if let pending, !pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !routeSent {
+      defaults.set(true, forKey: "haohao.shortcut.routeSent")
+      emitNotificationRoute("/profile/autobookkeeping/shortcut")
     }
   }
 
@@ -334,6 +497,92 @@ import UserNotifications
       emitNotificationRoute(route)
     }
     completionHandler()
+  }
+
+  private func scheduleFinanceRefresh() {
+    let request = BGAppRefreshTaskRequest(identifier: financeTaskIdentifier)
+    // iOS decides the exact execution time. Six hours keeps the daily finance
+    // task eligible without pretending BGTaskScheduler is an exact alarm.
+    request.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 60 * 60)
+    do {
+      try BGTaskScheduler.shared.submit(request)
+    } catch {
+      // Foreground resume processing remains the fallback when iOS declines a
+      // background request (for example, Background App Refresh is disabled).
+    }
+  }
+
+  private func handleFinanceRefresh(_ task: BGAppRefreshTask) {
+    // BGAppRefresh requests are one-shot. Schedule the next opportunity before
+    // running this one so a process termination cannot silently stop the chain.
+    scheduleFinanceRefresh()
+
+    let engine = FlutterEngine(
+      name: "haohao-finance-background",
+      project: nil,
+      allowHeadlessExecution: true
+    )
+    backgroundFinanceEngine = engine
+    guard engine.run(withEntrypoint: "scheduledFinanceMain") else {
+      backgroundFinanceEngine = nil
+      task.setTaskCompleted(success: false)
+      return
+    }
+    GeneratedPluginRegistrant.register(with: engine)
+
+    let channel = FlutterMethodChannel(
+      name: "jizhang/finance_scheduler",
+      binaryMessenger: engine.binaryMessenger
+    )
+    backgroundFinanceChannel = channel
+    var didFinish = false
+
+    func finish(_ success: Bool) {
+      guard !didFinish else { return }
+      didFinish = true
+      channel.setMethodCallHandler(nil)
+      backgroundFinanceChannel = nil
+      backgroundFinanceEngine?.destroyContext()
+      backgroundFinanceEngine = nil
+      task.setTaskCompleted(success: success)
+    }
+
+    task.expirationHandler = {
+      DispatchQueue.main.async {
+        finish(false)
+      }
+    }
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "APP_DELEGATE_UNAVAILABLE", message: nil, details: nil))
+        finish(false)
+        return
+      }
+      switch call.method {
+      case "scheduleReminder":
+        self.scheduleRecurringNotification(call.arguments, result: result)
+      case "cancelReminder":
+        guard let arguments = call.arguments as? [String: Any],
+              let id = arguments["id"] as? String,
+              !id.isEmpty else {
+          result(FlutterError(code: "INVALID_REMINDER", message: "周期账单提醒 ID 为空", details: nil))
+          return
+        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+          withIdentifiers: [id]
+        )
+        result(nil)
+      case "completed":
+        result(nil)
+        finish(true)
+      case "failed":
+        result(nil)
+        finish(false)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func emitNotificationRoute(_ route: String) {

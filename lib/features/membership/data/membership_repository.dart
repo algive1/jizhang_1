@@ -138,7 +138,19 @@ class RemoteMembershipRepository implements MembershipRepository {
             ),
           )
           .toList(),
-      quotas: const [],
+      quotas: (json['quotas'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (value) => UsageQuota(
+              key: _entitlement(value['key'] as String?),
+              limit: (value['limit'] as num?)?.toInt() ?? 0,
+              used: (value['used'] as num?)?.toInt() ?? 0,
+              periodStart: _date(value['periodStart']),
+              periodEnd: _date(value['periodEnd']),
+            ),
+          )
+          .where((quota) => quota.limit > 0)
+          .toList(),
     );
   }
 

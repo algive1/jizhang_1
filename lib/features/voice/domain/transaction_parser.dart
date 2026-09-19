@@ -321,6 +321,10 @@ class CachedRetryingAiTransactionParser implements TransactionParser {
         lastError = error;
       } on FormatException catch (error) {
         lastError = error;
+      } on Object catch (error) {
+        // Network/auth/provider failures are an expected AI fallback boundary.
+        // The hybrid parser will keep the deterministic local rule result.
+        lastError = error;
       }
     }
     throw StateError(

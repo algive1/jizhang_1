@@ -199,6 +199,10 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             "com.unionpay",
             "com.sankuai.meituan",
             "com.sankuai.meituan.takeout",
+            "com.jingdong.app.mall",
+            "com.xunmeng.pinduoduo",
+            "com.ss.android.ugc.aweme",
+            "com.ss.android.ugc.aweme.mobile",
         )
     }
 }

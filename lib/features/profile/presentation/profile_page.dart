@@ -196,6 +196,24 @@ class ProfilePage extends ConsumerWidget {
                   () => push('/profile/budgets'),
                 ),
                 ProfileMenuItem(
+                  Icons.document_scanner_outlined,
+                  '小票识别',
+                  '本地 OCR · 确认后记账',
+                  () => push('/profile/receipt-ocr'),
+                ),
+                ProfileMenuItem(
+                  Icons.upload_file_outlined,
+                  '账单导入',
+                  '微信 · 支付宝 CSV',
+                  () => push('/profile/bill-import'),
+                ),
+                ProfileMenuItem(
+                  Icons.receipt_long_outlined,
+                  '财税与账单',
+                  '发票 · 报税台账 · 银行卡账单',
+                  () => push('/profile/finance-center'),
+                ),
+                ProfileMenuItem(
                   Icons.event_repeat_outlined,
                   '周期账单',
                   count(recurring, ' 个进行中'),
@@ -386,6 +404,7 @@ class ProfilePage extends ConsumerWidget {
           const ListTile(title: Text('设置')),
           for (final item in [
             ('信用卡分期', '/profile/installments'),
+            ('财税与账单', '/profile/finance-center'),
             ('通知设置', '/profile/notification-settings'),
             ('自动记账', '/profile/autobookkeeping'),
             ('数据与安全', '/profile/data'),

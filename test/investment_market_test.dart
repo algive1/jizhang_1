@@ -70,14 +70,6 @@ void main() {
       expect(cache.size, 0);
     });
 
-    test('RedisQuoteCache implements the contract but refuses to fake it',
-        () async {
-      const cache = RedisQuoteCache(client: null);
-      // A half-configured deployment must fail loudly rather than silently
-      // behaving like the in-memory cache.
-      await expectLater(cache.get('a'), throwsUnimplementedError);
-      await expectLater(cache.set('a', _quote('a', 1)), throwsUnimplementedError);
-    });
   });
 
   group('InvestmentConfig ttl policy', () {
