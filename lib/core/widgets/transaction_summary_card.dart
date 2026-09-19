@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../constants/app_assets.dart';
 import 'app_card.dart';
 import 'money_text.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class TransactionSummaryCard extends StatelessWidget {
   const TransactionSummaryCard({
@@ -31,7 +31,7 @@ class TransactionSummaryCard extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppColors.surface, Color(0xFFF6F4E8)],
+                      colors: [context.appSurface, Color(0xFFF6F4E8)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -69,7 +69,7 @@ class TransactionSummaryCard extends StatelessWidget {
                           Container(
                             width: 1,
                             height: 64,
-                            color: AppColors.divider,
+                            color: context.appDivider,
                           ),
                           Expanded(
                             child: _SummaryItem(
@@ -115,8 +115,8 @@ class _SummaryItem extends StatelessWidget {
           Text(
             label,
             maxLines: 1,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.appSecondaryText,
               fontSize: 15,
             ),
           ),
