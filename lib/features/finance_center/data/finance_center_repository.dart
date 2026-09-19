@@ -93,7 +93,8 @@ class CardStatement {
   final CardStatementStatus status;
   final String note;
 
-  double get remaining => (statementAmount - paidAmount).clamp(0, double.infinity);
+  double get remaining =>
+      (statementAmount - paidAmount).clamp(0, double.infinity).toDouble();
 }
 
 abstract interface class FinanceCenterRepository {
