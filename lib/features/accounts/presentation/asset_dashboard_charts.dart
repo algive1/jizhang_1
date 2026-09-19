@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/monotone_smooth_path.dart';
 import '../domain/asset_overview.dart';
@@ -46,10 +47,10 @@ class AssetDistribution extends StatelessWidget {
           const AssetSectionHeading('资产分布', more: true),
           const SizedBox(height: 12),
           if (entries.isEmpty)
-            const SizedBox(
+            SizedBox(
               height: 95,
               child: Center(
-                child: Text('暂无正余额资产', style: TextStyle(color: assetMuted)),
+                child: Text('暂无正余额资产', style: TextStyle(color: context.appSecondaryText)),
               ),
             )
           else
@@ -74,11 +75,11 @@ class AssetDistribution extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text(
+                              Text(
                                 '总资产',
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: assetMuted,
+                                  color: context.appSecondaryText,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -120,9 +121,9 @@ class AssetDistribution extends StatelessWidget {
                                       child: Text(
                                         entries[i].key,
                                         maxLines: 1,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 9,
-                                          color: assetMuted,
+                                          color: context.appSecondaryText,
                                         ),
                                       ),
                                     ),
@@ -130,9 +131,9 @@ class AssetDistribution extends StatelessWidget {
                                   const SizedBox(width: 2),
                                   Text(
                                     '${(entries[i].value / overview.assets * 100).toStringAsFixed(1)}%',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 9,
-                                      color: assetInk,
+                                      color: context.appPrimaryText,
                                     ),
                                   ),
                                 ],
@@ -195,12 +196,12 @@ class _AssetTrendState extends State<AssetTrend> {
                 child: FittedBox(
                   alignment: Alignment.centerLeft,
                   fit: BoxFit.scaleDown,
-                  child: const Text(
+                  child: Text(
                     '资产变化',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: assetInk,
+                      color: context.appPrimaryText,
                     ),
                   ),
                 ),
@@ -214,13 +215,13 @@ class _AssetTrendState extends State<AssetTrend> {
           ),
           const SizedBox(height: 8),
           if (widget.history.hasFutureRecords)
-            const SizedBox(
+            SizedBox(
               height: 115,
               child: Center(
                 child: Text(
                   '存在未来日期流水\n历史曲线暂不可用',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: assetMuted),
+                  style: TextStyle(fontSize: 12, color: context.appSecondaryText),
                 ),
               ),
             )
@@ -307,8 +308,8 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: days == option.$1
-                      ? const Color(0xFF83A25D)
-                      : assetCream,
+                      ? context.appPrimary
+                      : context.appSurfaceSoft,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: FittedBox(
@@ -318,7 +319,7 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       fontSize: 8,
-                      color: days == option.$1 ? Colors.white : assetMuted,
+                      color: days == option.$1 ? Colors.white : context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -369,9 +370,9 @@ class AssetDistributionDetail extends StatelessWidget {
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
+                            Text(
                               '总资产',
-                              style: TextStyle(color: assetMuted, fontSize: 12),
+                              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
                             ),
                             const SizedBox(height: 4),
                             AssetAmount(
@@ -459,14 +460,14 @@ class AssetTrendDetail extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Expanded(
+                Expanded(
                   child: SizedBox(
                     height: 180,
                     child: Center(
                       child: Text(
                         '存在未来日期流水\n历史曲线暂不可用',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: assetMuted),
+                        style: TextStyle(color: context.appSecondaryText),
                       ),
                     ),
                   ),
@@ -534,7 +535,7 @@ class AssetTrendDetail extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '统计区间：近${days == 365 ? '1年' : '$days天'} · 账面净资产',
-              style: const TextStyle(color: assetMuted, fontSize: 11),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 11),
             ),
           ],
           const SizedBox(height: 12),
@@ -593,24 +594,24 @@ class _AssetAnalysisNote extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F5E6),
+      color: context.appPrimarySoft,
       borderRadius: BorderRadius.circular(14),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1),
-          child: Icon(Icons.insights_outlined, size: 17, color: assetGreen),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(Icons.insights_outlined, size: 17, color: context.appPrimary),
         ),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.4,
-              color: assetMuted,
+              color: context.appSecondaryText,
             ),
           ),
         ),
@@ -755,6 +756,10 @@ class _AssetTrendPlotState extends State<AssetTrendPlot> {
                     widget.fontFamily,
                     selectedIndex: _activeIndex,
                     labelCount: labelCount,
+                    primary: context.appPrimary,
+                    muted: context.appSecondaryText,
+                    divider: context.appDivider,
+                    surface: context.appSurface,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -771,7 +776,7 @@ class _AssetTrendPlotState extends State<AssetTrendPlot> {
                   selectedLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10, color: assetMuted),
+                  style: TextStyle(fontSize: 10, color: context.appSecondaryText),
                 ),
               ),
             ),
@@ -788,11 +793,16 @@ class _AssetTrendPainter extends CustomPainter {
     this.fontFamily, {
     required this.selectedIndex,
     required this.labelCount,
+    required this.primary,
+    required this.muted,
+    required this.divider,
+    required this.surface,
   });
   final List<AssetHistoryPoint> points;
   final String? fontFamily;
   final int selectedIndex;
   final int labelCount;
+  final Color primary, muted, divider, surface;
   @override
   void paint(Canvas canvas, Size size) {
     final low = points.map((p) => p.balance).reduce(math.min);
@@ -813,7 +823,7 @@ class _AssetTrendPainter extends CustomPainter {
           Offset(x, y),
           Offset(math.min(x + 2.5, size.width), y),
           Paint()
-            ..color = const Color(0xFFDDDFD5)
+            ..color = divider
             ..strokeWidth = .5,
         );
       }
@@ -840,10 +850,10 @@ class _AssetTrendPainter extends CustomPainter {
     canvas.drawPath(
       area,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x508AA950), Color(0x068AA950)],
+          colors: [primary.withValues(alpha: .31), primary.withValues(alpha: .02)],
         ).createShader(Rect.fromLTWH(left, top, width, bottom - top)),
     );
     final activeIndex = selectedIndex.clamp(0, points.length - 1);
@@ -852,24 +862,24 @@ class _AssetTrendPainter extends CustomPainter {
       Offset(active.dx, top),
       Offset(active.dx, bottom),
       Paint()
-        ..color = const Color(0x5583A25D)
+        ..color = primary.withValues(alpha: .33)
         ..strokeWidth = .7,
     );
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFF73963B)
+        ..color = primary
         ..strokeWidth = 1.6
         ..style = PaintingStyle.stroke,
     );
     for (var i = 0; i < points.length; i++) {
       if (i % math.max(1, points.length ~/ 8) != 0 && i != points.length - 1)
         continue;
-      canvas.drawCircle(coordinates[i], 2.5, Paint()..color = Colors.white);
-      canvas.drawCircle(coordinates[i], 1.8, Paint()..color = assetGreen);
+      canvas.drawCircle(coordinates[i], 2.5, Paint()..color = surface);
+      canvas.drawCircle(coordinates[i], 1.8, Paint()..color = primary);
     }
-    canvas.drawCircle(active, 4.2, Paint()..color = Colors.white);
-    canvas.drawCircle(active, 2.8, Paint()..color = assetGreen);
+    canvas.drawCircle(active, 4.2, Paint()..color = surface);
+    canvas.drawCircle(active, 2.8, Paint()..color = primary);
     final activeText = MoneyFormatter.whole(points[activeIndex].balance);
     final activePainter = TextPainter(
       text: TextSpan(
@@ -893,7 +903,7 @@ class _AssetTrendPainter extends CustomPainter {
       ),
       const Radius.circular(6),
     );
-    canvas.drawRRect(bubbleRect, Paint()..color = assetGreen);
+    canvas.drawRRect(bubbleRect, Paint()..color = primary);
     activePainter.paint(
       canvas,
       Offset(bubbleRect.left + 5, bubbleRect.top + 4),
@@ -922,7 +932,7 @@ class _AssetTrendPainter extends CustomPainter {
         text: value,
         style: TextStyle(
           fontSize: 7,
-          color: assetMuted,
+          color: muted,
           fontFamily: fontFamily,
         ),
       ),
@@ -938,5 +948,9 @@ class _AssetTrendPainter extends CustomPainter {
       old.points != points ||
       old.fontFamily != fontFamily ||
       old.selectedIndex != selectedIndex ||
-      old.labelCount != labelCount;
+      old.labelCount != labelCount ||
+      old.primary != primary ||
+      old.muted != muted ||
+      old.divider != divider ||
+      old.surface != surface;
 }

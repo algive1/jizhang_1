@@ -7,9 +7,6 @@ import '../../../core/widgets/user_avatar.dart';
 import '../data/profile_stats.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
-const profileCream = Color(0xFFF7F7ED);
-const profileSurface = Color(0xFFFFFEF9);
-
 class ProfileHero extends StatelessWidget {
   const ProfileHero({
     super.key,
@@ -282,7 +279,7 @@ class ProfileQuickStat extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-    color: profileSurface,
+    color: context.appSurface,
     borderRadius: BorderRadius.circular(15),
     child: InkWell(
       onTap: onTap,
@@ -334,7 +331,7 @@ class ProfileMonthlyCard extends StatelessWidget {
   final bool loading;
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFFAFAEF),
+    color: context.appSurfaceSoft,
     borderRadius: BorderRadius.circular(18),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
@@ -405,7 +402,7 @@ class ProfileMonthlyCard extends StatelessWidget {
                     minHeight: 11,
                     borderRadius: BorderRadius.circular(10),
                     color: context.appPrimary,
-                    backgroundColor: const Color(0xFFE8EBDF),
+                    backgroundColor: context.appDivider,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -437,7 +434,7 @@ class ProfileMenuCard extends StatelessWidget {
   final List<ProfileMenuItem> items;
   @override
   Widget build(BuildContext context) => Material(
-    color: profileSurface,
+    color: context.appSurface,
     borderRadius: BorderRadius.circular(19),
     clipBehavior: Clip.antiAlias,
     child: Padding(
@@ -475,17 +472,17 @@ class ProfileMenuCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.right,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFF91928E),
+                                color: context.appSecondaryText,
                               ),
                             ),
                           ),
                           const SizedBox(width: 5),
-                          const Icon(
+                          Icon(
                             Icons.chevron_right,
                             size: 21,
-                            color: Color(0xFF9C9D98),
+                            color: context.appSecondaryText,
                           ),
                         ],
                       ),
@@ -495,11 +492,11 @@ class ProfileMenuCard extends StatelessWidget {
               ),
             ),
             if (i < items.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 thickness: .5,
                 indent: 41,
-                color: Color(0xFFEAECE3),
+                color: context.appDivider,
               ),
           ],
         ],

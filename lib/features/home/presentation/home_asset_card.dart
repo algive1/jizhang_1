@@ -85,14 +85,14 @@ class HomeAssetCard extends StatelessWidget {
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: const Color(0xFFFAFCEF),
+              color: context.appSurfaceSoft,
               image: const DecorationImage(
                 image: AssetImage(AppAssets.homeAssetScene),
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0x80E6EAD8)),
+              border: Border.all(color: context.appDivider.withValues(alpha: .72)),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x0C65713F),
@@ -113,9 +113,9 @@ class HomeAssetCard extends StatelessWidget {
                           center: const Alignment(-.55, .05),
                           radius: .9,
                           colors: [
-                            const Color(0xFFFFFEF8).withValues(alpha: .80),
-                            const Color(0xFFFFFEF8).withValues(alpha: .42),
-                            const Color(0x00FFFEF8),
+                            context.appSurface.withValues(alpha: .80),
+                            context.appSurface.withValues(alpha: .42),
+                            context.appSurface.withValues(alpha: 0),
                           ],
                           stops: const [0, .38, 1],
                         ),
@@ -230,9 +230,9 @@ class _AssetHeader extends StatelessWidget {
         width: compact ? 26 : 32,
         height: compact ? 26 : 32,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .78),
+          color: context.appSurface.withValues(alpha: .78),
           shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFFDCE8C8)),
+          border: Border.all(color: context.appDivider),
         ),
         child: Icon(
           Icons.account_balance_wallet_outlined,
@@ -315,9 +315,9 @@ class _HomeAssetMetricsPanel extends StatelessWidget {
       vertical: compact ? 3 : 6,
     ),
     decoration: BoxDecoration(
-      color: const Color(0x99FFFFF9),
+      color: context.appSurface.withValues(alpha: .60),
       borderRadius: BorderRadius.circular(17),
-      border: Border.all(color: const Color(0xB3FFFFFF)),
+      border: Border.all(color: context.appSurface.withValues(alpha: .70)),
     ),
     child: Row(
       children: [
@@ -334,7 +334,7 @@ class _HomeAssetMetricsPanel extends StatelessWidget {
         Container(
           width: 1,
           height: compact ? 22 : 31,
-          color: const Color(0x80C2CEAD),
+          color: context.appDivider.withValues(alpha: .55),
         ),
         Expanded(
           child: Padding(
@@ -385,9 +385,9 @@ class _StateCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFFEFB),
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF0EEE5)),
+          border: Border.all(color: context.appDivider),
         ),
         child: Row(
           children: [
@@ -487,7 +487,7 @@ class _HomeAssetMetric extends StatelessWidget {
         child: Icon(
           icon,
           size: compact ? 18 : 24,
-          color: const Color(0x2F6F8D3D),
+          color: context.appPrimary.withValues(alpha: .18),
         ),
       ),
     ],

@@ -60,11 +60,11 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
         ? null
         : AssetHistory(selected.accounts, records, DateTime.now());
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF3F6E9), Color(0xFFF7F8EE)],
+          colors: [context.appPrimarySoft.withValues(alpha: .72), context.appBackground],
         ),
       ),
       child: SafeArea(
@@ -277,12 +277,12 @@ class _Header extends StatelessWidget {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        const Text(
+        Text(
           '资产总览',
           style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,
-            color: assetInk,
+            color: context.appPrimaryText,
           ),
         ),
         Align(
@@ -312,12 +312,12 @@ class _Header extends StatelessWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xEFFFFFFB),
+                  color: context.appSurface.withValues(alpha: .94),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   selectedCurrency ?? currencies.first,
-                  style: const TextStyle(fontSize: 11, color: assetInk),
+                  style: TextStyle(fontSize: 11, color: context.appPrimaryText),
                 ),
               ),
             ),
@@ -456,13 +456,13 @@ class _AccountAssetCard extends StatelessWidget {
                           child: Text('恢复账户'),
                         ),
                     ],
-                    child: const SizedBox(
+                    child: SizedBox(
                       width: 20,
                       height: 20,
                       child: Icon(
                         Icons.chevron_right,
                         size: 16,
-                        color: assetMuted,
+                        color: context.appSecondaryText,
                       ),
                     ),
                   ),
@@ -473,7 +473,7 @@ class _AccountAssetCard extends StatelessWidget {
                 account.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: assetInk),
+                style: TextStyle(fontSize: 11, color: context.appPrimaryText),
               ),
               const SizedBox(height: 2),
               AssetAmount(
@@ -481,7 +481,7 @@ class _AccountAssetCard extends StatelessWidget {
                 currency: account.currency,
                 hidden: hidden,
                 size: 14,
-                color: account.type.isDebt ? assetCoral : assetInk,
+                color: account.type.isDebt ? assetCoral : context.appPrimaryText,
               ),
               const SizedBox(height: 2),
               Text(
@@ -640,10 +640,10 @@ class _RecentChangesState extends State<_RecentChanges> {
                       ),
                       labelStyle: TextStyle(
                         fontSize: 10,
-                        color: _filter == filter ? Colors.white : assetMuted,
+                        color: _filter == filter ? Colors.white : context.appSecondaryText,
                       ),
-                      backgroundColor: assetCream,
-                      selectedColor: const Color(0xff83a25d),
+                      backgroundColor: context.appSurfaceSoft,
+                      selectedColor: context.appPrimary,
                     ),
                   ),
               ],
@@ -651,18 +651,18 @@ class _RecentChangesState extends State<_RecentChanges> {
           ),
           const SizedBox(height: 2),
           if (filtered.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(8),
+            Padding(
+              padding: const EdgeInsets.all(8),
               child: Text(
                 '暂无近期资产变动',
-                style: TextStyle(fontSize: 12, color: assetMuted),
+                style: TextStyle(fontSize: 12, color: context.appSecondaryText),
               ),
             )
           else
             for (var index = 0; index < visible.length; index++) ...[
               _RecentRow(record: visible[index], accountIds: accountIds),
               if (index < visible.length - 1)
-                Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
+                Divider(height: 1, indent: 44, color: context.appDivider),
             ],
           if (_showTip) ...[
             SizedBox(height: 5),
@@ -681,17 +681,17 @@ class _RecentChangesState extends State<_RecentChanges> {
                     color: Color(0xffdca83f),
                   ),
                   const SizedBox(width: 6),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '小贴士：定期更新资产信息，才能更准确地掌握你的财务状况哦～',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, color: assetMuted),
+                      style: TextStyle(fontSize: 10, color: context.appSecondaryText),
                     ),
                   ),
                   IconButton(
                     onPressed: () => setState(() => _showTip = false),
-                    icon: const Icon(Icons.close, size: 16, color: assetGreen),
+                    icon: Icon(Icons.close, size: 16, color: context.appPrimary),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints.tightFor(
                       width: 22,
@@ -739,8 +739,8 @@ class _RecentRow extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3F5E8),
+            decoration: BoxDecoration(
+              color: context.appSurfaceSoft,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -762,10 +762,10 @@ class _RecentRow extends StatelessWidget {
                   record.displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: assetInk,
+                    color: context.appPrimaryText,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -773,7 +773,7 @@ class _RecentRow extends StatelessWidget {
                   '${record.occurredAt.month}/${record.occurredAt.day} ${TransactionDateFormatter.time(record.occurredAt)} · ${record.displayCategoryLabel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: assetMuted),
+                  style: TextStyle(fontSize: 11, color: context.appSecondaryText),
                 ),
               ],
             ),
@@ -783,7 +783,7 @@ class _RecentRow extends StatelessWidget {
             currency: record.currency,
             signed: true,
             size: 15,
-            color: amount >= 0 ? assetGreen : assetInk,
+            color: amount >= 0 ? assetGreen : context.appPrimaryText,
           ),
         ],
       ),
@@ -928,7 +928,7 @@ class _AssetSheetFrame extends StatelessWidget {
               width: 42,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xffd6dcc8),
+                color: context.appDivider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -938,10 +938,10 @@ class _AssetSheetFrame extends StatelessWidget {
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: assetInk,
+                    color: context.appPrimaryText,
                   ),
                 ),
               ),

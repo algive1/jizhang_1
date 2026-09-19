@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import 'asset_dashboard_icons.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/privacy_amount.dart';
 
-const assetInk = Color(0xFF152018);
 const assetGreen = Color(0xFF436B28);
-const assetMuted = Color(0xFF888C88);
-const assetCream = Color(0xFFF5F6EB);
 const assetCoral = Color(0xFFF18475);
 
 class AssetPanel extends StatelessWidget {
@@ -25,7 +22,7 @@ class AssetPanel extends StatelessWidget {
     width: double.infinity,
     padding: padding,
     decoration: BoxDecoration(
-      color: const Color(0xF5FFFFFC),
+      color: context.appSurface.withValues(alpha: .96),
       borderRadius: BorderRadius.circular(18),
     ),
     child: child,
@@ -38,7 +35,7 @@ class AssetAmount extends StatelessWidget {
     this.currency = 'CNY',
     this.hidden = false,
     this.size = 18,
-    this.color = assetInk,
+    this.color,
     this.signed = false,
     super.key,
   });
@@ -46,7 +43,7 @@ class AssetAmount extends StatelessWidget {
   final String currency;
   final bool hidden, signed;
   final double size;
-  final Color color;
+  final Color? color;
   @override
   Widget build(BuildContext context) => PrivacyAmount(
     text:
@@ -62,7 +59,7 @@ class AssetAmount extends StatelessWidget {
       fontSize: size,
       fontFeatures: const [FontFeature.tabularFigures()],
       fontWeight: FontWeight.w800,
-      color: color,
+      color: color ?? context.appPrimaryText,
       height: 1.15,
     ),
   );
@@ -112,7 +109,7 @@ class AssetShortcuts extends StatelessWidget {
               SizedBox(
                 width: (box.maxWidth - (columns - 1) * 6) / columns,
                 child: Material(
-                  color: const Color(0xF5FFFFFC),
+                  color: context.appSurface.withValues(alpha: .96),
                   borderRadius: BorderRadius.circular(17),
                   child: InkWell(
                     onTap: item.$4,
@@ -126,8 +123,8 @@ class AssetShortcuts extends StatelessWidget {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(10),
-                            decoration: const BoxDecoration(
-                              color: AppColors.primarySoft,
+                            decoration: BoxDecoration(
+                              color: context.appPrimarySoft,
                               shape: BoxShape.circle,
                             ),
                             child: AssetVectorIcon(item.$1, size: 19),
@@ -135,17 +132,17 @@ class AssetShortcuts extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             item.$2,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: assetInk,
+                              color: context.appPrimaryText,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
                             item.$3,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: assetMuted,
+                              color: context.appSecondaryText,
                             ),
                           ),
                         ],
@@ -184,7 +181,7 @@ class AssetSectionHeading extends StatelessWidget {
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.w800,
-            color: assetInk,
+            color: context.appPrimaryText,
           ),
         ),
       ),
@@ -192,7 +189,7 @@ class AssetSectionHeading extends StatelessWidget {
         TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(
-            foregroundColor: assetMuted,
+            foregroundColor: context.appSecondaryText,
             padding: EdgeInsets.zero,
             minimumSize: const Size(0, 24),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -204,7 +201,7 @@ class AssetSectionHeading extends StatelessWidget {
             style: const TextStyle(fontSize: 12),
           ),
         ),
-      if (more) const Icon(Icons.more_horiz, size: 20, color: assetInk),
+      if (more) Icon(Icons.more_horiz, size: 20, color: context.appPrimaryText),
     ],
   );
 }

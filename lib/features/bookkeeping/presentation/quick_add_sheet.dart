@@ -596,7 +596,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       key: ValueKey('quick-detail-card'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider),
       ),
@@ -2086,7 +2086,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     const Color(0xFFEF789E),
   ),
   AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
-  _ => (Icons.account_balance_wallet_outlined, AppColors.textSecondary),
+  _ => (Icons.account_balance_wallet_outlined, const Color(0xFF747A70)),
 };
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
@@ -2126,7 +2126,7 @@ class _EntryTabs extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: context.appDivider),
       ),
@@ -2195,7 +2195,7 @@ class _DebtTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.appDivider),
       ),
@@ -2266,7 +2266,7 @@ class _AccountPairCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider),
       ),
@@ -2494,7 +2494,7 @@ class _NoteIconAction extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
@@ -2576,7 +2576,7 @@ class _QuickChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? context.appPrimarySoft : Colors.white,
+      color: selected ? context.appPrimarySoft : context.appSurface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,

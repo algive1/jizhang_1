@@ -233,13 +233,13 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
           key: ValueKey('home-spending-card'),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFFFFD), Color(0xFFF1F5E4)],
+            gradient: LinearGradient(
+              colors: [context.appSurface, context.appPrimarySoft.withValues(alpha: .58)],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0x80E3E5D2)),
+            border: Border.all(color: context.appDivider.withValues(alpha: .72)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0C65713F),
@@ -280,14 +280,14 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                         ),
                       ),
                     if (showDecoration)
-                      const Positioned(
+                      Positioned(
                         right: 102,
                         top: 45,
                         child: Text(
                           '好好花钱\n也好好生活',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF709A34),
+                            color: context.appPrimary,
                             fontSize: 10,
                             height: 1.35,
                             fontStyle: FontStyle.italic,
@@ -409,7 +409,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                                   style: TextStyle(
                                     color: widget.snapshot.availableAmount < 0
                                         ? AppColors.expense
-                                        : const Color(0xFF709A34),
+                                        : context.appPrimary,
                                     fontSize: widget.snapshot.hasBudget
                                         ? 39
                                         : 23,
@@ -500,18 +500,18 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
               Container(
                 margin: const EdgeInsets.fromLTRB(1, 0, 1, 0),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [
-                      Color(0xFFF0F6DF),
-                      Color(0xFFF7FAED),
-                      Color(0xFFFCFCF4),
+                      context.appPrimarySoft,
+                      context.appSurfaceSoft,
+                      context.appSurface,
                     ],
                     stops: [0, .55, 1],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xCCFFFFFF)),
+                  border: Border.all(color: context.appSurface.withValues(alpha: .8)),
                 ),
                 padding: const EdgeInsets.fromLTRB(15, 6, 15, 5),
                 child: goal == null
@@ -562,7 +562,7 @@ class _BudgetChoice extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected
             ? context.appPrimary
-            : Colors.white.withValues(alpha: .5),
+            : context.appSurface.withValues(alpha: .5),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Text(
@@ -668,9 +668,9 @@ class _HomeGoalTimeline extends StatelessWidget {
             ),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xFFEAF2D9),
+                color: context.appPrimarySoft,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFDCE8C1)),
+                border: Border.all(color: context.appDivider),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -700,7 +700,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                         ? '¥••••'
                         : '¥${MoneyFormatter.whole(goal.currentAmount)}',
                     style: TextStyle(
-                      color: Color(0xFF709A34),
+                      color: context.appPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),
@@ -758,11 +758,11 @@ class _HomeGoalTimeline extends StatelessWidget {
                                             shape: BoxShape.circle,
                                             color: done
                                                 ? context.appPrimary
-                                                : const Color(0xFFF8FAF0),
+                                                : context.appSurfaceSoft,
                                             border: Border.all(
                                               color: done || current
                                                   ? context.appPrimary
-                                                  : Color(0xFFD7DCCB),
+                                                  : context.appDivider,
                                               width: current ? 3 : 2,
                                             ),
                                           ),

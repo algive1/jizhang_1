@@ -59,12 +59,16 @@ class ProfilePage extends ConsumerWidget {
       accountSession,
     ].where((s) => s.hasError);
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFEEF2DE), profileCream, Color(0xFFF8F7EF)],
-          stops: [0, .3, 1],
+          colors: [
+            context.appPrimarySoft.withValues(alpha: .72),
+            context.appBackground,
+            context.appSurfaceSoft.withValues(alpha: .64),
+          ],
+          stops: const [0, .3, 1],
         ),
       ),
       child: SafeArea(
@@ -74,13 +78,13 @@ class ProfilePage extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     '我的',
                     style: TextStyle(
                       fontSize: 27,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF10140E),
+                      color: context.appPrimaryText,
                     ),
                   ),
                 ),

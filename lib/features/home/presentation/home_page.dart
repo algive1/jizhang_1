@@ -652,7 +652,7 @@ class _HomeHeader extends ConsumerWidget {
           onPressed: onSearch,
           tooltip: '搜索流水',
           style: IconButton.styleFrom(
-            backgroundColor: Color(0xFFF2EEE3),
+            backgroundColor: context.appSurfaceSoft,
             minimumSize: const Size(36, 36),
             maximumSize: const Size(36, 36),
             padding: EdgeInsets.zero,
@@ -771,7 +771,7 @@ class _CategoryExpense extends StatelessWidget {
                     minHeight: 4,
                     borderRadius: BorderRadius.circular(4),
                     color: color,
-                    backgroundColor: const Color(0xFFE8EDF2),
+                    backgroundColor: context.appDivider,
                   ),
                 ),
                 const SizedBox(width: 4),

@@ -326,7 +326,7 @@ class _ExportReportCard extends StatelessWidget {
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: AppCard(
-        color: const Color(0xFFF2F5E4),
+        color: context.appPrimarySoft,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
