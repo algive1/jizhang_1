@@ -4,6 +4,7 @@ import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
 import com.algive.jizhang_app.autobookkeeping.parser.MeituanPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
+import com.algive.jizhang_app.autobookkeeping.parser.TransactionStatusParser
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
 
 data class PaymentDetectionResult(
@@ -15,6 +16,8 @@ class PaymentSceneDetector(
     private val weChatParser: WeChatPaymentParser = WeChatPaymentParser(),
     private val appParser: PaymentAppParser = PaymentAppParser(),
     private val meituanParser: MeituanPaymentParser = MeituanPaymentParser(),
+    private val transactionStatusParser: TransactionStatusParser =
+        TransactionStatusParser(),
 ) {
     fun detect(
         packageName: String,
@@ -27,6 +30,12 @@ class PaymentSceneDetector(
         nodes: List<ScreenNode>,
         timestamp: Long = System.currentTimeMillis(),
     ): PaymentDetectionResult {
+        val typedCandidate =
+            transactionStatusParser.parse(packageName, nodes, timestamp)
+        if (typedCandidate != null) {
+            return PaymentDetectionResult(typedCandidate, null)
+        }
+
         val candidate = when {
             packageName == weChatParser.rule.app ->
                 weChatParser.parse(nodes, timestamp)
@@ -37,7 +46,10 @@ class PaymentSceneDetector(
         }
         if (candidate != null) return PaymentDetectionResult(candidate, null)
 
+        val typedReason =
+            transactionStatusParser.rejectionReason(packageName, nodes)
         val reason = when {
+            typedReason != null -> typedReason
             packageName in MEITUAN_PACKAGES ->
                 meituanParser.rejectionReason(packageName, nodes)
             nodes.none { it.label.isNotBlank() } ->
