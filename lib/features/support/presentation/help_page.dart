@@ -36,6 +36,12 @@ class HelpPage extends StatelessWidget {
               icon: const Icon(Icons.feedback_outlined),
               label: const Text('仍有问题，提交反馈'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => context.push('/profile/support-tickets'),
+              icon: const Icon(Icons.support_agent_outlined),
+              label: const Text('查看我的工单'),
+            ),
           ],
         ),
       );
