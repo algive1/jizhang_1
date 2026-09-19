@@ -27,7 +27,7 @@ class TransactionSummaryCard extends StatelessWidget {
           height: 108,
           child: Stack(
             children: [
-              const Positioned.fill(
+              Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
