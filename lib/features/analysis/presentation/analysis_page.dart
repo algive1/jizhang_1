@@ -12,29 +12,40 @@ import 'package:go_router/go_router.dart';
 
 import '../../transactions/data/transactions_repository.dart';
 import 'cashflow_cards.dart';
+import '../application/analysis_report_export_service.dart';
 import '../data/analysis_repository.dart';
 
-class AnalysisPage extends ConsumerWidget {
+class AnalysisPage extends ConsumerStatefulWidget {
   const AnalysisPage({super.key, this.month});
   final DateTime? month;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final snapshot = month == null
+  ConsumerState<AnalysisPage> createState() => _AnalysisPageState();
+}
+
+class _AnalysisPageState extends ConsumerState<AnalysisPage> {
+  final _reportKey = GlobalKey();
+  bool _sharing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = widget.month == null
         ? ref.watch(analysisSnapshotProvider)
         : ref
               .watch(analysisRepositoryProvider)
               .analyze(
                 period: ref.watch(analysisPeriodProvider),
-                month: month,
+                month: widget.month,
                 currency: ref.watch(analysisCurrencyProvider),
               );
-    final transactions = ref.watch(transactionsProvider);
+    final transactions = ref.watch(analysisTransactionsProvider);
+    final scope = ref.watch(analysisScopeProvider);
     final currencies = {
       'CNY',
       snapshot.currency,
       ...?transactions.value?.map((t) => t.currency.toUpperCase()),
-    }.toList()..sort();
+    }.toList()
+      ..sort();
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -42,8 +53,23 @@ class AnalysisPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                const _AnalysisHeader(),
+                _AnalysisHeader(
+                  sharing: _sharing,
+                  onAnnualReport: () => context.push('/analysis/annual-report'),
+                  onShareImage: () => _share(context, 'image', snapshot, scope),
+                  onSharePdf: () => _share(context, 'pdf', snapshot, scope),
+                ),
                 const SizedBox(height: 16),
+                const Text(
+                  '统计范围',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                _AnalysisScopeSelector(selected: scope),
+                const SizedBox(height: 14),
                 const Text(
                   '统计周期',
                   style: TextStyle(
@@ -52,17 +78,20 @@ class AnalysisPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 7),
-                if (month == null)
+                if (widget.month == null)
                   _PeriodSelector(selected: snapshot.period)
                 else
                   Align(
                     alignment: Alignment.centerLeft,
                     child: InputChip(
-                      label: Text('${month!.year}年${month!.month}月'),
+                      label: Text(
+                        '${widget.month!.year}年${widget.month!.month}月',
+                      ),
                       onDeleted: () => context.go('/analysis'),
                     ),
                   ),
-                if (currencies.length > 1)
+                if (currencies.length > 1) ...[
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     children: [
@@ -76,6 +105,7 @@ class AnalysisPage extends ConsumerWidget {
                         ),
                     ],
                   ),
+                ],
                 const SizedBox(height: 16),
                 if (transactions.isLoading)
                   const Center(child: CircularProgressIndicator())
@@ -85,13 +115,27 @@ class AnalysisPage extends ConsumerWidget {
                       children: [
                         const Text('收支读取失败，请重试'),
                         TextButton(
-                          onPressed: () => ref.invalidate(transactionsProvider),
+                          onPressed: () {
+                            if (scope == AnalysisScope.allBooks) {
+                              ref.invalidate(allTransactionsProvider);
+                            } else {
+                              ref.invalidate(transactionsProvider);
+                            }
+                          },
                           child: const Text('重新加载'),
                         ),
                       ],
                     ),
                   )
                 else ...[
+                  RepaintBoundary(
+                    key: _reportKey,
+                    child: _ExportReportCard(
+                      snapshot: snapshot,
+                      scopeLabel: scope.label,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   CashflowSummaryCard(snapshot: snapshot),
                   const SizedBox(height: 16),
                   CashflowTrendCard(snapshot: snapshot),
@@ -143,10 +187,63 @@ class AnalysisPage extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _share(
+    BuildContext context,
+    String format,
+    AnalysisSnapshot snapshot,
+    AnalysisScope scope,
+  ) async {
+    if (_sharing || _reportKey.currentContext == null) return;
+    setState(() => _sharing = true);
+    try {
+      final service = ref.read(analysisReportExportServiceProvider);
+      final start = snapshot.range.start;
+      final end = snapshot.range.endExclusive.subtract(const Duration(days: 1));
+      final name =
+          '好好记账-${start.year}${start.month.toString().padLeft(2, '0')}'
+          '${start.day.toString().padLeft(2, '0')}-'
+          '${end.year}${end.month.toString().padLeft(2, '0')}'
+          '${end.day.toString().padLeft(2, '0')}';
+      if (format == 'pdf') {
+        await service.sharePdf(
+          context,
+          _reportKey,
+          fileName: name,
+          text: '${scope.label} · ${snapshot.currency} 收支报告',
+        );
+      } else {
+        await service.shareImage(
+          context,
+          _reportKey,
+          fileName: name,
+          text: '${scope.label} · ${snapshot.currency} 收支报告',
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('报表分享失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 }
 
 class _AnalysisHeader extends StatelessWidget {
-  const _AnalysisHeader();
+  const _AnalysisHeader({
+    required this.sharing,
+    required this.onAnnualReport,
+    required this.onShareImage,
+    required this.onSharePdf,
+  });
+
+  final bool sharing;
+  final VoidCallback onAnnualReport;
+  final VoidCallback onShareImage;
+  final VoidCallback onSharePdf;
 
   @override
   Widget build(BuildContext context) {
@@ -163,9 +260,202 @@ class _AnalysisHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ),
+        IconButton(
+          onPressed: onAnnualReport,
+          tooltip: '年度报告',
+          icon: const Icon(Icons.health_and_safety_outlined),
+        ),
+        PopupMenuButton<String>(
+          enabled: !sharing,
+          tooltip: '分享报表',
+          icon: sharing
+              ? const SizedBox.square(
+                  dimension: 19,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.ios_share_outlined),
+          onSelected: (value) =>
+              value == 'pdf' ? onSharePdf() : onShareImage(),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'image', child: Text('分享图片')),
+            PopupMenuItem(value: 'pdf', child: Text('分享 PDF')),
+          ],
+        ),
       ],
     );
   }
+}
+
+class _AnalysisScopeSelector extends ConsumerWidget {
+  const _AnalysisScopeSelector({required this.selected});
+
+  final AnalysisScope selected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        for (final scope in AnalysisScope.values)
+          ChoiceChip(
+            label: Text(scope.label),
+            selected: scope == selected,
+            showCheckmark: false,
+            selectedColor: AppColors.primarySoft,
+            onSelected: (_) =>
+                ref.read(analysisScopeProvider.notifier).select(scope),
+          ),
+      ],
+    );
+  }
+}
+
+class _ExportReportCard extends StatelessWidget {
+  const _ExportReportCard({
+    required this.snapshot,
+    required this.scopeLabel,
+  });
+
+  final AnalysisSnapshot snapshot;
+  final String scopeLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final end = snapshot.range.endExclusive.subtract(const Duration(days: 1));
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: AppCard(
+        color: const Color(0xFFF2F5E4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.auto_graph_outlined,
+                  color: AppColors.primaryDark,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '可分享报表摘要',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              '$scopeLabel · ${snapshot.currency} · '
+              '${snapshot.range.start.year}/${snapshot.range.start.month}/${snapshot.range.start.day}'
+              '—${end.year}/${end.month}/${end.day}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 22,
+              runSpacing: 12,
+              children: [
+                _ReportMetric(
+                  label: '收入',
+                  value: '¥${MoneyFormatter.decimal(snapshot.totalIncome)}',
+                ),
+                _ReportMetric(
+                  label: '支出',
+                  value: '¥${MoneyFormatter.decimal(snapshot.totalExpense)}',
+                ),
+                _ReportMetric(
+                  label: '净现金流',
+                  value:
+                      '${snapshot.netCashflow < 0 ? '-' : '+'}¥${MoneyFormatter.decimal(snapshot.netCashflow.abs())}',
+                ),
+                _ReportMetric(
+                  label: '收支笔数',
+                  value: '${snapshot.incomeCount + snapshot.expenseCount} 笔',
+                ),
+              ],
+            ),
+            if (snapshot.expenseCategories.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              const Text(
+                '主要支出',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              for (final item in snapshot.expenseCategories.take(5))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(item.name)),
+                      Text(
+                        '¥${MoneyFormatter.decimal(item.amount)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            if (snapshot.insights.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              const Text(
+                '值得关注',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              for (final insight in snapshot.insights.take(3))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '• ${insight.description}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportMetric extends StatelessWidget {
+  const _ReportMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 128,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
 }
 
 class _PeriodSelector extends ConsumerWidget {

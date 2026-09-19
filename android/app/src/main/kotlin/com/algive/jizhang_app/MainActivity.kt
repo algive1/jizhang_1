@@ -288,6 +288,44 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/budget_notifications")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isGranted" -> result.success(isNotificationGranted())
+                    "requestPermission" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            requestPermissions(
+                                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                                NOTIFICATION_PERMISSION_REQUEST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    "show" -> {
+                        val id = call.argument<String>("id")
+                        val title = call.argument<String>("title")
+                        val body = call.argument<String>("body")
+                        val route = call.argument<String>("route")
+                        if (id.isNullOrBlank() || title.isNullOrBlank() ||
+                            body.isNullOrBlank() || route.isNullOrBlank()
+                        ) {
+                            result.error("INVALID_BUDGET_ALERT", "预算预警参数不完整", null)
+                        } else {
+                            BudgetNotificationScheduler.show(
+                                applicationContext,
+                                id,
+                                title,
+                                body,
+                                route,
+                            )
+                            result.success(null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/recurring_notifications")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
