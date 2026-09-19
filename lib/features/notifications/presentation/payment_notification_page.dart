@@ -45,7 +45,7 @@ class _PaymentNotificationPageState
   Future<void> _load() async {
     final bridge = ref.read(paymentNotificationBridgeProvider);
     final accessGranted = await bridge.isAccessGranted();
-    final enabled = accessGranted && await bridge.isEnabled();
+    final enabled = await bridge.isEnabled();
     if (!mounted) return;
     setState(() {
       _accessGranted = accessGranted;
@@ -57,11 +57,14 @@ class _PaymentNotificationPageState
 
   Future<void> _enableOrOpenSettings() async {
     final bridge = ref.read(paymentNotificationBridgeProvider);
-    if (!(_accessGranted ?? false)) {
+    if (!(_accessGranted ?? false) && !_enabled) {
       try {
         await bridge.openAccessSettings();
         if (mounted) {
-          setState(() => _message = '请在系统设置中允许「好好记账」读取通知，然后返回本页开启。');
+          setState(
+            () => _message =
+                '请在系统设置中允许「好好记账」读取通知，返回本页后会自动刷新授权状态。',
+          );
         }
       } on Object catch (error) {
         if (mounted) setState(() => _message = '$error');
@@ -181,7 +184,13 @@ class _PaymentNotificationPageState
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('自动记账支付通知'),
-                        subtitle: Text(_enabled ? '已开启' : '已关闭'),
+                        subtitle: Text(
+                          _enabled && _accessGranted == true
+                              ? '已开启并已授权'
+                              : _enabled
+                              ? '已开启，但系统通知读取权限已失效'
+                              : '已关闭',
+                        ),
                         value: _enabled,
                         onChanged: (_) => _enableOrOpenSettings(),
                       ),
