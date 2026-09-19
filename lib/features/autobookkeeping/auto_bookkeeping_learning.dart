@@ -123,7 +123,7 @@ class AutoBookkeepingLearningService {
       'transactionType': transactionType.name,
       'merchantDisplay': candidate.merchant,
       'categoryId': categoryId,
-      if (subcategoryId != null) 'subcategoryId': subcategoryId,
+      'subcategoryId': ?subcategoryId,
       'accountId': accountId,
       'bookId': bookId,
       'tags': tags,
