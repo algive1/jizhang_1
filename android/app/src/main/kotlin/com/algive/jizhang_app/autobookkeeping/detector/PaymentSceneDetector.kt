@@ -19,7 +19,7 @@ class PaymentSceneDetector(
     val registry: AutoBookkeepingRuleRegistry =
         AutoBookkeepingRuleRegistry.builtIn(),
     private val transactionStatusParser: TransactionStatusParser =
-        TransactionStatusParser(),
+        TransactionStatusParser(registry),
 ) {
     private val weChatRule =
         registry.ruleForKind(PaymentParserKind.WECHAT)
