@@ -15,6 +15,7 @@ import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
@@ -147,6 +148,9 @@ class AutoBillOverlayService : Service() {
         super.onCreate()
         instance = this
         val foregroundStarted = runCatching {
+            if (!AutoBookkeepingSettings.enabled(this)) {
+                error("auto bookkeeping is disabled")
+            }
             if (!AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
                 error("status notification is not available")
             }
@@ -185,6 +189,24 @@ class AutoBillOverlayService : Service() {
         super.onDestroy()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+        if (
+            !AutoBookkeepingSettings.enabled(this) ||
+            !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+        ) {
+            AutoBookkeepingLogStore.record(
+                this,
+                "overlay_service_stop",
+                "service restarted without valid runtime conditions",
+            )
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
 }
