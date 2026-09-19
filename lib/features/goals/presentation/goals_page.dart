@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/placement.dart';
