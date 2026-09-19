@@ -196,6 +196,12 @@ class ProfilePage extends ConsumerWidget {
                   () => push('/profile/budgets'),
                 ),
                 ProfileMenuItem(
+                  Icons.upload_file_outlined,
+                  '账单导入',
+                  '微信 · 支付宝 CSV',
+                  () => push('/profile/bill-import'),
+                ),
+                ProfileMenuItem(
                   Icons.receipt_long_outlined,
                   '财税与账单',
                   '发票 · 报税台账 · 银行卡账单',
