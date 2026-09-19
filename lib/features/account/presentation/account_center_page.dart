@@ -159,6 +159,15 @@ class AccountCenterPage extends ConsumerWidget {
                   },
                   child: const Text('退出当前账号'),
                 ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: () => _deleteAccount(context, ref),
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: const Text('注销账号'),
+                ),
               ],
             ),
     );
@@ -424,6 +433,81 @@ class AccountCenterPage extends ConsumerWidget {
     if (confirmed != true) return;
     await ref.read(sessionRepositoryProvider).logoutAll();
     if (context.mounted) context.pop();
+  }
+
+  static Future<void> _deleteAccount(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final password = TextEditingController();
+    final confirmation = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('注销账号'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '服务器会删除你的私有云备份、推送设备、诊断记录和账号资料；共享账本中的必要审计身份会匿名化保留。本机离线账本不会自动删除。\n\n如果你仍拥有未归档的共享账本，需要先处理这些账本。',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: '当前密码'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: confirmation,
+              decoration: const InputDecoration(
+                labelText: '输入“注销账号”确认',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () {
+              Navigator.pop(
+                dialogContext,
+                password.text.length >= 10 &&
+                    confirmation.text.trim() == '注销账号',
+              );
+            },
+            child: const Text('永久注销'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      password.dispose();
+      confirmation.dispose();
+      return;
+    }
+    try {
+      await ref
+          .read(sessionRepositoryProvider)
+          .deleteAccount(password: password.text);
+      if (context.mounted) {
+        context.go('/profile');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('账号已注销，本机离线账本仍保留')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) _error(context, error);
+    } finally {
+      password.dispose();
+      confirmation.dispose();
+    }
   }
 
   static String _date(DateTime value) =>
