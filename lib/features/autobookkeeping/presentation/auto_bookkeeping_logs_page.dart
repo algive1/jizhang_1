@@ -10,7 +10,6 @@ import '../../sharing/data/session_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auto_bookkeeping_logs.dart';
-import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingLogsPage extends ConsumerStatefulWidget {
   const AutoBookkeepingLogsPage({super.key});
