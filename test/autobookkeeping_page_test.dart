@@ -26,6 +26,11 @@ void main() {
     expect(find.text('常驻通知权限'), findsOneWidget);
     expect(find.text('支付通知兜底'), findsOneWidget);
     expect(find.text('保存支付结果截图'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('页面识别规则'),
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('页面识别规则'), findsOneWidget);
     expect(find.textContaining('常驻通知'), findsWidgets);
     expect(tester.takeException(), isNull);
