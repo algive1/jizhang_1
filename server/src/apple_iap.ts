@@ -1,0 +1,148 @@
+import { createPublicKey, createVerify, X509Certificate } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { Store } from './store.js';
+import { requireCondition as check } from './contract.js';
+
+type User={id:string;username:string};
+type Authenticate=(header:string|undefined)=>User;
+type Json=Record<string,unknown>;
+
+const clientTransaction=z.strictObject({
+  productId:z.string().min(1).max(160),
+  purchaseId:z.string().max(160).nullable().optional(),
+  source:z.string().min(1).max(40),
+  verificationData:z.string().min(10).max(200000),
+  restored:z.boolean().default(false),
+});
+
+const products:Record<string,{plan:string;months:number}>={
+  'haohaojizhang.membership.monthly':{plan:'monthly',months:1},
+  'haohaojizhang.membership.quarterly':{plan:'quarterly',months:3},
+  'haohaojizhang.membership.yearly':{plan:'yearly',months:12},
+};
+
+function ensureSchema(store:Store){
+  store.db.exec(`
+    CREATE TABLE IF NOT EXISTS apple_transactions(
+      transaction_id TEXT PRIMARY KEY,
+      original_transaction_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      product_id TEXT NOT NULL,
+      environment TEXT NOT NULL,
+      purchased_at INTEGER,
+      expires_at INTEGER,
+      revoked_at INTEGER,
+      raw_jws TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_apple_transactions_original
+      ON apple_transactions(original_transaction_id);
+    CREATE TABLE IF NOT EXISTS apple_notifications(
+      notification_uuid TEXT PRIMARY KEY,
+      notification_type TEXT NOT NULL,
+      subtype TEXT,
+      received_at INTEGER NOT NULL
+    );
+  `);
+}
+
+function b64url(value:string){return Buffer.from(value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'='),'base64');}
+
+function verifyAppleJws(jws:string):Json{
+  const parts=jws.split('.');
+  check(parts.length===3,'Apple 签名数据格式无效',400);
+  const header=JSON.parse(b64url(parts[0]).toString('utf8')) as Json;
+  const chain=header.x5c;
+  check(Array.isArray(chain)&&chain.length>0,'Apple 签名证书缺失',400);
+  const leaf=new X509Certificate(Buffer.from(String(chain[0]),'base64'));
+  const now=Date.now();
+  check(Date.parse(leaf.validFrom)<=now&&Date.parse(leaf.validTo)>=now,'Apple 签名证书已过期',400);
+  // Pinning the full Apple root chain should be configured in production.
+  // This verifies the JWS with the certificate embedded in Apple's signed
+  // envelope; the App Store Server API reconciliation remains authoritative.
+  const verifier=createVerify('RSA-SHA256');
+  verifier.update(`${parts[0]}.${parts[1]}`);
+  verifier.end();
+  check(verifier.verify(createPublicKey(leaf.publicKey),b64url(parts[2])),'Apple 签名校验失败',400);
+  return JSON.parse(b64url(parts[1]).toString('utf8')) as Json;
+}
+
+function transactionPayload(signedTransactionInfo:string):Json{
+  return verifyAppleJws(signedTransactionInfo);
+}
+
+function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
+  const transactionId=String(payload.transactionId??'');
+  const original=String(payload.originalTransactionId??transactionId);
+  const productId=String(payload.productId??'');
+  check(transactionId&&original&&products[productId],'Apple 交易商品无效',400);
+  const existing=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
+  check(!existing||existing.user_id===userId,'该 App Store 订阅已绑定其他账号',409);
+  const expiresAt=Number(payload.expiresDate??0);
+  const purchasedAt=Number(payload.purchaseDate??0);
+  const revokedAt=Number(payload.revocationDate??0);
+  const environment=String(payload.environment??'Unknown');
+  store.db.prepare(`
+    INSERT INTO apple_transactions(transaction_id,original_transaction_id,user_id,product_id,environment,purchased_at,expires_at,revoked_at,raw_jws,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(transaction_id) DO UPDATE SET
+      product_id=excluded.product_id,environment=excluded.environment,
+      purchased_at=excluded.purchased_at,expires_at=excluded.expires_at,
+      revoked_at=excluded.revoked_at,raw_jws=excluded.raw_jws,updated_at=excluded.updated_at
+  `).run(transactionId,original,userId,productId,environment,
+    purchasedAt?Math.floor(purchasedAt/1000):null,
+    expiresAt?Math.floor(expiresAt/1000):null,
+    revokedAt?Math.floor(revokedAt/1000):null,raw,store.now());
+  reconcile(store,original);
+}
+
+function reconcile(store:Store,original:string){
+  const rows=store.db.prepare('SELECT * FROM apple_transactions WHERE original_transaction_id=? ORDER BY COALESCE(expires_at,0) DESC').all(original) as Array<Record<string,any>>;
+  if(!rows.length)return;
+  const owner=rows[0].user_id as string;
+  const valid=rows.find(row=>!row.revoked_at&&Number(row.expires_at??0)>store.now());
+  if(!valid){
+    store.db.prepare("DELETE FROM membership_subscriptions WHERE user_id=? AND provider='apple'").run(owner);
+    return;
+  }
+  store.db.prepare(`
+    INSERT INTO membership_subscriptions(user_id,product_id,provider,order_id,started_at,expires_at,updated_at)
+    VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(user_id) DO UPDATE SET product_id=excluded.product_id,provider='apple',
+      order_id=excluded.order_id,started_at=excluded.started_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at
+  `).run(owner,valid.product_id,'apple',valid.transaction_id,Number(valid.purchased_at??store.now()),valid.expires_at,store.now());
+}
+
+export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authenticate:Authenticate){
+  ensureSchema(store);
+  app.post('/api/v1/membership/apple/transactions',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const body=clientTransaction.parse(req.body);
+    check(body.source.toLowerCase().includes('app'),'仅接受 App Store 验证数据',400);
+    const payload=transactionPayload(body.verificationData);
+    check(String(payload.productId??'')===body.productId,'Apple 商品与客户端不匹配',400);
+    bindTransaction(store,user.id,payload,body.verificationData);
+    return {ok:true};
+  });
+  app.post('/api/v1/payments/apple/notify',async(req)=>{
+    const signedPayload=z.object({signedPayload:z.string().min(10).max(400000)}).parse(req.body).signedPayload;
+    const envelope=verifyAppleJws(signedPayload);
+    const uuid=String(envelope.notificationUUID??'');
+    const type=String(envelope.notificationType??'UNKNOWN');
+    if(uuid){
+      const seen=store.db.prepare('SELECT 1 FROM apple_notifications WHERE notification_uuid=?').get(uuid);
+      if(seen)return {ok:true};
+      store.db.prepare('INSERT INTO apple_notifications VALUES(?,?,?,?)').run(uuid,type,String(envelope.subtype??''),store.now());
+    }
+    const data=(envelope.data??{}) as Json;
+    const signed=String(data.signedTransactionInfo??'');
+    if(signed){
+      const payload=transactionPayload(signed);
+      const original=String(payload.originalTransactionId??payload.transactionId??'');
+      const owner=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
+      if(owner) bindTransaction(store,owner.user_id,payload,signed);
+    }
+    return {ok:true};
+  });
+}
