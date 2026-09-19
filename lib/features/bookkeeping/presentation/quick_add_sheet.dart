@@ -1171,6 +1171,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _subcategoryId = null;
       _accountId = null;
       _destinationAccountId = null;
+      // Payer attribution belongs to a specific shared family ledger.
+      // Never carry it across ledger switches.
+      _payerUserId = null;
+      _payerLabel = null;
     });
   }
 
@@ -1515,7 +1519,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       final categoryUnchanged = persisted?.categoryId == selectedCategory?.id;
       final request = QuickBookkeepingRequest(
         bookId: bookId,
-        payerUserId: _payerUserId,
+        payerUserId:
+            ref
+                    .read(booksProvider)
+                    .value
+                    ?.where((book) => book.id == bookId)
+                    .firstOrNull
+                    ?.type ==
+                BookType.family
+            ? _payerUserId
+            : null,
         type: _type,
         amount: _amount.amount!,
         metadata: {
