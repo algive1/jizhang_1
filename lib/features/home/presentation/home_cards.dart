@@ -153,7 +153,7 @@ class HomeMonthlySummary extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: context.appSecondaryText,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 11,
             ),
           ),
@@ -773,7 +773,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                                                   color: Colors.white,
                                                 )
                                               : current
-                                              ? const Center(
+                                              ? Center(
                                                   child: Icon(
                                                     Icons.circle,
                                                     size: 7,
