@@ -1,6 +1,7 @@
 import '../../../core/widgets/app_form.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/platform/bookkeeping_feedback.dart';
 import '../../accounts/data/account_repository.dart';
@@ -19,6 +21,8 @@ import '../../categories/data/category_repository.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
+import '../auto_bookkeeping_refund_matcher.dart';
+import '../../transactions/data/refund_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
@@ -37,6 +41,7 @@ class _AutoBookkeepingConfirmPageState
   String? _categoryId;
   String? _message;
   AutoBookkeepingRecommendation? _recommendation;
+  TransactionRecord? _matchedRefundOriginal;
   bool _rememberForMerchant = true;
   bool _loading = true;
   bool _saving = false;
@@ -54,21 +59,29 @@ class _AutoBookkeepingConfirmPageState
           .read(autoBookkeepingPendingBridgeProvider)
           .getPending();
       AutoBookkeepingRecommendation? recommendation;
+      TransactionRecord? matchedRefundOriginal;
       if (candidate != null) {
+        final fallbackBookId = ref.read(activeBookIdProvider);
         recommendation = await ref
             .read(autoBookkeepingLearningServiceProvider)
             .recommend(
               candidate: candidate,
-              fallbackBookId: ref.read(activeBookIdProvider),
+              fallbackBookId: fallbackBookId,
               transactionType: _transactionTypeFor(candidate.transactionType),
             );
+        final targetBookId = recommendation.bookId ?? fallbackBookId;
+        matchedRefundOriginal = await ref
+            .read(autoBookkeepingRefundMatcherProvider)
+            .findOriginal(candidate: candidate, bookId: targetBookId);
       }
       if (!mounted) return;
       setState(() {
         _candidate = candidate;
         _recommendation = recommendation;
+        _matchedRefundOriginal = matchedRefundOriginal;
         _bookId = recommendation?.bookId;
-        _accountId = recommendation?.accountId;
+        _accountId =
+            matchedRefundOriginal?.accountId ?? recommendation?.accountId;
         _categoryId = recommendation?.categoryId;
         _loading = false;
       });
@@ -104,46 +117,65 @@ class _AutoBookkeepingConfirmPageState
       _message = null;
     });
     try {
-      final saved = await ref
-          .read(quickBookkeepingServiceProvider)
-          .save(
-            QuickBookkeepingRequest(
-              transactionId: 'auto-${candidate.fingerprint}',
+      final metadata = <String, Object?>{
+        'paymentChannel': _paymentChannel(candidate),
+        if (candidate.orderId != null) 'orderId': candidate.orderId,
+        if (candidate.identifierSuffix != null)
+          'cardLastFour': candidate.identifierSuffix,
+        'autobookkeeping': {
+          'fingerprint': candidate.fingerprint,
+          'sourceApp': candidate.sourceApp,
+          'scene': candidate.scene,
+          'paymentMethod': candidate.paymentMethod,
+          'transactionType': candidate.transactionType,
+          if (candidate.orderId != null) 'orderId': candidate.orderId,
+          if (candidate.identifierSuffix != null)
+            'identifierSuffix': candidate.identifierSuffix,
+          if (candidate.originalAmountInCents != null)
+            'originalAmountInCents': candidate.originalAmountInCents,
+          if (candidate.discountAmountInCents != null)
+            'discountAmountInCents': candidate.discountAmountInCents,
+          'confirmedIn': 'autobookkeeping_confirm_page',
+        },
+      };
+      final transactionType = _transactionTypeFor(candidate.transactionType);
+      final matchedRefund = transactionType == TransactionType.refund &&
+              _matchedRefundOriginal?.bookId == bookId
+          ? _matchedRefundOriginal
+          : null;
+      final saved = matchedRefund == null
+          ? await ref
+                .read(quickBookkeepingServiceProvider)
+                .save(
+                  QuickBookkeepingRequest(
+                    transactionId: 'auto-${candidate.fingerprint}',
+                    bookId: bookId,
+                    type: transactionType,
+                    amount: candidate.amountInCents / 100,
+                    accountId: account.id,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    merchant: candidate.merchant,
+                    note: candidate.note,
+                    occurredAt: candidate.timestamp,
+                    source: TransactionSource.auto,
+                    userCorrected: true,
+                    metadata: metadata,
+                  ),
+                )
+          : await RefundService(
+              ref.read(databaseProvider),
               bookId: bookId,
-              type: _transactionTypeFor(candidate.transactionType),
+            ).register(
+              original: matchedRefund,
               amount: candidate.amountInCents / 100,
-              accountId: account.id,
-              categoryId: category.id,
-              categoryName: category.name,
-              merchant: candidate.merchant,
-              note: candidate.note,
+              category: category,
               occurredAt: candidate.timestamp,
+              transactionId: 'auto-${candidate.fingerprint}',
+              note: candidate.note ?? '自动识别退款：${candidate.merchant}',
+              metadataJson: jsonEncode(metadata),
               source: TransactionSource.auto,
-              userCorrected: true,
-              metadata: {
-                'paymentChannel': _paymentChannel(candidate),
-                if (candidate.orderId != null) 'orderId': candidate.orderId,
-                if (candidate.identifierSuffix != null)
-                  'cardLastFour': candidate.identifierSuffix,
-                'autobookkeeping': {
-                  'fingerprint': candidate.fingerprint,
-                  'sourceApp': candidate.sourceApp,
-                  'scene': candidate.scene,
-                  'paymentMethod': candidate.paymentMethod,
-                  'transactionType': candidate.transactionType,
-                  if (candidate.orderId != null)
-                    'orderId': candidate.orderId,
-                  if (candidate.identifierSuffix != null)
-                    'identifierSuffix': candidate.identifierSuffix,
-                  if (candidate.originalAmountInCents != null)
-                    'originalAmountInCents': candidate.originalAmountInCents,
-                  if (candidate.discountAmountInCents != null)
-                    'discountAmountInCents': candidate.discountAmountInCents,
-                  'confirmedIn': 'autobookkeeping_confirm_page',
-                },
-              },
-            ),
-          );
+            );
       try {
         await ref
             .read(autoBookkeepingLearningServiceProvider)
@@ -289,6 +321,13 @@ class _AutoBookkeepingConfirmPageState
                   style: TextStyle(color: context.appPrimary),
                 ),
               ],
+              if (_matchedRefundOriginal != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '已按订单号匹配原消费，将同步冲减原消费净支出',
+                  style: TextStyle(color: context.appPrimary),
+                ),
+              ],
             ],
           ),
         ),
@@ -311,6 +350,9 @@ class _AutoBookkeepingConfirmPageState
                           _bookId = value;
                           _accountId = null;
                           _categoryId = null;
+                          if (_matchedRefundOriginal?.bookId != value) {
+                            _matchedRefundOriginal = null;
+                          }
                         }),
                 ),
                 const SizedBox(height: 12),
