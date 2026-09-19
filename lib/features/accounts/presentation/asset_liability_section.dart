@@ -92,12 +92,12 @@ class AssetLiabilitySection extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     if (debts.isEmpty)
-                      const SizedBox(
+                      SizedBox(
                         height: 40,
                         child: Center(
                           child: Text(
                             '暂无负债账户',
-                            style: TextStyle(fontSize: 11, color: assetMuted),
+                            style: TextStyle(fontSize: 11, color: context.appSecondaryText),
                           ),
                         ),
                       )
