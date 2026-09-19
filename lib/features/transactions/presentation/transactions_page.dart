@@ -100,7 +100,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   spending: _monthlyTotal(all, expense: true),
                   income: _monthlyTotal(all, expense: false),
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     '月度汇总为 CNY · 全部分类 · 截至当前',
@@ -129,7 +129,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   ),
                 const SizedBox(height: 18),
                 if (transactions.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 48),
                     child: Center(
                       child: Text(
@@ -227,7 +227,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                               ),
                               title: Text(item),
                               trailing: item == (_categoryFilter ?? '全部')
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.check,
                                       color: context.appPrimary,
                                     )
@@ -365,7 +365,7 @@ class _TransactionsToolbar extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onFilter,
-              icon: const Icon(Icons.filter_alt_outlined, size: 28),
+              icon: Icon(Icons.filter_alt_outlined, size: 28),
               tooltip: '筛选流水',
             ),
             if (hasCategoryFilter)
