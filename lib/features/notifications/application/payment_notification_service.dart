@@ -168,6 +168,10 @@ class PaymentNotificationParser {
       'com.tencent.mm' => SeedIds.wechatAccount,
       'com.eg.android.AlipayGphone' => SeedIds.alipayAccount,
       'com.unionpay' => SeedIds.bankAccount,
+      'com.jingdong.app.mall' => 'jd',
+      'com.xunmeng.pinduoduo' => 'pinduoduo',
+      'com.ss.android.ugc.aweme' ||
+      'com.ss.android.ugc.aweme.mobile' => 'douyin',
       _ => null,
     };
   }
@@ -176,7 +180,7 @@ class PaymentNotificationParser {
     SeedIds.wechatAccount => SeedIds.wechatAccount,
     SeedIds.alipayAccount => SeedIds.alipayAccount,
     SeedIds.bankAccount => SeedIds.bankAccount,
-    'meituan' => null,
+    'meituan' || 'jd' || 'pinduoduo' || 'douyin' => null,
     _ => null,
   };
 
@@ -445,6 +449,9 @@ String _sourceApp(String channel) => switch (channel) {
   SeedIds.alipayAccount => 'ALIPAY',
   SeedIds.bankAccount => 'UNIONPAY',
   'meituan' => 'MEITUAN',
+  'jd' => 'JD',
+  'pinduoduo' => 'PINDUODUO',
+  'douyin' => 'DOUYIN',
   _ => 'PAYMENT_APP',
 };
 
@@ -453,6 +460,9 @@ String _displayPaymentMethod(String channel) => switch (channel) {
   SeedIds.alipayAccount => '支付宝',
   SeedIds.bankAccount => '云闪付',
   'meituan' => '美团支付',
+  'jd' => '京东支付',
+  'pinduoduo' => '拼多多支付',
+  'douyin' => '抖音支付',
   _ => '支付应用',
 };
 
@@ -498,7 +508,9 @@ final paymentNotificationAutoBookkeepingProvider =
           }
           final accountId =
               await settings.get(notificationAccountKey(book, channel)) ??
-              (book == SeedIds.personalBook && channel != 'meituan'
+              (book == SeedIds.personalBook &&
+                      !const {'meituan', 'jd', 'pinduoduo', 'douyin'}
+                          .contains(channel)
                   ? channel
                   : null);
           if (accountId == null) return null;
@@ -573,7 +585,7 @@ Set<AccountType> _notificationTypes(String channel) => switch (channel) {
   SeedIds.wechatAccount => {AccountType.wechat},
   SeedIds.alipayAccount => {AccountType.alipay},
   SeedIds.bankAccount => {AccountType.debitCard, AccountType.creditCard},
-  'meituan' => {
+  'meituan' || 'jd' || 'pinduoduo' || 'douyin' => {
     AccountType.wechat,
     AccountType.alipay,
     AccountType.debitCard,
