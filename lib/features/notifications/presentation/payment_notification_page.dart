@@ -96,6 +96,11 @@ class _PaymentNotificationPageState
             : '已关闭支付通知兜底。';
       });
       if (_enabled) {
+        for (var attempt = 0; attempt < 4 && !_connected; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          await _load();
+          if (!mounted) return;
+        }
         await _processPending(showFeedback: true);
       }
     } on Object catch (error) {
