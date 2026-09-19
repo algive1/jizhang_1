@@ -63,7 +63,7 @@ class _ConsumptionCalendarPageState
       return item.deletedAt == null &&
           date.year == _month.year &&
           date.month == _month.month &&
-          !date.isAfter(_today);
+          !_isFutureDate(date);
     }).toList();
 
     final dailyExpense = <int, double>{};
@@ -111,7 +111,7 @@ class _ConsumptionCalendarPageState
         filtered
             .where(
               (item) =>
-                  _isConsumption(item) && !item.occurredAt.isAfter(_today),
+                  _isConsumption(item) && !_isFutureDate(item.occurredAt),
             )
             .map(
               (item) => DateTime(item.occurredAt.year, item.occurredAt.month),
@@ -249,6 +249,12 @@ class _ConsumptionCalendarPageState
 
   bool get _isCurrentMonth =>
       _month.year == _today.year && _month.month == _today.month;
+
+  bool _isFutureDate(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final today = DateTime(_today.year, _today.month, _today.day);
+    return day.isAfter(today);
+  }
 
   /// Keep the calendar aligned with the app's consumption-expense flag while
   /// excluding fully offset or refunded records whose net expense is not positive.
