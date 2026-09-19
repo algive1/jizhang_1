@@ -26,16 +26,23 @@ class MeituanPaymentParser {
         "交易成功",
         "订单支付成功",
         "订单已支付",
+        "订单支付完成",
         "支付完成",
         "付款完成",
+        "支付已完成",
+        "付款已完成",
+        "交易已完成",
         "已支付",
         "已付款",
     )
 
     private val rejectMarkers = setOf(
         "待支付",
+        "待付款",
         "去支付",
+        "去付款",
         "未支付",
+        "未付款",
         "支付失败",
         "付款失败",
         "交易失败",
@@ -135,12 +142,7 @@ class MeituanPaymentParser {
     }
 
     private fun isSuccessLabel(label: String): Boolean =
-        successMarkers.any { marker ->
-            label == marker ||
-                label.startsWith("$marker ") ||
-                label.startsWith("$marker：") ||
-                label.startsWith("$marker:")
-        }
+        successMarkers.any { marker -> label == marker || label.startsWith(marker) }
 
     private fun findField(labels: List<String>, keys: Set<String>): String? {
         labels.forEachIndexed { index, text ->
@@ -217,12 +219,28 @@ class MeituanPaymentParser {
             "付款方式",
             "支付渠道",
         )
+        val genericFragments = setOf(
+            "订单",
+            "支付",
+            "付款",
+            "金额",
+            "优惠",
+            "完成",
+            "详情",
+            "返回",
+            "时间",
+            "方式",
+            "渠道",
+            "美团",
+        )
         return labels.firstOrNull { label ->
             label.length in 2..80 &&
                 label !in generic &&
+                genericFragments.none { label.contains(it) } &&
                 amountPatterns.none { it.containsMatchIn(label) } &&
                 excludedAmountLabels.none { label.contains(it) } &&
-                merchantKeys.none { label == it }
+                merchantKeys.none { label == it } &&
+                !label.matches(Regex("[A-Za-z0-9_-]{6,}"))
         }
     }
 }
