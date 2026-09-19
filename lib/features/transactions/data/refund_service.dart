@@ -32,6 +32,16 @@ class RefundService {
     String? metadataJson,
     TransactionSource source = TransactionSource.manual,
   }) async {
+    if (transactionId != null) {
+      final existing = await (await _readRepository()).getById(transactionId);
+      if (existing != null) {
+        if (existing.type == TransactionType.refund &&
+            existing.relatedTransactionId == original.id) {
+          return existing;
+        }
+        throw StateError('退款流水编号已被其他记录占用');
+      }
+    }
     if (original.bookId != bookId) throw ArgumentError('流水不属于当前账本');
     if (!original.isExpense) throw ArgumentError('只有消费流水可以登记退款');
     final previous = original.refundAmount ?? 0;
