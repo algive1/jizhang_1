@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,6 +23,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool? _overlayGranted;
   bool? _notificationGranted;
   bool _enabled = false;
+  bool _shortcutAvailable = false;
   bool _loading = true;
   String? _message;
 
@@ -42,6 +46,23 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   }
 
   Future<void> _load() async {
+    if (Platform.isIOS) {
+      var shortcutAvailable = false;
+      try {
+        shortcutAvailable =
+            await const MethodChannel('jizhang/ios_shortcut')
+                    .invokeMethod<bool>('isAvailable') ??
+                false;
+      } on MissingPluginException {
+        shortcutAvailable = false;
+      }
+      if (!mounted) return;
+      setState(() {
+        _shortcutAvailable = shortcutAvailable;
+        _loading = false;
+      });
+      return;
+    }
     final bridge = ref.read(autoBookkeepingSettingsProvider);
     final accessibility = await bridge.isAccessibilityGranted();
     final overlay = await bridge.isOverlayGranted();
@@ -115,6 +136,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isIOS) return _buildIos(context);
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
@@ -147,7 +169,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '自动记账支持微信、支付宝、云闪付和美团付款页面；识别金额和商户后会先弹出本机确认卡片，未确认前不会写入流水。',
+                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音付款页面；识别金额和商户后会先弹出本机确认卡片，未确认前不会写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -252,6 +274,113 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       ),
     );
   }
+  Widget _buildIos(BuildContext context) {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: context.pop,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '自动记账',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const AppCard(
+            color: AppColors.primarySoft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  color: AppColors.primary,
+                  size: 34,
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'iPhone 使用系统允许的替代流程',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'iOS 不允许第三方 App 监听微信、支付宝等其他 App 的通知内容或页面。好好记账不会伪造这一能力，而是用快捷指令、截图 OCR 和官方账单导入完成确认式记账。',
+                  style: TextStyle(height: 1.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          AppCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.shortcut_outlined,
+                color: _shortcutAvailable
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+              title: const Text('系统快捷指令记账'),
+              subtitle: Text(
+                _loading
+                    ? '正在检查…'
+                    : _shortcutAvailable
+                    ? 'iOS 16+ 已注册「记一笔到好好记账」动作'
+                    : '当前系统版本不支持 App Intents，使用下方 OCR 或账单导入',
+              ),
+              trailing: Icon(
+                _shortcutAvailable ? Icons.check_circle : Icons.info_outline,
+                color: _shortcutAvailable
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppCard(
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.document_scanner_outlined),
+                  title: const Text('截图 / 小票识别'),
+                  subtitle: const Text('本地 OCR 识别文字，确认后再保存'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/profile/receipt-ocr'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.upload_file_outlined),
+                  title: const Text('微信 / 支付宝账单导入'),
+                  subtitle: const Text('导入官方 CSV，预览去重后批量保存'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/profile/bill-import'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          const AppCard(
+            child: Text(
+              '快捷指令用法：在系统「快捷指令」App 中搜索“好好记账”，选择「记一笔到好好记账」，把剪贴板文字、语音转写或你自己自动化得到的账单文本传入。运行后会打开好好记账的确认页，不会后台静默保存。',
+              style: TextStyle(
+                height: 1.5,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 }
 
 class _PermissionRow extends StatelessWidget {
