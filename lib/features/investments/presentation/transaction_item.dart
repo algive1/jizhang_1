@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_holding.dart';
 import 'investment_widgets.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// One 交易记录 row: type, date, quantity × price and the resulting amount.
 class TransactionItem extends StatelessWidget {
@@ -22,7 +23,7 @@ class TransactionItem extends StatelessWidget {
     final type = transaction.type;
     // BUY is money leaving the pocket; everything else is money arriving.
     final amountColor = type == InvestmentTransactionType.buy
-        ? AppColors.textPrimary
+        ? context.appPrimaryText
         : AppColors.expense;
     final isCashOnly =
         type == InvestmentTransactionType.dividend ||
@@ -32,7 +33,7 @@ class TransactionItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: LayoutBuilder(
         builder: (context, box) => Row(
@@ -55,10 +56,10 @@ class TransactionItem extends StatelessWidget {
                     children: [
                       Text(
                         type.label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                         ),
                     ),
                     const SizedBox(width: 6),
@@ -69,9 +70,9 @@ class TransactionItem extends StatelessWidget {
                         ).format(transaction.transactionDate),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                         ),
                       ),
                     ),
@@ -84,9 +85,9 @@ class TransactionItem extends StatelessWidget {
                       : transaction.amountLabel(unit: unit),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                   ),
                 ),
                 if (transaction.note != null &&
@@ -95,9 +96,9 @@ class TransactionItem extends StatelessWidget {
                     transaction.note!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
               ],
@@ -140,7 +141,7 @@ class TransactionItem extends StatelessWidget {
 
   static Color _tint(InvestmentTransactionType type) => switch (type) {
     InvestmentTransactionType.buy => const Color(0xFFFBEDEB),
-    InvestmentTransactionType.sell => AppColors.primarySoft,
+    InvestmentTransactionType.sell => context.appPrimarySoft,
     InvestmentTransactionType.dividend => const Color(0xFFF8F0DE),
     InvestmentTransactionType.interest => const Color(0xFFEDEFF9),
   };
