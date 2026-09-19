@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../application/support_ticket_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class FeedbackPage extends ConsumerStatefulWidget {
   const FeedbackPage({super.key});
@@ -86,7 +86,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('反馈建议')),
+        appBar: AppBar(title: Text('反馈建议')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
@@ -96,7 +96,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.support_agent_outlined, color: AppColors.primary),
+                    Icon(Icons.support_agent_outlined, color: context.appPrimary),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
