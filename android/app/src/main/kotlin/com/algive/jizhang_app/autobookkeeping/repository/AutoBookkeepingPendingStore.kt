@@ -271,7 +271,7 @@ object AutoBookkeepingPendingStore {
             }
 
     private fun priorityFor(scene: String): Int =
-        if (scene == "PAYMENT_NOTIFICATION") {
+        if (scene.startsWith("PAYMENT_NOTIFICATION")) {
             PRIORITY_NOTIFICATION
         } else {
             PRIORITY_ACCESSIBILITY
@@ -309,9 +309,9 @@ object AutoBookkeepingPendingStore {
                 firstMerchant == secondMerchant
 
         val firstNotification =
-            first.optString("scene") == "PAYMENT_NOTIFICATION"
+            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
         val secondNotification =
-            second.optString("scene") == "PAYMENT_NOTIFICATION"
+            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
         if (firstNotification != secondNotification) {
             // The same marketplace payment may be observed from the merchant
             // app page and from the underlying Alipay/WeChat notification.
@@ -322,7 +322,7 @@ object AutoBookkeepingPendingStore {
     }
 
     private fun isInvalidLegacyNotification(value: JSONObject): Boolean {
-        if (value.optString("scene") != "PAYMENT_NOTIFICATION") return false
+        if (!value.optString("scene").startsWith("PAYMENT_NOTIFICATION")) return false
         val merchant = value.optString("merchant").trim()
         return merchant.isBlank() || merchant == "支付通知待确认"
     }
