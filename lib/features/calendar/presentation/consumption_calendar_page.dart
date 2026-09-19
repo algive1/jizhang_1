@@ -33,8 +33,8 @@ enum _CalendarHeaderAction {
 
 class _ConsumptionCalendarPageState
     extends ConsumerState<ConsumptionCalendarPage> {
-  final _today = DateTime.now();
-  late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime get _today => DateTime.now();
+  late DateTime _month;
   int? _selectedDay;
   String? _bookFilterId;
   _CalendarViewMode _viewMode = _CalendarViewMode.month;
@@ -45,23 +45,27 @@ class _ConsumptionCalendarPageState
     // Calendar scope starts from the app's active ledger, but remains local to
     // this page. Changing it must never switch the global active ledger.
     _bookFilterId = ref.read(activeBookIdProvider);
-    _selectedDay = _today.day;
+    final now = _today;
+    _month = DateTime(now.year, now.month);
+    _selectedDay = now.day;
   }
 
   @override
   Widget build(BuildContext context) {
     final all =
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
-    final books = ref.watch(booksProvider).value ?? const <LedgerBook>[];
-    final filtered = _bookFilterId == null
+    final booksValue = ref.watch(booksProvider).value;
+    final books = booksValue ?? const <LedgerBook>[];
+    final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
+    final filtered = effectiveBookFilterId == null
         ? all
-        : all.where((item) => item.bookId == _bookFilterId).toList();
+        : all.where((item) => item.bookId == effectiveBookFilterId).toList();
     final monthTransactions = filtered.where((item) {
       final date = item.occurredAt;
       return item.deletedAt == null &&
           date.year == _month.year &&
           date.month == _month.month &&
-          !date.isAfter(_today);
+          !_isFutureDate(date);
     }).toList();
 
     final dailyExpense = <int, double>{};
@@ -100,16 +104,11 @@ class _ConsumptionCalendarPageState
               .toList()
           ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
 
-    final maxDailyExpense = dailyExpense.values.fold<double>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
-
     final recordMonths =
         filtered
             .where(
               (item) =>
-                  _isConsumption(item) && !item.occurredAt.isAfter(_today),
+                  item.deletedAt == null && !_isFutureDate(item.occurredAt),
             )
             .map(
               (item) => DateTime(item.occurredAt.year, item.occurredAt.month),
@@ -141,6 +140,45 @@ class _ConsumptionCalendarPageState
     final selectedDate = _selectedDay == null
         ? null
         : DateTime(_month.year, _month.month, _selectedDay!);
+    final calendarDates = _viewMode == _CalendarViewMode.week
+        ? _weekDates(selectedDate)
+        : _monthDates(_month);
+    var calendarExpense = dailyExpense;
+    var calendarIncome = dailyIncome;
+    var calendarOther = dailyOther;
+    if (_viewMode == _CalendarViewMode.week) {
+      final visibleDateKeys = calendarDates.map(_dateKey).toSet();
+      calendarExpense = <int, double>{};
+      calendarIncome = <int, double>{};
+      calendarOther = <int>{};
+      for (final item in filtered) {
+        if (item.deletedAt != null ||
+            _isFutureDate(item.occurredAt) ||
+            !visibleDateKeys.contains(_dateKey(item.occurredAt))) {
+          continue;
+        }
+        final day = item.occurredAt.day;
+        if (_isConsumption(item)) {
+          calendarExpense.update(
+            day,
+            (value) => value + item.netExpenseAmount,
+            ifAbsent: () => item.netExpenseAmount,
+          );
+        } else if (item.isIncome) {
+          calendarIncome.update(
+            day,
+            (value) => value + item.amount,
+            ifAbsent: () => item.amount,
+          );
+        } else {
+          calendarOther.add(day);
+        }
+      }
+    }
+    final calendarMaxDailyExpense = calendarExpense.values.fold<double>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -180,8 +218,7 @@ class _ConsumptionCalendarPageState
                         canGoNext: !_isCurrentMonth,
                         onPrevious: () => _moveMonth(-1),
                         onNext: () => _moveMonth(1),
-                        onModeChanged: (mode) =>
-                            setState(() => _viewMode = mode),
+                        onModeChanged: _setViewMode,
                       ),
                       const SizedBox(height: 6),
                       if (_viewMode != _CalendarViewMode.stats) ...[
@@ -189,13 +226,13 @@ class _ConsumptionCalendarPageState
                         const SizedBox(height: 6),
                         _CalendarGrid(
                           month: _month,
-                          dates: _viewMode == _CalendarViewMode.month
-                              ? _monthDates(_month)
-                              : _weekDates(selectedDate),
-                          dailyExpense: dailyExpense,
-                          dailyIncome: dailyIncome,
-                          dailyOther: dailyOther,
-                          maxDailyExpense: maxDailyExpense,
+                          dates: calendarDates,
+                          dailyExpense: calendarExpense,
+                          dailyIncome: calendarIncome,
+                          dailyOther: calendarOther,
+                          maxDailyExpense: calendarMaxDailyExpense,
+                          showDataOutsideMonth:
+                              _viewMode == _CalendarViewMode.week,
                           selectedDay: _selectedDay,
                           today: _today,
                           onDateTap: (date) => setState(() {
@@ -215,7 +252,7 @@ class _ConsumptionCalendarPageState
                       const SizedBox(height: 8),
                       _CalendarFooter(
                         books: books,
-                        selectedBookId: _bookFilterId,
+                        selectedBookId: effectiveBookFilterId,
                         onBookTap: _openBookFilter,
                         onToday: _goToday,
                       ),
@@ -245,11 +282,18 @@ class _ConsumptionCalendarPageState
     );
   }
 
-  bool get _isCurrentMonth =>
-      _month.year == _today.year && _month.month == _today.month;
+  bool get _isCurrentMonth {
+    final today = _today;
+    return _month.year == today.year && _month.month == today.month;
+  }
 
-  /// The calendar is a consumption view. Lending and asset conversions move
-  /// money without spending it, so they stay off the daily consumption totals.
+  int _dateKey(DateTime date) =>
+      date.year * 10000 + date.month * 100 + date.day;
+
+  bool _isFutureDate(DateTime date) => date.isAfter(_today);
+
+  /// Keep the calendar aligned with the app's consumption-expense flag while
+  /// excluding fully offset or refunded records whose net expense is not positive.
   bool _isConsumption(TransactionRecord item) =>
       item.deletedAt == null &&
       item.isConsumptionExpense &&
@@ -271,6 +315,13 @@ class _ConsumptionCalendarPageState
     return List.generate(7, (index) => start.add(Duration(days: index)));
   }
 
+  void _setViewMode(_CalendarViewMode mode) => setState(() {
+    _viewMode = mode;
+    if (mode == _CalendarViewMode.week && _selectedDay == null) {
+      _selectedDay = 1;
+    }
+  });
+
   void _moveMonth(int delta) {
     if (delta > 0 && _isCurrentMonth) return;
     final candidate = DateTime(_month.year, _month.month + delta);
@@ -279,16 +330,21 @@ class _ConsumptionCalendarPageState
   }
 
   void _setMonth(DateTime month) => setState(() {
+    final today = _today;
     _month = DateTime(month.year, month.month);
-    _selectedDay = _isCurrentMonth ? _today.day : null;
-    if (_viewMode == _CalendarViewMode.week) {
-      _viewMode = _CalendarViewMode.month;
-    }
+    final isCurrentMonth =
+        _month.year == today.year && _month.month == today.month;
+    _selectedDay = isCurrentMonth
+        ? today.day
+        : _viewMode == _CalendarViewMode.week
+            ? 1
+            : null;
   });
 
   void _goToday() => setState(() {
-    _month = DateTime(_today.year, _today.month);
-    _selectedDay = _today.day;
+    final today = _today;
+    _month = DateTime(today.year, today.month);
+    _selectedDay = today.day;
   });
 
   void _openAnalysis() {
@@ -297,9 +353,13 @@ class _ConsumptionCalendarPageState
   }
 
   Future<void> _addForSelectedDate() async {
-    final day = _selectedDay ?? (_isCurrentMonth ? _today.day : 1);
+    final today = _today;
+    final isCurrentMonth =
+        _month.year == today.year && _month.month == today.month;
+    final day = _selectedDay ?? (isCurrentMonth ? today.day : 1);
     final selectedDate = DateTime(_month.year, _month.month, day);
-    final initialBookId = _bookFilterId ?? ref.read(activeBookIdProvider);
+    final scopedBookId = _effectiveBookFilterId(ref.read(booksProvider).value);
+    final initialBookId = scopedBookId ?? ref.read(activeBookIdProvider);
     await showQuickAddSheet(
       context,
       initialOccurredAt: selectedDate,
@@ -307,8 +367,17 @@ class _ConsumptionCalendarPageState
     );
   }
 
+  String? _effectiveBookFilterId(List<LedgerBook>? books) {
+    final selectedBookId = _bookFilterId;
+    if (selectedBookId == null || books == null) return selectedBookId;
+    return books.any((book) => book.id == selectedBookId)
+        ? selectedBookId
+        : null;
+  }
+
   Future<void> _openBookFilter() async {
     final books = ref.read(booksProvider).value ?? const <LedgerBook>[];
+    final effectiveBookFilterId = _effectiveBookFilterId(books);
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -329,7 +398,7 @@ class _ConsumptionCalendarPageState
               leading: Icon(Icons.all_inclusive, color: context.appPrimary),
               title: const Text('全部账本'),
               subtitle: const Text('汇总当前账号可访问的账本'),
-              trailing: _bookFilterId == null
+              trailing: effectiveBookFilterId == null
                   ? Icon(Icons.check, color: context.appPrimary)
                   : null,
               onTap: () => Navigator.pop(context, _allBooksFilterValue),
@@ -340,7 +409,7 @@ class _ConsumptionCalendarPageState
                 leading: BookColorDot(book: book, size: 12),
                 title: Text(book.name),
                 subtitle: Text(book.type.label),
-                trailing: _bookFilterId == book.id
+                trailing: effectiveBookFilterId == book.id
                     ? Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, book.id),
@@ -508,7 +577,8 @@ class _CalendarToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 330;
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final compact = constraints.maxWidth < 330 || textScale > 1.2;
         if (compact) {
           return Column(
             children: [
@@ -710,6 +780,7 @@ class _CalendarGrid extends StatelessWidget {
     required this.dailyIncome,
     required this.dailyOther,
     required this.maxDailyExpense,
+    required this.showDataOutsideMonth,
     required this.selectedDay,
     required this.today,
     required this.onDateTap,
@@ -721,6 +792,7 @@ class _CalendarGrid extends StatelessWidget {
   final Map<int, double> dailyIncome;
   final Set<int> dailyOther;
   final double maxDailyExpense;
+  final bool showDataOutsideMonth;
   final int? selectedDay;
   final DateTime today;
   final ValueChanged<DateTime> onDateTap;
@@ -733,8 +805,11 @@ class _CalendarGrid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cellHeight =
+        final baseCellHeight =
             (constraints.maxWidth / 7 * 1.04).clamp(48.0, 56.0).toDouble();
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final scaleExtra = (textScale - 1).clamp(0.0, 0.6).toDouble();
+        final cellHeight = baseCellHeight + scaleExtra * 24;
         final rowCount = (dates.length / 7).ceil();
 
         return SizedBox(
@@ -753,9 +828,13 @@ class _CalendarGrid extends StatelessWidget {
                   date.year == month.year && date.month == month.month;
               final isFuture =
                   date.isAfter(DateTime(today.year, today.month, today.day));
-              final amount = inMonth ? (dailyExpense[date.day] ?? 0) : 0.0;
-              final income = inMonth ? (dailyIncome[date.day] ?? 0) : 0.0;
-              final hasOther = inMonth && dailyOther.contains(date.day);
+              final showData = inMonth || showDataOutsideMonth;
+              final amount =
+                  showData ? (dailyExpense[date.day] ?? 0) : 0.0;
+              final income =
+                  showData ? (dailyIncome[date.day] ?? 0) : 0.0;
+              final hasOther =
+                  showData && dailyOther.contains(date.day);
               final intensity = maxDailyExpense == 0
                   ? 0.0
                   : (amount / maxDailyExpense).clamp(0.0, 1.0);
@@ -954,21 +1033,21 @@ class _CalendarInlineStats extends StatelessWidget {
                 width: itemWidth,
                 child: _InlineStat(
                   label: '月支出',
-                  value: '¥${totalExpense.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(totalExpense),
                 ),
               ),
               SizedBox(
                 width: itemWidth,
                 child: _InlineStat(
                   label: '月收入',
-                  value: '¥${totalIncome.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(totalIncome),
                 ),
               ),
               SizedBox(
                 width: itemWidth,
                 child: _InlineStat(
                   label: '结余',
-                  value: '¥${balance.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(balance),
                 ),
               ),
               SizedBox(
@@ -1085,7 +1164,8 @@ class _CalendarFooter extends StatelessWidget {
           ],
         );
 
-        if (constraints.maxWidth < 330) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        if (constraints.maxWidth < 330 || textScale > 1.2) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1168,27 +1248,44 @@ class _CalendarLegend extends StatelessWidget {
   const _CalendarLegend();
 
   @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: const [
+          _CalendarLegendItem(
+            color: Color(0xFFFF7A45),
+            label: '支出',
+          ),
+          _CalendarLegendItem(
+            color: Color(0xFF5BAE61),
+            label: '收入',
+          ),
+          _CalendarLegendItem(
+            color: Color(0xFF3FA7E8),
+            label: '有记账',
+          ),
+        ],
+      );
+}
+
+class _CalendarLegendItem extends StatelessWidget {
+  const _CalendarLegendItem({
+    required this.color,
+    required this.label,
+  });
+
+  final Color color;
+  final String label;
+
+  @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _CalendarDot(color: Color(0xFFFF7A45)),
+          _CalendarDot(color: color),
           const SizedBox(width: 4),
           Text(
-            '支出',
-            style: TextStyle(fontSize: 10, color: context.appSecondaryText),
-          ),
-          const SizedBox(width: 8),
-          const _CalendarDot(color: Color(0xFF5BAE61)),
-          const SizedBox(width: 4),
-          Text(
-            '收入',
-            style: TextStyle(fontSize: 10, color: context.appSecondaryText),
-          ),
-          const SizedBox(width: 8),
-          const _CalendarDot(color: Color(0xFF3FA7E8)),
-          const SizedBox(width: 4),
-          Text(
-            '有记账',
+            label,
             style: TextStyle(fontSize: 10, color: context.appSecondaryText),
           ),
         ],
@@ -1222,7 +1319,10 @@ class _SelectedDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final expense = transactions
-        .where((item) => item.isConsumptionExpense)
+        .where(
+          (item) =>
+              item.isConsumptionExpense && item.netExpenseAmount > 0,
+        )
         .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
     final income = transactions
         .where((item) => item.isIncome)
@@ -1358,28 +1458,47 @@ class _MonthlyOverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textScale = MediaQuery.textScalerOf(context).scale(1);
+              final range = Text(
+                '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
+                ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: context.appSecondaryText,
+                ),
+              );
+              const title = Text(
                 '本月概览',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
-                    ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.appSecondaryText,
+              );
+
+              if (textScale > 1.2 || constraints.maxWidth < 300) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: 4),
+                    range,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  title,
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: range,
                     ),
                   ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: 14),
           Row(
@@ -1387,7 +1506,7 @@ class _MonthlyOverviewCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _MonthlyMetric(
-                  value: '¥${totalExpense.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(totalExpense),
                   label: '月支出',
                   progress: totalExpense.abs() / scale,
                   color: const Color(0xFFFF7A45),
@@ -1396,7 +1515,7 @@ class _MonthlyOverviewCard extends StatelessWidget {
               const _MetricDivider(),
               Expanded(
                 child: _MonthlyMetric(
-                  value: '¥${totalIncome.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(totalIncome),
                   label: '月收入',
                   progress: totalIncome.abs() / scale,
                   color: const Color(0xFF5BAE61),
@@ -1405,7 +1524,7 @@ class _MonthlyOverviewCard extends StatelessWidget {
               const _MetricDivider(),
               Expanded(
                 child: _MonthlyMetric(
-                  value: '¥${balance.toStringAsFixed(2)}',
+                  value: _formatMoneyLabel(balance),
                   label: '结余',
                   progress: balance.abs() / scale,
                   color: context.appPrimary,
@@ -1488,6 +1607,12 @@ class _MonthlyMetric extends StatelessWidget {
           ],
         ),
       );
+}
+
+String _formatMoneyLabel(double value) {
+  final normalized = value.abs() < 0.005 ? 0.0 : value;
+  final amount = normalized.abs().toStringAsFixed(2);
+  return normalized < 0 ? '-¥$amount' : '¥$amount';
 }
 
 class _MetricDivider extends StatelessWidget {
