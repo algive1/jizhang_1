@@ -182,8 +182,11 @@ class AutoBookkeepingRepository {
           (preferences[merchantKey] ?? preferences[merchant])
               as Map<String, dynamic>?;
       preferences.remove(merchant);
-      preferences[merchantKey] = {
+      preferences.remove(merchantKey);
+      final typedMerchantKey = '${transactionType.name}|$merchantKey';
+      preferences[typedMerchantKey] = {
         'merchantKey': merchantKey,
+        'transactionType': transactionType.name,
         'merchantDisplay': merchant,
         'categoryId': categoryId,
         'accountId': accountId,
