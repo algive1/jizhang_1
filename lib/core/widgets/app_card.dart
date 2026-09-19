@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
