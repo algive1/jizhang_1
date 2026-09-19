@@ -404,14 +404,17 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           ),
           const SizedBox(height: 10),
           AppCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.rule_folder_outlined),
-              title: const Text('页面识别规则'),
-              subtitle: Text(
-                _ruleVersions.isEmpty
-                    ? '规则服务尚未连接；开启无障碍服务后会显示当前规则版本'
-                    : 'schema v$_ruleSchemaVersion · $_ruleVersions · ${_ruleSource == 'asset' ? '随 App 发布规则' : '内置回退规则'}',
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.rule_folder_outlined),
+                title: const Text('页面识别规则'),
+                subtitle: Text(
+                  _ruleVersions.isEmpty
+                      ? '规则服务尚未连接；开启无障碍服务后会显示当前规则版本'
+                      : 'schema v$_ruleSchemaVersion · $_ruleVersions · ${_ruleSource == 'asset' ? '随 App 发布规则' : '内置回退规则'}',
+                ),
               ),
             ),
           ),
