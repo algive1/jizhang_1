@@ -16,6 +16,11 @@ import { registerAppUpdateRoutes } from './app_update.js';
 import { registerAnalyticsRoutes } from './analytics.js';
 import { registerPushRoutes } from './push.js';
 import { registerAdConfigRoutes } from './ads.js';
+import { registerMessageCenterRoutes } from './message_center.js';
+import { registerSupportRoutes } from './support.js';
+import { registerAdminRoutes } from './admin.js';
+import { registerOperationalRoutes } from './ops.js';
+import { startPushWorker } from './push_delivery.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
 const deviceNameField = z.string().trim().min(1).max(80).optional();
@@ -23,6 +28,10 @@ const credentials = z.strictObject({ username: usernameField, password: z.string
 const registration = z.strictObject({ username: usernameField, password: z.string().min(10).max(128), displayName: z.string().trim().min(1).max(24).optional(), deviceName: deviceNameField });
 const changePasswordSchema = z.strictObject({ currentPassword: z.string().min(10).max(128), newPassword: z.string().min(10).max(128) });
 const recoverySchema = z.strictObject({ username: usernameField, recoveryKey: z.string().min(20).max(200), newPassword: z.string().min(10).max(128), deviceName: deviceNameField });
+const deleteAccountSchema = z.strictObject({
+  password: z.string().min(10).max(128),
+  confirmation: z.literal('DELETE'),
+});
 type AuthUser = { id:string; username:string; displayName:string|null };
 const hashToken = (token:string) => createHash('sha256').update(token).digest('hex');
 const hashRecoveryKey = (key:string) => createHash('sha256').update(key).digest('hex');
@@ -39,10 +48,11 @@ async function passwordMatches(password:string, encoded:string|undefined) {
 export async function createApp(path:string, modelProvider?: AssistantModelProvider) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
+  let stopPushWorker = () => {};
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, body));
   await app.register(rateLimit,{max:300,timeWindow:'1 minute'});
-  app.addHook('onClose',async()=>{store.db.close();});
+  app.addHook('onClose',async()=>{stopPushWorker();store.db.close();});
   app.setErrorHandler((error,_req,reply)=>{
     if(error instanceof z.ZodError) return reply.code(400).send({message:'请求字段无效',issues:error.issues.map(i=>({path:i.path,message:i.message}))});
     if(error instanceof ApiError) return reply.code(error.statusCode).send({message:error.message,details:error.details});
@@ -74,8 +84,12 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerPersonalCloudRoutes(app,store,authenticate);
   registerDiagnosticsRoutes(app,store,authenticate);
   registerPushRoutes(app,store,authenticate);
+  registerMessageCenterRoutes(app,store,authenticate);
+  registerSupportRoutes(app,store,authenticate);
+  registerAdminRoutes(app,store);
+  registerOperationalRoutes(app,store);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
-  app.get('/health',async()=>({status:'ok',schemaVersion:1}));
+  stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password,displayName,deviceName}=registration.parse(req.body);
     check(!store.db.prepare('SELECT 1 FROM users WHERE username=?').get(username),'用户名已被使用',409);
@@ -165,6 +179,56 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
     const user=authenticate(req.headers.authorization);
     store.db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
     return {ok:true};
+  });
+  app.delete('/api/v1/account',async(req)=>{
+    const user=authenticate(req.headers.authorization);
+    const body=deleteAccountSchema.parse(req.body);
+    const row=store.db.prepare(
+      'SELECT password_hash FROM users WHERE id=?'
+    ).get(user.id) as {password_hash:string}|undefined;
+    check(row && await passwordMatches(body.password,row.password_hash),'密码错误',401);
+    const activeOwned=(store.db.prepare(
+      'SELECT COUNT(*) AS n FROM books WHERE owner_user_id=? AND is_archived=0'
+    ).get(user.id) as {n:number}).n;
+    check(
+      activeOwned===0,
+      '请先归档或处理你创建的共享账本，再注销账号',
+      409,
+    );
+    const anonymousUsername =
+      'deleted_' + createHash('sha256').update(user.id).digest('hex').slice(0,30);
+    store.db.transaction(()=>{
+      // Delete private cloud content and direct personal telemetry first.
+      store.db.prepare('DELETE FROM cloud_datasets WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM diagnostic_events WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM push_outbox WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM push_devices WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM announcement_reads WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM support_tickets WHERE user_id=?').run(user.id);
+      // Leaving books owned by other people must not erase their shared data.
+      store.db.prepare("DELETE FROM members WHERE user_id=? AND role<>'owner'").run(user.id);
+      store.db.prepare(
+        "UPDATE invitations SET status='revoked' WHERE invited_by=? AND status='pending'"
+      ).run(user.id);
+      store.db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
+      // Shared-ledger/payment audit rows retain only the opaque user id. The
+      // account row is irreversibly anonymised so FK-backed audit history stays
+      // valid without retaining username, display name, recovery key or login.
+      store.db.prepare(
+        'UPDATE users SET username=?,display_name=NULL,recovery_key_hash=NULL,'
+          + 'password_hash=?,password_changed_at=? WHERE id=?'
+      ).run(
+        anonymousUsername,
+        'deleted:' + randomBytes(64).toString('hex'),
+        store.now(),
+        user.id,
+      );
+    })();
+    return {
+      ok:true,
+      deleted:true,
+      retainedSharedAuditIdentity:user.id,
+    };
   });
   app.get('/api/v1/books',async(req)=>({books:store.list(authenticate(req.headers.authorization).id)}));
   app.post('/api/v1/books',async(req)=>{
