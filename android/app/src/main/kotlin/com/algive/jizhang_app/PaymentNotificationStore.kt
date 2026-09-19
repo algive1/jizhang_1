@@ -3,6 +3,9 @@ package com.algive.jizhang_app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 object PaymentNotificationStore {
     const val PREFS_NAME = "payment_notifications"
@@ -47,7 +50,7 @@ object PaymentNotificationStore {
                 "title" to item.optString("title"),
                 "text" to item.optString("text"),
                 "postedAt" to item.optString("postedAt"),
-                "postedAtMillis" to item.optLong("postedAtMillis", 0L).toString(),
+                "postedAtMillis" to postedAtMillis(item).toString(),
             )
         }
     }
@@ -70,17 +73,35 @@ object PaymentNotificationStore {
         val retained = JSONArray()
         for (index in 0 until array.length()) {
             val item = array.optJSONObject(index) ?: continue
-            val postedAtMillis = item.optLong("postedAtMillis", 0L)
+            val postedAtMillis = postedAtMillis(item)
             if (
-                postedAtMillis > 0L &&
-                (postedAtMillis > now + 5 * 60 * 1000L ||
-                    now - postedAtMillis > RECOVERY_TTL_MILLIS)
+                postedAtMillis <= 0L ||
+                postedAtMillis > now + 5 * 60 * 1000L ||
+                now - postedAtMillis > RECOVERY_TTL_MILLIS
             ) {
                 continue
+            }
+            if (!item.has("postedAtMillis")) {
+                item.put("postedAtMillis", postedAtMillis)
             }
             retained.put(item)
         }
         return retained
+    }
+
+    private fun postedAtMillis(item: JSONObject): Long {
+        val direct = item.optLong("postedAtMillis", 0L)
+        if (direct > 0L) return direct
+        val raw = item.optString("postedAt").trim()
+        if (raw.isEmpty()) return 0L
+        return runCatching {
+            SimpleDateFormat(
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                Locale.US,
+            ).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(raw)?.time ?: 0L
+        }.getOrDefault(0L)
     }
 
     private fun readArray(raw: String?): JSONArray = try {
