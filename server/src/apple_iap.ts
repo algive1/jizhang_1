@@ -44,6 +44,7 @@ function ensureSchema(store:Store){
       notification_type TEXT NOT NULL,
       subtype TEXT,
       signed_at INTEGER,
+      original_transaction_id TEXT,
       received_at INTEGER NOT NULL
     );
   `);
@@ -132,14 +133,22 @@ export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authentic
     if(uuid){
       const seen=store.db.prepare('SELECT 1 FROM apple_notifications WHERE notification_uuid=?').get(uuid);
       if(seen)return {ok:true};
-      store.db.prepare('INSERT INTO apple_notifications(notification_uuid,notification_type,subtype,signed_at,received_at) VALUES(?,?,?,?,?)').run(uuid,type,String(envelope.subtype??''),Number(envelope.signedDate??0)?Math.floor(Number(envelope.signedDate)/1000):null,store.now());
+      store.db.prepare('INSERT INTO apple_notifications(notification_uuid,notification_type,subtype,signed_at,original_transaction_id,received_at) VALUES(?,?,?,?,NULL,?)').run(uuid,type,String(envelope.subtype??''),Number(envelope.signedDate??0)?Math.floor(Number(envelope.signedDate)/1000):null,store.now());
     }
     if(type==='TEST') return {ok:true};
     const data=(envelope.data??{}) as Json;
+    const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
+    if(expectedBundle&&data.bundleId!==undefined) check(String(data.bundleId)===expectedBundle,'Apple 通知 Bundle ID 不匹配',400);
+    const expectedEnvironment=process.env.APPLE_ENVIRONMENT?.trim();
+    if(expectedEnvironment&&data.environment!==undefined) check(String(data.environment)===expectedEnvironment,'Apple 通知环境不匹配',400);
     const signed=String(data.signedTransactionInfo??'');
     if(signed){
       const payload=transactionPayload(signed);
       const original=String(payload.originalTransactionId??payload.transactionId??'');
+      const signedAt=Number(envelope.signedDate??0)?Math.floor(Number(envelope.signedDate)/1000):store.now();
+      const latest=store.db.prepare('SELECT MAX(signed_at) AS signed_at FROM apple_notifications WHERE original_transaction_id=?').get(original) as {signed_at:number|null}|undefined;
+      if(latest?.signed_at&&latest.signed_at>signedAt) return {ok:true};
+      if(uuid) store.db.prepare('UPDATE apple_notifications SET original_transaction_id=? WHERE notification_uuid=?').run(original,uuid);
       const owner=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
       if(owner) bindTransaction(store,owner.user_id,payload,signed);
     }
