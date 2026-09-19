@@ -446,17 +446,17 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
             ),
           ),
           const SizedBox(height: 16),
-          const AppCard(
+          AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   '本机存储',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
-                SizedBox(height: 8),
-                Text('当前账本保存在本机。CSV 适合表格查看和对账；完整 SQLite 备份可用于应用内恢复。'),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
+                const Text('当前账本保存在本机。CSV 适合表格查看和对账；完整 SQLite 备份可用于应用内恢复。'),
+                const SizedBox(height: 8),
                 Text(
                   '卸载应用可能丢失本地账本，请先导出加密完整备份。新格式 .hhbackup 同时包含数据库与现有附件；旧 .sqlite/.db 备份仍可兼容恢复但不含附件。',
                   style: TextStyle(color: context.appSecondaryText),
