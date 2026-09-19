@@ -106,7 +106,7 @@ class _PaymentNotificationPageState
             ],
           ),
           const SizedBox(height: 12),
-          const AppCard(
+          AppCard(
             color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +180,7 @@ class _PaymentNotificationPageState
               ),
             ),
           const SizedBox(height: 14),
-          const AppCard(
+          AppCard(
             child: Text(
               '隐私说明：通知只在本机转换为待确认数据，确认或忽略后才会清理。收款、到账、退款等入账类通知不会按支出处理。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
