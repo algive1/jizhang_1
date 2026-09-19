@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/installment_plan.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
@@ -10,6 +9,7 @@ import '../../../core/widgets/money_text.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/installment_plan_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class InstallmentPlanDetailPage extends ConsumerWidget {
   const InstallmentPlanDetailPage({required this.planId, super.key});
@@ -44,7 +44,7 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go('/profile/installments'),
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
                 tooltip: '返回分期列表',
               ),
               Expanded(
@@ -56,16 +56,16 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   plan.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primaryDark,
+                    color: context.appPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -75,7 +75,7 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text(
                   '第 ${plan.currentPeriod} / ${plan.totalPeriods} 期 · 每月 ${plan.dueDay} 日',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
               ],
             ),
@@ -97,15 +97,15 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
             onPressed: plan.status == InstallmentPlanStatus.active
                 ? () => _recordRepayment(context, ref, plan)
                 : null,
-            icon: const Icon(Icons.payments_outlined),
+            icon: Icon(Icons.payments_outlined),
             label: Text(
               plan.status == InstallmentPlanStatus.active ? '登记本期还款' : '分期已完成',
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '登记后会生成一笔“还款”流水：还款账户减少、信用卡账户增加，消费统计保持不变。',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: context.appSecondaryText),
           ),
         ],
       ),
@@ -148,7 +148,7 @@ class _MetricRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.appSecondaryText),
           ),
         ),
         MoneyText(amount, style: const TextStyle(fontWeight: FontWeight.w700)),
