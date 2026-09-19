@@ -331,10 +331,11 @@ class _ConsumptionCalendarPageState
 
   void _setMonth(DateTime month) => setState(() {
     _month = DateTime(month.year, month.month);
-    _selectedDay = _isCurrentMonth ? _today.day : null;
-    if (_viewMode == _CalendarViewMode.week) {
-      _viewMode = _CalendarViewMode.month;
-    }
+    _selectedDay = _isCurrentMonth
+        ? _today.day
+        : _viewMode == _CalendarViewMode.week
+            ? 1
+            : null;
   });
 
   void _goToday() => setState(() {
