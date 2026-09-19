@@ -336,13 +336,30 @@ struct HaoHaoBookkeepingShortcuts: AppShortcutsProvider {
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do {
           try handler.perform([request])
-          let lines = (request.results ?? []).compactMap {
+          let observations = request.results ?? []
+          let lines = observations.compactMap {
             $0.topCandidates(1).first?.string
+          }
+          let elements: [[String: Any]] = observations.compactMap { observation in
+            guard let text = observation.topCandidates(1).first?.string else { return nil }
+            let box = observation.boundingBox
+            // Vision coordinates are normalized with a bottom-left origin. Convert
+            // to top-left normalized coordinates so Android/iOS share one model.
+            return [
+              "text": text,
+              "box": [
+                "left": Double(box.minX),
+                "top": Double(1.0 - box.maxY),
+                "right": Double(box.maxX),
+                "bottom": Double(1.0 - box.minY),
+              ],
+            ]
           }
           DispatchQueue.main.async {
             result([
               "text": lines.joined(separator: "\n"),
               "blocks": lines,
+              "elements": elements,
             ])
           }
         } catch {

@@ -308,6 +308,23 @@ class MainActivity : FlutterFragmentActivity() {
                             mapOf(
                                 "text" to recognized.text,
                                 "blocks" to recognized.textBlocks.map { it.text },
+                                "elements" to recognized.textBlocks.flatMap { block ->
+                                    block.lines.flatMap { line ->
+                                        line.elements.mapNotNull { element ->
+                                            element.boundingBox?.let { box ->
+                                                mapOf(
+                                                    "text" to element.text,
+                                                    "box" to mapOf(
+                                                        "left" to box.left.toDouble(),
+                                                        "top" to box.top.toDouble(),
+                                                        "right" to box.right.toDouble(),
+                                                        "bottom" to box.bottom.toDouble(),
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
                             ),
                         )
                     }

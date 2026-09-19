@@ -5,6 +5,7 @@ import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.*
+import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -33,6 +34,27 @@ class PaymentEngineTest {
         assertEquals(3600L, candidate?.amountInCents)
         assertEquals("MEITUAN", candidate?.sourceApp)
     }
+    @Test fun meituanDedicatedParserAcceptsOrderPaidLayout() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.sankuai.meituan",
+            nodes("订单已支付", "店铺名称", "测试餐厅", "订单实付", "36.00"),
+            100000,
+        )
+        assertEquals(3600L, candidate?.amountInCents)
+        assertEquals("MEITUAN", candidate?.sourceApp)
+        assertEquals("测试餐厅", candidate?.merchantRaw)
+    }
+
+    @Test fun meituanDedicatedParserRejectsPendingPayment() {
+        assertNull(
+            PaymentSceneDetector().detect(
+                "com.sankuai.meituan",
+                nodes("待支付", "店铺名称", "测试餐厅", "订单实付", "36.00"),
+                100000,
+            ),
+        )
+    }
+
     @Test fun jdPinduoduoAndDouyinUseGenericParser() {
         val expected = mapOf(
             "com.jingdong.app.mall" to "JD",
@@ -53,6 +75,24 @@ class PaymentEngineTest {
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
+    @Test fun pendingStoreAcceptsAllNotificationSourceApps() {
+        val sources = listOf("WECHAT", "ALIPAY", "UNIONPAY", "MEITUAN", "JD", "PINDUODUO", "DOUYIN")
+        sources.forEach { source ->
+            val candidate = AutoBookkeepingPendingStore.candidateFromMap(
+                mapOf(
+                    "amountInCents" to 1880L,
+                    "merchant" to "测试商户",
+                    "paymentMethod" to "测试支付",
+                    "timestamp" to 100000L,
+                    "sourceApp" to source,
+                    "scene" to "PAYMENT_NOTIFICATION",
+                ),
+            )
+            assertNotNull(source, candidate)
+            assertEquals(source, candidate?.sourceApp)
+        }
+    }
+
     @Test fun normalization() { assertEquals("麦当劳", parse("支付成功", "商户", "McDonald's 成都", "￥38.50")?.merchantNormalized) }
     @Test fun transferSuccessUsesRecipientAsMerchant() {
         val candidate = parse("支付成功", "待陆勤老师-专注职工社保确认收款", "￥1.00")

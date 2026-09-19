@@ -57,6 +57,30 @@ void main() {
     },
   );
 
+  test('商城待支付和支付提醒不会被解析成已发生流水', () {
+    final parser = const PaymentNotificationParser();
+    for (final text in <String>[
+      '订单待支付 ¥36.00，请尽快完成支付',
+      '支付提醒：订单金额 ¥36.00',
+      '去支付 ¥36.00 可享优惠',
+      '支付失败 ¥36.00，请重新支付',
+    ]) {
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: text,
+            packageName: 'com.sankuai.meituan',
+            title: '美团',
+            text: text,
+            postedAt: DateTime(2026, 9, 19, 9),
+          ),
+        ),
+        isNull,
+        reason: text,
+      );
+    }
+  });
+
   test('美团付款通知可解析但必须通过目标账户和待确认队列', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
@@ -94,6 +118,69 @@ void main() {
       expect(parsed!.channel, entry.value);
       expect(parsed.accountId, isNull);
     }
+  });
+
+  test('商城确认队列不要求预先配置目标账户', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'meituan-no-target',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '订单支付成功 ¥36.00，商户：测试餐厅',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      resolveTarget: (_, _) async => null,
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(result.waiting, 0);
+    expect(pending.candidates, hasLength(1));
+    expect(bridge.acknowledged, ['meituan-no-target']);
+  });
+
+  test('缺少商户的通知不会生成未知待确认流水', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'unknown-merchant',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '订单支付成功 ¥36.00',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.unrecognized, 1);
+    expect(result.queued, 0);
+    expect(pending.candidates, isEmpty);
+    expect(bridge.acknowledged, ['unknown-merchant']);
   });
 
   test('Android notification path queues for confirmation instead of saving silently', () async {
@@ -231,7 +318,8 @@ void main() {
       expect(first.created, 1);
       expect(first.unrecognized, 1);
       expect(second.created, 0);
-      expect(bridge.acknowledged, ['n-2']);
+      expect(second.unrecognized, 0);
+      expect(bridge.acknowledged, ['n-2', 'n-unknown']);
       expect(
         (await transactions.getAll())
             .where((item) => item.source == TransactionSource.auto)

@@ -140,12 +140,23 @@ class PaymentNotificationParser {
     final channel = _channelFor(notification.packageName);
     if (channel == null) return null;
     final content = notification.content;
-    if (RegExp(r'收款到账|收款成功|转入|入账|到账|退款|退回').hasMatch(content)) {
+
+    if (RegExp(
+      r'收款到账|收款成功|转入|入账|到账|退款|退回|待支付|去支付|未支付|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|支付优惠|支付立减|预计支付|应付|付款码',
+    ).hasMatch(content)) {
       return null;
     }
-    if (!RegExp(r'支付|付款|消费|扣款|已付|支出').hasMatch(content)) {
+
+    final hasStrongSuccess = RegExp(
+      r'支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付',
+    ).hasMatch(content);
+    final hasWalletDebit = RegExp(r'消费|扣款|支出').hasMatch(content);
+    if (_isMarketplaceChannel(channel)) {
+      if (!hasStrongSuccess) return null;
+    } else if (!hasStrongSuccess && !hasWalletDebit) {
       return null;
     }
+
     final amount = _amountFor(content);
     if (amount == null || amount <= 0) return null;
     return ParsedPaymentNotification(
@@ -158,6 +169,9 @@ class PaymentNotificationParser {
       identifierSuffix: _identifierSuffixFor(content),
     );
   }
+
+  bool _isMarketplaceChannel(String channel) =>
+      const {'meituan', 'jd', 'pinduoduo', 'douyin'}.contains(channel);
 
   String? _channelFor(String packageName) {
     if (packageName == 'com.sankuai.meituan' ||
@@ -297,6 +311,7 @@ class PaymentNotificationAutoBookkeepingService {
       final parsed = parser.parse(notification);
       if (parsed == null) {
         unrecognized++;
+        acknowledged.add(notification.id);
         continue;
       }
       final notificationKey = notification.id;
@@ -311,21 +326,22 @@ class PaymentNotificationAutoBookkeepingService {
         acknowledged.add(notification.id);
         continue;
       }
-      final target = resolveTarget == null
-          ? parsed.accountId != null && parsed.identifierSuffix == null
-                ? (bookId: SeedIds.personalBook, accountId: parsed.accountId!)
-                : null
-          : await resolveTarget!(parsed.channel, parsed.identifierSuffix);
-      if (target == null) {
-        waiting++;
-        continue;
-      }
       if (pendingBridge != null) {
+        // Confirmation-mode bookkeeping does not need a preconfigured target
+        // account: the confirmation page lets the user choose book/account/
+        // category. Requiring resolveTarget here used to block marketplace
+        // notifications (Meituan/JD/etc.) before they could ever show a card.
+        final merchant = parsed.merchant?.trim();
+        if (merchant == null || merchant.isEmpty) {
+          unrecognized++;
+          acknowledged.add(notification.id);
+          continue;
+        }
         final accepted = await pendingBridge!.enqueue(
           PendingAutoBookkeepingCandidate(
             fingerprint: stableNotificationKey(fingerprint),
             amountInCents: (parsed.amount * 100).round(),
-            merchant: parsed.merchant ?? '支付通知待确认',
+            merchant: merchant,
             paymentMethod: _displayPaymentMethod(parsed.channel),
             timestamp: parsed.occurredAt,
             sourceApp: _sourceApp(parsed.channel),
@@ -339,6 +355,16 @@ class PaymentNotificationAutoBookkeepingService {
         } else {
           waiting++;
         }
+        continue;
+      }
+
+      final target = resolveTarget == null
+          ? parsed.accountId != null && parsed.identifierSuffix == null
+                ? (bookId: SeedIds.personalBook, accountId: parsed.accountId!)
+                : null
+          : await resolveTarget!(parsed.channel, parsed.identifierSuffix);
+      if (target == null) {
+        waiting++;
         continue;
       }
       final id = 'auto-notification-${stableNotificationKey(fingerprint)}';
