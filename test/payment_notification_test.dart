@@ -149,6 +149,20 @@ void main() {
     }
   });
 
+  test('商城通知保留明确的底层支付方式', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'meituan-alipay',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功 ¥36.00，商户：测试餐厅，支付方式：支付宝',
+        postedAt: DateTime(2026, 9, 20, 9),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.paymentMethod, '支付宝');
+  });
+
   test('美团完成态付款通知可以进入待确认解析', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
