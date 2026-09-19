@@ -196,6 +196,12 @@ class ProfilePage extends ConsumerWidget {
                   () => push('/profile/budgets'),
                 ),
                 ProfileMenuItem(
+                  Icons.document_scanner_outlined,
+                  '小票识别',
+                  '本地 OCR · 确认后记账',
+                  () => push('/profile/receipt-ocr'),
+                ),
+                ProfileMenuItem(
                   Icons.upload_file_outlined,
                   '账单导入',
                   '微信 · 支付宝 CSV',
