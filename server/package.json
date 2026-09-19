@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/src/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "backup": "node scripts/backup.mjs"
   },
   "dependencies": {
     "@fastify/rate-limit": "^10.0.0",
