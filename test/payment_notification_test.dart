@@ -553,6 +553,9 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
   }
 
   @override
+  Future<String?> promoteScreenshot(String path) async => path;
+
+  @override
   Future<void> complete({bool keepScreenshot = false}) async {}
 
   @override
