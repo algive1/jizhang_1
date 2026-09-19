@@ -47,7 +47,7 @@ import '../../voice/presentation/voice_bookkeeping_sheet.dart';
 import '../application/amount_input.dart';
 import '../application/attachment_storage_service.dart';
 import '../application/quick_bookkeeping_service.dart';
-import '../data/bookkeeping_template_repository.dart';
+import '../../bookkeeping_templates/data/bookkeeping_template_repository.dart';
 
 /// The four top-level entry groups in the quick-add header.
 ///
@@ -898,7 +898,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     String? subcategoryId,
   ) async {
     final repository = ref.read(bookkeepingTemplateRepositoryProvider);
-    final templates = await repository.list(bookId);
+    final templates = await repository.list();
     if (!mounted) return;
     final selected = await showModalBottomSheet<Object>(
       context: context,
@@ -929,7 +929,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 padding: EdgeInsets.symmetric(vertical: 28),
                 child: Center(
                   child: Text(
-                    '还没有模板。先填写一笔常用内容，再点“保存当前”。',
+                    '还没有模板。先填写一笔常用收支，再点“保存当前”。',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
@@ -946,18 +946,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       _transactionTypeLabel(template.type),
                       if (template.amount != null)
                         '¥${template.amount!.toStringAsFixed(2)}',
-                      if (template.categoryId != null)
-                        categories
-                                .where((item) => item.id == template.categoryId)
-                                .firstOrNull
-                                ?.name ??
-                            '分类已变更',
-                      if (template.accountId != null)
-                        accounts
-                                .where((item) => item.id == template.accountId)
-                                .firstOrNull
-                                ?.displayName ??
-                            '账户已变更',
+                      categories
+                              .where((item) => item.id == template.categoryId)
+                              .firstOrNull
+                              ?.name ??
+                          '分类已变更',
+                      accounts
+                              .where((item) => item.id == template.accountId)
+                              .firstOrNull
+                              ?.displayName ??
+                          '账户已变更',
                     ].join(' · '),
                   ),
                   onTap: () => Navigator.pop(sheetContext, template),
@@ -965,7 +963,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     tooltip: '删除模板',
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () async {
-                      await repository.delete(bookId, template.id);
+                      await repository.delete(template.id);
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
                       if (mounted) _showMessage('模板已删除');
                     },
@@ -996,19 +994,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     Category? selectedCategory,
     String? subcategoryId,
   ) async {
-    if (_type == TransactionType.transfer ||
-        _type == TransactionType.assetPurchase ||
-        _type == TransactionType.assetSale ||
-        _type == TransactionType.adjustment ||
-        _type == TransactionType.refund ||
-        _type == TransactionType.reimbursement) {
-      _showMessage('当前交易类型暂不支持保存为常用模板');
+    if (_type != TransactionType.expense && _type != TransactionType.income) {
+      _showMessage('常用模板目前支持支出和收入');
+      return;
+    }
+    if (sourceAccount == null || selectedCategory == null) {
+      _showMessage('请先选择账户和分类');
       return;
     }
     final controller = TextEditingController(
       text: _merchantController.text.trim().isNotEmpty
           ? _merchantController.text.trim()
-          : selectedCategory?.name ?? '',
+          : selectedCategory.name,
     );
     final name = await showDialog<String>(
       context: context,
@@ -1041,16 +1038,32 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     );
     controller.dispose();
     if (name == null || !mounted) return;
-    await ref.read(bookkeepingTemplateRepositoryProvider).save(
+
+    final repository = ref.read(bookkeepingTemplateRepositoryProvider);
+    final existing = await repository.list();
+    final sortOrder = existing.fold<int>(
+      0,
+      (next, item) => item.sortOrder >= next ? item.sortOrder + 1 : next,
+    );
+    final base = newBookkeepingTemplate(
       bookId: bookId,
-      name: name,
-      type: _type,
-      amount: _amount.isValid ? _amount.amount : null,
-      accountId: sourceAccount?.id,
-      categoryId: selectedCategory?.id,
-      subcategoryId: subcategoryId,
-      merchant: _merchantController.text,
-      note: _noteController.text,
+      accountId: sourceAccount.id,
+      categoryId: selectedCategory.id,
+      sortOrder: sortOrder,
+    );
+    await repository.save(
+      base.copyWith(
+        name: name,
+        type: _type,
+        amount: _amount.isValid ? _amount.amount : null,
+        subcategoryId: subcategoryId,
+        merchant: _merchantController.text.trim().isEmpty
+            ? null
+            : _merchantController.text.trim(),
+        note: _noteController.text.trim().isEmpty
+            ? null
+            : _noteController.text.trim(),
+      ),
     );
     if (mounted) _showMessage('已保存到常用模板');
   }
@@ -1060,17 +1073,20 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     List<Account> accounts,
     List<Category> categories,
   ) {
-    final accountExists = template.accountId != null &&
-        accounts.any(
-          (item) => item.id == template.accountId && !item.isArchived,
-        );
-    final categoryExists = template.categoryId != null &&
-        categories.any(
-          (item) => item.id == template.categoryId && !item.isArchived,
-        );
+    final accountExists = accounts.any(
+      (item) => item.id == template.accountId && !item.isArchived,
+    );
+    final categoryExists = categories.any(
+      (item) => item.id == template.categoryId && !item.isArchived,
+    );
     final subcategoryExists = template.subcategoryId != null &&
         categories.any(
           (item) => item.id == template.subcategoryId && !item.isArchived,
+        );
+    final destinationExists = template.destinationAccountId != null &&
+        accounts.any(
+          (item) =>
+              item.id == template.destinationAccountId && !item.isArchived,
         );
     setState(() {
       _type = template.type;
@@ -1083,6 +1099,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           ? const AmountInput()
           : AmountInput(template.amount!.toStringAsFixed(2));
       _accountId = accountExists ? template.accountId : null;
+      _destinationAccountId =
+          destinationExists ? template.destinationAccountId : null;
       _categoryId = categoryExists ? template.categoryId : null;
       _subcategoryId = subcategoryExists ? template.subcategoryId : null;
       _merchantController.text = template.merchant ?? '';
@@ -1094,7 +1112,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _amountError = false;
     });
     _showMessage(
-      accountExists || template.accountId == null
+      accountExists
           ? '已套用模板「${template.name}」'
           : '已套用模板；原账户已不存在，请重新选择账户',
     );
