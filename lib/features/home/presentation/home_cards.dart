@@ -153,7 +153,7 @@ class HomeMonthlySummary extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              color: color.withValues(alpha: .72),
               fontSize: 11,
             ),
           ),
