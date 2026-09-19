@@ -150,7 +150,7 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
  const retained={...stored,note:'payer left but history remains'};
  delete retained.family_id;
  const retainedEdit=await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[{operationId:randomUUID(),kind:'transactions',id:'for-member',action:'update',expectedVersion:stored.version,data:retained}]}});
- assert.equal(retainedEdit.statusCode,200);
+ assert.equal(retainedEdit.statusCode,200,retainedEdit.body);
  const retainedStored=(retainedEdit.json() as any).entities.find((e:any)=>e.kind==='transactions'&&e.id==='for-member').data;
  assert.equal(retainedStored.user_id,member.user.id);
  const reassigned={...tx(book,'departed-payer',100),user_id:member.user.id};
