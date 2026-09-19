@@ -23,6 +23,7 @@ import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
+import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
 import java.io.File
@@ -204,6 +205,23 @@ class MainActivity : FlutterFragmentActivity() {
                         openOverlaySettings(result)
                     }
                     "isEnabled" -> result.success(AutoBookkeepingSettings.enabled(this))
+                    "runtimeStatus" -> result.success(
+                        mapOf(
+                            "enabled" to AutoBookkeepingSettings.enabled(this),
+                            "accessibilityGranted" to isAccessibilityGranted(),
+                            "accessibilityConnected" to
+                                AutoBookkeepingDiagnostics.accessibilityConnected,
+                            "overlayGranted" to
+                                AutoBookkeepingOverlayPermission.isGranted(this),
+                            "notificationGranted" to isNotificationGranted(),
+                            "foregroundRunning" to
+                                AutoBookkeepingDiagnostics.foregroundRunning,
+                            "notificationListenerGranted" to
+                                isNotificationAccessGranted(),
+                            "notificationListenerEnabled" to
+                                notificationPreferences().getBoolean(KEY_ENABLED, false),
+                        ),
+                    )
                     "isNotificationGranted" -> result.success(isNotificationGranted())
                     "requestNotificationPermission" -> {
                         requestNotificationPermission(result)
