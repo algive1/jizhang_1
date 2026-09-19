@@ -851,19 +851,20 @@ class _DateField extends StatelessWidget {
     key: const ValueKey('investment-form-date'),
     onTap: onPick,
     borderRadius: BorderRadius.circular(16),
-    child: InputDecorator(
-      decoration: appFieldDecoration('买入日期'),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-              '${date.day.toString().padLeft(2, '0')}',
-              style: const TextStyle(fontSize: 15),
+      child: InputDecorator(
+        decoration: appFieldDecoration('买入日期'),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+                '${date.day.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontSize: 15),
+              ),
             ),
-          ),
-          const Icon(Icons.calendar_today_outlined, size: 16),
-        ],
+            const Icon(Icons.calendar_today_outlined, size: 16),
+          ],
+        ),
       ),
     ),
   );
