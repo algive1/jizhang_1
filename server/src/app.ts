@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { ApiError, identifier, kinds, mutationSchema, nullableId, requireCondition as check } from './contract.js';
 import { Store } from './store.js';
 import type { AssistantModelProvider } from './assistant_ai.js';
+import { registerMarketDataRoutes, type ServerMarketDataProvider } from './market_data.js';
 import { registerPersonalCloudRoutes } from './personal_cloud.js';
 import { registerAppUpdateRoutes } from './app_update.js';
 import { registerAnalyticsRoutes } from './analytics.js';
@@ -46,7 +47,11 @@ async function passwordMatches(password:string, encoded:string|undefined) {
   const actual=await passwordHash(password,salt);
   return actual.length===encoded.length && timingSafeEqual(Buffer.from(actual),Buffer.from(encoded));
 }
-export async function createApp(path:string, modelProvider?: AssistantModelProvider) {
+export async function createApp(
+  path:string,
+  modelProvider?: AssistantModelProvider,
+  marketProvider?: ServerMarketDataProvider,
+) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
   let stopPushWorker = () => {};
@@ -90,6 +95,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerSupportRoutes(app,store,authenticate);
   registerAdminRoutes(app,store);
   registerOperationalRoutes(app,store);
+  registerMarketDataRoutes(app, marketProvider);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
