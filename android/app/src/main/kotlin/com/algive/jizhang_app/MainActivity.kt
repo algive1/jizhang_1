@@ -207,15 +207,7 @@ class MainActivity : FlutterFragmentActivity() {
                     "isEnabled" -> result.success(AutoBookkeepingSettings.enabled(this))
                     "isNotificationGranted" -> result.success(isNotificationGranted())
                     "requestNotificationPermission" -> {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            requestPermissions(
-                                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                                NOTIFICATION_PERMISSION_REQUEST,
-                            )
-                        }
-                        result.success(null)
+                        requestNotificationPermission(result)
                     }
                     "setEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
