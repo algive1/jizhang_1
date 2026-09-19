@@ -85,6 +85,28 @@ void main() {
     expect(parsed, isNull);
   });
 
+  test('微信普通聊天里的收款和退款文案不会触发自动记账', () {
+    final parser = const PaymentNotificationParser();
+    for (final entry in <(String, String)>[
+      ('收款成功 ¥88.00，来自张三', 'chat-income'),
+      ('退款成功 ¥28.50，退款方：测试餐厅', 'chat-refund'),
+    ]) {
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: entry.$2,
+            packageName: 'com.tencent.mm',
+            title: '小王',
+            text: entry.$1,
+            postedAt: DateTime(2026, 9, 20, 9),
+          ),
+        ),
+        isNull,
+        reason: entry.$2,
+      );
+    }
+  });
+
   test('完成态通知包含优惠信息仍可识别', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
