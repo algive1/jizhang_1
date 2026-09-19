@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
 import '../../application/amount_input.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AmountInputView extends StatelessWidget {
   const AmountInputView({
@@ -31,8 +31,8 @@ class AmountInputView extends StatelessWidget {
             child: Text(
               input.value.isEmpty ? '0' : input.value,
               key: const ValueKey('quick-amount-expression'),
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: context.appPrimaryText,
                 fontSize: 30,
                 fontWeight: FontWeight.w400,
               ),
@@ -48,8 +48,8 @@ class AmountInputView extends StatelessWidget {
             child: Text(
               '= $currency${input.amount == null ? '0.00' : input.displayValue}',
               key: const ValueKey('quick-amount-display'),
-              style: const TextStyle(
-                color: AppColors.primaryDark,
+              style: TextStyle(
+                color: context.appPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
               ),
