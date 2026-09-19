@@ -16,6 +16,7 @@ import 'investment_states.dart';
 import 'investment_transaction_sheet.dart';
 import 'investment_widgets.dart';
 import 'transaction_item.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// 单个投资详情. Every asset class shares this layout; only the small set of
 /// extra fields below the fold differs.
@@ -176,8 +177,8 @@ class _Header extends StatelessWidget {
         IconButton(
           key: const ValueKey('investment-detail-back'),
           onPressed: onBack,
-          icon: const Icon(Icons.chevron_left, size: 26),
-          color: AppColors.textPrimary,
+          icon: Icon(Icons.chevron_left, size: 26),
+          color: context.appPrimaryText,
           tooltip: '返回',
         ),
         Expanded(
@@ -186,18 +187,18 @@ class _Header extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
         ),
         IconButton(
           key: const ValueKey('investment-detail-add-transaction'),
           onPressed: onAddTransaction,
-          icon: const Icon(Icons.add_circle_outline, size: 22),
-          color: AppColors.primaryDark,
+          icon: Icon(Icons.add_circle_outline, size: 22),
+          color: context.appPrimary,
           tooltip: '记录交易',
         ),
       ],
@@ -227,7 +228,7 @@ class _PositionHeaderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,10 +245,10 @@ class _PositionHeaderCard extends StatelessWidget {
                       asset.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -255,9 +256,9 @@ class _PositionHeaderCard extends StatelessWidget {
                       children: [
                         Text(
                           asset.displayCode,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: AppColors.textSecondary,
+                            color: context.appSecondaryText,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -285,7 +286,7 @@ class _PositionHeaderCard extends StatelessWidget {
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
                       size: 17,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -303,9 +304,9 @@ class _PositionHeaderCard extends StatelessWidget {
                     children: [
                     Text(
                       _priceLabel(asset.type),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -314,10 +315,10 @@ class _PositionHeaderCard extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         '¥${InvestmentInput.formatPriceLabel(position.price)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -335,9 +336,9 @@ class _PositionHeaderCard extends StatelessWidget {
                   children: [
                     Text(
                       _changeLabel(asset.type),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -347,7 +348,7 @@ class _PositionHeaderCard extends StatelessWidget {
                       signed: true,
                       size: 14,
                       color: quote == null
-                          ? AppColors.textSecondary
+                          ? context.appSecondaryText
                           : profitColor(quote.change),
                     ),
                     ProfitText(
@@ -375,11 +376,11 @@ class _PositionHeaderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       '当前市值',
                       style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -395,11 +396,11 @@ class _PositionHeaderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       '累计收益',
                       style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -412,7 +413,7 @@ class _PositionHeaderCard extends StatelessWidget {
                             signed: true,
                             size: 17,
                             color: position.profitPercent == null
-                                ? AppColors.textSecondary
+                                ? context.appSecondaryText
                                 : profitColor(position.profit),
                           ),
                         ),
@@ -462,17 +463,17 @@ class _PositionStatsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '持仓数据',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
           const SizedBox(height: 10),
@@ -503,9 +504,9 @@ class _PositionStatsCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '计价货币 ${asset.currency}，暂不折算为本位币',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
           ],
@@ -568,9 +569,9 @@ class _StatTile extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: AppColors.textSecondary,
+            color: context.appSecondaryText,
           ),
         ),
         const SizedBox(height: 3),
@@ -578,10 +579,10 @@ class _StatTile extends StatelessWidget {
           hiddenValue ? '••••' : value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: context.appPrimaryText,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
         ),
@@ -621,7 +622,7 @@ class _TrendCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -633,10 +634,10 @@ class _TrendCard extends ConsumerWidget {
                   asset.type == InvestmentAssetType.fund ? '净值走势' : '价格走势',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: context.appPrimaryText,
                   ),
                 ),
               ),
@@ -709,19 +710,19 @@ class _NoTransactions extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xF7FFFFFC),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+      border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
     child: const Column(
       children: [
         Icon(
           Icons.receipt_long_outlined,
           size: 22,
-          color: AppColors.textSecondary,
+          color: context.appSecondaryText,
         ),
         SizedBox(height: 6),
         Text(
           '暂无交易记录',
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 12, color: context.appSecondaryText),
         ),
       ],
     ),
