@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../auto_bookkeeping_settings.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingPage extends ConsumerStatefulWidget {
   const AutoBookkeepingPage({super.key});
@@ -145,7 +146,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             children: [
               IconButton(
                 onPressed: context.pop,
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
               ),
               const SizedBox(width: 4),
               Text('自动记账', style: Theme.of(context).textTheme.headlineSmall),
@@ -153,13 +154,13 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           ),
           const SizedBox(height: 12),
           const AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.auto_awesome_outlined,
-                  color: AppColors.primary,
+                  color: context.appPrimary,
                   size: 34,
                 ),
                 SizedBox(height: 10),
@@ -239,7 +240,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               padding: const EdgeInsets.only(top: 14),
               child: Text(
                 _message!,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ),
           const SizedBox(height: 14),
@@ -248,10 +249,10 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               color: Colors.transparent,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.article_outlined),
-                title: const Text('运行日志'),
-                subtitle: const Text('查看最近一次支付识别和弹窗处理结果'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: Icon(Icons.article_outlined),
+                title: Text('运行日志'),
+                subtitle: Text('查看最近一次支付识别和弹窗处理结果'),
+                trailing: Icon(Icons.chevron_right),
                 onTap: () => context.push('/profile/autobookkeeping/logs'),
               ),
             ),
@@ -260,14 +261,14 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const AppCard(
             child: Text(
               '通知栏说明：开启后会有一条低打扰的常驻通知。点击通知正文会打开自动记账设置，通知上的“关闭自动记账”按钮可直接关闭。关闭后通知会自动消失。',
-              style: TextStyle(height: 1.5, color: AppColors.textSecondary),
+              style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
           const SizedBox(height: 10),
           const AppCard(
             child: Text(
               '隐私说明：自动识别只处理支持的付款页面中的必要信息；识别结果会先显示在悬浮卡片中，需用户确认后才写入本地账本。',
-              style: TextStyle(height: 1.5, color: AppColors.textSecondary),
+              style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
         ],
@@ -283,7 +284,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             children: [
               IconButton(
                 onPressed: context.pop,
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
               ),
               const SizedBox(width: 4),
               Text(
@@ -294,13 +295,13 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           ),
           const SizedBox(height: 12),
           const AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.auto_awesome_outlined,
-                  color: AppColors.primary,
+                  color: context.appPrimary,
                   size: 34,
                 ),
                 SizedBox(height: 10),
@@ -323,10 +324,10 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               leading: Icon(
                 Icons.shortcut_outlined,
                 color: _shortcutAvailable
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
+                    ? context.appPrimary
+                    : context.appSecondaryText,
               ),
-              title: const Text('系统快捷指令记账'),
+              title: Text('系统快捷指令记账'),
               subtitle: Text(
                 _loading
                     ? '正在检查…'
@@ -337,8 +338,8 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               trailing: Icon(
                 _shortcutAvailable ? Icons.check_circle : Icons.info_outline,
                 color: _shortcutAvailable
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
+                    ? context.appPrimary
+                    : context.appSecondaryText,
               ),
             ),
           ),
@@ -357,10 +358,10 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 const Divider(height: 1),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.upload_file_outlined),
-                  title: const Text('微信 / 支付宝账单导入'),
-                  subtitle: const Text('导入官方 CSV，预览去重后批量保存'),
-                  trailing: const Icon(Icons.chevron_right),
+                  leading: Icon(Icons.upload_file_outlined),
+                  title: Text('微信 / 支付宝账单导入'),
+                  subtitle: Text('导入官方 CSV，预览去重后批量保存'),
+                  trailing: Icon(Icons.chevron_right),
                   onTap: () => context.push('/profile/bill-import'),
                 ),
               ],
@@ -372,7 +373,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               '快捷指令用法：在系统「快捷指令」App 中搜索“好好记账”，选择「记一笔到好好记账」，把剪贴板文字、语音转写或你自己自动化得到的账单文本传入。运行后会打开好好记账的确认页，不会后台静默保存。',
               style: TextStyle(
                 height: 1.5,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
           ),
@@ -402,7 +403,7 @@ class _PermissionRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Icon(
         icon,
-        color: enabled ? AppColors.primary : AppColors.warning,
+        color: enabled ? context.appPrimary : AppColors.warning,
       ),
       title: Text(title),
       subtitle: Text(enabled ? '已允许' : '未允许'),
