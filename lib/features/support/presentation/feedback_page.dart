@@ -90,15 +90,15 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
-            const Card(
+            Card(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(Icons.support_agent_outlined, color: context.appPrimary),
-                    SizedBox(width: 12),
-                    Expanded(
+                    const SizedBox(width: 12),
+                    const Expanded(
                       child: Text(
                         '这里会真实提交到好好记账服务端工单，不再是静态弹窗。请尽量写清发生页面、操作步骤和大致时间。',
                       ),
