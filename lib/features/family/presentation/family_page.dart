@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../account/application/account_auth_gate.dart';
@@ -162,7 +163,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
           child: Row(children: [
             SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 10),
-            Text('正在统计本月成员消费…', style: TextStyle(color: AppColors.textSecondary)),
+            Text('正在统计本月成员消费…', style: TextStyle(color: context.appSecondaryText)),
           ]),
         ),
       );
@@ -200,14 +201,14 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('本月成员消费',
+          Text('本月成员消费',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text('家庭消费 ¥${MoneyFormatter.decimal(total)}',
-              style: const TextStyle(color: AppColors.textSecondary)),
+              style: const TextStyle(color: context.appSecondaryText)),
           const SizedBox(height: 12),
           if (rows.isEmpty)
-            const Text('暂无成员消费记录')
+            Text('暂无成员消费记录')
           else
             for (final row in rows)
               Padding(
@@ -222,7 +223,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
               ),
           const SizedBox(height: 4),
           const Text('按流水付款成员归属统计；记录人和付款人可以不同。',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
         ],
       ),
     );
@@ -262,7 +263,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
             children: [
               IconButton(
                 onPressed: context.pop,
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
               ),
               const Expanded(
                 child: Text(
@@ -279,14 +280,14 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                 Text(
                   '家庭共享',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontSize: 13,
                   ),
                 ),
                 Text(
                   ' · 企业协作',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontSize: 13,
                   ),
                 ),
@@ -300,7 +301,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
                 _error ?? '无法读取登录状态，请重试',
-                style: const TextStyle(color: AppColors.warning),
+                style: TextStyle(color: AppColors.warning),
               ),
             ),
           if (accountStatus == AccountSessionStatus.initializing)
@@ -401,7 +402,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                             '@${user.username}',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: AppColors.textSecondary,
+                              color: context.appSecondaryText,
                             ),
                           ),
                       ],
