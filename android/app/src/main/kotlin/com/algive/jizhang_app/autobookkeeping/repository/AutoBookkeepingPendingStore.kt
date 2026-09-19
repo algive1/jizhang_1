@@ -53,35 +53,19 @@ object AutoBookkeepingPendingStore {
         val pending = parse(preferences.getString(KEY_PENDING, null))
 
         if (pending != null) {
-            if (isInvalidLegacyNotification(pending)) {
+            val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
+            if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
                 deleteScreenshot(context, pending.optString("screenshotPath"))
                 preferences.edit().remove(KEY_PENDING).apply()
             } else {
-                val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
-                if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
-                    deleteScreenshot(context, pending.optString("screenshotPath"))
-                    preferences.edit().remove(KEY_PENDING).apply()
-                } else {
-                    val sameTransaction = isLikelySameTransaction(pending, incoming)
-                    val existingPriority = pending.optInt(
-                        KEY_PRIORITY,
-                        priorityFor(pending.optString("scene")),
-                    )
-                    val incomingPriority = incoming.optInt(KEY_PRIORITY)
+                val sameTransaction = isLikelySameTransaction(pending, incoming)
+                val existingPriority = pending.optInt(
+                    KEY_PRIORITY,
+                    priorityFor(pending.optString("scene")),
+                )
+                val incomingPriority = incoming.optInt(KEY_PRIORITY)
 
-                    if (sameTransaction) {
-                        if (incomingPriority > existingPriority) {
-                            deleteScreenshot(context, pending.optString("screenshotPath"))
-                            preferences.edit()
-                                .putString(KEY_PENDING, incoming.toString())
-                                .apply()
-                            return PendingEnqueueDecision.ACCEPTED
-                        }
-                        return PendingEnqueueDecision.DUPLICATE
-                    }
-
-                    // A low-confidence notification must never block a real
-                    // payment-success page for the whole pending TTL.
+                if (sameTransaction) {
                     if (incomingPriority > existingPriority) {
                         deleteScreenshot(context, pending.optString("screenshotPath"))
                         preferences.edit()
@@ -89,8 +73,19 @@ object AutoBookkeepingPendingStore {
                             .apply()
                         return PendingEnqueueDecision.ACCEPTED
                     }
-                    return PendingEnqueueDecision.BUSY
+                    return PendingEnqueueDecision.DUPLICATE
                 }
+
+                // A low-confidence notification must never block a real
+                // payment-success page for the whole pending TTL.
+                if (incomingPriority > existingPriority) {
+                    deleteScreenshot(context, pending.optString("screenshotPath"))
+                    preferences.edit()
+                        .putString(KEY_PENDING, incoming.toString())
+                        .apply()
+                    return PendingEnqueueDecision.ACCEPTED
+                }
+                return PendingEnqueueDecision.BUSY
             }
         }
 
@@ -242,7 +237,6 @@ object AutoBookkeepingPendingStore {
         if (
             remember &&
             value != null &&
-            !isInvalidLegacyNotification(value) &&
             fingerprint.isNotBlank()
         ) {
             val handled = JSONObject(value.toString()).apply {
@@ -293,7 +287,6 @@ object AutoBookkeepingPendingStore {
         val createdAt = value.optLong(KEY_CREATED_AT, 0L)
 
         if (
-            isInvalidLegacyNotification(value) ||
             createdAt <= 0L ||
             System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS
         ) {
@@ -421,12 +414,6 @@ object AutoBookkeepingPendingStore {
                     normalized.contains("储蓄卡")
             else -> false
         }
-    }
-
-    private fun isInvalidLegacyNotification(value: JSONObject): Boolean {
-        if (!value.optString("scene").startsWith("PAYMENT_NOTIFICATION")) return false
-        val merchant = value.optString("merchant").trim()
-        return merchant.isBlank() || merchant == "支付通知待确认"
     }
 
     private fun isManagedScreenshot(context: Context, path: String): Boolean {
