@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/payment_notification_service.dart';
 import 'notification_target_card.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class PaymentNotificationPage extends ConsumerStatefulWidget {
   const PaymentNotificationPage({super.key});
@@ -98,7 +99,7 @@ class _PaymentNotificationPageState
             children: [
               IconButton(
                 onPressed: context.pop,
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
               ),
               const SizedBox(width: 4),
               Text('支付通知记账', style: Theme.of(context).textTheme.headlineSmall),
@@ -106,13 +107,13 @@ class _PaymentNotificationPageState
           ),
           const SizedBox(height: 12),
           const AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.notifications_active_outlined,
-                  color: AppColors.primary,
+                  color: context.appPrimary,
                   size: 34,
                 ),
                 SizedBox(height: 10),
@@ -131,7 +132,7 @@ class _PaymentNotificationPageState
           const SizedBox(height: 14),
           AppCard(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: CircularProgressIndicator())
                 : Column(
                     children: [
                       ListTile(
@@ -141,7 +142,7 @@ class _PaymentNotificationPageState
                               ? Icons.check_circle_outline
                               : Icons.info_outline,
                           color: _accessGranted == true
-                              ? AppColors.primary
+                              ? context.appPrimary
                               : AppColors.warning,
                         ),
                         title: Text(
@@ -175,14 +176,14 @@ class _PaymentNotificationPageState
               padding: const EdgeInsets.only(top: 14),
               child: Text(
                 _message!,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ),
           const SizedBox(height: 14),
           const AppCard(
             child: Text(
               '隐私说明：通知只在本机转换为待确认数据，确认或忽略后才会清理。收款、到账、退款等入账类通知不会按支出处理。',
-              style: TextStyle(height: 1.5, color: AppColors.textSecondary),
+              style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
         ],
