@@ -44,6 +44,14 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         if (INCOMING_WORDS.any { content.contains(it) }) return false
 
         val hasStrongSuccess = SUCCESS_WORDS.any { content.contains(it) }
+        if (packageName == "com.tencent.mm" &&
+            hasStrongSuccess &&
+            WECHAT_PAYMENT_CONTEXT.none { content.contains(it) }
+        ) {
+            // WeChat also carries ordinary chat notifications. A friend quoting
+            // "支付成功 ¥20" must not become a bookkeeping candidate.
+            return false
+        }
         if (packageName in MARKETPLACE_PACKAGES) {
             // Marketplace apps emit many order/marketing notifications containing
             // the word "支付". Only completed-payment semantics are allowed into
@@ -56,6 +64,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         // Wallet/bank apps sometimes publish terse debit notifications without
         // the word "成功"; "消费/扣款/支出" are sufficiently strong for these apps.
         return packageName in WALLET_PACKAGES &&
+            NON_TRANSACTION_WORDS.none { content.contains(it) } &&
             DEBIT_WORDS.any { content.contains(it) }
     }
 
@@ -95,6 +104,10 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "付款完成",
             "订单支付成功",
             "订单已支付",
+            "订单支付完成",
+            "支付已完成",
+            "付款已完成",
+            "交易已完成",
         )
         private val DEBIT_WORDS = setOf("消费", "扣款", "支出")
         private val INCOMING_WORDS = setOf(
@@ -108,8 +121,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         )
         private val REJECT_WORDS = setOf(
             "待支付",
+            "待付款",
             "去支付",
+            "去付款",
             "未支付",
+            "未付款",
             "支付失败",
             "付款失败",
             "交易失败",
@@ -118,11 +134,21 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "取消支付",
             "重新支付",
             "支付提醒",
-            "支付优惠",
-            "支付立减",
-            "预计支付",
-            "应付",
+            "请支付",
+        )
+        private val NON_TRANSACTION_WORDS = setOf(
+            "优惠券",
+            "消费券",
+            "立减券",
+            "活动提醒",
             "付款码",
+            "收款码",
+        )
+        private val WECHAT_PAYMENT_CONTEXT = setOf(
+            "微信支付",
+            "支付凭证",
+            "付款凭证",
+            "服务通知",
         )
     }
 }
