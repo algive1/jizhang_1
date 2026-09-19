@@ -1,4 +1,4 @@
-import { createVerify, X509Certificate } from 'node:crypto';
+import { verify as cryptoVerify, X509Certificate } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -80,10 +80,8 @@ function verifyAppleJws(jws:string):Json{
   check(roots.length>0,'服务端未配置 Apple Root CA',503);
   const top=certs[certs.length-1]!;
   check(roots.some(root=>(top.fingerprint256===root.fingerprint256)||(top.checkIssued(root)&&top.verify(root.publicKey))),'Apple 根证书不受信任',400);
-  const verifier=createVerify('SHA256');
-  verifier.update(`${parts[0]!}.${parts[1]!}`);
-  verifier.end();
-  check(verifier.verify(leaf.publicKey,b64url(parts[2]!)),'Apple 签名校验失败',400);
+  const signingInput=Buffer.from(`${parts[0]!}.${parts[1]!}`,'utf8');
+  check(cryptoVerify('sha256',signingInput,{key:leaf.publicKey,dsaEncoding:'ieee-p1363'},b64url(parts[2]!)),'Apple 签名校验失败',400);
   const payload=JSON.parse(b64url(parts[1]!).toString('utf8')) as Json;
   const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
   if(expectedBundle&&payload.bundleId!==undefined) check(String(payload.bundleId)===expectedBundle,'Apple Bundle ID 不匹配',400);
@@ -99,6 +97,10 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
   const original=String(payload.originalTransactionId??transactionId);
   const productId=String(payload.productId??'');
   check(transactionId&&original&&products[productId],'Apple 交易商品无效',400);
+  const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
+  check(expectedBundle&&String(payload.bundleId??'')===expectedBundle,'Apple Bundle ID 未配置或不匹配',503);
+  const expectedEnvironment=process.env.APPLE_ENVIRONMENT?.trim();
+  check(expectedEnvironment&&String(payload.environment??'')===expectedEnvironment,'Apple 交易环境未配置或不匹配',503);
   const existing=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
   check(!existing||existing.user_id===userId,'该 App Store 订阅已绑定其他账号',409);
   const expiresAt=Number(payload.expiresDate??0);
@@ -118,6 +120,8 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
     revokedAt?Math.floor(revokedAt/1000):null,raw,store.now());
 
 }
+
+export function applePlanForProductId(productId:string){return products[productId]?.plan??null;}
 
 export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authenticate:Authenticate){
   ensureSchema(store);
