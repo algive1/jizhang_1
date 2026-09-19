@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/monotone_smooth_path.dart';
 import '../domain/asset_overview.dart';
@@ -46,10 +47,10 @@ class AssetDistribution extends StatelessWidget {
           const AssetSectionHeading('资产分布', more: true),
           const SizedBox(height: 12),
           if (entries.isEmpty)
-            const SizedBox(
+            SizedBox(
               height: 95,
               child: Center(
-                child: Text('暂无正余额资产', style: TextStyle(color: assetMuted)),
+                child: Text('暂无正余额资产', style: TextStyle(color: context.appSecondaryText)),
               ),
             )
           else
@@ -74,11 +75,11 @@ class AssetDistribution extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text(
+                              Text(
                                 '总资产',
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: assetMuted,
+                                  color: context.appSecondaryText,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -120,9 +121,9 @@ class AssetDistribution extends StatelessWidget {
                                       child: Text(
                                         entries[i].key,
                                         maxLines: 1,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 9,
-                                          color: assetMuted,
+                                          color: context.appSecondaryText,
                                         ),
                                       ),
                                     ),
@@ -130,9 +131,9 @@ class AssetDistribution extends StatelessWidget {
                                   const SizedBox(width: 2),
                                   Text(
                                     '${(entries[i].value / overview.assets * 100).toStringAsFixed(1)}%',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 9,
-                                      color: assetInk,
+                                      color: context.appPrimaryText,
                                     ),
                                   ),
                                 ],
@@ -195,12 +196,12 @@ class _AssetTrendState extends State<AssetTrend> {
                 child: FittedBox(
                   alignment: Alignment.centerLeft,
                   fit: BoxFit.scaleDown,
-                  child: const Text(
+                  child: Text(
                     '资产变化',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: assetInk,
+                      color: context.appPrimaryText,
                     ),
                   ),
                 ),
@@ -307,8 +308,8 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: days == option.$1
-                      ? const Color(0xFF83A25D)
-                      : assetCream,
+                      ? context.appPrimary
+                      : context.appSurfaceSoft,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: FittedBox(
@@ -318,7 +319,7 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       fontSize: 8,
-                      color: days == option.$1 ? Colors.white : assetMuted,
+                      color: days == option.$1 ? Colors.white : context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -593,24 +594,24 @@ class _AssetAnalysisNote extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F5E6),
+      color: context.appPrimarySoft,
       borderRadius: BorderRadius.circular(14),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1),
-          child: Icon(Icons.insights_outlined, size: 17, color: assetGreen),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(Icons.insights_outlined, size: 17, color: context.appPrimary),
         ),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.4,
-              color: assetMuted,
+              color: context.appSecondaryText,
             ),
           ),
         ),
