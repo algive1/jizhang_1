@@ -106,9 +106,21 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
     }
     if (!(_notificationGranted ?? false)) {
       try {
-        await bridge.requestNotificationPermission();
+        final granted = await bridge.requestNotificationPermission();
+        if (!mounted) return;
+        await _load();
+        if (!granted) {
+          if (mounted) {
+            setState(
+              () => _message =
+                  '请允许通知，并确保系统中的「自动记账状态」通知渠道已开启，然后返回本页。',
+            );
+          }
+          return;
+        }
       } on Object catch (error) {
         if (mounted) setState(() => _message = '$error');
+        return;
       }
     }
     await _setEnabled(bridge, true);
@@ -232,12 +244,26 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                           icon: Icons.notifications_none_outlined,
                           title: '常驻通知权限',
                           enabled: _notificationGranted == true,
-                          onTap: () => _openSettings(
-                            ref
-                                .read(autoBookkeepingSettingsProvider)
-                                .requestNotificationPermission,
-                            '请在系统设置中允许通知，自动记账开启后才能显示常驻状态。',
-                          ),
+                          onTap: () async {
+                            final bridge = ref.read(
+                              autoBookkeepingSettingsProvider,
+                            );
+                            try {
+                              final granted =
+                                  await bridge.requestNotificationPermission();
+                              if (!mounted) return;
+                              await _load();
+                              setState(
+                                () => _message = granted
+                                    ? '通知权限已允许，自动记账开启后会显示常驻状态。'
+                                    : '请在系统通知设置中允许通知，并开启「自动记账状态」渠道。',
+                              );
+                            } on Object catch (error) {
+                              if (mounted) {
+                                setState(() => _message = '$error');
+                              }
+                            }
+                          },
                         ),
                         _PermissionRow(
                           icon: Icons.notifications_active_outlined,
