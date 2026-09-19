@@ -282,8 +282,10 @@ class _ConsumptionCalendarPageState
     );
   }
 
-  bool get _isCurrentMonth =>
-      _month.year == _today.year && _month.month == _today.month;
+  bool get _isCurrentMonth {
+    final today = _today;
+    return _month.year == today.year && _month.month == today.month;
+  }
 
   int _dateKey(DateTime date) =>
       date.year * 10000 + date.month * 100 + date.day;
@@ -328,17 +330,21 @@ class _ConsumptionCalendarPageState
   }
 
   void _setMonth(DateTime month) => setState(() {
+    final today = _today;
     _month = DateTime(month.year, month.month);
-    _selectedDay = _isCurrentMonth
-        ? _today.day
+    final isCurrentMonth =
+        _month.year == today.year && _month.month == today.month;
+    _selectedDay = isCurrentMonth
+        ? today.day
         : _viewMode == _CalendarViewMode.week
             ? 1
             : null;
   });
 
   void _goToday() => setState(() {
-    _month = DateTime(_today.year, _today.month);
-    _selectedDay = _today.day;
+    final today = _today;
+    _month = DateTime(today.year, today.month);
+    _selectedDay = today.day;
   });
 
   void _openAnalysis() {
@@ -347,7 +353,10 @@ class _ConsumptionCalendarPageState
   }
 
   Future<void> _addForSelectedDate() async {
-    final day = _selectedDay ?? (_isCurrentMonth ? _today.day : 1);
+    final today = _today;
+    final isCurrentMonth =
+        _month.year == today.year && _month.month == today.month;
+    final day = _selectedDay ?? (isCurrentMonth ? today.day : 1);
     final selectedDate = DateTime(_month.year, _month.month, day);
     final scopedBookId = _effectiveBookFilterId(ref.read(booksProvider).value);
     final initialBookId = scopedBookId ?? ref.read(activeBookIdProvider);
