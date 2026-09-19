@@ -1,8 +1,51 @@
+import AppIntents
 import BackgroundTasks
 import Flutter
 import UIKit
 import UserNotifications
 import Vision
+
+@available(iOS 16.0, *)
+struct HaoHaoBookkeepingShortcutIntent: AppIntent {
+  static var title: LocalizedStringResource = "记一笔到好好记账"
+  static var description = IntentDescription("把一段账单文字发送到好好记账，打开后确认再保存。")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "账单文字", requestValueDialog: IntentDialog("例如：午餐 28 元微信支付"))
+  var text: String
+
+  func perform() async throws -> some IntentResult {
+    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else {
+      throw NSError(
+        domain: "HaoHaoBookkeepingShortcut",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "账单文字不能为空"]
+      )
+    }
+    let defaults = UserDefaults.standard
+    defaults.set(value, forKey: "haohao.shortcut.pendingText")
+    defaults.set(false, forKey: "haohao.shortcut.routeSent")
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct HaoHaoBookkeepingShortcuts: AppShortcutsProvider {
+  static var appShortcuts: [AppShortcut] {
+    [
+      AppShortcut(
+        intent: HaoHaoBookkeepingShortcutIntent(),
+        phrases: [
+          "用\(.applicationName)记账",
+          "在\(.applicationName)记一笔"
+        ],
+        shortTitle: "记一笔",
+        systemImageName: "plus.circle"
+      )
+    ]
+  }
+}
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -112,6 +155,29 @@ import Vision
               ))
             }
           }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let shortcutChannel = FlutterMethodChannel(
+      name: "jizhang/ios_shortcut",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    shortcutChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "takePendingText":
+        let defaults = UserDefaults.standard
+        let text = defaults.string(forKey: "haohao.shortcut.pendingText")
+        defaults.removeObject(forKey: "haohao.shortcut.pendingText")
+        defaults.set(false, forKey: "haohao.shortcut.routeSent")
+        result(text)
+      case "isAvailable":
+        if #available(iOS 16.0, *) {
+          result(true)
+        } else {
+          result(false)
         }
       default:
         result(FlutterMethodNotImplemented)
@@ -274,6 +340,17 @@ import Vision
           }
         }
       }
+    }
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    let defaults = UserDefaults.standard
+    let pending = defaults.string(forKey: "haohao.shortcut.pendingText")
+    let routeSent = defaults.bool(forKey: "haohao.shortcut.routeSent")
+    if let pending, !pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !routeSent {
+      defaults.set(true, forKey: "haohao.shortcut.routeSent")
+      emitNotificationRoute("/profile/autobookkeeping/shortcut")
     }
   }
 
