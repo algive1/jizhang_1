@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../formatters/money_formatter.dart';
 import '../models/goal.dart';
 import 'app_card.dart';
 import '../../features/goals/domain/goal_milestone_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class GoalProgressCard extends StatelessWidget {
   const GoalProgressCard({required this.goal, super.key, this.onTap});
@@ -37,7 +37,7 @@ class GoalProgressCard extends StatelessWidget {
                 Icon(
                   _goalIcon(goal.goalType),
                   size: 20,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -45,9 +45,9 @@ class GoalProgressCard extends StatelessWidget {
                     goal.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -55,9 +55,9 @@ class GoalProgressCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '${goal.progressPercent}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.primaryDark,
+                    color: context.appPrimary,
                   ),
                 ),
               ],
@@ -68,9 +68,9 @@ class GoalProgressCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 '¥${MoneyFormatter.whole(goal.currentAmount)} / ¥${MoneyFormatter.whole(goal.targetAmount)}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 21,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -88,7 +88,7 @@ class GoalProgressCard extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: lineProgress,
                         minHeight: 3,
-                        color: AppColors.primary,
+                        color: context.appPrimary,
                         backgroundColor: const Color(0xFFDFE7CB),
                       ),
                     ),
@@ -113,34 +113,34 @@ class GoalProgressCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: done
-                                        ? AppColors.primary
-                                        : AppColors.surface,
+                                        ? context.appPrimary
+                                        : context.appSurface,
                                     border: Border.all(
                                       color: done || current
-                                          ? AppColors.primary
+                                          ? context.appPrimary
                                           : const Color(0xFFD8DCCB),
                                       width: current ? 3 : 2,
                                     ),
                                   ),
                                   child: done
-                                      ? const Icon(
+                                      ? Icon(
                                           Icons.check,
                                           size: 17,
                                           color: Colors.white,
                                         )
                                       : current
-                                      ? const Center(
+                                      ? Center(
                                           child: Icon(
                                             Icons.circle,
                                             size: 9,
-                                            color: AppColors.primary,
+                                            color: context.appPrimary,
                                           ),
                                         )
                                       : amount == goal.targetAmount
                                       ? Icon(
                                           _goalIcon(goal.goalType),
                                           size: 13,
-                                          color: AppColors.textSecondary,
+                                          color: context.appSecondaryText,
                                         )
                                       : null,
                                 ),
@@ -154,16 +154,16 @@ class GoalProgressCard extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: current
-                                          ? AppColors.textPrimary
-                                          : AppColors.textSecondary,
+                                          ? context.appPrimaryText
+                                          : context.appSecondaryText,
                                     ),
                                   ),
                                 ),
                                 Text(
                                   current ? '当前' : ' ',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 9,
-                                    color: AppColors.primaryDark,
+                                    color: context.appPrimary,
                                   ),
                                 ),
                               ],
@@ -184,16 +184,16 @@ class GoalProgressCard extends StatelessWidget {
                     next == null
                         ? '目标已达成'
                         : '下一站 ¥${MoneyFormatter.whole(next.amount)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.primaryDark,
+                      color: context.appPrimary,
                     ),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 18,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                 ),
               ],
             ),
