@@ -139,6 +139,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
           ifAbsent: () => transaction.netExpenseAmount);
     }
     final total = spending.values.fold<double>(0, (sum, value) => sum + value);
+    final currentMemberIds = _members.map((member) => member['user_id'] as String).toSet();
+    final formerMemberAmount = spending.entries
+        .where((entry) => !currentMemberIds.contains(entry.key))
+        .fold<double>(0, (sum, entry) => sum + entry.value);
     final rows = _members.map((member) {
       final id = member['user_id'] as String;
       final displayName =
@@ -146,8 +150,11 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
           ? member['display_name'] as String
           : member['username'] as String;
       return (id: id, name: displayName, amount: spending[id] ?? 0);
-    }).toList()
-      ..sort((a, b) => b.amount.compareTo(a.amount));
+    }).toList();
+    if (formerMemberAmount > 0) {
+      rows.add((id: '_former', name: '已退出成员', amount: formerMemberAmount));
+    }
+    rows.sort((a, b) => b.amount.compareTo(a.amount));
 
     return AppCard(
       child: Column(
@@ -190,7 +197,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     final book = ref.watch(activeBookProvider);
     final sync = ref.watch(activeSharedStateProvider).value;
     final pending = (sync?['pending'] as List? ?? []).cast<Json>();
-    final familyTransactions = book?.type == BookType.family && book != null
+    final familyTransactions = book != null && book.type == BookType.family
         ? ref.watch(transactionsByBookProvider(book.id)).value ?? const <TransactionRecord>[]
         : const <TransactionRecord>[];
     if (user != null &&
