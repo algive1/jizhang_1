@@ -55,8 +55,10 @@ export function registerReleaseControlRoutes(app:FastifyInstance,store:Store) {
     const row=store.db.prepare('SELECT * FROM app_release_config WHERE platform=?').get(q.platform) as any;
     if(!row || !row.enabled) return {status:'none',configured:false};
     const required=compare(q.version,row.minimum_version)<0;
-    const optional=compare(q.version,row.latest_version)<0;
-    return {configured:true,status:required?'required':optional?'optional':'none',latestVersion:row.latest_version,minimumVersion:row.minimum_version,storeUrl:row.store_url,message:optional?row.message:null};
+    const belowLatest=compare(q.version,row.latest_version)<0;
+    const bucket=(()=>{if(!q.installationId)return 0;let h=2166136261;for(const ch of q.installationId+':release'){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0)%100})();
+    const optional=belowLatest && bucket<row.rollout_percent;
+    return {configured:true,status:required?'required':optional?'optional':'none',latestVersion:row.latest_version,minimumVersion:row.minimum_version,storeUrl:row.store_url,message:(required||optional)?row.message:null};
   });
 
   app.get('/api/v1/app/features',async request=>{
