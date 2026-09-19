@@ -39,12 +39,19 @@ class AutoBillOverlayService : Service() {
             remove()
         }
 
+        val transactionLabel = when (candidate.transactionType) {
+            "INCOME" -> "收入"
+            "REFUND" -> "退款"
+            "REIMBURSEMENT" -> "报销回款"
+            else -> "支出"
+        }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 20, 28, 20)
             setBackgroundColor(Color.rgb(38, 38, 42))
             addView(TextView(context).apply {
-                text = "好好记账\n¥%.2f  %s\n%s\n请打开应用确认账本、账户与分类".format(
+                text = "好好记账 · %s\n¥%.2f  %s\n%s\n请打开应用确认账本、账户与分类".format(
+                    transactionLabel,
                     candidate.amountInCents / 100.0,
                     candidate.merchantNormalized,
                     candidate.paymentMethod,
@@ -59,7 +66,7 @@ class AutoBillOverlayService : Service() {
                 setPadding(0, 12, 0, 12)
             })
             addView(TextView(context).apply {
-                text = "识别到支付，确认后记账"
+                text = "识别到$transactionLabel，确认后记账"
                 setTextColor(Color.WHITE)
                 textSize = 14f
                 gravity = Gravity.CENTER
