@@ -6,6 +6,7 @@ import '../../../core/models/analysis.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/cashflow_trend_chart.dart';
 import '../../../core/widgets/money_text.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class CashflowSummaryCard extends StatelessWidget {
   const CashflowSummaryCard({required this.snapshot, this.onTap, super.key});
@@ -27,7 +28,7 @@ class CashflowSummaryCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              if (onTap != null) const Icon(Icons.chevron_right),
+              if (onTap != null) Icon(Icons.chevron_right),
             ],
           ),
           const SizedBox(height: 14),
@@ -40,7 +41,7 @@ class CashflowSummaryCard extends StatelessWidget {
                 context,
                 '支出',
                 snapshot.totalExpense,
-                AppColors.textPrimary,
+                context.appPrimaryText,
               ),
               _amount(
                 context,
@@ -48,7 +49,7 @@ class CashflowSummaryCard extends StatelessWidget {
                 snapshot.netCashflow,
                 snapshot.netCashflow < 0
                     ? AppColors.warning
-                    : AppColors.primaryDark,
+                    : context.appPrimary,
               ),
             ],
           ),
@@ -56,14 +57,14 @@ class CashflowSummaryCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '收入 ${snapshot.incomeCount} 笔 · 支出 ${snapshot.expenseCount} 笔',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
-            const Text(
+            Text(
               '转账、初始余额和余额校准不计入收支。',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
             ),
           ],
         ],
@@ -80,7 +81,7 @@ class CashflowSummaryCard extends StatelessWidget {
     children: [
       Text(
         title,
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        style: TextStyle(color: context.appSecondaryText, fontSize: 12),
       ),
       MoneyText(
         value,
@@ -147,14 +148,14 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.appPrimaryText,
                   ),
                 ),
               ),
               Text(
                 '单位 ${widget.snapshot.currency}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appSecondaryText,
                   fontSize: 10,
                 ),
               ),
@@ -167,8 +168,8 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
               Expanded(
                 child: Text(
                   '本期支出 ¥${MoneyFormatter.whole(widget.snapshot.totalExpense)}  · 日均 ¥${MoneyFormatter.whole(averageExpense)}',
-                  style: const TextStyle(
-                    color: AppColors.primaryDark,
+                  style: TextStyle(
+                    color: context.appPrimary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -248,7 +249,7 @@ class _TrendLegend extends StatelessWidget {
         const SizedBox(width: 3),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+          style: TextStyle(color: context.appSecondaryText, fontSize: 10),
         ),
       ],
     );
@@ -281,9 +282,9 @@ class _CashflowCategoriesCardState extends State<CashflowCategoriesCard> {
         Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         if (widget.items.isEmpty)
-          const Text(
+          Text(
             '本期暂无记录',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.appSecondaryText),
           ),
         for (final item in widget.items.take(
           _expanded ? widget.items.length : 5,
@@ -303,7 +304,7 @@ class _CashflowCategoriesCardState extends State<CashflowCategoriesCard> {
                     ),
                     Text(
                       '${item.count} 笔 · ${(widget.total == 0 ? 0 : item.amount / widget.total * 100).toStringAsFixed(1)}%',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: context.appSecondaryText),
                     ),
                   ],
                 ),
@@ -312,8 +313,8 @@ class _CashflowCategoriesCardState extends State<CashflowCategoriesCard> {
                   value: widget.total == 0
                       ? 0
                       : (item.amount / widget.total).clamp(0, 1),
-                  color: AppColors.primary,
-                  backgroundColor: AppColors.primarySoft,
+                  color: context.appPrimary,
+                  backgroundColor: context.appPrimarySoft,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ],
