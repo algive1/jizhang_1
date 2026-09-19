@@ -11,7 +11,7 @@ struct HaoHaoBookkeepingShortcutIntent: AppIntent {
   static var description = IntentDescription("把一段账单文字发送到好好记账，打开后确认再保存。")
   static var openAppWhenRun: Bool = true
 
-  @Parameter(title: "账单文字", requestValueDialog: IntentDialog("例如：午餐 28 元微信支付"))
+  @Parameter(title: "账单文字")
   var text: String
 
   func perform() async throws -> some IntentResult {
@@ -33,17 +33,15 @@ struct HaoHaoBookkeepingShortcutIntent: AppIntent {
 @available(iOS 16.0, *)
 struct HaoHaoBookkeepingShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
-    [
-      AppShortcut(
-        intent: HaoHaoBookkeepingShortcutIntent(),
-        phrases: [
-          "用\(.applicationName)记账",
-          "在\(.applicationName)记一笔"
-        ],
-        shortTitle: "记一笔",
-        systemImageName: "plus.circle"
-      )
-    ]
+    AppShortcut(
+      intent: HaoHaoBookkeepingShortcutIntent(),
+      phrases: [
+        "用\(.applicationName)记账",
+        "在\(.applicationName)记一笔"
+      ],
+      shortTitle: "记一笔",
+      systemImageName: "plus.circle"
+    )
   }
 }
 
