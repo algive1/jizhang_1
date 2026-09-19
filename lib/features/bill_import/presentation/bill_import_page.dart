@@ -333,9 +333,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         type: FileType.custom,
         allowedExtensions: const ['csv', 'txt'],
       );
-      final path = file?.path;
-      if (path == null) return;
-      final result = await const BillImportService().parseFile(path);
+      if (file == null || file.path == null) return;
+      final result = await const BillImportService().parseFile(file.path!);
       if (!mounted) return;
       setState(() {
         _fileName = file.name;
