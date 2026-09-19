@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 abstract final class AppBottomSheet {
   static Future<T?> show<T>({
