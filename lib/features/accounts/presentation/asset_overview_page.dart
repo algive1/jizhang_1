@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../../core/models/account.dart';
@@ -104,7 +103,7 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                   }
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               AssetShortcuts(
                 accountCount: selected.accounts
                     .where(
@@ -663,10 +662,10 @@ class _RecentChangesState extends State<_RecentChanges> {
             for (var index = 0; index < visible.length; index++) ...[
               _RecentRow(record: visible[index], accountIds: accountIds),
               if (index < visible.length - 1)
-                const Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
+                Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
             ],
           if (_showTip) ...[
-            const SizedBox(height: 5),
+            SizedBox(height: 5),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -918,7 +917,7 @@ class _AssetSheetFrame extends StatelessWidget {
       heightFactor: .52,
       alignment: Alignment.bottomCenter,
       child: Material(
-        key: const ValueKey('asset-sheet-frame'),
+        key: ValueKey('asset-sheet-frame'),
         color: context.appSurfaceSoft,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         clipBehavior: Clip.antiAlias,
