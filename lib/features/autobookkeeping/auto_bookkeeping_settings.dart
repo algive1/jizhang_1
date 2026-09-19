@@ -14,6 +14,9 @@ class AutoBookkeepingRuntimeStatus {
     required this.notificationListenerConnected,
     required this.screenshotSupported,
     required this.screenshotEnabled,
+    required this.ruleSchemaVersion,
+    required this.ruleVersions,
+    required this.ruleSource,
   });
 
   final bool enabled;
@@ -27,6 +30,9 @@ class AutoBookkeepingRuntimeStatus {
   final bool notificationListenerConnected;
   final bool screenshotSupported;
   final bool screenshotEnabled;
+  final int ruleSchemaVersion;
+  final String ruleVersions;
+  final String ruleSource;
 
   factory AutoBookkeepingRuntimeStatus.fromMap(Map<Object?, Object?> map) {
     bool flag(String key) => map[key] == true;
@@ -42,6 +48,10 @@ class AutoBookkeepingRuntimeStatus {
       notificationListenerConnected: flag('notificationListenerConnected'),
       screenshotSupported: flag('screenshotSupported'),
       screenshotEnabled: flag('screenshotEnabled'),
+      ruleSchemaVersion:
+          (map['ruleSchemaVersion'] as num?)?.toInt() ?? 0,
+      ruleVersions: map['ruleVersions']?.toString() ?? '',
+      ruleSource: map['ruleSource']?.toString() ?? 'unknown',
     );
   }
 }
@@ -119,6 +129,9 @@ class MethodChannelAutoBookkeepingSettings
           notificationListenerConnected: false,
           screenshotSupported: false,
           screenshotEnabled: false,
+          ruleSchemaVersion: 0,
+          ruleVersions: '',
+          ruleSource: 'unknown',
         );
       }
       return AutoBookkeepingRuntimeStatus.fromMap(raw);
