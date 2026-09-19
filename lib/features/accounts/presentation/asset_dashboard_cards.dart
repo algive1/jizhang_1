@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import 'asset_dashboard_icons.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/privacy_amount.dart';
 
-const assetInk = Color(0xFF152018);
 const assetGreen = Color(0xFF436B28);
 const assetCoral = Color(0xFFF18475);
 
