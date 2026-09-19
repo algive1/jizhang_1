@@ -187,6 +187,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
   Future<void> _openFilter(List<Category> categories) async {
     final selected = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => SafeArea(
