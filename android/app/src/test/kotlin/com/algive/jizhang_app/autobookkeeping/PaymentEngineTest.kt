@@ -3,6 +3,7 @@ package com.algive.jizhang_app.autobookkeeping
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
+import com.algive.jizhang_app.autobookkeeping.parser.PaymentNotificationCandidateParser
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.*
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
@@ -72,6 +73,47 @@ class PaymentEngineTest {
             assertEquals(packageName, sourceApp, candidate?.sourceApp)
         }
     }
+    @Test fun nativeNotificationParserAcceptsCompletedMeituanPayment() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.sankuai.meituan",
+            "美团",
+            "支付成功，原价 ￥40.00，优惠券 ￥4.00，实付金额 ￥36.00，商户：测试餐厅",
+            100000,
+        )
+        assertEquals(3600L, candidate?.amountInCents)
+        assertEquals("测试餐厅", candidate?.merchantRaw)
+        assertEquals("MEITUAN", candidate?.sourceApp)
+        assertEquals("PAYMENT_NOTIFICATION", candidate?.scene?.scene)
+    }
+
+    @Test fun nativeNotificationParserRejectsPendingAndWechatChat() {
+        val parser = PaymentNotificationCandidateParser()
+        assertNull(
+            parser.parse(
+                "com.sankuai.meituan",
+                "美团",
+                "订单待支付 ￥36.00，请尽快支付",
+                100000,
+            ),
+        )
+        assertNull(
+            parser.parse(
+                "com.tencent.mm",
+                "小王",
+                "我刚支付成功 ￥20.00，商户：便利店",
+                100000,
+            ),
+        )
+        assertNotNull(
+            parser.parse(
+                "com.tencent.mm",
+                "微信支付",
+                "支付成功 ￥20.00，商户：便利店",
+                100000,
+            ),
+        )
+    }
+
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
