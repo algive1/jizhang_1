@@ -16,6 +16,12 @@ import kotlin.math.abs
  * lower-confidence notification candidate. Cross-source observations of the
  * same payment are also deduplicated before they reach the overlay.
  */
+enum class PendingEnqueueDecision {
+    ACCEPTED,
+    DUPLICATE,
+    BUSY,
+}
+
 object AutoBookkeepingPendingStore {
     private const val PREFS = "autobookkeeping.pending"
     private const val KEY_PENDING = "pending"
@@ -30,7 +36,10 @@ object AutoBookkeepingPendingStore {
     private const val HANDLED_TTL_MILLIS = 10 * 60 * 1000L
     private const val CROSS_SOURCE_MATCH_MILLIS = 2 * 60 * 1000L
 
-    fun enqueueIfAbsent(context: Context, candidate: PaymentCandidate): Boolean {
+    fun enqueueIfAbsent(context: Context, candidate: PaymentCandidate): Boolean =
+        enqueueDecision(context, candidate) == PendingEnqueueDecision.ACCEPTED
+
+    fun enqueueDecision(context: Context, candidate: PaymentCandidate): PendingEnqueueDecision {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val incoming = payload(candidate, now)
@@ -48,18 +57,18 @@ object AutoBookkeepingPendingStore {
                 if (sameTransaction) {
                     if (incomingPriority > existingPriority) {
                         preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
-                        return true
+                        return PendingEnqueueDecision.ACCEPTED
                     }
-                    return false
+                    return PendingEnqueueDecision.DUPLICATE
                 }
 
                 // A low-confidence notification must never block a real
                 // accessibility payment-success page for up to 30 minutes.
                 if (incomingPriority > existingPriority) {
                     preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
-                    return true
+                    return PendingEnqueueDecision.ACCEPTED
                 }
-                return false
+                return PendingEnqueueDecision.BUSY
             }
         }
 
@@ -67,7 +76,7 @@ object AutoBookkeepingPendingStore {
         val handledFingerprint = preferences.getString(KEY_HANDLED_FINGERPRINT, null)
         val handledAt = preferences.getLong(KEY_HANDLED_AT, 0L)
         if (handledFingerprint == fingerprint && now - handledAt <= HANDLED_TTL_MILLIS) {
-            return false
+            return PendingEnqueueDecision.DUPLICATE
         }
 
         val handledPayload = parse(preferences.getString(KEY_HANDLED_PAYLOAD, null))
@@ -75,11 +84,11 @@ object AutoBookkeepingPendingStore {
             now - handledAt <= HANDLED_TTL_MILLIS &&
             isLikelySameTransaction(handledPayload, incoming)
         ) {
-            return false
+            return PendingEnqueueDecision.DUPLICATE
         }
 
         preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
-        return true
+        return PendingEnqueueDecision.ACCEPTED
     }
 
     /** Converts a parsed, already-redacted Flutter notification candidate. */
