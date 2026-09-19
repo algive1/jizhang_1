@@ -6,6 +6,7 @@ import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.abs
 
 enum class PendingEnqueueDecision {
@@ -53,10 +54,12 @@ object AutoBookkeepingPendingStore {
 
         if (pending != null) {
             if (isInvalidLegacyNotification(pending)) {
+                deleteScreenshot(context, pending.optString("screenshotPath"))
                 preferences.edit().remove(KEY_PENDING).apply()
             } else {
                 val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
                 if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
+                    deleteScreenshot(context, pending.optString("screenshotPath"))
                     preferences.edit().remove(KEY_PENDING).apply()
                 } else {
                     val sameTransaction = isLikelySameTransaction(pending, incoming)
@@ -68,6 +71,7 @@ object AutoBookkeepingPendingStore {
 
                     if (sameTransaction) {
                         if (incomingPriority > existingPriority) {
+                            deleteScreenshot(context, pending.optString("screenshotPath"))
                             preferences.edit()
                                 .putString(KEY_PENDING, incoming.toString())
                                 .apply()
@@ -79,6 +83,7 @@ object AutoBookkeepingPendingStore {
                     // A low-confidence notification must never block a real
                     // payment-success page for the whole pending TTL.
                     if (incomingPriority > existingPriority) {
+                        deleteScreenshot(context, pending.optString("screenshotPath"))
                         preferences.edit()
                             .putString(KEY_PENDING, incoming.toString())
                             .apply()
@@ -130,6 +135,8 @@ object AutoBookkeepingPendingStore {
             (arguments["discountAmountInCents"] as? Number)?.toLong()
         val identifierSuffix =
             (arguments["identifierSuffix"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val screenshotPath =
+            (arguments["screenshotPath"] as? String)?.trim()?.takeIf { it.isNotBlank() }
 
         if (
             amount !in 1..99_999_999_999L ||
@@ -142,7 +149,8 @@ object AutoBookkeepingPendingStore {
             timestamp <= 0L ||
             (originalAmount != null && originalAmount !in amount..99_999_999_999L) ||
             (discountAmount != null && discountAmount !in 0..99_999_999_999L) ||
-            (identifierSuffix != null && !identifierSuffix.matches(Regex("\\d{4}")))
+            (identifierSuffix != null && !identifierSuffix.matches(Regex("\\d{4}"))) ||
+            (screenshotPath != null && screenshotPath.length > 500)
         ) {
             return null
         }
@@ -167,6 +175,7 @@ object AutoBookkeepingPendingStore {
             originalAmountInCents = originalAmount,
             discountAmountInCents = discountAmount,
             identifierSuffix = identifierSuffix,
+            screenshotPath = screenshotPath,
         )
     }
 
@@ -189,6 +198,8 @@ object AutoBookkeepingPendingStore {
                     value.optLong("discountAmountInCents").takeIf { value.has("discountAmountInCents") },
                 "identifierSuffix" to
                     value.optString("identifierSuffix").takeIf { it.isNotBlank() },
+                "screenshotPath" to
+                    value.optString("screenshotPath").takeIf { it.isNotBlank() },
             ),
         )
     }
@@ -209,14 +220,24 @@ object AutoBookkeepingPendingStore {
             "originalAmountInCents" to value.optLong("originalAmountInCents"),
             "discountAmountInCents" to value.optLong("discountAmountInCents"),
             "identifierSuffix" to value.optString("identifierSuffix"),
+            "screenshotPath" to value.optString("screenshotPath"),
         )
     }
 
-    fun complete(context: Context, remember: Boolean = true) {
+    fun complete(
+        context: Context,
+        remember: Boolean = true,
+        keepScreenshot: Boolean = false,
+    ) {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val value = parse(preferences.getString(KEY_PENDING, null))
         val fingerprint = value?.optString(KEY_FINGERPRINT).orEmpty()
+        val screenshotPath = value?.optString("screenshotPath").orEmpty()
         val editor = preferences.edit().remove(KEY_PENDING)
+
+        if (!keepScreenshot) {
+            deleteScreenshot(context, screenshotPath)
+        }
 
         if (
             remember &&
@@ -224,13 +245,46 @@ object AutoBookkeepingPendingStore {
             !isInvalidLegacyNotification(value) &&
             fingerprint.isNotBlank()
         ) {
+            val handled = JSONObject(value.toString()).apply {
+                remove("screenshotPath")
+            }
             editor
                 .putString(KEY_HANDLED_FINGERPRINT, fingerprint)
-                .putString(KEY_HANDLED_PAYLOAD, value.toString())
+                .putString(KEY_HANDLED_PAYLOAD, handled.toString())
                 .putLong(KEY_HANDLED_AT, System.currentTimeMillis())
         }
 
         editor.apply()
+    }
+
+    fun attachScreenshotIfCurrent(
+        context: Context,
+        fingerprint: String,
+        path: String,
+    ): Boolean {
+        if (!isManagedScreenshot(context, path)) {
+            return false
+        }
+        val file = File(path)
+        if (!file.isFile) return false
+
+        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val pending = parse(preferences.getString(KEY_PENDING, null))
+        if (
+            pending == null ||
+            pending.optString(KEY_FINGERPRINT) != fingerprint
+        ) {
+            deleteScreenshot(context, path)
+            return false
+        }
+
+        val oldPath = pending.optString("screenshotPath")
+        if (oldPath.isNotBlank() && oldPath != path) {
+            deleteScreenshot(context, oldPath)
+        }
+        pending.put("screenshotPath", path)
+        preferences.edit().putString(KEY_PENDING, pending.toString()).apply()
+        return true
     }
 
     private fun readValidPayload(context: Context): JSONObject? {
@@ -268,6 +322,7 @@ object AutoBookkeepingPendingStore {
                 candidate.originalAmountInCents?.let { put("originalAmountInCents", it) }
                 candidate.discountAmountInCents?.let { put("discountAmountInCents", it) }
                 candidate.identifierSuffix?.let { put("identifierSuffix", it) }
+                candidate.screenshotPath?.let { put("screenshotPath", it) }
             }
 
     private fun priorityFor(scene: String): Int =
@@ -325,6 +380,20 @@ object AutoBookkeepingPendingStore {
         if (!value.optString("scene").startsWith("PAYMENT_NOTIFICATION")) return false
         val merchant = value.optString("merchant").trim()
         return merchant.isBlank() || merchant == "支付通知待确认"
+    }
+
+    private fun isManagedScreenshot(context: Context, path: String): Boolean {
+        if (path.isBlank()) return false
+        return runCatching {
+            val root = File(context.filesDir, "autobookkeeping/screenshots").canonicalFile
+            val file = File(path).canonicalFile
+            file.path.startsWith(root.path + File.separator)
+        }.getOrDefault(false)
+    }
+
+    private fun deleteScreenshot(context: Context, path: String) {
+        if (!isManagedScreenshot(context, path)) return
+        runCatching { File(path).delete() }
     }
 
     private fun parse(raw: String?): JSONObject? = raw?.let {
