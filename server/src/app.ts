@@ -2,6 +2,7 @@ import { registerAssistantPolicy } from './assistant_policy.js';
 import Fastify from 'fastify';
 import { registerMembershipCatalog } from './membership_catalog.js';
 import { registerPaymentRoutes } from './payment.js';
+import { registerAppleIapRoutes } from './apple_iap.js';
 import { registerDiagnosticsRoutes } from './diagnostics.js';
 import rateLimit from '@fastify/rate-limit';
 import rawBody from 'fastify-raw-body';
@@ -81,6 +82,7 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
+  registerAppleIapRoutes(app,store,authenticate);
   registerPersonalCloudRoutes(app,store,authenticate);
   registerDiagnosticsRoutes(app,store,authenticate);
   registerPushRoutes(app,store,authenticate);
@@ -258,6 +260,15 @@ export async function createApp(path:string, modelProvider?: AssistantModelProvi
   app.delete('/api/v1/books/:id/members/:userId',async(req)=>{
     const p=z.object({id:identifier,userId:identifier}).parse(req.params);
     return store.memberChange(p.id,authenticate(req.headers.authorization).id,p.userId);
+  });
+  app.post('/api/v1/books/:id/transfer-ownership',async(req)=>{
+    const id=bookId(req.params);const user=authenticate(req.headers.authorization);
+    const {userId}=z.strictObject({userId:identifier}).parse(req.body);
+    return store.transferOwnership(id,user.id,userId);
+  });
+  app.post('/api/v1/books/:id/disband',async(req)=>{
+    const id=bookId(req.params);const user=authenticate(req.headers.authorization);
+    return store.disband(id,user.id);
   });
   app.post('/api/v1/books/:id/invitations',async(req)=>store.invite(bookId(req.params),authenticate(req.headers.authorization).id));
   app.get('/api/v1/books/:id/invitations',async(req)=>{

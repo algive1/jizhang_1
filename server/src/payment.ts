@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
+import { applePlanForProductId } from './apple_iap.js';
 import type { Store } from './store.js';
 
 export type PaymentChannel = 'wechat' | 'alipay';
@@ -171,6 +172,15 @@ function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
 }
 
 function membershipCurrent(store: Store, userId: string) {
+  const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
+  if (apple) {
+    return {
+      membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
+      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
+      entitlements: ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
+      quotas: [],
+    };
+  }
   const subscription = store.db.prepare('SELECT * FROM membership_subscriptions WHERE user_id=?').get(userId) as { user_id: string; product_id: string; provider: PaymentChannel; order_id: string; started_at: number; expires_at: number; updated_at: number } | undefined;
   if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], quotas: [] };
   const now = store.now();

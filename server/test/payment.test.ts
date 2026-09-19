@@ -270,3 +270,34 @@ test('支付宝回调验签并校验金额后才授予会员', async t => {
   const current = await request('/membership/current', token);
   assert.equal((current.data.membership as Record<string, unknown>).plan, 'pro');
 });
+
+
+test('未配置可信 Apple Root CA 时拒绝客户端伪造的会员交易', async t => {
+  const previous = process.env.APPLE_ROOT_CA_PATHS;
+  delete process.env.APPLE_ROOT_CA_PATHS;
+  t.after(() => {
+    if (previous == null) delete process.env.APPLE_ROOT_CA_PATHS;
+    else process.env.APPLE_ROOT_CA_PATHS = previous;
+  });
+  const { app } = await createApp(':memory:');
+  const base = await app.listen({ host: '127.0.0.1', port: 0 });
+  t.after(() => app.close());
+  const register = await fetch(`${base}/api/v1/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'apple_fail_closed', password: 'local-test-password' }),
+  });
+  const registered = await register.json() as Record<string, unknown>;
+  const response = await fetch(`${base}/api/v1/membership/apple/transactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${registered.token}` },
+    body: JSON.stringify({
+      productId: 'haohaojizhang.membership.monthly',
+      purchaseId: 'fake-transaction',
+      source: 'app_store',
+      verificationData: 'eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJmYWtlIn0.invalid-signature',
+      restored: false,
+    }),
+  });
+  assert.notEqual(response.status, 200);
+});

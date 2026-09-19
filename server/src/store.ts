@@ -262,6 +262,8 @@ export class Store {
         check(data.id===e.id && (!('book_id' in data) || data.book_id===id),'数据不属于目标账本');
         if (e.kind==='accounts') this.validateAccountIdentity(id, data, e.id);
         if (e.kind==='transactions') this.validateMetadata(data);
+        // Before the first share there are no remote family members yet, so
+        // local transaction attribution is normalized to the promoting owner.
         if (e.kind==='transactions') Object.assign(data,{created_by:user,updated_by:user,user_id:user,visibility:'shared',sync_status:'synced'});
         if (e.kind==='goals') Object.assign(data,{created_by:user,updated_by:user});
         if (e.kind==='goal_contributions') data.contributor_user_id=user;
@@ -303,7 +305,13 @@ export class Store {
         if (op.kind==='transactions') {
           if (!previous) {for(const field of ['account_id','destination_account_id']) if(data[field]) check(this.get(book,'accounts',String(data[field]))?.data.is_archived===0,'新流水不能使用已归档或不存在的账户');}
           if (previous) check(data.created_at===previous.data.created_at,'不能修改创建时间');
-          Object.assign(data,{created_by:previous?.data.created_by??user,updated_by:user,user_id:previous?.data.user_id??user,visibility:'shared',sync_status:'synced'});
+          const previousPayer=previous?.data.user_id;
+          const requestedPayer=data.user_id??previousPayer??user;
+          // Historical attribution stays valid after a member leaves. A new
+          // transaction, or changing its payer, must still target a current member.
+          if (!previous || requestedPayer!==previousPayer)
+            check(this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(book,String(requestedPayer)),'付款人必须是当前共享账本成员',400);
+          Object.assign(data,{created_by:previous?.data.created_by??user,updated_by:user,user_id:requestedPayer,visibility:'shared',sync_status:'synced'});
           if (data.type==='adjustment' && !previous) {
             const account=this.get(book,'accounts',String(data.account_id));
             if (account?.version!==op.expectedAccountVersion) throw new ApiError(409,'校准期间账户余额已改变',{operationId:op.operationId,remote:account});
@@ -451,6 +459,32 @@ export class Store {
   }
   accept(code:string,user:string) {
     return this.db.transaction(()=>{const invitation=this.db.prepare('SELECT * FROM invitations WHERE code=?').get(code) as {id:string;book_id:string;expires_at:number;status:string}|undefined;check(invitation&&invitation.status==='pending'&&invitation.expires_at>this.now(),'邀请无效、已使用或已过期',409);check(!this.book(invitation.book_id).is_archived,'账本已归档',403);check(!this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(invitation.book_id,user),'你已是该账本成员',409);this.db.prepare('INSERT INTO members VALUES(?,?,?,?)').run(invitation.book_id,user,'member',this.now());this.db.prepare("UPDATE invitations SET status='accepted' WHERE id=?").run(invitation.id);return this.snapshot(invitation.book_id,user);})();
+  }
+  transferOwnership(book:string,actor:string,target:string) {
+    return this.db.transaction(()=>{
+      check(this.role(book,actor)==='owner','只有所有者可以转让账本',403);
+      check(actor!==target,'新所有者不能是自己',400);
+      this.role(book,target);
+      this.db.prepare("UPDATE members SET role='admin' WHERE book_id=? AND user_id=?").run(book,actor);
+      this.db.prepare("UPDATE members SET role='owner' WHERE book_id=? AND user_id=?").run(book,target);
+      this.db.prepare('UPDATE books SET owner_user_id=?,updated_at=?,version=version+1 WHERE id=?').run(target,this.now(),book);
+      const canonical={...this.book(book),family_id:book};
+      this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,'books',book,canonical.version,0,JSON.stringify(canonical),actor,this.now());
+      return {ok:true,owner_user_id:target,version:canonical.version};
+    })();
+  }
+  disband(book:string,actor:string) {
+    return this.db.transaction(()=>{
+      check(this.role(book,actor)==='owner','只有所有者可以解散共享账本',403);
+      const current=this.book(book);
+      check(!current.is_archived,'账本已经解散',409);
+      const version=current.version+1;
+      this.db.prepare('UPDATE books SET is_archived=1,updated_at=?,version=? WHERE id=?').run(this.now(),version,book);
+      const canonical={...this.book(book),family_id:book};
+      this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,'books',book,version,1,JSON.stringify(canonical),actor,this.now());
+      this.db.prepare("UPDATE invitations SET status='revoked' WHERE book_id=? AND status='pending'").run(book);
+      return {ok:true,version};
+    })();
   }
   memberChange(book:string,actor:string,target:string,role?:'admin'|'member') {
     return this.db.transaction(()=>{const actorRole=this.writable(book,actor);const targetRole=this.role(book,target);check(targetRole!=='owner','所有者不能退出或被移除',403);if(role){check(actorRole==='owner','只有所有者可以设置角色',403);this.db.prepare('UPDATE members SET role=? WHERE book_id=? AND user_id=?').run(role,book,target);}else{check(actor===target||actorRole==='owner'||(actorRole==='admin'&&targetRole==='member'),'没有移除该成员的权限',403);this.db.prepare('DELETE FROM members WHERE book_id=? AND user_id=?').run(book,target);}this.db.prepare('INSERT INTO changes(book_id,kind,entity_id,version,deleted,data_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(book,'members',target,0,Number(!role),JSON.stringify({role:role??null}),actor,this.now());return {ok:true};})();
