@@ -1180,7 +1180,10 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File(p.join(directory.path, AppDatabase.databaseFileName));
-    await _applyPendingDatabaseRestore(file);
+    // Restores are staged while the live database is open and are applied only
+    // after an app/process restart. Never swap the database, -wal, or -shm
+    // files opportunistically from a database opener: another FlutterEngine
+    // may already own a live connection to this file.
     if (await file.exists()) {
       final source = sqlite.sqlite3.open(
         file.path,
@@ -1219,6 +1222,10 @@ Future<void> _applyPendingDatabaseRestore(File databaseFile) async {
   );
   if (!await pendingFile.exists()) return;
 
+  // This method is intentionally NOT called by _openConnection(). Applying a
+  // restore is a maintenance operation and is only safe before any Flutter
+  // engine opens the live database. The foreground startup performs it before
+  // runApp(); background entrypoints never apply pending restores.
   final safetyCopy = File(
     '${databaseFile.path}.pre-restore-on-open-${DateTime.now().microsecondsSinceEpoch}',
   );
