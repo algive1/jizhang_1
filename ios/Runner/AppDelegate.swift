@@ -2,6 +2,7 @@ import BackgroundTasks
 import Flutter
 import UIKit
 import UserNotifications
+import Vision
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -171,6 +172,57 @@ import UserNotifications
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let ocrChannel = FlutterMethodChannel(
+      name: "jizhang/local_ocr",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    ocrChannel.setMethodCallHandler { call, result in
+      guard call.method == "recognize" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let arguments = call.arguments as? [String: Any],
+            let path = arguments["path"] as? String,
+            !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let image = UIImage(contentsOfFile: path),
+            let cgImage = image.cgImage else {
+        result(FlutterError(
+          code: "INVALID_IMAGE",
+          message: "OCR image cannot be loaded",
+          details: nil
+        ))
+        return
+      }
+
+      DispatchQueue.global(qos: .userInitiated).async {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["zh-Hans", "en-US"]
+        request.usesLanguageCorrection = true
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+          try handler.perform([request])
+          let lines = (request.results ?? []).compactMap {
+            $0.topCandidates(1).first?.string
+          }
+          DispatchQueue.main.async {
+            result([
+              "text": lines.joined(separator: "\n"),
+              "blocks": lines,
+            ])
+          }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(
+              code: "OCR_FAILED",
+              message: error.localizedDescription,
+              details: nil
+            ))
+          }
+        }
       }
     }
 
