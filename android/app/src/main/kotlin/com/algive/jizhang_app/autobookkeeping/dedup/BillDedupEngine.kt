@@ -30,7 +30,13 @@ class BillDedupEngine {
         recent.removeAll { abs(candidate.timestamp - it.timestamp) > 300000 }
         val exact = recent.any { BillFingerprint.identity(it) == BillFingerprint.identity(candidate) }
         if (samePage && exact) return DedupResult.DUPLICATE
-        if (recent.any { it.amountInCents == candidate.amountInCents && it.merchantNormalized == candidate.merchantNormalized }) return DedupResult.POSSIBLE_DUPLICATE
+        if (
+            recent.any {
+                it.transactionType == candidate.transactionType &&
+                    it.amountInCents == candidate.amountInCents &&
+                    it.merchantNormalized == candidate.merchantNormalized
+            }
+        ) return DedupResult.POSSIBLE_DUPLICATE
         return DedupResult.NOT_DUPLICATE
     }
     fun remember(candidate: PaymentCandidate) { recent.addLast(candidate); while (recent.size > 100) recent.removeFirst() }
