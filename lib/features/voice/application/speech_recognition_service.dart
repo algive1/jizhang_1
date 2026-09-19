@@ -200,8 +200,7 @@ final voiceTransactionParserProvider = Provider<TransactionParser>((ref) {
     canUseAi: () {
       final quota = membership?.quotaFor(EntitlementKey.voiceAi);
       return (membership?.has(EntitlementKey.voiceAi) ?? false) &&
-          quota != null &&
-          quota.remaining > 0;
+          (quota == null || quota.remaining > 0);
     },
   );
 });
