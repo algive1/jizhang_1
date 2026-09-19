@@ -159,6 +159,12 @@ class PaymentNotificationParser {
       _ => 'EXPENSE',
     };
 
+    if (notification.packageName == 'com.tencent.mm' &&
+        transactionType != 'EXPENSE' &&
+        !RegExp(r'微信支付|支付凭证|付款凭证|服务通知').hasMatch(content)) {
+      return null;
+    }
+
     if (transactionType == 'EXPENSE') {
       if (RegExp(
         r'转入提醒|入账提醒|到账提醒|退回失败|待支付|待付款|去支付|去付款|未支付|未付款|支付失败|付款失败|交易失败|支付取消|付款取消|取消支付|重新支付|支付提醒|请支付',
