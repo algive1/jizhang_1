@@ -221,11 +221,7 @@ class ProfilePage extends ConsumerWidget {
                   Icons.checkroom_outlined,
                   '个性化设置',
                   '主题、字体、图标',
-                  () => _info(
-                    context,
-                    '个性化设置',
-                    '当前使用草木绿主题，字体跟随系统。当前版本尚不支持切换主题、字体与图标。',
-                  ),
+                  () => push('/profile/appearance'),
                 ),
                 ProfileMenuItem(
                   Icons.help_outline,
