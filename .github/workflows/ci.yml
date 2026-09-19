@@ -65,6 +65,15 @@ jobs:
           test/investment_repository_test.dart
           test/voice_parser_test.dart
           test/payment_notification_test.dart
+          test/autobookkeeping_page_test.dart
+          test/autobookkeeping_learning_test.dart
+          test/autobookkeeping_refund_matcher_test.dart
+
+      - name: Run Android auto-bookkeeping unit tests
+        run: >-
+          cd android &&
+          ./gradlew :app:testDebugUnitTest
+          --tests "com.algive.jizhang_app.autobookkeeping.PaymentEngineTest"
 
       - name: Build Android debug APK
         run: flutter build apk --debug
