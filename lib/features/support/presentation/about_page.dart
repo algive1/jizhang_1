@@ -67,6 +67,12 @@ class _AboutPageState extends State<AboutPage> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/profile/feedback'),
             ),
+            ListTile(
+              leading: const Icon(Icons.support_agent_outlined),
+              title: const Text('我的工单'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/profile/support-tickets'),
+            ),
           ],
         ),
       );
