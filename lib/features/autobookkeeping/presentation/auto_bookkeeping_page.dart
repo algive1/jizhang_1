@@ -325,6 +325,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                             ),
                             child: const Text('设置'),
                           ),
+                        ),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           secondary: Icon(
@@ -358,7 +359,6 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                                         : '支付截图已关闭。';
                                   });
                                 },
-                        ),
                         ),
                       ],
                     ),
