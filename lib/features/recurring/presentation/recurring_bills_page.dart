@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
@@ -70,7 +71,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
               IconButton(
                 onPressed: () =>
                     context.canPop() ? context.pop() : context.go('/'),
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
                 tooltip: '返回首页',
               ),
               Expanded(
@@ -94,29 +95,29 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Row(
               children: [
                 const Icon(
                   Icons.loop_rounded,
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                   size: 30,
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       '本月固定支出',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: context.appSecondaryText),
                     ),
                     const SizedBox(height: 4),
                     MoneyText(
                       monthlyOut,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
+                        color: context.appPrimary,
                       ),
                     ),
                   ],
@@ -131,7 +132,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline, color: AppColors.warning),
+                  Icon(Icons.error_outline, color: AppColors.warning),
                   const SizedBox(width: 10),
                   Expanded(child: Text(autoRecordError)),
                   IconButton(
@@ -160,14 +161,14 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             alignment: Alignment.centerRight,
             child: Text(
               '${bills.length} 项',
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: context.appSecondaryText),
             ),
           ),
           if (bills.isEmpty)
             const AppCard(
               child: Text(
                 '还没有周期账单，添加房租、订阅或固定收入',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             )
           else
@@ -475,9 +476,9 @@ class _RecurringBillCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.event_repeat_outlined,
-                  color: AppColors.primary,
+                  color: context.appPrimary,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
@@ -487,7 +488,7 @@ class _RecurringBillCard extends StatelessWidget {
                     children: [
                       Text(
                         bill.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -498,7 +499,7 @@ class _RecurringBillCard extends StatelessWidget {
                             : '已结束'}',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                         ),
                       ),
                     ],
