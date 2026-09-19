@@ -189,9 +189,6 @@ class _AutoBookkeepingConfirmPageState
                     occurredAt: candidate.timestamp,
                     source: TransactionSource.auto,
                     userCorrected: true,
-                    attachmentPaths: screenshotPath == null
-                        ? const []
-                        : [screenshotPath],
                     metadata: metadata,
                   ),
                 )
@@ -209,21 +206,36 @@ class _AutoBookkeepingConfirmPageState
               source: TransactionSource.auto,
             );
 
-      var screenshotAttached = screenshotPath == null || matchedRefund == null;
       var screenshotWarning = false;
-      if (matchedRefund != null && screenshotPath != null) {
+      if (screenshotPath != null) {
+        String? promotedPath;
         try {
-          await ref
-              .read(transactionAttachmentRepositoryProvider)
-              .replaceForTransaction(
-                transactionId: saved.id,
-                bookId: saved.bookId,
-                paths: [screenshotPath],
-              );
-          screenshotAttached = true;
+          promotedPath = await ref
+              .read(autoBookkeepingPendingBridgeProvider)
+              .promoteScreenshot(screenshotPath);
+          if (promotedPath == null) {
+            screenshotWarning = true;
+          } else {
+            await ref
+                .read(transactionAttachmentRepositoryProvider)
+                .replaceForTransaction(
+                  transactionId: saved.id,
+                  bookId: saved.bookId,
+                  paths: [promotedPath],
+                );
+          }
         } on Object {
-          screenshotAttached = false;
           screenshotWarning = true;
+          if (promotedPath != null) {
+            try {
+              final promotedFile = File(promotedPath);
+              if (await promotedFile.exists()) {
+                await promotedFile.delete();
+              }
+            } on Object {
+              // Best-effort cleanup only; bookkeeping already succeeded.
+            }
+          }
         }
       }
 
@@ -243,9 +255,7 @@ class _AutoBookkeepingConfirmPageState
         // must never be rolled back or shown as failed because memory could
         // not be updated.
       }
-      await _completePending(
-        keepScreenshot: screenshotPath != null && screenshotAttached,
-      );
+      await _completePending();
       await BookkeepingFeedback.notifySuccess(count: 1);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
