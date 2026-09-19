@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../books/presentation/book_selector.dart';
@@ -130,7 +131,7 @@ class _HomePageState extends ConsumerState<HomePage>
     final dataReady =
         book != null && !transactions.isLoading && !transactions.hasError;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFAF9F4)),
+      decoration: BoxDecoration(color: context.appBackground),
       child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
@@ -160,7 +161,7 @@ class _HomePageState extends ConsumerState<HomePage>
                       const Icon(
                         Icons.people_outline,
                         size: 16,
-                        color: AppColors.primaryDark,
+                        color: context.appPrimary,
                       ),
                       const SizedBox(width: 6),
                       Expanded(
@@ -168,7 +169,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           '${(sharedState?['pending'] as List? ?? []).length} 项待同步 · ${sharedState?['error'] != null ? '需要处理' : '共享成员'}',
                           style: const TextStyle(
                             fontSize: 12,
-                            color: AppColors.primaryDark,
+                            color: context.appPrimary,
                           ),
                         ),
                       ),
@@ -252,7 +253,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         child: Text(
                           '记下一笔支出，在这里了解钱花在哪里',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.appSecondaryText,
                             fontSize: 12,
                           ),
                         ),
@@ -323,7 +324,7 @@ class _HomePageState extends ConsumerState<HomePage>
                             const Text(
                               '每一笔小记录，都让生活更清晰',
                               style: TextStyle(
-                                color: AppColors.textSecondary,
+                                color: context.appSecondaryText,
                                 fontSize: 13,
                               ),
                             ),
@@ -389,7 +390,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: Text(
                   TransactionDateFormatter.groupLabel(entries[groupIndex].key),
                   style: const TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -478,7 +479,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         Text(
                           item.$2,
                           style: const TextStyle(
-                            color: AppColors.textPrimary,
+                            color: context.appPrimaryText,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -609,7 +610,7 @@ class _HomeHeader extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: AppColors.textPrimary,
+                                color: context.appPrimaryText,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -620,7 +621,7 @@ class _HomeHeader extends ConsumerWidget {
                         const Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 20,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                         ),
                       ],
                     ),
@@ -630,7 +631,7 @@ class _HomeHeader extends ConsumerWidget {
               const SizedBox(height: 1),
               const Text(
                 '记录生活  更好地生活',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 11),
               ),
             ],
           ),
@@ -644,7 +645,7 @@ class _HomeHeader extends ConsumerWidget {
           padding: EdgeInsets.zero,
           icon: const Icon(
             Icons.calendar_month_outlined,
-            color: AppColors.textPrimary,
+            color: context.appPrimaryText,
             size: 23,
           ),
         ),
@@ -660,7 +661,7 @@ class _HomeHeader extends ConsumerWidget {
           ),
           icon: const Icon(
             Icons.search_rounded,
-            color: AppColors.textPrimary,
+            color: context.appPrimaryText,
             size: 22,
           ),
         ),
@@ -687,7 +688,7 @@ class _SectionHeading extends StatelessWidget {
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: context.appPrimaryText,
           ),
         ),
       ),
@@ -699,7 +700,7 @@ class _SectionHeading extends StatelessWidget {
             '$action ›',
             style: const TextStyle(
               fontSize: 11,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
           ),
         ),
@@ -745,7 +746,7 @@ class _CategoryExpense extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: AppColors.textPrimary,
+                color: context.appPrimaryText,
                 fontSize: 11,
               ),
             ),
@@ -756,7 +757,7 @@ class _CategoryExpense extends StatelessWidget {
               child: Text(
                 '¥${MoneyFormatter.decimal(category.amount)}',
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -779,7 +780,7 @@ class _CategoryExpense extends StatelessWidget {
                   '${(ratio * 100).round()}%',
                   style: const TextStyle(
                     fontSize: 9,
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                   ),
                 ),
               ],
@@ -804,7 +805,7 @@ class _InsightBanner extends ConsumerWidget {
     if (dismissed.value != false) return const SizedBox.shrink();
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
+        color: context.appPrimarySoft,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -820,7 +821,7 @@ class _InsightBanner extends ConsumerWidget {
                     const Icon(
                       Icons.insights_rounded,
                       size: 22,
-                      color: AppColors.primary,
+                      color: context.appPrimary,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -830,7 +831,7 @@ class _InsightBanner extends ConsumerWidget {
                           const Text(
                             '值得关注',
                             style: TextStyle(
-                              color: AppColors.primaryDark,
+                              color: context.appPrimary,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -841,7 +842,7 @@ class _InsightBanner extends ConsumerWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: AppColors.primaryDark,
+                              color: context.appPrimary,
                               fontSize: 11,
                             ),
                           ),
@@ -858,7 +859,7 @@ class _InsightBanner extends ConsumerWidget {
             icon: const Icon(
               Icons.close,
               size: 18,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
             onPressed: () async {
               try {
