@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/models/account.dart';
 import '../domain/asset_overview.dart';
@@ -34,13 +35,13 @@ class AssetLiabilitySection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   '负债管理',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: assetInk,
+                    color: context.appPrimaryText,
                   ),
                 ),
               ),
@@ -49,20 +50,20 @@ class AssetLiabilitySection extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       '总负债 ',
-                      style: TextStyle(fontSize: 10, color: assetMuted),
+                      style: TextStyle(fontSize: 10, color: context.appSecondaryText),
                     ),
                     AssetAmount(
                       overview.liabilities,
                       currency: overview.currency,
                       size: 10,
-                      color: assetMuted,
+                      color: context.appSecondaryText,
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       size: 16,
-                      color: assetMuted,
+                      color: context.appSecondaryText,
                     ),
                   ],
                 ),
@@ -113,7 +114,7 @@ class AssetLiabilitySection extends StatelessWidget {
                                   width: cardWidth,
                                   height: 40,
                                   child: Material(
-                                    color: const Color(0xfffffdfa),
+                                    color: context.appSurface,
                                     borderRadius: BorderRadius.circular(10),
                                     child: InkWell(
                                       onTap: () => context.push(
@@ -145,9 +146,9 @@ class AssetLiabilitySection extends StatelessWidget {
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 10,
-                                                      color: assetInk,
+                                                      color: context.appPrimaryText,
                                                     ),
                                                   ),
                                                   AssetAmount(
@@ -158,10 +159,10 @@ class AssetLiabilitySection extends StatelessWidget {
                                                 ],
                                               ),
                                             ),
-                                            const Icon(
+                                            Icon(
                                               Icons.chevron_right,
                                               size: 12,
-                                              color: assetMuted,
+                                              color: context.appSecondaryText,
                                             ),
                                           ],
                                         ),
