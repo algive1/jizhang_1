@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
@@ -7,6 +9,7 @@ import '../../sharing/data/session_repository.dart';
 import '../data/app_settings_repository.dart';
 
 const _themeSettingKey = 'appearance.theme.preferred.v1';
+const _themeCatalogCacheKey = 'appearance.theme.catalog.cache.v1';
 
 class ThemeCatalog {
   const ThemeCatalog(this.themes);
@@ -31,16 +34,47 @@ final preferredThemeProvider = AsyncNotifierProvider<ThemeController, String>(Th
 
 final themeCatalogProvider = FutureProvider<ThemeCatalog>((ref) async {
   final session = ref.watch(sessionRepositoryProvider);
-  try {
-      final data = await ref.read(sharedApiProvider).request('/themes/catalog');
+  final settings = ref.read(appSettingsRepositoryProvider);
+
+  ThemeCatalog? parseCatalog(Map<String, dynamic> data) {
+    try {
       final items = (data['themes'] as List? ?? const [])
           .whereType<Map>()
           .map((e) => AppThemeDefinition.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      if (items.any((e) => e.id == BuiltInThemes.freshGreen.id)) return ThemeCatalog(items);
-  } on Object {
-    // Remote appearance config is best-effort. Never block app startup.
+      if (items.any((e) => e.id == BuiltInThemes.freshGreen.id)) {
+        return ThemeCatalog(items);
+      }
+    } on Object {
+      // Invalid remote/cache data must never make appearance unavailable.
+    }
+    return null;
   }
+
+  try {
+    final data = await ref.read(sharedApiProvider).request('/themes/catalog');
+    final remote = parseCatalog(data);
+    if (remote != null) {
+      await settings.set(_themeCatalogCacheKey, jsonEncode(data));
+      return remote;
+    }
+  } on Object {
+    // Remote appearance config is best-effort. Fall through to last-known-good.
+  }
+
+  try {
+    final cached = await settings.get(_themeCatalogCacheKey);
+    if (cached != null) {
+      final decoded = jsonDecode(cached);
+      if (decoded is Map) {
+        final local = parseCatalog(Map<String, dynamic>.from(decoded));
+        if (local != null) return local;
+      }
+    }
+  } on Object {
+    // Corrupt cache is ignored in favor of the bundled safe catalog.
+  }
+
   // Keep the dependency alive so a login/logout refresh can rebuild this provider.
   session.user;
   return const ThemeCatalog(BuiltInThemes.all);
