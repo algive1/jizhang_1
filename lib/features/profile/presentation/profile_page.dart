@@ -313,6 +313,7 @@ class ProfilePage extends ConsumerWidget {
     final user = session?.user;
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Padding(
@@ -401,6 +402,7 @@ class ProfilePage extends ConsumerWidget {
 
   static void _settings(BuildContext context) => showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: Column(
@@ -458,6 +460,7 @@ class ProfilePage extends ConsumerWidget {
   static void _photos(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => FractionallySizedBox(
