@@ -271,8 +271,12 @@ export class Store {
         if (op.kind==='transactions') {
           if (!previous) {for(const field of ['account_id','destination_account_id']) if(data[field]) check(this.get(book,'accounts',String(data[field]))?.data.is_archived===0,'新流水不能使用已归档或不存在的账户');}
           if (previous) check(data.created_at===previous.data.created_at,'不能修改创建时间');
-          const requestedPayer=data.user_id??previous?.data.user_id??user;
-          check(this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(book,String(requestedPayer)),'付款人必须是当前共享账本成员',400);
+          const previousPayer=previous?.data.user_id;
+          const requestedPayer=data.user_id??previousPayer??user;
+          // Historical attribution stays valid after a member leaves. A new
+          // transaction, or changing its payer, must still target a current member.
+          if (!previous || requestedPayer!==previousPayer)
+            check(this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(book,String(requestedPayer)),'付款人必须是当前共享账本成员',400);
           Object.assign(data,{created_by:previous?.data.created_by??user,updated_by:user,user_id:requestedPayer,visibility:'shared',sync_status:'synced'});
           if (data.type==='adjustment' && !previous) {
             const account=this.get(book,'accounts',String(data.account_id));
