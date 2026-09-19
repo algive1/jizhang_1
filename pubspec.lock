@@ -24,14 +24,6 @@ packages:
       relative: true
     source: path
     version: "6.0.0"
-  alipay_kit_ios:
-    dependency: "direct main"
-    description:
-      name: alipay_kit_ios
-      sha256: "6c29373c88d373c0830fe53dc98fd9cf8ab634bd001ee39ec69a41662900ca08"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.0.1"
   analyzer:
     dependency: transitive
     description:
