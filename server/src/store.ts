@@ -164,6 +164,11 @@ export class Store {
       this.db.pragma('user_version = 9');
     }
     this.db.exec('CREATE TABLE IF NOT EXISTS book_import_versions(book_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(book_id,kind,entity_id))');
+    this.db.exec(
+      'CREATE TABLE IF NOT EXISTS sync_retention('
+        + 'book_id TEXT PRIMARY KEY,reset_before_cursor INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL'
+        + ')'
+    );
   }
   now() { return Math.floor(Date.now()/1000); }
   book(id: string): Book {
@@ -195,8 +200,37 @@ export class Store {
   cursor(book: string) { return (this.db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM changes WHERE book_id=?').get(book) as {n:number}).n; }
   changes(book: string, user: string, cursor: number) {
     this.role(book,user);
-    const rows = this.db.prepare('SELECT * FROM changes WHERE book_id=? AND seq>? ORDER BY seq LIMIT 500').all(book,cursor) as {seq:number;kind:Kind;entity_id:string;version:number;deleted:number;data_json:string}[];
-    return {changes:rows.map(r=>({seq:r.seq,kind:r.kind,id:r.entity_id,version:r.version,deleted:!!r.deleted,data:JSON.parse(r.data_json) as Data})),cursor:rows.at(-1)?.seq ?? cursor,hasMore:rows.length===500};
+    const floor = (
+      this.db.prepare(
+        'SELECT reset_before_cursor FROM sync_retention WHERE book_id=?'
+      ).get(book) as {reset_before_cursor:number}|undefined
+    )?.reset_before_cursor ?? 0;
+    if (cursor > 0 && cursor < floor) {
+      return {
+        changes: [],
+        cursor: this.cursor(book),
+        hasMore: false,
+        resetRequired: true,
+        resetBeforeCursor: floor,
+      };
+    }
+    const rows = this.db.prepare(
+      'SELECT * FROM changes WHERE book_id=? AND seq>? ORDER BY seq LIMIT 500'
+    ).all(book,cursor) as {seq:number;kind:Kind;entity_id:string;version:number;deleted:number;data_json:string}[];
+    return {
+      changes: rows.map(r=>({
+        seq:r.seq,
+        kind:r.kind,
+        id:r.entity_id,
+        version:r.version,
+        deleted:!!r.deleted,
+        data:JSON.parse(r.data_json) as Data,
+      })),
+      cursor:rows.at(-1)?.seq ?? cursor,
+      hasMore:rows.length===500,
+      resetRequired:false,
+      resetBeforeCursor:floor,
+    };
   }
   write(book: string, kind: Kind, id: string, data: Data, actor: string, deleted = false): Entity {
     const version = (kind === 'books' ? this.book(book).version : this.get(book,kind,id)?.version ?? 0) + 1;
