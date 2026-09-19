@@ -24,6 +24,7 @@ void main() {
     expect(find.text('无障碍服务'), findsOneWidget);
     expect(find.text('悬浮窗权限'), findsOneWidget);
     expect(find.text('常驻通知权限'), findsOneWidget);
+    expect(find.text('支付通知兜底'), findsOneWidget);
     expect(find.textContaining('常驻通知'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -79,8 +80,9 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
   const _FakePendingBridge();
 
   @override
-  Future<bool> enqueue(PendingAutoBookkeepingCandidate candidate) async =>
-      false;
+  Future<AutoBookkeepingEnqueueResult> enqueue(
+    PendingAutoBookkeepingCandidate candidate,
+  ) async => AutoBookkeepingEnqueueResult.busy;
 
   @override
   Future<void> complete() async {}
