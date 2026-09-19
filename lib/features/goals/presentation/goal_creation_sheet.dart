@@ -35,6 +35,7 @@ class GoalCreationDraft {
 Future<GoalCreationDraft?> showGoalCreationSheet(BuildContext context) {
   return showModalBottomSheet<GoalCreationDraft>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => const _GoalCreationSheet(),

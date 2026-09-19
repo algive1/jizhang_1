@@ -448,6 +448,7 @@ Future<void> showTransactionCategoryCorrection(
   var remember = false;
   final shouldSave = await showModalBottomSheet<bool>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setModalState) => SafeArea(

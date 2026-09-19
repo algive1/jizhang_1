@@ -8,6 +8,7 @@ import '../data/goal_repository.dart';
 Future<void> showGoalReservationSheet(BuildContext context, Goal goal) {
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => _ReservationSheet(goal: goal),
@@ -117,6 +118,7 @@ class _ReservationSheetState extends ConsumerState<_ReservationSheet> {
 Future<void> showGoalOrderSheet(BuildContext context, List<Goal> goals) {
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => _GoalOrderSheet(goals: goals),
