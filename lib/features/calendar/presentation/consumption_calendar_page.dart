@@ -188,7 +188,11 @@ class _ConsumptionCalendarPageState
                   dailyIncome: dailyIncome,
                   maxDaily: maxDaily,
                   selectedDay: _selectedDay,
-                  onDayTap: (day) => setState(() => _selectedDay = day),
+                  today: _today,
+                  onDateTap: (date) => setState(() {
+                    _month = DateTime(date.year, date.month);
+                    _selectedDay = date.day;
+                  }),
                 ),
               ],
             ),
@@ -274,9 +278,9 @@ class _ConsumptionCalendarPageState
           ),
           const SizedBox(height: 16),
           if (_selectedDay != null)
-            Text(
-              '${_month.month}月$_selectedDay日',
-              style: Theme.of(context).textTheme.titleLarge,
+            _SelectedDayHeader(
+              date: DateTime(_month.year, _month.month, _selectedDay!),
+              transactions: selected,
             ),
           if (_selectedDay != null) const SizedBox(height: 8),
           if (_selectedDay != null)
@@ -442,7 +446,8 @@ class _CalendarGrid extends StatelessWidget {
     required this.dailyIncome,
     required this.maxDaily,
     required this.selectedDay,
-    required this.onDayTap,
+    required this.today,
+    required this.onDateTap,
   });
 
   final DateTime month;
@@ -450,83 +455,68 @@ class _CalendarGrid extends StatelessWidget {
   final Map<int, double> dailyIncome;
   final double maxDaily;
   final int? selectedDay;
-  final ValueChanged<int> onDayTap;
+  final DateTime today;
+  final ValueChanged<DateTime> onDateTap;
 
   @override
   Widget build(BuildContext context) {
-    final firstOffset = DateTime(month.year, month.month, 1).weekday - 1;
-    final days = DateTime(month.year, month.month + 1, 0).day;
-    final cells = <Widget>[];
-    for (var index = 0; index < firstOffset; index++)
-      cells.add(const SizedBox());
-    for (var day = 1; day <= days; day++) {
-      final amount = daily[day] ?? 0;
-      final intensity = maxDaily == 0
-          ? 0.0
-          : (amount / maxDaily).clamp(0.0, 1.0);
-      cells.add(
-        GestureDetector(
-          onTap: () => onDayTap(day),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            margin: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: selectedDay == day
-                  ? AppColors.primary.withValues(alpha: .22)
-                  : amount == 0
-                  ? Colors.transparent
-                  : Color.lerp(
-                      AppColors.surface,
-                      AppColors.primarySoft,
-                      .25 + intensity * .45,
-                    ),
-              borderRadius: BorderRadius.circular(12),
-              border: selectedDay == day
-                  ? Border.all(color: AppColors.primary)
-                  : null,
-            ),
+    final first = DateTime(month.year, month.month, 1);
+    final gridStart = first.subtract(Duration(days: first.weekday - 1));
+    final selectedDate = selectedDay == null
+        ? null
+        : DateTime(month.year, month.month, selectedDay!);
+    final cells = List<Widget>.generate(42, (index) {
+      final date = gridStart.add(Duration(days: index));
+      final inMonth = date.year == month.year && date.month == month.month;
+      final isFuture = date.isAfter(DateTime(today.year, today.month, today.day));
+      final amount = inMonth ? (daily[date.day] ?? 0) : 0.0;
+      final income = inMonth ? (dailyIncome[date.day] ?? 0) : 0.0;
+      final intensity = maxDaily == 0 ? 0.0 : (amount / maxDaily).clamp(0.0, 1.0);
+      final selected = selectedDate != null && DateUtils.isSameDay(date, selectedDate);
+      return GestureDetector(
+        onTap: isFuture ? null : () => onDateTap(date),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: .22)
+                : !inMonth
+                ? AppColors.background.withValues(alpha: .55)
+                : amount == 0
+                ? Colors.transparent
+                : Color.lerp(AppColors.surface, AppColors.primarySoft, .25 + intensity * .45),
+            borderRadius: BorderRadius.circular(12),
+            border: selected ? Border.all(color: AppColors.primary) : null,
+          ),
+          child: Opacity(
+            opacity: inMonth ? 1 : .38,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  '$day',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                if (amount > 0 || (dailyIncome[day] ?? 0) > 0) ...[
+                Text('${date.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isFuture ? AppColors.textSecondary : null)),
+                if (amount > 0 || income > 0) ...[
                   const SizedBox(height: 2),
-                  if (amount > 0)
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}',
-                        style: const TextStyle(fontSize: 10, color: AppColors.primaryDark),
-                      ),
-                    )
-                  else
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '+¥${dailyIncome[day]!.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 10, color: AppColors.primary),
-                      ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      amount > 0 ? '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}' : '+¥${income.toStringAsFixed(0)}',
+                      style: TextStyle(fontSize: 10, color: amount > 0 ? AppColors.primaryDark : AppColors.primary),
                     ),
-                  const SizedBox(height: 3),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (amount > 0) const _CalendarDot(color: Color(0xFFFF7A45)),
-                      if (amount > 0 && (dailyIncome[day] ?? 0) > 0) const SizedBox(width: 3),
-                      if ((dailyIncome[day] ?? 0) > 0) const _CalendarDot(color: Color(0xFF5BAE61)),
-                    ],
                   ),
+                  const SizedBox(height: 3),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (amount > 0) const _CalendarDot(color: Color(0xFFFF7A45)),
+                    if (amount > 0 && income > 0) const SizedBox(width: 3),
+                    if (income > 0) const _CalendarDot(color: Color(0xFF5BAE61)),
+                  ]),
                 ],
               ],
             ),
           ),
         ),
       );
-    }
-    while (cells.length % 7 != 0) cells.add(const SizedBox());
+    });
     return GridView.count(
       crossAxisCount: 7,
       shrinkWrap: true,
@@ -617,4 +607,28 @@ class _CalendarLegend extends StatelessWidget {
       Text('收入', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
     ],
   );
+}
+
+
+class _SelectedDayHeader extends StatelessWidget {
+  const _SelectedDayHeader({required this.date, required this.transactions});
+  final DateTime date;
+  final List<TransactionRecord> transactions;
+  @override
+  Widget build(BuildContext context) {
+    final expense = transactions.where((t) => t.isConsumptionExpense).fold<double>(0, (s, t) => s + t.netExpenseAmount);
+    final income = transactions.where((t) => t.isIncome).fold<double>(0, (s, t) => s + t.amount);
+    const weekdays = ['一','二','三','四','五','六','日'];
+    return Row(children: [
+      Text('${date.month}月${date.day}日', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(width: 8),
+      Text('周${weekdays[date.weekday - 1]}', style: const TextStyle(color: AppColors.textSecondary)),
+      const Spacer(),
+      Text('共 ${transactions.length} 笔', style: const TextStyle(color: AppColors.textSecondary)),
+      const SizedBox(width: 12),
+      Text('支出 ¥${expense.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFFFF6B35), fontWeight: FontWeight.w600)),
+      const SizedBox(width: 10),
+      Text('收入 ¥${income.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF4F984F), fontWeight: FontWeight.w600)),
+    ]);
+  }
 }
