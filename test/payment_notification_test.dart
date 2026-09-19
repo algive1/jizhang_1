@@ -521,7 +521,7 @@ class _FakeBridge implements PaymentNotificationBridge {
   Future<bool> isNotificationGranted() async => true;
 
   @override
-  Future<void> requestNotificationPermission() async {}
+  Future<bool> requestNotificationPermission() async => true;
 
   @override
   Future<List<PaymentNotification>> getPending() async => _pending;
