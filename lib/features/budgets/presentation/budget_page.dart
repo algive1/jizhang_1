@@ -105,7 +105,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
           if (overview.categories.isEmpty)
             AppCard(
               child: Text(
-                '还没有分类预算，可以先从餐饮、交通等高频分类开始。'
+                '还没有分类预算，可以先从餐饮、交通等高频分类开始。',
                 style: TextStyle(color: context.appSecondaryText),
               ),
             )
