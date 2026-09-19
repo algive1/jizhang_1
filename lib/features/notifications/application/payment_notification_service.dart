@@ -489,13 +489,13 @@ class PaymentNotificationAutoBookkeepingService {
       final request = QuickBookkeepingRequest(
         transactionId: id,
         bookId: target.bookId,
-        type: TransactionType.expense,
+        type: _transactionTypeForNotification(parsed.transactionType),
         amount: parsed.amount,
         accountId: target.accountId,
         occurredAt: parsed.occurredAt,
         categoryId: null,
         merchant: parsed.merchant,
-        note: '支付通知自动记账',
+        note: parsed.note ?? '支付通知自动记账',
         source: TransactionSource.auto,
         metadata: {
           'autoType': 'paymentNotification',
@@ -503,8 +503,13 @@ class PaymentNotificationAutoBookkeepingService {
           'paymentFingerprint': fingerprint,
           'notificationOrderId': parsed.orderId,
           'paymentPackageName': notification.packageName,
+          'transactionType': parsed.transactionType,
           if (parsed.identifierSuffix != null)
             'accountIdentifierSuffix': parsed.identifierSuffix,
+          if (parsed.originalAmount != null)
+            'originalAmountInCents': (parsed.originalAmount! * 100).round(),
+          if (parsed.discountAmount != null)
+            'discountAmountInCents': (parsed.discountAmount! * 100).round(),
         },
       );
       try {
@@ -580,13 +585,20 @@ class PaymentNotificationAutoBookkeepingService {
   ) {
     final order = parsed.orderId;
     if (order != null && order.isNotEmpty) {
-      return '${notification.packageName}|order|$order';
+      return '${notification.packageName}|${parsed.transactionType}|order|$order';
     }
     final merchant = (parsed.merchant ?? '').trim().toLowerCase();
     final minute = parsed.occurredAt.millisecondsSinceEpoch ~/ 60000;
-    return '${notification.packageName}|${parsed.amount.toStringAsFixed(2)}|$merchant|$minute';
+    return '${notification.packageName}|${parsed.transactionType}|${parsed.amount.toStringAsFixed(2)}|$merchant|$minute';
   }
 }
+
+TransactionType _transactionTypeForNotification(String value) => switch (value) {
+  'INCOME' => TransactionType.income,
+  'REFUND' => TransactionType.refund,
+  'REIMBURSEMENT' => TransactionType.reimbursement,
+  _ => TransactionType.expense,
+};
 
 String _sourceApp(String channel) => switch (channel) {
   SeedIds.wechatAccount => 'WECHAT',
