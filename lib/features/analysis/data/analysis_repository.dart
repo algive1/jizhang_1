@@ -37,6 +37,34 @@ class LocalAnalysisRepository implements AnalysisRepository {
   }
 }
 
+enum AnalysisScope { currentBook, allBooks }
+
+extension AnalysisScopeLabel on AnalysisScope {
+  String get label => switch (this) {
+    AnalysisScope.currentBook => '当前账本',
+    AnalysisScope.allBooks => '全部账本',
+  };
+}
+
+class AnalysisScopeController extends Notifier<AnalysisScope> {
+  @override
+  AnalysisScope build() => AnalysisScope.currentBook;
+
+  void select(AnalysisScope value) => state = value;
+}
+
+final analysisScopeProvider =
+    NotifierProvider<AnalysisScopeController, AnalysisScope>(
+      AnalysisScopeController.new,
+    );
+
+final analysisTransactionsProvider =
+    Provider<AsyncValue<List<TransactionRecord>>>((ref) {
+      return ref.watch(analysisScopeProvider) == AnalysisScope.allBooks
+          ? ref.watch(allTransactionsProvider)
+          : ref.watch(transactionsProvider);
+    });
+
 class AnalysisPeriodController extends Notifier<AnalysisPeriod> {
   @override
   AnalysisPeriod build() => AnalysisPeriod.currentMonth;
@@ -54,7 +82,8 @@ final statisticalAnalysisServiceProvider = Provider(
 );
 
 final analysisRepositoryProvider = Provider<AnalysisRepository>((ref) {
-  final transactions = ref.watch(transactionsProvider).value ?? const [];
+  final transactions =
+      ref.watch(analysisTransactionsProvider).value ?? const <TransactionRecord>[];
   return LocalAnalysisRepository(
     transactions,
     ref.watch(statisticalAnalysisServiceProvider),

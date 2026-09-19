@@ -23,6 +23,8 @@ import '../features/account/application/personal_cloud_auto_backup_service.dart'
 import '../features/account/application/personal_cloud_remote_change_service.dart';
 import '../features/update/application/app_update_service.dart';
 import '../features/push/application/push_registration_service.dart';
+import '../features/budgets/application/budget_alert_notification_service.dart';
+import '../features/budgets/data/budget_repository.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -73,6 +75,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _processNotifications();
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
+      _syncBudgetAlerts();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
       _registerPushIfAvailable();
@@ -149,6 +152,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _processNotifications();
       _processRecurringAutoRecords();
       _syncRecurringBillNotifications();
+      _syncBudgetAlerts();
       unawaited(_flushDiagnosticsAfterSessionRestore());
       _syncPersonalCloudForeground();
       _registerPushIfAvailable();
@@ -313,6 +317,22 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     );
   }
 
+  void _syncBudgetAlerts() {
+    unawaited(
+      ref
+          .read(databaseBootstrapProvider.future)
+          .then((_) async {
+            if (!mounted) return;
+            await ref
+                .read(budgetAlertNotificationServiceProvider)
+                .sync(ref.read(budgetOverviewProvider));
+          })
+          .catchError((Object _) {
+            // Budget warnings are best effort and must never block startup.
+          }),
+    );
+  }
+
   void _processNotifications() {
     unawaited(
       ref
@@ -371,6 +391,17 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         home: StartupPoster(),
       );
     }
+
+    ref.listen(budgetOverviewProvider, (previous, next) {
+      unawaited(
+        ref
+            .read(budgetAlertNotificationServiceProvider)
+            .sync(next)
+            .catchError((Object _) {
+              // A notification failure must not affect budgeting or app UI.
+            }),
+      );
+    });
 
     if (!_initialUpdateCheckScheduled) {
       _initialUpdateCheckScheduled = true;

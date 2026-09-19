@@ -520,8 +520,11 @@ class StatisticalAnalysisService {
     );
   }
 
-  String _categoryKey(TransactionRecord item) =>
-      item.categoryId ?? 'uncategorized';
+  String _categoryKey(TransactionRecord item) {
+    final name = item.categoryName?.trim();
+    if (name != null && name.isNotEmpty) return 'name:$name';
+    return 'id:${item.bookId}:${item.categoryId ?? 'uncategorized'}';
+  }
 
   bool _isLateNight(TransactionRecord item) => item.occurredAt.hour >= 22;
 

@@ -35,6 +35,11 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Verify Flutter dependency lock
+        run: |
+          git diff -- pubspec.lock
+          git diff --quiet -- pubspec.lock
+
       - name: Analyze
         run: flutter analyze
 
@@ -53,6 +58,8 @@ jobs:
           test/push_registration_service_test.dart
           test/ad_placement_test.dart
           test/ad_placement_readiness_test.dart
+          test/budget_alert_notification_service_test.dart
+          test/analysis_multibook_and_annual_report_test.dart
 
   server-core:
     name: Server core checks
