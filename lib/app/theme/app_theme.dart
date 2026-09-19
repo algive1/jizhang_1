@@ -22,60 +22,60 @@ abstract final class AppTheme {
         error: AppColors.warning,
       ),
       scaffoldBackgroundColor: theme.background,
-      textTheme: const TextTheme(
+      textTheme: TextTheme(
         headlineLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 30,
           fontWeight: FontWeight.w700,
           height: 1.2,
         ),
         headlineMedium: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 24,
           fontWeight: FontWeight.w700,
           height: 1.25,
         ),
         titleLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 21,
           fontWeight: FontWeight.w600,
           height: 1.3,
         ),
         titleMedium: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           height: 1.35,
         ),
         bodyLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 16,
           height: 1.45,
         ),
         bodyMedium: TextStyle(
-          color: AppColors.textSecondary,
+          color: theme.textSecondary,
           fontSize: 14,
           height: 1.4,
         ),
         labelLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: theme.textPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: theme.textPrimary,
         elevation: 0,
         centerTitle: false,
         surfaceTintColor: Colors.transparent,
       ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.divider,
+      dividerTheme: DividerThemeData(
+        color: theme.divider,
         thickness: 1,
         space: 1,
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: theme.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
