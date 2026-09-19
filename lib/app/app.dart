@@ -25,6 +25,7 @@ import '../features/update/application/app_update_service.dart';
 import '../features/push/application/push_registration_service.dart';
 import '../features/budgets/application/budget_alert_notification_service.dart';
 import '../features/budgets/data/budget_repository.dart';
+import '../features/settings/application/theme_controller.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -410,9 +411,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       });
     }
 
+    final appearance = ref.watch(effectiveThemeProvider);
     return MaterialApp.router(
       title: '好好记账',
-      theme: AppTheme.light(),
+      theme: AppTheme.light(appearance),
       routerConfig: ref.watch(appRouterProvider),
       locale: const Locale('zh', 'CN'),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,

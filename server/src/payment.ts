@@ -177,7 +177,7 @@ function membershipCurrent(store: Store, userId: string) {
     return {
       membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
       subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
-      entitlements: ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
+      entitlements: ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree', 'customTheme'].map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
       quotas: [],
     };
   }
@@ -188,7 +188,7 @@ function membershipCurrent(store: Store, userId: string) {
   return {
     membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
     subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree'].map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
+    entitlements: status === 'active' ? ['automaticBookkeeping', 'cloudSync', 'multiDevice', 'advancedReport', 'familyBook', 'adFree', 'customTheme'].map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
     quotas: [],
   };
 }
