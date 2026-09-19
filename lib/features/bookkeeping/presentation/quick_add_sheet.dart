@@ -15,6 +15,7 @@ import 'components/category_grid.dart';
 import 'dart:async';
 
 import 'components/amount_input_view.dart';
+import 'components/bookkeeping_card_style.dart';
 import 'components/time_selector.dart';
 import 'components/business_fields.dart';
 
@@ -570,10 +571,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }) {
     return Container(
       key: const ValueKey('quick-detail-card'),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: BookkeepingCardStyle.outerPadding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(BookkeepingCardStyle.outerRadius),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
@@ -584,7 +585,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             onAi: _openAi,
             onVoice: _openVoice,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: BookkeepingCardStyle.sectionGap),
           AmountInputView(
             input: input,
             currency: _currencySymbol(sourceAccount),
@@ -605,7 +606,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
               ),
             ),
-          const SizedBox(height: 10),
+          const SizedBox(height: BookkeepingCardStyle.sectionGap),
           _ChipRow(
             children: [
               if (!_usesAccountPair)
@@ -672,7 +673,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: BookkeepingCardStyle.rowGap),
           _ChipRow(
             children: [
               _QuickChip(
@@ -2126,7 +2127,7 @@ class _NoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final stacks = MediaQuery.textScalerOf(context).scale(14) > 19;
     final field = SizedBox(
-      height: 40,
+      height: BookkeepingCardStyle.noteHeight,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -2182,7 +2183,7 @@ class _NoteRow extends StatelessWidget {
       icon: Icons.auto_awesome_outlined,
       iconColor: AppColors.primaryDark,
       selected: true,
-      height: 36,
+      height: BookkeepingCardStyle.compactActionHeight,
       horizontalPadding: 6,
       iconGap: 4,
       fontSize: 12,
@@ -2198,7 +2199,7 @@ class _NoteRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         aiAction,
-        const SizedBox(width: 4),
+        const SizedBox(width: BookkeepingCardStyle.compactInlineGap),
         voiceAction,
       ],
     );
@@ -2217,7 +2218,7 @@ class _NoteRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(child: field),
-        const SizedBox(width: 6),
+        const SizedBox(width: BookkeepingCardStyle.inlineGap),
         actions,
       ],
     );
@@ -2247,8 +2248,8 @@ class _NoteIconAction extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Container(
-            width: 36,
-            height: 36,
+            width: BookkeepingCardStyle.compactActionHeight,
+            height: BookkeepingCardStyle.compactActionHeight,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppColors.divider),
@@ -2301,7 +2302,7 @@ class _QuickChip extends StatelessWidget {
     this.leading,
     this.selected = false,
     this.showChevron = false,
-    this.height = 40,
+    this.height = BookkeepingCardStyle.chipHeight,
     this.horizontalPadding = 8,
     this.iconGap = 6,
     this.fontSize = 12.5,
