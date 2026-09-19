@@ -228,7 +228,11 @@ export class Store {
         check(data.id===e.id && (!('book_id' in data) || data.book_id===id),'数据不属于目标账本');
         if (e.kind==='accounts') this.validateAccountIdentity(id, data, e.id);
         if (e.kind==='transactions') this.validateMetadata(data);
-        if (e.kind==='transactions') Object.assign(data,{created_by:user,updated_by:user,user_id:user,visibility:'shared',sync_status:'synced'});
+        if (e.kind==='transactions') {
+          const requestedPayer=data.user_id??user;
+          check(this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(id,String(requestedPayer)),'付款人必须是当前共享账本成员',400);
+          Object.assign(data,{created_by:user,updated_by:user,user_id:requestedPayer,visibility:'shared',sync_status:'synced'});
+        }
         if (e.kind==='goals') Object.assign(data,{created_by:user,updated_by:user});
         if (e.kind==='goal_contributions') data.contributor_user_id=user;
         check(!this.get(id,e.kind,e.id),'快照中记录标识重复');
