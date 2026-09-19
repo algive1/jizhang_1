@@ -146,15 +146,32 @@ class AutoBillOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        runCatching {
-            AutoBookkeepingNotificationController.sync(this)
+        val foregroundStarted = runCatching {
+            if (!AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
+                error("status notification is not available")
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForeground(
                     AutoBookkeepingNotificationController.NOTIFICATION_ID,
                     AutoBookkeepingNotificationController.buildNotification(this),
                 )
+            } else {
+                AutoBookkeepingNotificationController.sync(this)
             }
-        }.onFailure { error -> Log.e(TAG, "overlay foreground initialization failed", error) }
+        }
+        if (foregroundStarted.isFailure) {
+            val error = foregroundStarted.exceptionOrNull()
+            Log.e(TAG, "overlay foreground initialization failed", error)
+            AutoBookkeepingDiagnostics.foregroundRunning = false
+            AutoBookkeepingDiagnostics.error = "自动记账常驻通知不可用，请检查通知权限"
+            AutoBookkeepingLogStore.record(
+                this,
+                "overlay_foreground_failed",
+                error?.javaClass?.simpleName ?: "notification unavailable",
+            )
+            stopSelf()
+            return
+        }
         AutoBookkeepingDiagnostics.foregroundRunning = true
         Log.i(TAG, "overlay service created")
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service created")
