@@ -615,7 +615,7 @@ class PaymentNotificationAutoBookkeepingService {
           return transaction;
         }
       } on FormatException {
-        // Ignore legacy metadata that cannot describe an auto event.
+        // Ignore malformed metadata that cannot describe an automatic event.
       }
     }
     return null;
