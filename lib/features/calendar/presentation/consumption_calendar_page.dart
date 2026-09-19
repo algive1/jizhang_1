@@ -281,8 +281,8 @@ class _ConsumptionCalendarPageState
               child: Column(
                 children: [
                   if (selected.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text('当天没有流水记录', style: TextStyle(color: context.appSecondaryText)),
                     )
                   else
