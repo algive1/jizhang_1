@@ -215,9 +215,9 @@ InvestmentPortfolio buildPortfolio({
   );
 }
 
-/// A once-per-day portfolio snapshot. The MVP writes it lazily the first time
-/// the user opens 投资管理 on a given day, so no background job is needed and
-/// inactive users cost the server nothing.
+/// A once-per-day portfolio snapshot. Foreground opening and the daily finance
+/// scheduler both call the same idempotent writer; only fresh market quotes or
+/// explicit manual valuations are persisted.
 class InvestmentSnapshot {
   const InvestmentSnapshot({
     required this.date,
