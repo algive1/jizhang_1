@@ -26,6 +26,7 @@ void main() {
     expect(find.text('常驻通知权限'), findsOneWidget);
     expect(find.text('支付通知兜底'), findsOneWidget);
     expect(find.text('保存支付结果截图'), findsOneWidget);
+    expect(find.text('页面识别规则'), findsOneWidget);
     expect(find.textContaining('常驻通知'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -93,6 +94,9 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
         notificationListenerConnected: false,
         screenshotSupported: true,
         screenshotEnabled: false,
+        ruleSchemaVersion: 1,
+        ruleVersions: 'WECHAT:v1,ALIPAY:v1',
+        ruleSource: 'asset',
       );
 
 
