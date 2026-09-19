@@ -20,7 +20,7 @@ class ThemeSettingsPage extends ConsumerWidget {
       appBar: AppBar(title: const Text('主题外观')),
       body: catalog.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(child: Text('主题暂时无法读取')),
+        error: (_, _) => const Center(child: Text('主题暂时无法读取')),
         data: (value) => ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
