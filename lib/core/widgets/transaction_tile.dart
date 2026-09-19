@@ -4,7 +4,7 @@ import '../formatters/transaction_date_formatter.dart';
 import '../models/transaction_record.dart';
 import 'category_icon.dart';
 import 'money_text.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class TransactionTile extends StatelessWidget {
   const TransactionTile({
