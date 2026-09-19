@@ -7,7 +7,7 @@ import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
 import type { Store } from './store.js';
 
-export type PaymentChannel = 'wechat' | 'alipay';
+export type PaymentChannel = 'wechat' | 'alipay' | 'apple';
 type User = { id: string; username: string };
 type Authenticate = (header: string | undefined) => User;
 type OrderRow = {
