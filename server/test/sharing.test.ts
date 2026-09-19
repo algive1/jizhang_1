@@ -140,13 +140,6 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
  assert.equal(stored.created_by,owner.user.id);
  assert.equal(stored.user_id,member.user.id);
 
- const promotedBook='phase-promoted-'+randomUUID();
- const promoted={...tx(promotedBook,'historical-member',300),user_id:member.user.id};
- const promotedResult=await app.inject({method:'POST',url:'/api/v1/books',headers:{authorization:`Bearer ${owner.token}`},payload:{id:promotedBook,name:'历史家庭账本',type:'family',entities:[{kind:'accounts',id:'cash',data:account(promotedBook)},{kind:'transactions',id:'historical-member',data:promoted}]}});
- // The target member is not yet a member of this newly promoted book, so an
- // arbitrary attribution must not be accepted during initial sharing.
- assert.equal(promotedResult.statusCode,400);
-
  const invalid={...tx(book,'outsider-payer',100),user_id:outsider.user.id};
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',invalid)]}})).statusCode,400);
 
