@@ -11,7 +11,7 @@ import '../../../core/utils/entity_id.dart';
 import '../../books/data/book_repository.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../transactions/data/transactions_repository.dart';
-import '../../sharing/data/shared_api.dart';
+import '../../sharing/data/session_repository.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_holding.dart';
 import '../domain/investment_portfolio.dart';
