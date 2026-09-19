@@ -43,6 +43,7 @@ function ensureSchema(store:Store){
       notification_uuid TEXT PRIMARY KEY,
       notification_type TEXT NOT NULL,
       subtype TEXT,
+      signed_at INTEGER,
       received_at INTEGER NOT NULL
     );
   `);
@@ -131,8 +132,9 @@ export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authentic
     if(uuid){
       const seen=store.db.prepare('SELECT 1 FROM apple_notifications WHERE notification_uuid=?').get(uuid);
       if(seen)return {ok:true};
-      store.db.prepare('INSERT INTO apple_notifications VALUES(?,?,?,?)').run(uuid,type,String(envelope.subtype??''),store.now());
+      store.db.prepare('INSERT INTO apple_notifications(notification_uuid,notification_type,subtype,signed_at,received_at) VALUES(?,?,?,?,?)').run(uuid,type,String(envelope.subtype??''),Number(envelope.signedDate??0)?Math.floor(Number(envelope.signedDate)/1000):null,store.now());
     }
+    if(type==='TEST') return {ok:true};
     const data=(envelope.data??{}) as Json;
     const signed=String(data.signedTransactionInfo??'');
     if(signed){
