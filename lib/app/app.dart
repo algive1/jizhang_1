@@ -23,6 +23,7 @@ import '../features/account/application/personal_cloud_auto_backup_service.dart'
 import '../features/account/application/personal_cloud_remote_change_service.dart';
 import '../features/update/application/app_update_service.dart';
 import '../features/push/application/push_registration_service.dart';
+import '../features/security/presentation/app_lock_gate.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -387,6 +388,9 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('zh', 'CN')],
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => AppLockGate(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }
