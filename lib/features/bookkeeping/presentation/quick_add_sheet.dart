@@ -634,7 +634,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   selectedBook?.isShared == true)
                 _QuickChip(
                   key: const ValueKey('quick-family-payer-chip'),
-                  label: _payerLabel ?? '本人付款',
+                  label: _payerLabel ?? (_payerUserId == null ? '本人付款' : '付款成员'),
                   icon: Icons.person_outline_rounded,
                   selected: true,
                   showChevron: true,
@@ -731,6 +731,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     );
   }
 
+  String _familyMemberName(Map<String, dynamic> member) {
+    final displayName = (member['display_name'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final username = (member['username'] as String?)?.trim();
+    if (username != null && username.isNotEmpty) return username;
+    final userId = (member['user_id'] as String?)?.trim();
+    return userId == null || userId.isEmpty ? '家庭成员' : userId;
+  }
+
   Future<void> _restorePayerLabel() async {
     if (_payerLabelLoading || _payerUserId == null || !mounted) return;
     final books = ref.read(booksProvider).value ?? const <LedgerBook>[];
@@ -749,11 +758,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         if (payer == null) {
           _payerLabel = '已退出成员付款';
         } else {
-          final displayName =
-              (payer['display_name'] as String?)?.trim().isNotEmpty == true
-              ? payer['display_name'] as String
-              : payer['username'] as String;
-          _payerLabel = '$displayName付款';
+          _payerLabel = '${_familyMemberName(payer)}付款';
         }
       });
     } on Object {
@@ -812,10 +817,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ),
       );
       if (selected == null || !mounted) return;
-      final name =
-          (selected['display_name'] as String?)?.trim().isNotEmpty == true
-          ? selected['display_name'] as String
-          : selected['username'] as String;
+      final name = _familyMemberName(selected);
       setState(() {
         _payerUserId = selected['user_id'] as String;
         _payerLabel = '$name付款';
