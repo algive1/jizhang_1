@@ -642,7 +642,7 @@ class _CalendarHeroHeader extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           Image.asset(
-            'assets/images/微信图片_20260919140237_156_240.png',
+            '微信图片_20260919140237_156_240.png',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
           ),
