@@ -128,6 +128,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   String? _destinationAccountId;
   String? _payerUserId;
   String? _payerLabel;
+  bool _payerLabelLoading = false;
   DateTime _occurredAt = DateTime.now();
   bool _isPlanned = false;
   bool _isOneTime = true;
@@ -185,6 +186,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _accountId = transaction.accountId;
     _destinationAccountId = transaction.destinationAccountId;
     _payerUserId = transaction.userId;
+    if (_payerUserId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePayerLabel());
+    }
     _occurredAt = transaction.occurredAt;
     _isPlanned = transaction.isPlanned;
     _isOneTime = transaction.isOneTime;
@@ -725,6 +729,39 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ],
       ),
     );
+  }
+
+  Future<void> _restorePayerLabel() async {
+    if (_payerLabelLoading || _payerUserId == null || !mounted) return;
+    final books = ref.read(booksProvider).value ?? const <LedgerBook>[];
+    final book = books.where((item) => item.id == _bookId).firstOrNull;
+    if (book == null || book.type != BookType.family || !book.isShared) return;
+    _payerLabelLoading = true;
+    try {
+      final members = await ref
+          .read(familyServiceProvider)
+          .memberDetails(book.sharedId!);
+      if (!mounted) return;
+      final payer = members
+          .where((member) => member['user_id'] == _payerUserId)
+          .firstOrNull;
+      setState(() {
+        if (payer == null) {
+          _payerLabel = '已退出成员付款';
+        } else {
+          final displayName =
+              (payer['display_name'] as String?)?.trim().isNotEmpty == true
+              ? payer['display_name'] as String
+              : payer['username'] as String;
+          _payerLabel = '$displayName付款';
+        }
+      });
+    } on Object {
+      // Attribution itself remains intact. A temporary member-list failure must
+      // never rewrite an existing transaction's payer.
+    } finally {
+      _payerLabelLoading = false;
+    }
   }
 
   Future<void> _chooseFamilyPayer(LedgerBook book) async {
