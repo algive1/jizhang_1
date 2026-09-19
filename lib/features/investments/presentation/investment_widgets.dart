@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/privacy_amount.dart';
 import '../domain/investment_asset.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// Formats a return rate, or renders “暂无可比基数” when the cost basis is
 /// zero. A missing rate is never shown as 0%.
@@ -38,7 +39,7 @@ class ProfitText extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: fontSize,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
           )
         : Text(
@@ -75,7 +76,7 @@ class ProfitText extends StatelessWidget {
 Color profitColor(double value) {
   if (value > 0) return AppColors.expense;
   if (value < 0) return AppColors.success;
-  return AppColors.textSecondary;
+  return context.appSecondaryText;
 }
 
 /// Money amount with an explicit sign, reusing the app-wide privacy mask so a
@@ -117,7 +118,7 @@ class InvestmentAmountText extends StatelessWidget {
         fontWeight: weight,
         height: 1.15,
         fontFeatures: const [FontFeature.tabularFigures()],
-        color: color ?? AppColors.textPrimary,
+        color: color ?? context.appPrimaryText,
       ),
     );
   }
@@ -155,7 +156,7 @@ class QuoteStatus extends StatelessWidget {
         Icon(
           isStale ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
           size: 12,
-          color: isStale ? AppColors.warning : AppColors.textSecondary,
+          color: isStale ? AppColors.warning : context.appSecondaryText,
         ),
         const SizedBox(width: 3),
         Flexible(
@@ -165,7 +166,7 @@ class QuoteStatus extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
-              color: isStale ? AppColors.warning : AppColors.textSecondary,
+              color: isStale ? AppColors.warning : context.appSecondaryText,
             ),
           ),
         ),
@@ -201,14 +202,14 @@ class InvestmentChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: background ?? AppColors.surfaceSoft,
+      color: background ?? context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 12, color: color ?? AppColors.textSecondary),
+          Icon(icon, size: 12, color: color ?? context.appSecondaryText),
           const SizedBox(width: 3),
         ],
         Text(
@@ -218,7 +219,7 @@ class InvestmentChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: color ?? AppColors.textSecondary,
+            color: color ?? context.appSecondaryText,
           ),
         ),
       ],
