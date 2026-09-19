@@ -183,6 +183,7 @@ const memberEntitlementKeys = [
   'dataExport',
   'basicBackup',
   'adFree',
+  'customTheme',
 ] as const;
 
 function assistantQuotas(store: Store, userId: string) {

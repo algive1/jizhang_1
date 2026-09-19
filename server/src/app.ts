@@ -18,6 +18,7 @@ import { registerAppUpdateRoutes } from './app_update.js';
 import { registerAnalyticsRoutes } from './analytics.js';
 import { registerPushRoutes } from './push.js';
 import { registerAdConfigRoutes } from './ads.js';
+import { registerThemeCatalog } from './theme_catalog.js';
 import { registerMessageCenterRoutes } from './message_center.js';
 import { registerSupportRoutes } from './support.js';
 import { registerAdminRoutes } from './admin.js';
@@ -86,6 +87,7 @@ export async function createApp(
   registerAdConfigRoutes(app);
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
+  registerThemeCatalog(app,store);
   registerPaymentRoutes(app,store,authenticate);
   registerAppleIapRoutes(app,store,authenticate);
   registerPersonalCloudRoutes(app,store,authenticate);
