@@ -2086,7 +2086,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     const Color(0xFFEF789E),
   ),
   AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
-  _ => (Icons.account_balance_wallet_outlined, context.appSecondaryText),
+  _ => (Icons.account_balance_wallet_outlined, AppColors.textSecondary),
 };
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
@@ -2280,8 +2280,8 @@ class _AccountPairCard extends StatelessWidget {
               onTap: onSourceTap,
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Icon(
               Icons.arrow_forward_rounded,
               color: context.appPrimary,
