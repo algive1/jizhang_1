@@ -63,7 +63,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '支出趋势',
                       style: TextStyle(
@@ -77,7 +77,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                     width: 132,
                     child: SlidingSegmentedControl<AnalysisPeriod>(
                       compact: true,
-                      colors: const [context.appPrimary, context.appPrimary],
+                      colors: [context.appPrimary, context.appPrimary],
                       backgroundColor: context.appSurfaceSoft,
                       inactiveTextColor: context.appSecondaryText,
                       keyPrefix: 'home-trend',
@@ -116,7 +116,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
               ),
               const SizedBox(height: 5),
               if (widget.amountHidden)
-                const SizedBox(
+                SizedBox(
                   height: 88,
                   child: Center(
                     child: Text(
