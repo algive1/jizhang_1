@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
@@ -182,6 +184,81 @@ void main() {
     // Keep the variable used so this test also asserts a valid expense
     // category exists in a seeded personal book.
     expect(expenseCategory.type, 'expense');
+  });
+
+  test('refund learning preserves legacy expense preference', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+
+    final settings = DriftAppSettingsRepository(database);
+    final transactions = DriftTransactionRepository(database);
+    final rules = DriftMerchantRuleRepository(
+      database,
+      transactions,
+      const MerchantClassificationService(),
+    );
+    final learning = AutoBookkeepingLearningService(settings, rules);
+    final categories = await database.categoryDao.getActive();
+    final expenseCategory = categories.firstWhere(
+      (item) => item.type == 'expense' && item.bookId == SeedIds.personalBook,
+    );
+    final incomeCategory = categories.firstWhere(
+      (item) => item.type == 'income' && item.bookId == SeedIds.personalBook,
+    );
+    const merchant = '历史偏好商户';
+    final merchantKey = const MerchantNormalizer().normalize(merchant);
+    await settings.set(
+      AutoBookkeepingLearningService.preferenceKey,
+      jsonEncode({
+        merchantKey: {
+          'merchantKey': merchantKey,
+          'merchantDisplay': merchant,
+          'categoryId': expenseCategory.id,
+          'accountId': SeedIds.wechatAccount,
+          'bookId': SeedIds.personalBook,
+          'useCount': 3,
+        },
+      }),
+    );
+
+    final now = DateTime(2026, 9, 20, 14);
+    final refund = PendingAutoBookkeepingCandidate(
+      fingerprint: 'refund-preserves-expense',
+      amountInCents: 1000,
+      merchant: merchant,
+      paymentMethod: '支付宝',
+      timestamp: now,
+      sourceApp: 'ALIPAY',
+      scene: 'PAYMENT_NOTIFICATION_REFUND',
+      transactionType: 'REFUND',
+    );
+    await learning.remember(
+      transactionId: 'not-needed-for-refund-learning',
+      candidate: refund,
+      bookId: SeedIds.personalBook,
+      accountId: SeedIds.alipayAccount,
+      categoryId: incomeCategory.id,
+      rememberForMerchant: true,
+    );
+
+    final expenseRecommendation = await learning.recommend(
+      candidate: PendingAutoBookkeepingCandidate(
+        fingerprint: 'expense-after-legacy-refund',
+        amountInCents: 2000,
+        merchant: merchant,
+        paymentMethod: '微信支付',
+        timestamp: now.add(const Duration(hours: 1)),
+        sourceApp: 'WECHAT',
+        scene: 'WECHAT_PAYMENT_SUCCESS',
+        transactionType: 'EXPENSE',
+      ),
+      fallbackBookId: SeedIds.personalBook,
+      transactionType: TransactionType.expense,
+    );
+    expect(expenseRecommendation.categoryId, expenseCategory.id);
+    expect(expenseRecommendation.accountId, SeedIds.wechatAccount);
+    expect(expenseRecommendation.useCount, 3);
   });
 
   test('payment method mapping helps a new merchant choose account', () async {
