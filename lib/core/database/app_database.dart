@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../utils/entity_id.dart';
+import '../security/database_encryption_key_store.dart';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -1180,6 +1181,10 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File(p.join(directory.path, AppDatabase.databaseFileName));
+    final encryptionKey = await DatabaseEncryptionKeyStore().loadOrCreate();
+
+    await _ensureDatabaseEncrypted(file, encryptionKey);
+
     // Restores are staged while the live database is open and are applied only
     // after an app/process restart. Never swap the database, -wal, or -shm
     // files opportunistically from a database opener: another FlutterEngine
@@ -1190,6 +1195,7 @@ LazyDatabase _openConnection() {
         mode: sqlite.OpenMode.readOnly,
       );
       try {
+        _applyDatabaseKey(source, encryptionKey);
         if (source.userVersion < 10) {
           final backup =
               '${file.path}.pre-migration-v${source.userVersion}-${DateTime.now().microsecondsSinceEpoch}.sqlite';
@@ -1199,12 +1205,17 @@ LazyDatabase _openConnection() {
         source.close();
       }
     }
-    // SQLite is bundled through native assets on every platform. Keep queries
-    // off the UI isolate, including Android; the old system-library loading
-    // workaround is no longer needed.
+
+    // sqlite3 is built with SQLite3MultipleCiphers. PRAGMA key must be the first
+    // connection operation before Drift reads sqlite_master or user_version.
     return NativeDatabase.createInBackground(
       file,
       setup: (database) {
+        _applyDatabaseKey(database, encryptionKey);
+        final cipher = database.select('PRAGMA cipher');
+        if (cipher.isEmpty) {
+          throw StateError('当前 SQLite 构建不支持数据库加密');
+        }
         // WAL lets readers proceed while another isolate is writing. A busy
         // timeout makes short write/write overlaps wait instead of failing
         // immediately with SQLITE_BUSY.
@@ -1214,6 +1225,127 @@ LazyDatabase _openConnection() {
       },
     );
   });
+}
+
+void _applyDatabaseKey(sqlite.Database database, String key) {
+  final escaped = key.replaceAll("'", "''");
+  database.execute("PRAGMA key = '$escaped'");
+}
+
+bool _canReadEncryptedDatabase(File file, String key) {
+  sqlite.Database? database;
+  try {
+    database = sqlite.sqlite3.open(file.path, mode: sqlite.OpenMode.readOnly);
+    _applyDatabaseKey(database, key);
+    database.select('SELECT count(*) FROM sqlite_master');
+    return true;
+  } on Object {
+    return false;
+  } finally {
+    database?.close();
+  }
+}
+
+bool _canReadPlainDatabase(File file) {
+  sqlite.Database? database;
+  try {
+    database = sqlite.sqlite3.open(file.path, mode: sqlite.OpenMode.readOnly);
+    database.select('SELECT count(*) FROM sqlite_master');
+    return true;
+  } on Object {
+    return false;
+  } finally {
+    database?.close();
+  }
+}
+
+Future<void> _ensureDatabaseEncrypted(File file, String key) async {
+  if (!await file.exists()) return;
+  if (_canReadEncryptedDatabase(file, key)) {
+    await _removeStalePlaintextMigrationCopies(file);
+    return;
+  }
+
+  final lockFile = File('${file.path}.encryption-migration.lock');
+  final lock = await lockFile.open(mode: FileMode.append);
+  await lock.lock(FileLock.exclusive);
+  try {
+    // Another isolate may have completed the migration while this isolate was
+    // waiting for the OS file lock.
+    if (_canReadEncryptedDatabase(file, key)) {
+      await _removeStalePlaintextMigrationCopies(file);
+      return;
+    }
+    if (!_canReadPlainDatabase(file)) {
+      throw StateError(
+        '本地数据库无法解密。系统安全存储中的数据库密钥可能已丢失，请从备份恢复。',
+      );
+    }
+
+    final temporary = File(
+      '${file.path}.encrypting-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    await _deleteIfExists(temporary);
+
+    sqlite.Database? source;
+    sqlite.Database? target;
+    try {
+      source = sqlite.sqlite3.open(file.path);
+      source.execute('PRAGMA busy_timeout = 5000');
+      source.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+      source.execute('VACUUM INTO ?', [temporary.path]);
+      source.close();
+      source = null;
+
+      target = sqlite.sqlite3.open(temporary.path);
+      final escaped = key.replaceAll("'", "''");
+      target.execute("PRAGMA rekey = '$escaped'");
+      target.select('SELECT count(*) FROM sqlite_master');
+      target.close();
+      target = null;
+
+      if (!_canReadEncryptedDatabase(temporary, key)) {
+        throw StateError('数据库加密迁移校验失败');
+      }
+
+      final safety = File(
+        '${file.path}.pre-encryption-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await file.copy(safety.path);
+      await _deleteIfExists(File('${file.path}-wal'));
+      await _deleteIfExists(File('${file.path}-shm'));
+
+      // On Android/iOS this is an atomic rename on the same filesystem. The
+      // transient plaintext safety copy is removed only after the encrypted
+      // destination has been opened successfully with the device key.
+      await temporary.rename(file.path);
+      if (!_canReadEncryptedDatabase(file, key)) {
+        await _deleteIfExists(file);
+        await safety.rename(file.path);
+        throw StateError('数据库加密迁移后的文件无法验证');
+      }
+      await _deleteIfExists(safety);
+      await _removeStalePlaintextMigrationCopies(file);
+    } finally {
+      source?.close();
+      target?.close();
+      await _deleteIfExists(temporary);
+    }
+  } finally {
+    await lock.unlock();
+    await lock.close();
+    await _deleteIfExists(lockFile);
+  }
+}
+
+Future<void> _removeStalePlaintextMigrationCopies(File file) async {
+  final directory = file.parent;
+  final prefix = '${p.basename(file.path)}.pre-encryption-';
+  await for (final entity in directory.list()) {
+    if (entity is File && p.basename(entity.path).startsWith(prefix)) {
+      await _deleteIfExists(entity);
+    }
+  }
 }
 
 Future<void> _applyPendingDatabaseRestore(File databaseFile) async {
