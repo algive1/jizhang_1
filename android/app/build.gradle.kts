@@ -88,6 +88,7 @@ android {
 dependencies {
     testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core:1.18.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-messaging")
 }
