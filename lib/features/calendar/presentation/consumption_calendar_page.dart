@@ -984,7 +984,7 @@ class _CalendarInlineStats extends StatelessWidget {
                   label: '最高消费日',
                   value: highestExpenseDay == null
                       ? '暂无'
-                      : '$highestExpenseDay日',
+                      : highestExpenseDay.toString() + '日',
                   helper: highestExpenseCents == null
                       ? null
                       : '¥${(highestExpenseCents! / 100).toStringAsFixed(2)}',
