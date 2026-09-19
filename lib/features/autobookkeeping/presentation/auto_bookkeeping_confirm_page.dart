@@ -18,6 +18,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
   const AutoBookkeepingConfirmPage({super.key});
@@ -185,7 +186,7 @@ class _AutoBookkeepingConfirmPageState
             IconButton(
               onPressed: _close,
               tooltip: '忽略这笔账单',
-              icon: const Icon(Icons.close),
+              icon: Icon(Icons.close),
             ),
             const SizedBox(width: 4),
             Text('确认记一笔', style: Theme.of(context).textTheme.headlineSmall),
@@ -193,13 +194,13 @@ class _AutoBookkeepingConfirmPageState
         ),
         const SizedBox(height: 12),
         AppCard(
-          color: AppColors.primarySoft,
+          color: context.appPrimarySoft,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '已识别支付结果',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
               const SizedBox(height: 8),
               Text(
@@ -213,7 +214,7 @@ class _AutoBookkeepingConfirmPageState
               const SizedBox(height: 6),
               Text(
                 candidate.merchant,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                 ),
@@ -221,7 +222,7 @@ class _AutoBookkeepingConfirmPageState
               const SizedBox(height: 6),
               Text(
                 '${_sourceLabel(candidate.sourceApp)} · ${DateFormat('yyyy-MM-dd HH:mm').format(candidate.timestamp)}',
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ],
           ),
