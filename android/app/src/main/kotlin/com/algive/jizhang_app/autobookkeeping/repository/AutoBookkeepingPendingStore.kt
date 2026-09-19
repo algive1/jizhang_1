@@ -385,7 +385,10 @@ object AutoBookkeepingPendingStore {
     private fun isManagedScreenshot(context: Context, path: String): Boolean {
         if (path.isBlank()) return false
         return runCatching {
-            val root = File(context.filesDir, "autobookkeeping/screenshots").canonicalFile
+            val root = File(
+                context.filesDir,
+                "autobookkeeping/pending_screenshots",
+            ).canonicalFile
             val file = File(path).canonicalFile
             file.path.startsWith(root.path + File.separator)
         }.getOrDefault(false)
@@ -394,6 +397,33 @@ object AutoBookkeepingPendingStore {
     private fun deleteScreenshot(context: Context, path: String) {
         if (!isManagedScreenshot(context, path)) return
         runCatching { File(path).delete() }
+    }
+
+    fun promoteScreenshot(
+        context: Context,
+        path: String,
+    ): String? {
+        if (!isManagedScreenshot(context, path)) return null
+        val source = File(path)
+        if (!source.isFile) return null
+
+        val directory = File(
+            context.filesDir,
+            "autobookkeeping/attachments",
+        )
+        if (!directory.exists() && !directory.mkdirs()) return null
+
+        val destination = File(directory, source.name)
+        if (destination.exists()) {
+            return destination.absolutePath
+        }
+        return runCatching {
+            if (!source.renameTo(destination)) {
+                source.copyTo(destination, overwrite = false)
+                source.delete()
+            }
+            destination.absolutePath
+        }.getOrNull()
     }
 
     private fun parse(raw: String?): JSONObject? = raw?.let {
