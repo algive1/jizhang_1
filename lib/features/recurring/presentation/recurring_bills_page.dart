@@ -84,12 +84,12 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
                 onPressed: active.any((bill) => bill.autoRecord)
                     ? () => _recordDue(active)
                     : null,
-                icon: const Icon(Icons.play_circle_outline),
+                icon: Icon(Icons.play_circle_outline),
                 tooltip: '执行自动记账',
               ),
               IconButton(
                 onPressed: () => _openCreate(context, ref),
-                icon: const Icon(Icons.add_circle_outline),
+                icon: Icon(Icons.add_circle_outline),
                 tooltip: '新增周期账单',
               ),
             ],
@@ -98,7 +98,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             color: context.appPrimarySoft,
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.loop_rounded,
                   color: context.appPrimary,
                   size: 30,
@@ -161,7 +161,7 @@ class _RecurringBillsPageState extends ConsumerState<RecurringBillsPage> {
             alignment: Alignment.centerRight,
             child: Text(
               '${bills.length} 项',
-              style: const TextStyle(color: context.appSecondaryText),
+              style: TextStyle(color: context.appSecondaryText),
             ),
           ),
           if (bills.isEmpty)
@@ -497,7 +497,7 @@ class _RecurringBillCard extends StatelessWidget {
                             : bill.status == RecurringBillStatus.paused
                             ? '已暂停'
                             : '已结束'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: context.appSecondaryText,
                         ),
