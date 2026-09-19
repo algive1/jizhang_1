@@ -355,6 +355,10 @@ class PaymentEngineTest {
         assertEquals(DedupResult.DUPLICATE, engine.check(c.copy(timestamp = 100100), samePage = true))
         assertEquals(DedupResult.POSSIBLE_DUPLICATE, engine.check(c.copy(timestamp = 160000)))
         assertEquals(DedupResult.NOT_DUPLICATE, engine.check(c.copy(timestamp = 500001)))
+        assertEquals(
+            DedupResult.NOT_DUPLICATE,
+            engine.check(c.copy(timestamp = 160000, transactionType = "REFUND")),
+        )
         assertNotEquals(BillFingerprint.of(c), BillFingerprint.of(c.copy(paymentMethod = "银行卡")))
         val ordered = c.copy(orderId = "ORDER_123456")
         assertEquals(
