@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/database/app_database.dart';
 import '../../sharing/data/session_repository.dart';
 import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
 import '../domain/account_session_status.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AccountCenterPage extends ConsumerWidget {
   const AccountCenterPage({super.key});
@@ -21,9 +21,9 @@ class AccountCenterPage extends ConsumerWidget {
     final binding = ref.watch(datasetBindingProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('账号中心')),
+      appBar: AppBar(title: Text('账号中心')),
       body: status == AccountSessionStatus.initializing
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : user == null
           ? _GuestAccountCenter(status: status)
           : ListView(
@@ -36,11 +36,11 @@ class AccountCenterPage extends ConsumerWidget {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: AppColors.primary.withValues(alpha: .12),
+                          backgroundColor: context.appPrimary.withValues(alpha: .12),
                           child: Text(
                             user.preferredName.characters.first.toUpperCase(),
-                            style: const TextStyle(
-                              color: AppColors.primary,
+                            style: TextStyle(
+                              color: context.appPrimary,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                             ),
@@ -53,7 +53,7 @@ class AccountCenterPage extends ConsumerWidget {
                             children: [
                               Text(
                                 user.preferredName,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 21,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -61,8 +61,8 @@ class AccountCenterPage extends ConsumerWidget {
                               const SizedBox(height: 3),
                               Text(
                                 '@${user.username}',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
+                                style: TextStyle(
+                                  color: context.appSecondaryText,
                                 ),
                               ),
                             ],
