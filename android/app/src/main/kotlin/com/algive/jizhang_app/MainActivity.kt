@@ -533,33 +533,40 @@ class MainActivity : FlutterFragmentActivity() {
         return enabled.split(":").any { ComponentName.unflattenFromString(it) == expected }
     }
 
-    private fun isNotificationGranted(): Boolean {
-        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            return false
-        }
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+    private fun hasRuntimeNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
-    }
+
+    private fun isNotificationGranted(): Boolean =
+        hasRuntimeNotificationPermission() &&
+            AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
 
     private fun requestNotificationPermission(result: MethodChannel.Result) {
         if (isNotificationGranted()) {
             result.success(true)
             return
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            openAppNotificationSettings(result)
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasRuntimeNotificationPermission()
+        ) {
+            if (pendingNotificationPermissionResult != null) {
+                result.error("PERMISSION_REQUEST_BUSY", "通知权限请求正在处理中", null)
+                return
+            }
+            pendingNotificationPermissionResult = result
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_REQUEST,
+            )
             return
         }
-        if (pendingNotificationPermissionResult != null) {
-            result.error("PERMISSION_REQUEST_BUSY", "通知权限请求正在处理中", null)
-            return
-        }
-        pendingNotificationPermissionResult = result
-        requestPermissions(
-            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-            NOTIFICATION_PERMISSION_REQUEST,
-        )
+
+        // Permission is granted but notifications or the status channel were
+        // disabled in system settings. Open the app's notification settings;
+        // the Flutter page re-checks the state when the user returns.
+        openAppNotificationSettings(result, successValue = false)
     }
 
     private fun openAccessibilitySettings(result: MethodChannel.Result) {
@@ -606,7 +613,10 @@ class MainActivity : FlutterFragmentActivity() {
         )
     }
 
-    private fun openAppNotificationSettings(result: MethodChannel.Result) {
+    private fun openAppNotificationSettings(
+        result: MethodChannel.Result,
+        successValue: Boolean = true,
+    ) {
         openSystemSettings(
             result,
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -615,12 +625,14 @@ class MainActivity : FlutterFragmentActivity() {
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:$packageName"),
             ),
+            successValue = successValue,
         )
     }
 
     private fun openSystemSettings(
         result: MethodChannel.Result,
         vararg intents: Intent,
+        successValue: Boolean = true,
     ) {
         for (intent in intents) {
             val opened = runCatching {
@@ -628,7 +640,7 @@ class MainActivity : FlutterFragmentActivity() {
                 true
             }.getOrDefault(false)
             if (opened) {
-                result.success(true)
+                result.success(successValue)
                 return
             }
         }
