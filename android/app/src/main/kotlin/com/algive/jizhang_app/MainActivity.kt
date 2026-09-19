@@ -709,8 +709,16 @@ class MainActivity : FlutterFragmentActivity() {
 
         // Runtime permission exists, but app notifications or (for automatic
         // bookkeeping) the dedicated status channel were disabled in system
-        // settings. The Flutter page re-checks when the user returns.
-        openAppNotificationSettings(result, successValue = false)
+        // settings. Prefer the exact status-channel page when that is the only
+        // missing requirement; the Flutter page re-checks on return.
+        if (requireAutoStatus && isAppNotificationGranted()) {
+            openAutoBookkeepingNotificationSettings(
+                result,
+                successValue = false,
+            )
+        } else {
+            openAppNotificationSettings(result, successValue = false)
+        }
     }
 
     private fun openAccessibilitySettings(result: MethodChannel.Result) {
@@ -754,6 +762,28 @@ class MainActivity : FlutterFragmentActivity() {
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:$packageName"),
             ),
+        )
+    }
+
+    private fun openAutoBookkeepingNotificationSettings(
+        result: MethodChannel.Result,
+        successValue: Any? = null,
+    ) {
+        openSystemSettings(
+            result,
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                .putExtra(
+                    Settings.EXTRA_CHANNEL_ID,
+                    AutoBookkeepingNotificationController.STATUS_CHANNEL_ID,
+                ),
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+            successValue = successValue,
         )
     }
 
