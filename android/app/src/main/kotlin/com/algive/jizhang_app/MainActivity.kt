@@ -227,6 +227,10 @@ class MainActivity : FlutterFragmentActivity() {
                                 AutoBookkeepingSettings.screenshotSupported(),
                             "screenshotEnabled" to
                                 AutoBookkeepingSettings.screenshotEnabled(this),
+                            "ruleSchemaVersion" to
+                                AutoBookkeepingDiagnostics.ruleSchemaVersion,
+                            "ruleVersions" to AutoBookkeepingDiagnostics.ruleVersions,
+                            "ruleSource" to AutoBookkeepingDiagnostics.ruleSource,
                         ),
                     )
                     "isNotificationGranted" -> result.success(isNotificationGranted())
