@@ -36,6 +36,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             "notification_listener_connected",
             "notification listener connected",
         )
+        mainHandler.post { retryStoredNotifications() }
     }
 
     override fun onListenerDisconnected() {
