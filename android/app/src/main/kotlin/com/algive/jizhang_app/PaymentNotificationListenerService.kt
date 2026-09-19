@@ -129,7 +129,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val canStartOverlay =
             AutoBookkeepingSettings.enabled(this) &&
-                AutoBookkeepingOverlayPermission.isGranted(this)
+                AutoBookkeepingOverlayPermission.isGranted(this) &&
+                AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
         if (!canStartOverlay) {
             AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
             return
