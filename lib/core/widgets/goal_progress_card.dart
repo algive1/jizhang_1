@@ -4,7 +4,7 @@ import '../formatters/money_formatter.dart';
 import '../models/goal.dart';
 import 'app_card.dart';
 import '../../features/goals/domain/goal_milestone_service.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class GoalProgressCard extends StatelessWidget {
   const GoalProgressCard({required this.goal, super.key, this.onTap});
