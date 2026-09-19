@@ -24,7 +24,7 @@ The script checkpoints WAL, creates a SQLite-consistent snapshot with `VACUUM IN
 
 ## Retention
 
-The server prunes diagnostics, analytics, resolved support tickets, admin audit rows, and completed push-outbox rows according to environment settings. Shared-ledger tombstones and change history are **not** automatically pruned: cursor-based sync needs a per-device acknowledgement watermark before deleting those rows can be safe.
+The server prunes diagnostics, analytics, resolved support tickets, admin audit rows, and completed push-outbox rows according to environment settings. Shared-ledger change history and deleted-entity tombstones are retained for 90 days by default. The server records a retention cursor floor before pruning; clients presenting an older cursor are forced through a full snapshot reconciliation, so long-offline devices do not silently miss deletions.
 
 ## Push
 
