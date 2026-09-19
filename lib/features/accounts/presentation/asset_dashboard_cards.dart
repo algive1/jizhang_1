@@ -9,8 +9,6 @@ import '../../../core/widgets/privacy_amount.dart';
 
 const assetInk = Color(0xFF152018);
 const assetGreen = Color(0xFF436B28);
-const assetMuted = Color(0xFF888C88);
-const assetCream = Color(0xFFF5F6EB);
 const assetCoral = Color(0xFFF18475);
 
 class AssetPanel extends StatelessWidget {
@@ -39,7 +37,7 @@ class AssetAmount extends StatelessWidget {
     this.currency = 'CNY',
     this.hidden = false,
     this.size = 18,
-    this.color = assetInk,
+    this.color,
     this.signed = false,
     super.key,
   });
@@ -47,7 +45,7 @@ class AssetAmount extends StatelessWidget {
   final String currency;
   final bool hidden, signed;
   final double size;
-  final Color color;
+  final Color? color;
   @override
   Widget build(BuildContext context) => PrivacyAmount(
     text:
@@ -63,7 +61,7 @@ class AssetAmount extends StatelessWidget {
       fontSize: size,
       fontFeatures: const [FontFeature.tabularFigures()],
       fontWeight: FontWeight.w800,
-      color: color,
+      color: color ?? context.appPrimaryText,
       height: 1.15,
     ),
   );
