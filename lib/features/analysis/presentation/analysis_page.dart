@@ -406,7 +406,7 @@ class _ExportReportCard extends StatelessWidget {
               const SizedBox(height: 12),
               const Divider(height: 1),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 '值得关注',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
@@ -416,7 +416,7 @@ class _ExportReportCard extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     '• ${insight.description}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: context.appSecondaryText,
                       fontSize: 12,
                     ),
@@ -602,7 +602,7 @@ class _InsightSection extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         insight.description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: context.appSecondaryText,
                           height: 1.45,
                         ),
@@ -639,7 +639,7 @@ class _SpendingHeatmap extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             '颜色越深，日常消费金额越高',
             style: TextStyle(color: context.appSecondaryText),
           ),
@@ -776,7 +776,7 @@ class _CategoryTrends extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (trends.isEmpty)
-            const Text(
+            Text(
               '当前周期暂无支出',
               style: TextStyle(color: context.appSecondaryText),
             )
@@ -811,7 +811,7 @@ class _CategoryTrends extends StatelessWidget {
                         Text(
                           '${trend.currentCount} 笔 · 均价 $currency ${MoneyFormatter.decimal(trend.currentAverage)} · '
                           '${trend.attribution.label}驱动',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: context.appSecondaryText,
                             fontSize: 12,
                           ),
@@ -861,7 +861,7 @@ class _BaselineCard extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             '只依据你的本地流水计算',
             style: TextStyle(color: context.appSecondaryText),
           ),
