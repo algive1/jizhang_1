@@ -49,13 +49,14 @@ class AnalysisReportExportService {
     required String fileName,
     String? text,
   }) async {
+    final origin = _shareOrigin(context);
     final png = await capturePng(boundaryKey);
     await _share(
-      context,
       bytes: png,
       mimeType: 'image/png',
       fileName: fileName.endsWith('.png') ? fileName : '$fileName.png',
       text: text,
+      sharePositionOrigin: origin,
     );
   }
 
@@ -65,28 +66,34 @@ class AnalysisReportExportService {
     required String fileName,
     String? text,
   }) async {
+    final origin = _shareOrigin(context);
     final png = await capturePng(boundaryKey);
     final pdf = await buildPdf(png);
     await _share(
-      context,
       bytes: pdf,
       mimeType: 'application/pdf',
       fileName: fileName.endsWith('.pdf') ? fileName : '$fileName.pdf',
       text: text,
+      sharePositionOrigin: origin,
     );
   }
 
-  Future<void> _share(
-    BuildContext context, {
+  Rect _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+  }
+
+  Future<void> _share({
     required Uint8List bytes,
     required String mimeType,
     required String fileName,
     String? text,
+    required Rect sharePositionOrigin,
   }) async {
-    final box = context.findRenderObject();
-    final origin = box is RenderBox && box.hasSize
-        ? box.localToGlobal(Offset.zero) & box.size
-        : null;
     await SharePlus.instance.share(
       ShareParams(
         files: [
@@ -94,7 +101,7 @@ class AnalysisReportExportService {
         ],
         fileNameOverrides: [fileName],
         text: text,
-        sharePositionOrigin: origin,
+        sharePositionOrigin: sharePositionOrigin,
       ),
     );
   }

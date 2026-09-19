@@ -78,7 +78,10 @@ class BudgetAlertNotificationService {
     ];
     if (!progresses.any((item) => item.status != BudgetAlertStatus.normal)) {
       for (final item in progresses) {
-        await _recordState(item, BudgetAlertStatus.normal);
+        final previous = _parseStatus(await _settings.get(_stateKey(item)));
+        if (previous != BudgetAlertStatus.normal) {
+          await _recordState(item, BudgetAlertStatus.normal);
+        }
       }
       return;
     }
@@ -102,11 +105,11 @@ class BudgetAlertNotificationService {
     final shouldNotify = previous == null || _rank(current) > _rank(previous);
     if (shouldNotify) {
       final categoryName = progress.category?.name;
-      final scope = categoryName == null ? '本月总预算' : '${categoryName}预算';
+      final scope = categoryName == null ? '本月总预算' : '$categoryName预算';
       final percent = (progress.percentage * 100).round();
       final title = current == BudgetAlertStatus.exceeded
-          ? '${scope}已超额'
-          : '${scope}已使用 ${percent}%';
+          ? '$scope已超额'
+          : '$scope已使用 $percent%';
       final body = current == BudgetAlertStatus.exceeded
           ? '已支出 ¥${MoneyFormatter.decimal(progress.used)}，'
                 '超出 ¥${MoneyFormatter.decimal(progress.remaining.abs())}。点击查看预算。'
