@@ -120,6 +120,16 @@ object AutoBookkeepingPendingStore {
         val timestamp = (arguments["timestamp"] as? Number)?.toLong() ?: return null
         val sourceApp = (arguments["sourceApp"] as? String)?.trim().orEmpty()
         val scene = (arguments["scene"] as? String)?.trim().orEmpty()
+        val transactionType =
+            (arguments["transactionType"] as? String)?.trim().orEmpty().ifBlank { "EXPENSE" }
+        val orderId = (arguments["orderId"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val note = (arguments["note"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val originalAmount =
+            (arguments["originalAmountInCents"] as? Number)?.toLong()
+        val discountAmount =
+            (arguments["discountAmountInCents"] as? Number)?.toLong()
+        val identifierSuffix =
+            (arguments["identifierSuffix"] as? String)?.trim()?.takeIf { it.isNotBlank() }
 
         if (
             amount !in 1..99_999_999_999L ||
@@ -128,7 +138,11 @@ object AutoBookkeepingPendingStore {
             paymentMethod.length > 80 ||
             sourceApp !in SUPPORTED_SOURCE_APPS ||
             scene.length !in 1..80 ||
-            timestamp <= 0L
+            transactionType !in SUPPORTED_TRANSACTION_TYPES ||
+            timestamp <= 0L ||
+            (originalAmount != null && originalAmount !in amount..99_999_999_999L) ||
+            (discountAmount != null && discountAmount !in 0..99_999_999_999L) ||
+            (identifierSuffix != null && !identifierSuffix.matches(Regex("\\d{4}")))
         ) {
             return null
         }
@@ -147,6 +161,12 @@ object AutoBookkeepingPendingStore {
             amountConfidence = 1.0,
             merchantConfidence = .9,
             sourceApp = sourceApp,
+            transactionType = transactionType,
+            orderId = orderId?.take(64),
+            note = note?.take(160),
+            originalAmountInCents = originalAmount,
+            discountAmountInCents = discountAmount,
+            identifierSuffix = identifierSuffix,
         )
     }
 
@@ -160,6 +180,15 @@ object AutoBookkeepingPendingStore {
                 "timestamp" to value.optLong("timestamp"),
                 "sourceApp" to value.optString("sourceApp"),
                 "scene" to value.optString("scene"),
+                "transactionType" to value.optString("transactionType"),
+                "orderId" to value.optString("orderId").takeIf { it.isNotBlank() },
+                "note" to value.optString("note").takeIf { it.isNotBlank() },
+                "originalAmountInCents" to
+                    value.optLong("originalAmountInCents").takeIf { value.has("originalAmountInCents") },
+                "discountAmountInCents" to
+                    value.optLong("discountAmountInCents").takeIf { value.has("discountAmountInCents") },
+                "identifierSuffix" to
+                    value.optString("identifierSuffix").takeIf { it.isNotBlank() },
             ),
         )
     }
@@ -175,6 +204,11 @@ object AutoBookkeepingPendingStore {
             "sourceApp" to value.optString("sourceApp"),
             "scene" to value.optString("scene"),
             "transactionType" to value.optString("transactionType"),
+            "orderId" to value.optString("orderId"),
+            "note" to value.optString("note"),
+            "originalAmountInCents" to value.optLong("originalAmountInCents"),
+            "discountAmountInCents" to value.optLong("discountAmountInCents"),
+            "identifierSuffix" to value.optString("identifierSuffix"),
         )
     }
 
@@ -228,6 +262,13 @@ object AutoBookkeepingPendingStore {
             .put("sourceApp", candidate.sourceApp)
             .put("scene", candidate.scene.scene)
             .put("transactionType", candidate.transactionType)
+            .apply {
+                candidate.orderId?.let { put("orderId", it) }
+                candidate.note?.let { put("note", it) }
+                candidate.originalAmountInCents?.let { put("originalAmountInCents", it) }
+                candidate.discountAmountInCents?.let { put("discountAmountInCents", it) }
+                candidate.identifierSuffix?.let { put("identifierSuffix", it) }
+            }
 
     private fun priorityFor(scene: String): Int =
         if (scene == "PAYMENT_NOTIFICATION") {
@@ -289,6 +330,15 @@ object AutoBookkeepingPendingStore {
     private fun parse(raw: String?): JSONObject? = raw?.let {
         runCatching { JSONObject(it) }.getOrNull()
     }
+
+    private val SUPPORTED_TRANSACTION_TYPES = setOf(
+        "EXPENSE",
+        "INCOME",
+        "TRANSFER",
+        "REFUND",
+        "REIMBURSEMENT",
+        "REPAYMENT",
+    )
 
     private val SUPPORTED_SOURCE_APPS = setOf(
         "WECHAT",
