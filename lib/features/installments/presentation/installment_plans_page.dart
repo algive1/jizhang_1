@@ -64,7 +64,7 @@ class InstallmentPlansPage extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
           if (plans.isEmpty)
-            const AppCard(
+            AppCard(
               child: Text(
                 '还没有分期计划',
                 style: TextStyle(color: context.appSecondaryText),
