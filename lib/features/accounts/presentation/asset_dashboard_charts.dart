@@ -215,13 +215,13 @@ class _AssetTrendState extends State<AssetTrend> {
           ),
           const SizedBox(height: 8),
           if (widget.history.hasFutureRecords)
-            const SizedBox(
+            SizedBox(
               height: 115,
               child: Center(
                 child: Text(
                   '存在未来日期流水\n历史曲线暂不可用',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: assetMuted),
+                  style: TextStyle(fontSize: 12, color: context.appSecondaryText),
                 ),
               ),
             )
@@ -370,9 +370,9 @@ class AssetDistributionDetail extends StatelessWidget {
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
+                            Text(
                               '总资产',
-                              style: TextStyle(color: assetMuted, fontSize: 12),
+                              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
                             ),
                             const SizedBox(height: 4),
                             AssetAmount(
@@ -460,14 +460,14 @@ class AssetTrendDetail extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Expanded(
+                Expanded(
                   child: SizedBox(
                     height: 180,
                     child: Center(
                       child: Text(
                         '存在未来日期流水\n历史曲线暂不可用',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: assetMuted),
+                        style: TextStyle(color: context.appSecondaryText),
                       ),
                     ),
                   ),
@@ -535,7 +535,7 @@ class AssetTrendDetail extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '统计区间：近${days == 365 ? '1年' : '$days天'} · 账面净资产',
-              style: const TextStyle(color: assetMuted, fontSize: 11),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 11),
             ),
           ],
           const SizedBox(height: 12),
