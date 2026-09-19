@@ -25,6 +25,7 @@ import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
 import '../../transactions/data/refund_service.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
+import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
@@ -123,6 +124,16 @@ class _AutoBookkeepingConfirmPageState
     await ref
         .read(autoBookkeepingPendingBridgeProvider)
         .complete(keepScreenshot: keepScreenshot);
+    // A second notification may have remained in the raw recovery queue while
+    // this confirmation slot was occupied. Drain it immediately instead of
+    // waiting for the next app resume.
+    try {
+      await ref
+          .read(paymentNotificationAutoBookkeepingProvider)
+          .processPending();
+    } on Object {
+      // Recovery remains best-effort; app startup/resume will retry again.
+    }
   }
 
   Future<void> _close() async {
