@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/formatters/money_formatter.dart';
+import '../../../core/models/transaction_record.dart';
 import '../../account/application/account_auth_gate.dart';
 import '../../account/application/account_pending_intent.dart';
 import '../../account/application/account_session_controller.dart';
@@ -17,6 +19,7 @@ import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/application/shared_book_sync_service.dart';
+import '../../transactions/data/transactions_repository.dart';
 import '../data/shared_family_service.dart';
 import 'unavailable_drafts_card.dart';
 
@@ -122,6 +125,62 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
         ),
       ) ??
       false;
+  Widget _memberSpendingCard(List<TransactionRecord> transactions) {
+    final now = DateTime.now();
+    final spending = <String, double>{};
+    for (final transaction in transactions) {
+      if (!transaction.isConsumptionExpense ||
+          transaction.deletedAt != null ||
+          transaction.occurredAt.year != now.year ||
+          transaction.occurredAt.month != now.month) continue;
+      final payer = transaction.userId;
+      if (payer == null) continue;
+      spending.update(payer, (value) => value + transaction.netExpenseAmount,
+          ifAbsent: () => transaction.netExpenseAmount);
+    }
+    final total = spending.values.fold<double>(0, (sum, value) => sum + value);
+    final rows = _members.map((member) {
+      final id = member['user_id'] as String;
+      final displayName =
+          (member['display_name'] as String?)?.trim().isNotEmpty == true
+          ? member['display_name'] as String
+          : member['username'] as String;
+      return (id: id, name: displayName, amount: spending[id] ?? 0);
+    }).toList()
+      ..sort((a, b) => b.amount.compareTo(a.amount));
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('本月成员消费',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text('家庭消费 ¥${MoneyFormatter.decimal(total)}',
+              style: const TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            const Text('暂无成员消费记录')
+          else
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(children: [
+                  const Icon(Icons.person_outline_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(row.name)),
+                  Text('¥${MoneyFormatter.decimal(row.amount)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ]),
+              ),
+          const SizedBox(height: 4),
+          const Text('按流水付款成员归属统计；记录人和付款人可以不同。',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountState = ref.watch(accountSessionProvider);
@@ -131,6 +190,9 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     final book = ref.watch(activeBookProvider);
     final sync = ref.watch(activeSharedStateProvider).value;
     final pending = (sync?['pending'] as List? ?? []).cast<Json>();
+    final familyTransactions = book?.type == BookType.family && book != null
+        ? ref.watch(transactionsByBookProvider(book.id)).value ?? const <TransactionRecord>[]
+        : const <TransactionRecord>[];
     if (user != null &&
         book?.sharedId != null &&
         book!.sharedPhase != 'promoting' &&
@@ -480,6 +542,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                     ],
                   ),
                 ),
+              ],
+              if (book.sharedPhase != 'promoting' && book.type == BookType.family) ...[
+                _memberSpendingCard(familyTransactions),
+                const SizedBox(height: 12),
               ],
               if (book.sharedPhase != 'promoting')
                 AppCard(
