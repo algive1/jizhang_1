@@ -326,16 +326,11 @@ class PaymentNotificationAutoBookkeepingService {
         acknowledged.add(notification.id);
         continue;
       }
-      final target = resolveTarget == null
-          ? parsed.accountId != null && parsed.identifierSuffix == null
-                ? (bookId: SeedIds.personalBook, accountId: parsed.accountId!)
-                : null
-          : await resolveTarget!(parsed.channel, parsed.identifierSuffix);
-      if (target == null) {
-        waiting++;
-        continue;
-      }
       if (pendingBridge != null) {
+        // Confirmation-mode bookkeeping does not need a preconfigured target
+        // account: the confirmation page lets the user choose book/account/
+        // category. Requiring resolveTarget here used to block marketplace
+        // notifications (Meituan/JD/etc.) before they could ever show a card.
         final merchant = parsed.merchant?.trim();
         if (merchant == null || merchant.isEmpty) {
           unrecognized++;
@@ -360,6 +355,16 @@ class PaymentNotificationAutoBookkeepingService {
         } else {
           waiting++;
         }
+        continue;
+      }
+
+      final target = resolveTarget == null
+          ? parsed.accountId != null && parsed.identifierSuffix == null
+                ? (bookId: SeedIds.personalBook, accountId: parsed.accountId!)
+                : null
+          : await resolveTarget!(parsed.channel, parsed.identifierSuffix);
+      if (target == null) {
+        waiting++;
         continue;
       }
       final id = 'auto-notification-${stableNotificationKey(fingerprint)}';
