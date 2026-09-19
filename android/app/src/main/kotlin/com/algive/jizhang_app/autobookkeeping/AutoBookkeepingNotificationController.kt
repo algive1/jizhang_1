@@ -115,7 +115,7 @@ object AutoBookkeepingNotificationController {
 
     /** Fallback when a confirmation overlay cannot be attached. */
     fun notifyConfirmationAvailable(context: Context) {
-        val text = "识别到支付通知，请打开好好记账确认"
+        val text = "识别到待确认交易，请打开好好记账确认"
         Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
@@ -140,7 +140,7 @@ object AutoBookkeepingNotificationController {
                 CONFIRM_NOTIFICATION_ID,
                 NotificationCompat.Builder(context, RESULT_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_popup_sync)
-                    .setContentTitle("好好记账 · 待确认流水")
+                    .setContentTitle("好好记账 · 待确认交易")
                     .setContentText(text)
                     .setContentIntent(openIntent)
                     .setAutoCancel(true)
