@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 
 object AutoBookkeepingNotificationController {
     const val ACTION_DISABLE = "com.algive.jizhang_app.AUTOB_BOOKKEEPING_DISABLE"
@@ -47,13 +48,20 @@ object AutoBookkeepingNotificationController {
     }
 
     fun sync(context: Context) {
-        val manager = NotificationManagerCompat.from(context)
-        if (!AutoBookkeepingSettings.enabled(context)) {
-            manager.cancel(NOTIFICATION_ID)
+        if (
+            !AutoBookkeepingSettings.enabled(context) ||
+            !AutoBookkeepingDiagnostics.foregroundRunning ||
+            !statusNotificationsAvailable(context)
+        ) {
+            cancelStatus(context)
             return
         }
-        if (!statusNotificationsAvailable(context)) return
-        manager.notify(NOTIFICATION_ID, buildNotification(context))
+        NotificationManagerCompat.from(context)
+            .notify(NOTIFICATION_ID, buildNotification(context))
+    }
+
+    fun cancelStatus(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
     }
 
     fun buildNotification(context: Context): Notification {
