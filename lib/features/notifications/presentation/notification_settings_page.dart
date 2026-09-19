@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../push/application/push_registration_service.dart';
 import '../../sharing/data/session_repository.dart';
-import '../../sharing/data/shared_api.dart';
 import '../application/payment_notification_service.dart';
 
 class NotificationSettingsPage extends ConsumerStatefulWidget {
