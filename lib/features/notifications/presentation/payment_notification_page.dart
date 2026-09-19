@@ -82,7 +82,7 @@ class _PaymentNotificationPageState
         if (!granted) {
           setState(
             () => _message =
-                '请允许通知并确保自动记账通知渠道可见，然后返回本页继续开启。',
+                '请允许「好好记账」发送通知，然后返回本页继续开启。',
           );
           return;
         }
