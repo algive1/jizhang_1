@@ -52,6 +52,7 @@ import '../../features/installments/presentation/installment_plans_page.dart';
 import '../../features/installments/presentation/installment_plan_detail_page.dart';
 import '../../features/finance_center/presentation/finance_center_page.dart';
 import '../../features/bill_import/presentation/bill_import_page.dart';
+import '../../features/ocr/presentation/receipt_ocr_page.dart';
 import '../../core/widgets/app_scaffold.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -259,6 +260,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => RecurringBillsPage(
                   focusBillId: state.uri.queryParameters['billId'],
                 ),
+              ),
+              GoRoute(
+                path: 'receipt-ocr',
+                builder: (context, state) => const ReceiptOcrPage(),
               ),
               GoRoute(
                 path: 'bill-import',
