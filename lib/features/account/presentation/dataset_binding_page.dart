@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../application/account_session_controller.dart';
 import '../application/dataset_binding_service.dart';
 import '../application/personal_cloud_bootstrap_service.dart';
 import '../application/personal_cloud_backup_service.dart';
 import '../application/personal_cloud_remote_change_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class DatasetBindingPage extends ConsumerWidget {
   const DatasetBindingPage({super.key});
@@ -35,7 +35,7 @@ class DatasetBindingPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         '这台设备的本地数据',
                         style: TextStyle(
                           fontSize: 20,
@@ -45,7 +45,7 @@ class DatasetBindingPage extends ConsumerWidget {
                       const SizedBox(height: 10),
                       Text(
                         '数据集 · …${value.datasetId.substring(value.datasetId.length > 8 ? value.datasetId.length - 8 : 0)}',
-                        style: const TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: context.appSecondaryText),
                       ),
                       const SizedBox(height: 16),
                       _StatusRow(
@@ -466,18 +466,18 @@ class _StatusRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primary),
+          Icon(icon, color: context.appPrimary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appSecondaryText,
                     height: 1.4,
                   ),
                 ),
