@@ -735,7 +735,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -746,6 +746,9 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (migrator) async {
       await migrator.createAll();
       await _createIndexes();
+      await _createScopeIndexes();
+      await ensureDataBindingSchema();
+      await installSyncSchema();
     },
     onUpgrade: (migrator, from, to) async {
       await transaction(() async {
@@ -928,13 +931,23 @@ class AppDatabase extends _$AppDatabase {
         if (from < 19) {
           await ensureDataBindingSchema();
         }
+        // v20 moves sync/index schema installation out of beforeOpen. These
+        // writes must run as part of the versioned migration so independent
+        // foreground/background database connections don't rebuild triggers
+        // every time they open the same SQLite file.
+        if (from < 20) {
+          await _createScopeIndexes();
+          await ensureDataBindingSchema();
+          await installSyncSchema();
+        }
       });
     },
     beforeOpen: (details) async {
-      await _createScopeIndexes();
-      await installSyncSchema();
-      await ensureDataBindingSchema();
+      // Connection-local safety only. Schema-changing work belongs in
+      // onCreate/onUpgrade so concurrent isolates can open without racing on
+      // DROP/CREATE TRIGGER and other DDL.
       await customStatement('PRAGMA foreign_keys = ON');
+      syncSchemaReady = true;
     },
   );
 
@@ -1182,7 +1195,17 @@ LazyDatabase _openConnection() {
     // SQLite is bundled through native assets on every platform. Keep queries
     // off the UI isolate, including Android; the old system-library loading
     // workaround is no longer needed.
-    return NativeDatabase.createInBackground(file);
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (database) {
+        // WAL lets readers proceed while another isolate is writing. A busy
+        // timeout makes short write/write overlaps wait instead of failing
+        // immediately with SQLITE_BUSY.
+        database.execute('PRAGMA journal_mode = WAL');
+        database.execute('PRAGMA busy_timeout = 5000');
+        database.execute('PRAGMA foreign_keys = ON');
+      },
+    );
   });
 }
 
