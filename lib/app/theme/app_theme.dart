@@ -95,15 +95,15 @@ abstract final class AppTheme {
         fillColor: theme.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: theme.divider),
+          borderSide: BorderSide(color: theme.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: theme.divider),
+          borderSide: BorderSide(color: theme.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: theme.primary, width: 1.5),
+          borderSide: BorderSide(color: theme.primary, width: 1.5),
         ),
       ),
     );
