@@ -33,7 +33,7 @@ enum _CalendarHeaderAction {
 
 class _ConsumptionCalendarPageState
     extends ConsumerState<ConsumptionCalendarPage> {
-  final _today = DateTime.now();
+  DateTime get _today => DateTime.now();
   late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   int? _selectedDay;
   String? _bookFilterId;
@@ -102,16 +102,11 @@ class _ConsumptionCalendarPageState
               .toList()
           ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
 
-    final maxDailyExpense = dailyExpense.values.fold<double>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
-
     final recordMonths =
         filtered
             .where(
               (item) =>
-                  _isConsumption(item) && !_isFutureDate(item.occurredAt),
+                  item.deletedAt == null && !_isFutureDate(item.occurredAt),
             )
             .map(
               (item) => DateTime(item.occurredAt.year, item.occurredAt.month),
@@ -143,6 +138,45 @@ class _ConsumptionCalendarPageState
     final selectedDate = _selectedDay == null
         ? null
         : DateTime(_month.year, _month.month, _selectedDay!);
+    final calendarDates = _viewMode == _CalendarViewMode.week
+        ? _weekDates(selectedDate)
+        : _monthDates(_month);
+    var calendarExpense = dailyExpense;
+    var calendarIncome = dailyIncome;
+    var calendarOther = dailyOther;
+    if (_viewMode == _CalendarViewMode.week) {
+      final visibleDateKeys = calendarDates.map(_dateKey).toSet();
+      calendarExpense = <int, double>{};
+      calendarIncome = <int, double>{};
+      calendarOther = <int>{};
+      for (final item in filtered) {
+        if (item.deletedAt != null ||
+            _isFutureDate(item.occurredAt) ||
+            !visibleDateKeys.contains(_dateKey(item.occurredAt))) {
+          continue;
+        }
+        final day = item.occurredAt.day;
+        if (_isConsumption(item)) {
+          calendarExpense.update(
+            day,
+            (value) => value + item.netExpenseAmount,
+            ifAbsent: () => item.netExpenseAmount,
+          );
+        } else if (item.isIncome) {
+          calendarIncome.update(
+            day,
+            (value) => value + item.amount,
+            ifAbsent: () => item.amount,
+          );
+        } else {
+          calendarOther.add(day);
+        }
+      }
+    }
+    final calendarMaxDailyExpense = calendarExpense.values.fold<double>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -191,13 +225,13 @@ class _ConsumptionCalendarPageState
                         const SizedBox(height: 6),
                         _CalendarGrid(
                           month: _month,
-                          dates: _viewMode == _CalendarViewMode.month
-                              ? _monthDates(_month)
-                              : _weekDates(selectedDate),
-                          dailyExpense: dailyExpense,
-                          dailyIncome: dailyIncome,
-                          dailyOther: dailyOther,
-                          maxDailyExpense: maxDailyExpense,
+                          dates: calendarDates,
+                          dailyExpense: calendarExpense,
+                          dailyIncome: calendarIncome,
+                          dailyOther: calendarOther,
+                          maxDailyExpense: calendarMaxDailyExpense,
+                          showDataOutsideMonth:
+                              _viewMode == _CalendarViewMode.week,
                           selectedDay: _selectedDay,
                           today: _today,
                           onDateTap: (date) => setState(() {
@@ -250,10 +284,13 @@ class _ConsumptionCalendarPageState
   bool get _isCurrentMonth =>
       _month.year == _today.year && _month.month == _today.month;
 
+  int _dateKey(DateTime date) =>
+      date.year * 10000 + date.month * 100 + date.day;
+
   bool _isFutureDate(DateTime date) {
     final day = DateTime(date.year, date.month, date.day);
-    final today = DateTime(_today.year, _today.month, _today.day);
-    return day.isAfter(today);
+    final today = _today;
+    return day.isAfter(DateTime(today.year, today.month, today.day));
   }
 
   /// Keep the calendar aligned with the app's consumption-expense flag while
@@ -728,6 +765,7 @@ class _CalendarGrid extends StatelessWidget {
     required this.dailyIncome,
     required this.dailyOther,
     required this.maxDailyExpense,
+    required this.showDataOutsideMonth,
     required this.selectedDay,
     required this.today,
     required this.onDateTap,
@@ -739,6 +777,7 @@ class _CalendarGrid extends StatelessWidget {
   final Map<int, double> dailyIncome;
   final Set<int> dailyOther;
   final double maxDailyExpense;
+  final bool showDataOutsideMonth;
   final int? selectedDay;
   final DateTime today;
   final ValueChanged<DateTime> onDateTap;
@@ -774,9 +813,13 @@ class _CalendarGrid extends StatelessWidget {
                   date.year == month.year && date.month == month.month;
               final isFuture =
                   date.isAfter(DateTime(today.year, today.month, today.day));
-              final amount = inMonth ? (dailyExpense[date.day] ?? 0) : 0.0;
-              final income = inMonth ? (dailyIncome[date.day] ?? 0) : 0.0;
-              final hasOther = inMonth && dailyOther.contains(date.day);
+              final showData = inMonth || showDataOutsideMonth;
+              final amount =
+                  showData ? (dailyExpense[date.day] ?? 0) : 0.0;
+              final income =
+                  showData ? (dailyIncome[date.day] ?? 0) : 0.0;
+              final hasOther =
+                  showData && dailyOther.contains(date.day);
               final intensity = maxDailyExpense == 0
                   ? 0.0
                   : (amount / maxDailyExpense).clamp(0.0, 1.0);
