@@ -157,7 +157,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
 
   Widget _memberSpendingCard(List<TransactionRecord> transactions, {required bool loading}) {
     if (loading) {
-      return const AppCard(
+      return AppCard(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
           child: Row(children: [
