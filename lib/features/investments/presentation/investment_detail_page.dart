@@ -251,7 +251,7 @@ class _PositionHeaderCard extends StatelessWidget {
                         color: context.appPrimaryText,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Row(
                       children: [
                         Text(
@@ -341,7 +341,7 @@ class _PositionHeaderCard extends StatelessWidget {
                         color: context.appSecondaryText,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     InvestmentAmountText(
                       quote?.change ?? 0,
                       hidden: hidden,
@@ -369,7 +369,7 @@ class _PositionHeaderCard extends StatelessWidget {
               isStale: quote.isStale,
             ),
           ],
-          const Divider(height: 20),
+          Divider(height: 20),
           Row(
             children: [
               Expanded(
@@ -501,7 +501,7 @@ class _PositionStatsCard extends StatelessWidget {
             ],
           ),
           if (asset.currency != 'CNY') ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '计价货币 ${asset.currency}，暂不折算为本位币',
               style: TextStyle(
@@ -574,7 +574,7 @@ class _StatTile extends StatelessWidget {
             color: context.appSecondaryText,
           ),
         ),
-        const SizedBox(height: 3),
+        SizedBox(height: 3),
         Text(
           hiddenValue ? '••••' : value,
           maxLines: 1,
@@ -712,7 +712,7 @@ class _NoTransactions extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
-    child: const Column(
+    child: Column(
       children: [
         Icon(
           Icons.receipt_long_outlined,
