@@ -106,10 +106,14 @@ internal object AutoBookkeepingScreenshotCapture {
         candidate: PaymentCandidate,
         bitmap: Bitmap,
     ): String {
-        val directory = File(service.filesDir, "autobookkeeping/screenshots")
+        val directory = File(
+            service.filesDir,
+            "autobookkeeping/pending_screenshots",
+        )
         if (!directory.exists() && !directory.mkdirs()) {
             error("Unable to create screenshot directory")
         }
+        purgeExpiredPending(directory)
         val fingerprint = BillFingerprint.of(candidate).take(16)
         val file = File(
             directory,
@@ -127,4 +131,13 @@ internal object AutoBookkeepingScreenshotCapture {
         )
         return file.absolutePath
     }
+
+    private fun purgeExpiredPending(directory: File) {
+        val cutoff = System.currentTimeMillis() - PENDING_FILE_TTL_MILLIS
+        directory.listFiles()
+            ?.filter { it.isFile && it.lastModified() < cutoff }
+            ?.forEach { runCatching { it.delete() } }
+    }
+
+    private const val PENDING_FILE_TTL_MILLIS = 24 * 60 * 60 * 1000L
 }
