@@ -310,6 +310,7 @@ void main() {
 
     expect(result.queued, 1);
     expect(pending.candidates.single.transactionType, 'INCOME');
+    expect(pending.candidates.single.scene, 'PAYMENT_NOTIFICATION_INCOME');
     expect(pending.candidates.single.merchant, '张三');
   });
 
@@ -362,6 +363,31 @@ void main() {
     expect(parsed.accountId, SeedIds.alipayAccount);
     expect(parsed.orderId, '202609080001');
     expect(parsed.transactionType, 'EXPENSE');
+  });
+
+  test('parser aligns native order id and bank suffix labels', () {
+    final paymentOrder = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'n-payment-order',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text: '支付成功 ¥28.50，商户：瑞幸咖啡，支付单号：PAY202609200001',
+        postedAt: DateTime(2026, 9, 20, 9),
+      ),
+    );
+    expect(paymentOrder?.orderId, 'PAY202609200001');
+
+    final transactionOrder = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'n-transaction-order',
+        packageName: 'com.unionpay',
+        title: '云闪付',
+        text: '支付成功 ¥66.00，商户：测试商户，交易号：TX202609200001，储蓄卡尾号 5566',
+        postedAt: DateTime(2026, 9, 20, 10),
+      ),
+    );
+    expect(transactionOrder?.orderId, 'TX202609200001');
+    expect(transactionOrder?.identifierSuffix, '5566');
   });
 
   test(
