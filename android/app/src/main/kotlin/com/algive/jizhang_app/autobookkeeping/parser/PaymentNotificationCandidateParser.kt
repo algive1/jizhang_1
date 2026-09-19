@@ -3,6 +3,8 @@ package com.algive.jizhang_app.autobookkeeping.parser
 import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentParserKind
 import java.math.BigDecimal
 
 /**
@@ -12,14 +14,18 @@ import java.math.BigDecimal
  * while another app is in the foreground. The Flutter parser remains the
  * foreground recovery path for raw notifications already persisted on disk.
  */
-class PaymentNotificationCandidateParser {
+class PaymentNotificationCandidateParser(
+    private val registry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn(),
+) {
     fun parse(
         packageName: String,
         title: String,
         text: String,
         timestamp: Long,
     ): PaymentCandidate? {
-        val source = SOURCES[packageName] ?: return null
+        val rule = registry.ruleFor(packageName) ?: return null
+        val source = rule.sourceApp
         val content = "$title $text".trim()
         if (content.isBlank()) return null
 
@@ -52,7 +58,10 @@ class PaymentNotificationCandidateParser {
                 return null
             }
 
-            if (packageName in MARKETPLACE_PACKAGES) {
+            if (
+                rule.parserKind == PaymentParserKind.MEITUAN ||
+                source in MARKETPLACE_SOURCES
+            ) {
                 if (!hasStrongSuccess) return null
             } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
                 return null
@@ -181,25 +190,11 @@ class PaymentNotificationCandidateParser {
     private companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
 
-        val MARKETPLACE_PACKAGES = setOf(
-            "com.sankuai.meituan",
-            "com.sankuai.meituan.takeout",
-            "com.jingdong.app.mall",
-            "com.xunmeng.pinduoduo",
-            "com.ss.android.ugc.aweme",
-            "com.ss.android.ugc.aweme.mobile",
-        )
-
-        val SOURCES = mapOf(
-            WECHAT_PACKAGE to "WECHAT",
-            "com.eg.android.AlipayGphone" to "ALIPAY",
-            "com.unionpay" to "UNIONPAY",
-            "com.sankuai.meituan" to "MEITUAN",
-            "com.sankuai.meituan.takeout" to "MEITUAN",
-            "com.jingdong.app.mall" to "JD",
-            "com.xunmeng.pinduoduo" to "PINDUODUO",
-            "com.ss.android.ugc.aweme" to "DOUYIN",
-            "com.ss.android.ugc.aweme.mobile" to "DOUYIN",
+        val MARKETPLACE_SOURCES = setOf(
+            "MEITUAN",
+            "JD",
+            "PINDUODUO",
+            "DOUYIN",
         )
 
         val PAYMENT_METHODS = mapOf(
