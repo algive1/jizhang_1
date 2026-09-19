@@ -33,6 +33,23 @@ class PaymentEngineTest {
         assertEquals(3600L, candidate?.amountInCents)
         assertEquals("MEITUAN", candidate?.sourceApp)
     }
+    @Test fun jdPinduoduoAndDouyinUseGenericParser() {
+        val expected = mapOf(
+            "com.jingdong.app.mall" to "JD",
+            "com.xunmeng.pinduoduo" to "PINDUODUO",
+            "com.ss.android.ugc.aweme" to "DOUYIN",
+            "com.ss.android.ugc.aweme.mobile" to "DOUYIN",
+        )
+        expected.forEach { (packageName, sourceApp) ->
+            val candidate = PaymentSceneDetector().detect(
+                packageName,
+                nodes("订单支付成功", "商户", "测试商户", "实付金额", "18.80元"),
+                100000,
+            )
+            assertEquals(packageName, 1880L, candidate?.amountInCents)
+            assertEquals(packageName, sourceApp, candidate?.sourceApp)
+        }
+    }
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
