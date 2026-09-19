@@ -23,10 +23,10 @@ extension SharedSyncSchema on AppDatabase {
     await customStatement(
       "INSERT OR IGNORE INTO sync_control(id,actor_id) VALUES(1,'user-local')",
     );
-    // A restored database never establishes an authenticated identity.
-    await customStatement(
-      "UPDATE sync_control SET actor_id='user-local',suppress=0,batch_id=NULL WHERE id=1",
-    );
+    // Do not reset actor/suppress/batch state when another foreground or
+    // background database connection opens. These values coordinate live sync
+    // work and resetting them here can corrupt another connection's transaction.
+    // Pending-restore handling is responsible for invalidating restored access.
     await customStatement(
       'CREATE TABLE IF NOT EXISTS sync_books(book_id TEXT PRIMARY KEY, remote_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, cursor INTEGER NOT NULL DEFAULT 0, access INTEGER NOT NULL DEFAULT 0, last_error TEXT, last_synced INTEGER)',
     );

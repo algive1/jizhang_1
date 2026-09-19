@@ -715,6 +715,10 @@ class AppDatabase extends _$AppDatabase {
       return super.transaction(action, requireNew: requireNew);
     }
     return super.transaction(
+      // batch_id lives in a shared row, but this update and the whole action
+      // run inside the same SQLite write transaction. SQLite serializes
+      // writers, so another connection cannot overwrite batch_id until this
+      // transaction commits or rolls back.
       () => runZoned(() async {
         await customStatement('UPDATE sync_control SET batch_id=? WHERE id=1', [
           newEntityId(),
@@ -735,7 +739,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -746,6 +750,9 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (migrator) async {
       await migrator.createAll();
       await _createIndexes();
+      await _createScopeIndexes();
+      await ensureDataBindingSchema();
+      await installSyncSchema();
     },
     onUpgrade: (migrator, from, to) async {
       await transaction(() async {
@@ -928,13 +935,23 @@ class AppDatabase extends _$AppDatabase {
         if (from < 19) {
           await ensureDataBindingSchema();
         }
+        // v20 moves sync/index schema installation out of beforeOpen. These
+        // writes must run as part of the versioned migration so independent
+        // foreground/background database connections don't rebuild triggers
+        // every time they open the same SQLite file.
+        if (from < 20) {
+          await _createScopeIndexes();
+          await ensureDataBindingSchema();
+          await installSyncSchema();
+        }
       });
     },
     beforeOpen: (details) async {
-      await _createScopeIndexes();
-      await installSyncSchema();
-      await ensureDataBindingSchema();
+      // Connection-local safety only. Schema-changing work belongs in
+      // onCreate/onUpgrade so concurrent isolates can open without racing on
+      // DROP/CREATE TRIGGER and other DDL.
       await customStatement('PRAGMA foreign_keys = ON');
+      syncSchemaReady = true;
     },
   );
 
@@ -1163,7 +1180,10 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File(p.join(directory.path, AppDatabase.databaseFileName));
-    await _applyPendingDatabaseRestore(file);
+    // Restores are staged while the live database is open and are applied only
+    // after an app/process restart. Never swap the database, -wal, or -shm
+    // files opportunistically from a database opener: another FlutterEngine
+    // may already own a live connection to this file.
     if (await file.exists()) {
       final source = sqlite.sqlite3.open(
         file.path,
@@ -1182,7 +1202,17 @@ LazyDatabase _openConnection() {
     // SQLite is bundled through native assets on every platform. Keep queries
     // off the UI isolate, including Android; the old system-library loading
     // workaround is no longer needed.
-    return NativeDatabase.createInBackground(file);
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (database) {
+        // WAL lets readers proceed while another isolate is writing. A busy
+        // timeout makes short write/write overlaps wait instead of failing
+        // immediately with SQLITE_BUSY.
+        database.execute('PRAGMA busy_timeout = 5000');
+        database.execute('PRAGMA journal_mode = WAL');
+        database.execute('PRAGMA foreign_keys = ON');
+      },
+    );
   });
 }
 
@@ -1192,6 +1222,10 @@ Future<void> _applyPendingDatabaseRestore(File databaseFile) async {
   );
   if (!await pendingFile.exists()) return;
 
+  // This method is intentionally NOT called by _openConnection(). Applying a
+  // restore is a maintenance operation and is only safe before any Flutter
+  // engine opens the live database. The foreground startup performs it before
+  // runApp(); background entrypoints never apply pending restores.
   final safetyCopy = File(
     '${databaseFile.path}.pre-restore-on-open-${DateTime.now().microsecondsSinceEpoch}',
   );
