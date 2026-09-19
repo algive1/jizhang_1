@@ -16,7 +16,6 @@ import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics as Diagnostics
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
-import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingBridge
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 
@@ -182,11 +181,6 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
         lastPage = identity
         lastWindow = windowId
-        AutoBookkeepingBridge.call(
-            this,
-            "catalog",
-            mapOf("merchant" to current.merchantNormalized),
-        ) { _, _ -> }
         Diagnostics.lastScene = current.scene.scene
         Diagnostics.lastResult =
             "source=${current.sourceApp} amountConfidence=${current.amountConfidence} " +
