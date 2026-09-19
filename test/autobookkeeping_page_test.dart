@@ -64,6 +64,20 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
   Future<bool> isOverlayGranted() async => false;
 
   @override
+  Future<AutoBookkeepingRuntimeStatus> runtimeStatus() async =>
+      const AutoBookkeepingRuntimeStatus(
+        enabled: false,
+        accessibilityGranted: false,
+        accessibilityConnected: false,
+        overlayGranted: false,
+        notificationGranted: false,
+        foregroundRunning: false,
+        notificationListenerGranted: false,
+        notificationListenerEnabled: false,
+      );
+
+
+  @override
   Future<void> openAccessibilitySettings() async {}
 
   @override
