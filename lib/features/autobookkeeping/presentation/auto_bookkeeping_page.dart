@@ -28,6 +28,8 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool _paymentNotificationConnected = false;
   bool _accessibilityConnected = false;
   bool _foregroundRunning = false;
+  bool _screenshotSupported = false;
+  bool _screenshotEnabled = false;
   bool _enabled = false;
   bool _shortcutAvailable = false;
   bool _loading = true;
@@ -81,6 +83,8 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       _paymentNotificationAccessGranted = status.notificationListenerGranted;
       _paymentNotificationEnabled = status.notificationListenerEnabled;
       _paymentNotificationConnected = status.notificationListenerConnected;
+      _screenshotSupported = status.screenshotSupported;
+      _screenshotEnabled = status.screenshotEnabled;
       _enabled = status.enabled;
       _loading = false;
     });
@@ -321,6 +325,40 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                             ),
                             child: const Text('设置'),
                           ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          secondary: Icon(
+                            Icons.photo_camera_outlined,
+                            color: _screenshotEnabled
+                                ? context.appPrimary
+                                : context.appSecondaryText,
+                          ),
+                          title: const Text('保存支付结果截图'),
+                          subtitle: Text(
+                            !_screenshotSupported
+                                ? '需要 Android 11 或更高版本'
+                                : _screenshotEnabled
+                                ? '已开启 · 仅在无障碍识别成功页本机截图'
+                                : '可选 · 忽略交易时截图会自动删除',
+                          ),
+                          value: _screenshotEnabled,
+                          onChanged: !_screenshotSupported
+                              ? null
+                              : (value) async {
+                                  final bridge = ref.read(
+                                    autoBookkeepingSettingsProvider,
+                                  );
+                                  final actual =
+                                      await bridge.setScreenshotEnabled(value);
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _screenshotEnabled = actual;
+                                    _message = actual
+                                        ? '支付截图已开启。截图只保存在本机，确认保存后才作为账单附件保留。'
+                                        : '支付截图已关闭。';
+                                  });
+                                },
+                        ),
                         ),
                       ],
                     ),
@@ -365,7 +403,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const SizedBox(height: 10),
           AppCard(
             child: Text(
-              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成，需用户确认后才写入本地账本。',
+              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成。支付截图默认关闭，开启后也只保存在本机，忽略或过期会自动删除，确认保存后才作为账单附件保留。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
