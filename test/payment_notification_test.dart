@@ -553,7 +553,7 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
   }
 
   @override
-  Future<void> complete() async {}
+  Future<void> complete({bool keepScreenshot = false}) async {}
 
   @override
   Future<PendingAutoBookkeepingCandidate?> getPending() async => null;
