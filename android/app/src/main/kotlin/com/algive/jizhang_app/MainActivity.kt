@@ -36,7 +36,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        AutoBookkeepingNotificationController.sync(this)
+        reconcileAutoBookkeepingRuntime()
     }
 
     override fun onRequestPermissionsResult(
@@ -49,7 +49,7 @@ class MainActivity : FlutterFragmentActivity() {
             val granted = isNotificationGranted()
             pendingNotificationPermissionResult?.success(granted)
             pendingNotificationPermissionResult = null
-            AutoBookkeepingNotificationController.sync(this)
+            reconcileAutoBookkeepingRuntime()
         }
     }
 
@@ -248,13 +248,10 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         AutoBookkeepingSettings.setEnabled(this, enabled)
                         AutoBookkeepingLogStore.record(this, "setting_changed", "enabled=$enabled")
-                        if (enabled) {
-                            ContextCompat.startForegroundService(this, Intent(this, AutoBillOverlayService::class.java))
-                        } else {
-                            stopService(Intent(this, AutoBillOverlayService::class.java))
+                        if (!enabled) {
                             AutoBookkeepingPendingStore.complete(this, remember = false)
                         }
-                        AutoBookkeepingNotificationController.sync(this)
+                        reconcileAutoBookkeepingRuntime()
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -546,6 +543,59 @@ class MainActivity : FlutterFragmentActivity() {
             ?: return false
         val expected = ComponentName(this, "${packageName}.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService")
         return enabled.split(":").any { ComponentName.unflattenFromString(it) == expected }
+    }
+
+    private fun reconcileAutoBookkeepingRuntime() {
+        val enabled = AutoBookkeepingSettings.enabled(this)
+        val ready =
+            enabled &&
+                isAccessibilityGranted() &&
+                AutoBookkeepingOverlayPermission.isGranted(this) &&
+                AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+
+        if (ready) {
+            if (AutoBillOverlayService.instance == null) {
+                runCatching {
+                    ContextCompat.startForegroundService(
+                        this,
+                        Intent(this, AutoBillOverlayService::class.java),
+                    )
+                }.onFailure { error ->
+                    AutoBookkeepingLogStore.record(
+                        this,
+                        "runtime_start_failed",
+                        error.javaClass.simpleName,
+                    )
+                    AutoBookkeepingDiagnostics.error = "自动记账后台服务启动失败"
+                }
+            }
+        } else {
+            stopService(Intent(this, AutoBillOverlayService::class.java))
+            if (enabled) {
+                AutoBookkeepingLogStore.record(
+                    this,
+                    "runtime_paused",
+                    "required permission or notification state unavailable",
+                )
+            }
+        }
+
+        if (
+            notificationPreferences().getBoolean(KEY_ENABLED, false) &&
+            isNotificationAccessGranted()
+        ) {
+            runCatching {
+                android.service.notification.NotificationListenerService
+                    .requestRebind(
+                        ComponentName(
+                            this,
+                            PaymentNotificationListenerService::class.java,
+                        ),
+                    )
+            }
+        }
+
+        AutoBookkeepingNotificationController.sync(this)
     }
 
     private fun hasRuntimeNotificationPermission(): Boolean =
