@@ -98,24 +98,24 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val parts = linkedSetOf<String>()
         extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?.toString()
-            ?.takeIf(String::isNotBlank)
+            ?.takeIf { it.isNotBlank() }
             ?.let(parts::add)
         extras.getCharSequence(Notification.EXTRA_TEXT)
             ?.toString()
-            ?.takeIf(String::isNotBlank)
+            ?.takeIf { it.isNotBlank() }
             ?.let(parts::add)
         extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
             ?.toString()
-            ?.takeIf(String::isNotBlank)
+            ?.takeIf { it.isNotBlank() }
             ?.let(parts::add)
         extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)
             ?.toString()
-            ?.takeIf(String::isNotBlank)
+            ?.takeIf { it.isNotBlank() }
             ?.let(parts::add)
         extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
             ?.map { it.toString() }
             ?.filter(String::isNotBlank)
-            ?.forEach(parts::add)
+            ?.forEach { parts.add(it) }
         return parts.joinToString(" ")
     }
 
@@ -135,16 +135,17 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             return
         }
 
-        runCatching {
+        val started = runCatching {
             ContextCompat.startForegroundService(
                 this,
                 Intent(this, AutoBillOverlayService::class.java),
             )
-        }.onFailure {
+        }
+        if (started.isFailure) {
             AutoBookkeepingLogStore.record(
                 this,
                 "notification_overlay_start_failed",
-                it.javaClass.simpleName,
+                started.exceptionOrNull()?.javaClass?.simpleName ?: "unknown",
             )
             AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
             return
