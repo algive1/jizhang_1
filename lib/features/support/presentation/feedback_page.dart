@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../application/support_ticket_service.dart';
@@ -44,19 +45,34 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
       if (!mounted) return;
       _subject.clear();
       _message.clear();
-      await showDialog<void>(
+      final loggedIn =
+          await ref.read(supportTicketServiceProvider).isLoggedIn;
+      if (!mounted) return;
+      final openTickets = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           title: const Text('反馈已提交'),
-          content: SelectableText('工单号：$id\n\n我们会通过后续版本的工单中心继续完善处理状态查询。'),
+          content: SelectableText(
+            loggedIn
+                ? '工单号：$id\n\n可以在“我的工单”中查看处理状态并继续回复。'
+                : '工单号：$id\n\n当前是游客匿名提交。匿名工单不会出现在账号历史记录中，请保存工单号。',
+          ),
           actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(context),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('知道了'),
             ),
+            if (loggedIn)
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('查看工单'),
+              ),
           ],
         ),
       );
+      if (openTickets == true && mounted) {
+        context.push('/profile/support-tickets/$id');
+      }
     } on Object catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
