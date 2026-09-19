@@ -72,9 +72,6 @@ class TransactionEntries extends Table {
   TextColumn get id => text()();
   TextColumn get bookId => text()();
   TextColumn get userId => text().nullable()();
-  /// Family attribution: who actually paid / owns this transaction.
-  /// This is deliberately separate from [createdBy], which is the audit actor.
-  TextColumn get payerUserId => text().nullable()();
   TextColumn get type => text()();
   IntColumn get amountInCents => integer()();
   TextColumn get currency => text().withDefault(const Constant('CNY'))();
@@ -742,7 +739,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 20;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -945,24 +942,6 @@ class AppDatabase extends _$AppDatabase {
         if (from < 20) {
           await _createScopeIndexes();
           await ensureDataBindingSchema();
-          await installSyncSchema();
-        }
-        // v21 separates the immutable audit actor (created_by) from family
-        // spending attribution (payer_user_id). Existing shared rows keep the
-        // same attribution they previously exposed through user_id.
-        if (from < 21) {
-          if (!await _hasColumn('transactions', 'payer_user_id')) {
-            await migrator.addColumn(
-              transactionEntries,
-              transactionEntries.payerUserId,
-            );
-          }
-          await customStatement(
-            'UPDATE transactions SET payer_user_id=user_id '
-            'WHERE payer_user_id IS NULL AND user_id IS NOT NULL',
-          );
-          // Trigger JSON is column-derived, so reinstall it once after the
-          // additive migration to include payer_user_id in the outbox.
           await installSyncSchema();
         }
       });
