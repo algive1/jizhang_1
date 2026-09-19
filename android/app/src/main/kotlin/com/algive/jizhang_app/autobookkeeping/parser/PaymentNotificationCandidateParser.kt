@@ -22,28 +22,37 @@ class PaymentNotificationCandidateParser {
         val source = SOURCES[packageName] ?: return null
         val content = "$title $text".trim()
         if (content.isBlank()) return null
-        if (REJECT_PATTERN.containsMatchIn(content)) return null
 
-        val hasStrongSuccess = SUCCESS_PATTERN.containsMatchIn(content)
-        val hasWalletDebit = DEBIT_PATTERN.containsMatchIn(content)
-        val hasNonTransactionSignal = NON_TRANSACTION_PATTERN.containsMatchIn(content)
-
-        if (
-            packageName == WECHAT_PACKAGE &&
-            hasStrongSuccess &&
-            !WECHAT_CONTEXT_PATTERN.containsMatchIn(content)
-        ) {
-            return null
+        val transactionType = when {
+            REFUND_PATTERN.containsMatchIn(content) -> "REFUND"
+            INCOME_PATTERN.containsMatchIn(content) -> "INCOME"
+            else -> "EXPENSE"
         }
 
-        if (packageName in MARKETPLACE_PACKAGES) {
-            if (!hasStrongSuccess) return null
-        } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
-            return null
+        if (transactionType == "EXPENSE") {
+            if (REJECT_PATTERN.containsMatchIn(content)) return null
+            val hasStrongSuccess = SUCCESS_PATTERN.containsMatchIn(content)
+            val hasWalletDebit = DEBIT_PATTERN.containsMatchIn(content)
+            val hasNonTransactionSignal =
+                NON_TRANSACTION_PATTERN.containsMatchIn(content)
+
+            if (
+                packageName == WECHAT_PACKAGE &&
+                hasStrongSuccess &&
+                !WECHAT_CONTEXT_PATTERN.containsMatchIn(content)
+            ) {
+                return null
+            }
+
+            if (packageName in MARKETPLACE_PACKAGES) {
+                if (!hasStrongSuccess) return null
+            } else if (!hasStrongSuccess && (!hasWalletDebit || hasNonTransactionSignal)) {
+                return null
+            }
         }
 
         val amount = amountInCents(content) ?: return null
-        val merchant = merchant(content) ?: return null
+        val merchant = merchant(content) ?: counterparty(content) ?: return null
         val paymentMethod = PAYMENT_METHODS[packageName] ?: "支付应用"
         val originalAmount = labeledAmount(content, ORIGINAL_AMOUNT_PATTERN)
         val discountAmount = labeledAmount(content, DISCOUNT_AMOUNT_PATTERN)
@@ -61,12 +70,17 @@ class PaymentNotificationCandidateParser {
             timestamp = timestamp,
             scene = PaymentScene(
                 sourceApp = source,
-                scene = "PAYMENT_NOTIFICATION",
+                scene = when (transactionType) {
+                    "REFUND" -> "PAYMENT_NOTIFICATION_REFUND"
+                    "INCOME" -> "PAYMENT_NOTIFICATION_INCOME"
+                    else -> "PAYMENT_NOTIFICATION"
+                },
                 confidence = .90,
             ),
             amountConfidence = .95,
             merchantConfidence = .90,
             sourceApp = source,
+            transactionType = transactionType,
             orderId = ORDER_ID_PATTERN.find(content)?.groupValues?.getOrNull(1),
             note = NOTE_PATTERN.find(content)
                 ?.groupValues
@@ -139,6 +153,14 @@ class PaymentNotificationCandidateParser {
             ?.takeIf { it in 1..99_999_999_999L }
     }
 
+    private fun counterparty(content: String): String? {
+        val match = COUNTERPARTY_PATTERN.find(content)
+        val value = match?.groupValues?.getOrNull(1)?.trim()?.take(80)
+        if (value.isNullOrBlank()) return null
+        if (INVALID_MERCHANT_PATTERN.containsMatchIn(value)) return null
+        return value
+    }
+
     private fun merchant(content: String): String? {
         val explicit = EXPLICIT_MERCHANT_PATTERN.find(content)?.groupValues?.get(1)
         val directional = DIRECTIONAL_MERCHANT_PATTERN.find(content)?.groupValues?.get(1)
@@ -185,10 +207,16 @@ class PaymentNotificationCandidateParser {
         )
 
         val REJECT_PATTERN = Regex(
-            "收款到账|收款成功|转入|入账|到账|退款|退回|" +
+            "转入提醒|入账提醒|到账提醒|退回失败|" +
                 "待支付|待付款|去支付|去付款|未支付|未付款|" +
                 "支付失败|付款失败|交易失败|支付取消|付款取消|" +
                 "取消支付|重新支付|支付提醒|请支付",
+        )
+        val REFUND_PATTERN = Regex(
+            "退款成功|退款到账|退款已到账|已退款|退款完成",
+        )
+        val INCOME_PATTERN = Regex(
+            "收款到账|收款成功|收款已到账|收入到账",
         )
         val SUCCESS_PATTERN = Regex(
             "支付成功|付款成功|交易成功|扣款成功|消费成功|" +
@@ -200,7 +228,8 @@ class PaymentNotificationCandidateParser {
         val WECHAT_CONTEXT_PATTERN = Regex("微信支付|支付凭证|付款凭证|服务通知")
 
         val EXPLICIT_AMOUNT_PATTERN = Regex(
-            "(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额)" +
+            "(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|" +
+                "退款金额|收款金额|到账金额|收入金额)" +
                 "[^0-9]{0,10}(?:¥|￥)?\\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
         )
         val STATUS_AMOUNT_PATTERN = Regex(
@@ -228,6 +257,9 @@ class PaymentNotificationCandidateParser {
                 "([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
         )
 
+        val COUNTERPARTY_PATTERN = Regex(
+            "(?:来自|付款方|付款人|退款方|对方)[：:\\s]*([^，。；;\\n]{2,32})",
+        )
         val EXPLICIT_MERCHANT_PATTERN = Regex(
             "(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店|收款方)" +
                 "[：:\\s]+([^，。；;\\n]{2,32})",
