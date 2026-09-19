@@ -70,7 +70,10 @@ class PaymentNotificationCandidateParser(
 
         val amount = amountInCents(content) ?: return null
         val merchant = merchant(content) ?: counterparty(content) ?: return null
-        val paymentMethod = PAYMENT_METHODS[packageName] ?: "支付应用"
+        val paymentMethod =
+            explicitPaymentMethod(content) ??
+                PAYMENT_METHODS[packageName] ??
+                "支付应用"
         val originalAmount = labeledAmount(content, ORIGINAL_AMOUNT_PATTERN)
         val discountAmount = labeledAmount(content, DISCOUNT_AMOUNT_PATTERN)
         val normalizedBreakdown = normalizeBreakdown(
@@ -170,6 +173,26 @@ class PaymentNotificationCandidateParser(
             ?.takeIf { it in 1..99_999_999_999L }
     }
 
+    private fun explicitPaymentMethod(content: String): String? {
+        val explicit = PAYMENT_METHOD_PATTERN.find(content)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.take(40)
+            ?.takeIf { it.isNotBlank() }
+        if (explicit != null) return explicit
+
+        return when {
+            content.contains("支付宝") -> "支付宝"
+            content.contains("微信支付") -> "微信支付"
+            content.contains("云闪付") -> "云闪付"
+            content.contains("信用卡") -> "信用卡"
+            content.contains("储蓄卡") -> "储蓄卡"
+            content.contains("银行卡") -> "银行卡"
+            else -> null
+        }
+    }
+
     private fun counterparty(content: String): String? {
         val match = COUNTERPARTY_PATTERN.find(content)
         val value = match?.groupValues?.getOrNull(1)?.trim()?.take(80)
@@ -241,6 +264,9 @@ class PaymentNotificationCandidateParser(
         )
         val CURRENCY_AMOUNT_PATTERN = Regex("[¥￥]\\s*([0-9]+(?:[.,][0-9]{1,2})?)")
 
+        val PAYMENT_METHOD_PATTERN = Regex(
+            "(?:支付方式|付款方式|支付渠道)[：:\\s]*([^，。；;\\n]{2,40})",
+        )
         val ORDER_ID_PATTERN = Regex(
             "(?:订单号|交易单号|交易号|流水号|支付单号)[：:\\s]*([A-Za-z0-9_-]{6,64})",
         )
