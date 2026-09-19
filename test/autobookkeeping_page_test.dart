@@ -74,6 +74,7 @@ class _FakeAutoBookkeepingBridge implements AutoBookkeepingSettingsBridge {
         foregroundRunning: false,
         notificationListenerGranted: false,
         notificationListenerEnabled: false,
+        notificationListenerConnected: false,
       );
 
 
