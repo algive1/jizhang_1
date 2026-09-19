@@ -146,7 +146,6 @@ class AutoBillOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
         val foregroundStarted = runCatching {
             if (!AutoBookkeepingSettings.enabled(this)) {
                 error("auto bookkeeping is disabled")
@@ -176,6 +175,7 @@ class AutoBillOverlayService : Service() {
             stopSelf()
             return
         }
+        instance = this
         AutoBookkeepingDiagnostics.foregroundRunning = true
         Log.i(TAG, "overlay service created")
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service created")
