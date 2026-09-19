@@ -247,8 +247,8 @@ class _HomePageState extends ConsumerState<HomePage>
                     ),
                     const SizedBox(height: 10),
                     if (analysis.expenseCategories.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
                           '记下一笔支出，在这里了解钱花在哪里',
                           style: TextStyle(
