@@ -19,9 +19,9 @@ import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnos
 object AutoBookkeepingNotificationController {
     const val ACTION_DISABLE = "com.algive.jizhang_app.AUTOB_BOOKKEEPING_DISABLE"
 
-    const val STATUS_STATUS_CHANNEL_ID = "autobookkeeping_status"
+    const val STATUS_CHANNEL_ID = "autobookkeeping_status"
     const val NOTIFICATION_ID = 2401
-    private const val RESULT_STATUS_CHANNEL_ID = "autobookkeeping_result"
+    private const val RESULT_CHANNEL_ID = "autobookkeeping_result"
     private const val RESULT_NOTIFICATION_ID = 2402
     private const val CONFIRM_NOTIFICATION_ID = 2403
 
@@ -121,7 +121,7 @@ object AutoBookkeepingNotificationController {
         runCatching {
             manager.notify(
                 RESULT_NOTIFICATION_ID,
-                NotificationCompat.Builder(context, RESULT_STATUS_CHANNEL_ID)
+                NotificationCompat.Builder(context, RESULT_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_popup_sync)
                     .setContentTitle("好好记账 · 记账成功")
                     .setContentText(text)
@@ -160,7 +160,7 @@ object AutoBookkeepingNotificationController {
         runCatching {
             manager.notify(
                 CONFIRM_NOTIFICATION_ID,
-                NotificationCompat.Builder(context, RESULT_STATUS_CHANNEL_ID)
+                NotificationCompat.Builder(context, RESULT_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_popup_sync)
                     .setContentTitle("好好记账 · 待确认交易")
                     .setContentText(text)
@@ -189,7 +189,7 @@ object AutoBookkeepingNotificationController {
     private fun createResultChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
-            RESULT_STATUS_CHANNEL_ID,
+            RESULT_CHANNEL_ID,
             "自动记账结果",
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
