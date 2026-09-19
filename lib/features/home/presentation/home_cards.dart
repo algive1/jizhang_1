@@ -123,7 +123,7 @@ class HomeMonthlySummary extends StatelessWidget {
                 ),
                 child: Text(
                   current ? '本月账单 ›' : '${snapshot.month.month}月账单 ›',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: context.appSecondaryText,
                   ),
@@ -709,7 +709,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                     text: amountHidden
                         ? ' / ¥••••'
                         : ' / ¥${MoneyFormatter.whole(goal.targetAmount)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: context.appSecondaryText,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
