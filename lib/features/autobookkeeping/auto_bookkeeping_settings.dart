@@ -11,6 +11,7 @@ class AutoBookkeepingRuntimeStatus {
     required this.foregroundRunning,
     required this.notificationListenerGranted,
     required this.notificationListenerEnabled,
+    required this.notificationListenerConnected,
   });
 
   final bool enabled;
@@ -21,6 +22,7 @@ class AutoBookkeepingRuntimeStatus {
   final bool foregroundRunning;
   final bool notificationListenerGranted;
   final bool notificationListenerEnabled;
+  final bool notificationListenerConnected;
 
   factory AutoBookkeepingRuntimeStatus.fromMap(Map<Object?, Object?> map) {
     bool flag(String key) => map[key] == true;
@@ -33,6 +35,7 @@ class AutoBookkeepingRuntimeStatus {
       foregroundRunning: flag('foregroundRunning'),
       notificationListenerGranted: flag('notificationListenerGranted'),
       notificationListenerEnabled: flag('notificationListenerEnabled'),
+      notificationListenerConnected: flag('notificationListenerConnected'),
     );
   }
 }
@@ -106,6 +109,7 @@ class MethodChannelAutoBookkeepingSettings
           foregroundRunning: false,
           notificationListenerGranted: false,
           notificationListenerEnabled: false,
+          notificationListenerConnected: false,
         );
       }
       return AutoBookkeepingRuntimeStatus.fromMap(raw);
