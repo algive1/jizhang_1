@@ -150,6 +150,7 @@ class MainActivity : FlutterFragmentActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isAccessGranted" -> result.success(isNotificationAccessGranted())
+                    "isConnected" -> result.success(PaymentNotificationListenerService.connected)
                     "openAccessSettings" -> {
                         openNotificationListenerSettings(result)
                     }
@@ -220,6 +221,8 @@ class MainActivity : FlutterFragmentActivity() {
                                 isNotificationAccessGranted(),
                             "notificationListenerEnabled" to
                                 notificationPreferences().getBoolean(KEY_ENABLED, false),
+                            "notificationListenerConnected" to
+                                PaymentNotificationListenerService.connected,
                         ),
                     )
                     "isNotificationGranted" -> result.success(isNotificationGranted())
