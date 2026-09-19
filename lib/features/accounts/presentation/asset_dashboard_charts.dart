@@ -756,6 +756,10 @@ class _AssetTrendPlotState extends State<AssetTrendPlot> {
                     widget.fontFamily,
                     selectedIndex: _activeIndex,
                     labelCount: labelCount,
+                    primary: context.appPrimary,
+                    muted: context.appSecondaryText,
+                    divider: context.appDivider,
+                    surface: context.appSurface,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -772,7 +776,7 @@ class _AssetTrendPlotState extends State<AssetTrendPlot> {
                   selectedLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10, color: assetMuted),
+                  style: TextStyle(fontSize: 10, color: context.appSecondaryText),
                 ),
               ),
             ),
@@ -789,11 +793,16 @@ class _AssetTrendPainter extends CustomPainter {
     this.fontFamily, {
     required this.selectedIndex,
     required this.labelCount,
+    required this.primary,
+    required this.muted,
+    required this.divider,
+    required this.surface,
   });
   final List<AssetHistoryPoint> points;
   final String? fontFamily;
   final int selectedIndex;
   final int labelCount;
+  final Color primary, muted, divider, surface;
   @override
   void paint(Canvas canvas, Size size) {
     final low = points.map((p) => p.balance).reduce(math.min);
@@ -814,7 +823,7 @@ class _AssetTrendPainter extends CustomPainter {
           Offset(x, y),
           Offset(math.min(x + 2.5, size.width), y),
           Paint()
-            ..color = const Color(0xFFDDDFD5)
+            ..color = divider
             ..strokeWidth = .5,
         );
       }
@@ -841,10 +850,10 @@ class _AssetTrendPainter extends CustomPainter {
     canvas.drawPath(
       area,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x508AA950), Color(0x068AA950)],
+          colors: [primary.withValues(alpha: .31), primary.withValues(alpha: .02)],
         ).createShader(Rect.fromLTWH(left, top, width, bottom - top)),
     );
     final activeIndex = selectedIndex.clamp(0, points.length - 1);
@@ -853,24 +862,24 @@ class _AssetTrendPainter extends CustomPainter {
       Offset(active.dx, top),
       Offset(active.dx, bottom),
       Paint()
-        ..color = const Color(0x5583A25D)
+        ..color = primary.withValues(alpha: .33)
         ..strokeWidth = .7,
     );
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFF73963B)
+        ..color = primary
         ..strokeWidth = 1.6
         ..style = PaintingStyle.stroke,
     );
     for (var i = 0; i < points.length; i++) {
       if (i % math.max(1, points.length ~/ 8) != 0 && i != points.length - 1)
         continue;
-      canvas.drawCircle(coordinates[i], 2.5, Paint()..color = Colors.white);
-      canvas.drawCircle(coordinates[i], 1.8, Paint()..color = assetGreen);
+      canvas.drawCircle(coordinates[i], 2.5, Paint()..color = surface);
+      canvas.drawCircle(coordinates[i], 1.8, Paint()..color = primary);
     }
-    canvas.drawCircle(active, 4.2, Paint()..color = Colors.white);
-    canvas.drawCircle(active, 2.8, Paint()..color = assetGreen);
+    canvas.drawCircle(active, 4.2, Paint()..color = surface);
+    canvas.drawCircle(active, 2.8, Paint()..color = primary);
     final activeText = MoneyFormatter.whole(points[activeIndex].balance);
     final activePainter = TextPainter(
       text: TextSpan(
@@ -894,7 +903,7 @@ class _AssetTrendPainter extends CustomPainter {
       ),
       const Radius.circular(6),
     );
-    canvas.drawRRect(bubbleRect, Paint()..color = assetGreen);
+    canvas.drawRRect(bubbleRect, Paint()..color = primary);
     activePainter.paint(
       canvas,
       Offset(bubbleRect.left + 5, bubbleRect.top + 4),
@@ -923,7 +932,7 @@ class _AssetTrendPainter extends CustomPainter {
         text: value,
         style: TextStyle(
           fontSize: 7,
-          color: assetMuted,
+          color: muted,
           fontFamily: fontFamily,
         ),
       ),
@@ -939,5 +948,9 @@ class _AssetTrendPainter extends CustomPainter {
       old.points != points ||
       old.fontFamily != fontFamily ||
       old.selectedIndex != selectedIndex ||
-      old.labelCount != labelCount;
+      old.labelCount != labelCount ||
+      old.primary != primary ||
+      old.muted != muted ||
+      old.divider != divider ||
+      old.surface != surface;
 }
