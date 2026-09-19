@@ -71,9 +71,9 @@ class PaymentNotificationCandidateParser(
         val amount = amountInCents(content) ?: return null
         val merchant = merchant(content) ?: counterparty(content) ?: return null
         val paymentMethod =
-            explicitPaymentMethod(content) ??
-                PAYMENT_METHODS[packageName] ??
-                "支付应用"
+            explicitPaymentMethod(content)
+                ?: PAYMENT_METHODS[packageName]
+                ?: "支付应用"
         val originalAmount = labeledAmount(content, ORIGINAL_AMOUNT_PATTERN)
         val discountAmount = labeledAmount(content, DISCOUNT_AMOUNT_PATTERN)
         val normalizedBreakdown = normalizeBreakdown(
