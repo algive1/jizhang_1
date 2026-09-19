@@ -34,6 +34,7 @@ import '../../features/support/presentation/about_page.dart';
 import '../../features/support/presentation/support_tickets_page.dart';
 import '../../features/support/presentation/support_ticket_detail_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_page.dart';
+import '../../features/autobookkeeping/presentation/ios_shortcut_bookkeeping_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_logs_page.dart';
 import '../../features/membership/presentation/membership_page.dart';
@@ -243,6 +244,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'autobookkeeping',
                 builder: (context, state) => const AutoBookkeepingPage(),
                 routes: [
+                  GoRoute(
+                    path: 'shortcut',
+                    builder: (context, state) =>
+                        const IosShortcutBookkeepingPage(),
+                  ),
                   GoRoute(
                     path: 'logs',
                     builder: (context, state) =>
