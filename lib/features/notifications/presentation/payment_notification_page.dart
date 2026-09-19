@@ -20,6 +20,7 @@ class _PaymentNotificationPageState
     extends ConsumerState<PaymentNotificationPage>
     with WidgetsBindingObserver {
   bool? _accessGranted;
+  bool _connected = false;
   bool _enabled = false;
   bool _loading = true;
   String? _message;
@@ -46,9 +47,11 @@ class _PaymentNotificationPageState
     final bridge = ref.read(paymentNotificationBridgeProvider);
     final accessGranted = await bridge.isAccessGranted();
     final enabled = await bridge.isEnabled();
+    final connected = accessGranted ? await bridge.isConnected() : false;
     if (!mounted) return;
     setState(() {
       _accessGranted = accessGranted;
+      _connected = connected;
       _enabled = enabled;
       _loading = false;
     });
@@ -185,11 +188,13 @@ class _PaymentNotificationPageState
                         contentPadding: EdgeInsets.zero,
                         title: const Text('自动记账支付通知'),
                         subtitle: Text(
-                          _enabled && _accessGranted == true
-                              ? '已开启并已授权'
-                              : _enabled
+                          !_enabled
+                              ? '已关闭'
+                              : _accessGranted != true
                               ? '已开启，但系统通知读取权限已失效'
-                              : '已关闭',
+                              : _connected
+                              ? '已开启 · 监听服务已连接'
+                              : '已开启 · 已授权，等待系统连接监听服务',
                         ),
                         value: _enabled,
                         onChanged: (_) => _enableOrOpenSettings(),
