@@ -142,7 +142,7 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   '收支趋势',
                   style: TextStyle(
