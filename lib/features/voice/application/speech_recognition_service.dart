@@ -6,7 +6,6 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../../core/models/membership.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../sharing/data/session_repository.dart';
-import '../../sharing/data/shared_api.dart';
 import '../domain/transaction_parser.dart';
 import 'remote_ai_parsing_gateway.dart';
 
