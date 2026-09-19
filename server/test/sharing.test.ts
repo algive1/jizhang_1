@@ -133,14 +133,14 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
  const invitation=(await app.inject({method:'POST',url:`/api/v1/books/${book}/invitations`,headers:{authorization:`Bearer ${owner.token}`},payload:{}})).json() as any;
  assert.equal((await app.inject({method:'POST',url:'/api/v1/invitations/accept',headers:{authorization:`Bearer ${member.token}`},payload:{code:invitation.code}})).statusCode,200);
 
- const attributed={...tx(book,'for-member',500),payer_user_id:member.user.id};
+ const attributed={...tx(book,'for-member',500),user_id:member.user.id};
  const mutation=await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',attributed)]}});
  assert.equal(mutation.statusCode,200);
  const stored=(mutation.json() as any).entities.find((e:any)=>e.kind==='transactions'&&e.id==='for-member').data;
  assert.equal(stored.created_by,owner.user.id);
- assert.equal(stored.payer_user_id,member.user.id);
+ assert.equal(stored.user_id,member.user.id);
 
- const invalid={...tx(book,'outsider-payer',100),payer_user_id:outsider.user.id};
+ const invalid={...tx(book,'outsider-payer',100),user_id:outsider.user.id};
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',invalid)]}})).statusCode,400);
 
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/transfer-ownership`,headers:{authorization:`Bearer ${member.token}`},payload:{userId:member.user.id}})).statusCode,403);
