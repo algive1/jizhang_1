@@ -40,10 +40,22 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val eventPackage = actualEvent.packageName?.toString()
         if (!AutoBookkeepingSettings.enabled(this) || eventPackage !in SUPPORTED_PACKAGES) return
         if (actualEvent.eventType !in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED)) return
+        if (eventPackage != "com.tencent.mm") {
+            // Marketplace/payment apps frequently update WebView/Compose content
+            // without a stable Activity transition. Any relevant accessibility
+            // event may therefore trigger a scan; parsers still require explicit
+            // completed-payment evidence before accepting a candidate.
+            paymentActivity = true
+            lastPaymentActivityAt = System.currentTimeMillis()
+        }
         if (actualEvent.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val activity = actualEvent.className?.toString().orEmpty()
             Log.i(TAG, "window event class=$activity")
-            AutoBookkeepingLogStore.record(this, "window_event", activity.substringAfterLast('.'))
+            AutoBookkeepingLogStore.record(
+                this,
+                "window_event",
+                "${eventPackage.orEmpty()}:${activity.substringAfterLast('.')}",
+            )
             if (eventPackage == "com.tencent.mm" && activity.startsWith("com.tencent.mm.")) {
                 val isPaymentActivity = listOf(
                     "WalletPayUI",
@@ -62,12 +74,6 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                     paymentActivity = false
                     lastPage = null
                 }
-            } else if (eventPackage in SUPPORTED_PACKAGES) {
-                // Other supported payment apps do not expose stable activity
-                // names; the generic parser still requires an exact success
-                // marker before accepting a page.
-                paymentActivity = true
-                lastPaymentActivityAt = System.currentTimeMillis()
             }
         }
         Diagnostics.lastEventAt = System.currentTimeMillis()
@@ -120,8 +126,9 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
         lastPage = identity; lastWindow = windowId
         AutoBookkeepingBridge.call(this, "catalog", mapOf("merchant" to candidate.merchantNormalized)) { _, _ -> }
-        Diagnostics.lastScene = "微信支付成功"
-        Diagnostics.lastResult = "金额已识别 · 商户已脱敏"
+        Diagnostics.lastScene = candidate.scene.scene
+        Diagnostics.lastResult =
+            "source=${candidate.sourceApp} amountConfidence=${candidate.amountConfidence} merchantConfidence=${candidate.merchantConfidence}"
         Log.i(TAG, "payment candidate offered")
         AutoBookkeepingLogStore.record(this, "overlay_offered", "payment candidate offered")
     }
@@ -147,8 +154,19 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         return try {
             roots.firstNotNullOfOrNull { (windowId, root) ->
                 if (root.packageName?.toString() !in SUPPORTED_PACKAGES) return@firstNotNullOfOrNull null
-                val nodes = reader.read(root)
-                detector.detect(root.packageName?.toString().orEmpty(), nodes)?.let { it to windowId }
+                val packageName = root.packageName?.toString().orEmpty()
+                val snapshot = reader.readSnapshot(root)
+                val result = detector.inspect(packageName, snapshot.nodes)
+                if (result.candidate == null) {
+                    debug(
+                        "scan package=$packageName nodes=${snapshot.nodes.size} " +
+                            "visited=${snapshot.visited} depth=${snapshot.maxDepth} " +
+                            "truncated=${snapshot.truncated} reject=${result.rejectionReason}",
+                    )
+                    null
+                } else {
+                    result.candidate to windowId
+                }
             }
         } finally {
             roots.forEach { (_, root) -> root.recycle() }
