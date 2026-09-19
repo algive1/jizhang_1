@@ -16,13 +16,15 @@ import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentNotificationCandidateParser
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class PaymentNotificationListenerService : NotificationListenerService() {
-    private val realtimeParser = PaymentNotificationCandidateParser()
+    private val ruleRegistry = AutoBookkeepingRuleRegistry.builtIn()
+    private val realtimeParser = PaymentNotificationCandidateParser(ruleRegistry)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onListenerConnected() {
@@ -72,7 +74,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(statusBarNotification: StatusBarNotification) {
         val packageName = statusBarNotification.packageName
-        if (packageName !in SUPPORTED_PACKAGES) return
+        if (ruleRegistry.ruleFor(packageName) == null) return
 
         val enabled = getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_ENABLED, false)
@@ -234,16 +236,5 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         private const val OVERLAY_START_GRACE_MS = 350L
         private const val LISTENER_REBIND_DELAY_MS = 1000L
 
-        private val SUPPORTED_PACKAGES = setOf(
-            "com.tencent.mm",
-            "com.eg.android.AlipayGphone",
-            "com.unionpay",
-            "com.sankuai.meituan",
-            "com.sankuai.meituan.takeout",
-            "com.jingdong.app.mall",
-            "com.xunmeng.pinduoduo",
-            "com.ss.android.ugc.aweme",
-            "com.ss.android.ugc.aweme.mobile",
-        )
     }
 }
