@@ -442,6 +442,45 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (book!.sharedPhase != 'promoting' &&
+                  book.role == 'owner') ...[
+                const SizedBox(height: 12),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '共享账本管理',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '解散后所有成员将无法继续同步或写入此共享账本。此操作不会自动删除本机保留的数据。',
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _run(() async {
+                                if (await _confirm(
+                                  '解散共享账本',
+                                  '确认解散「${book.name}」？所有成员将失去共享访问权限，未使用的邀请码也会同时失效。',
+                                )) {
+                                  await ref
+                                      .read(familyServiceProvider)
+                                      .disband(book.sharedId!);
+                                  _loadedBook = null;
+                                }
+                              }),
+                        child: const Text('解散共享账本'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (book!.sharedPhase != 'promoting')
                 AppCard(
                   child: Column(
@@ -490,6 +529,15 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                                           book.sharedId!,
                                           id,
                                         );
+                                    } else if (action == 'owner') {
+                                      if (await _confirm(
+                                        '转让账本所有权',
+                                        '确认将「${book.name}」的所有权转让给该成员？转让后你将变为管理员，新所有者可以管理成员并解散共享账本。',
+                                      ))
+                                        await service.transferOwnership(
+                                          book.sharedId!,
+                                          id,
+                                        );
                                     } else {
                                       await service.changeRole(
                                         book.sharedId!,
@@ -503,6 +551,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                                   }),
                                   itemBuilder: (_) => [
                                     if (book.role == 'owner') ...[
+                                      const PopupMenuItem(
+                                        value: 'owner',
+                                        child: Text('转让所有权'),
+                                      ),
                                       const PopupMenuItem(
                                         value: 'admin',
                                         child: Text('设为管理员'),
