@@ -46,6 +46,7 @@ import '../../voice/presentation/voice_bookkeeping_sheet.dart';
 import '../application/amount_input.dart';
 import '../application/attachment_storage_service.dart';
 import '../application/quick_bookkeeping_service.dart';
+import '../data/bookkeeping_template_repository.dart';
 
 /// The four top-level entry groups in the quick-add header.
 ///
@@ -399,7 +400,29 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           onChanged: _changeTab,
                         ),
                       ),
-                      SizedBox(width: 56, child: Center(child: _headerNote())),
+                      if (!_isEditing)
+                        IconButton(
+                          key: const ValueKey('quick-templates'),
+                          tooltip: '常用模板',
+                          constraints: const BoxConstraints.tightFor(
+                            width: 40,
+                            height: 40,
+                          ),
+                          padding: EdgeInsets.zero,
+                          onPressed: () => _openTemplates(
+                            selectedBookId,
+                            accounts,
+                            categories,
+                            sourceAccount,
+                            selectedCategory,
+                            effectiveSubcategoryId,
+                          ),
+                          icon: const Icon(
+                            Icons.bookmarks_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      SizedBox(width: 52, child: Center(child: _headerNote())),
                     ],
                   ),
                 ),
@@ -750,6 +773,217 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         _reimbursementStatus = ReimbursementStatus.none;
       }
     });
+  }
+
+  Future<void> _openTemplates(
+    String bookId,
+    List<Account> accounts,
+    List<Category> categories,
+    Account? sourceAccount,
+    Category? selectedCategory,
+    String? subcategoryId,
+  ) async {
+    final repository = ref.read(bookkeepingTemplateRepositoryProvider);
+    final templates = await repository.list(bookId);
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Object>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '常用记账模板',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext, 'save-current'),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('保存当前'),
+                ),
+              ],
+            ),
+            if (templates.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 28),
+                child: Center(
+                  child: Text(
+                    '还没有模板。先填写一笔常用内容，再点“保存当前”。',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              )
+            else
+              for (final template in templates)
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.bookmark_outline),
+                  ),
+                  title: Text(template.name),
+                  subtitle: Text(
+                    [
+                      _transactionTypeLabel(template.type),
+                      if (template.amount != null)
+                        '¥${template.amount!.toStringAsFixed(2)}',
+                      if (template.categoryId != null)
+                        categories
+                                .where((item) => item.id == template.categoryId)
+                                .firstOrNull
+                                ?.name ??
+                            '分类已变更',
+                      if (template.accountId != null)
+                        accounts
+                                .where((item) => item.id == template.accountId)
+                                .firstOrNull
+                                ?.displayName ??
+                            '账户已变更',
+                    ].join(' · '),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, template),
+                  trailing: IconButton(
+                    tooltip: '删除模板',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () async {
+                      await repository.delete(bookId, template.id);
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      if (mounted) _showMessage('模板已删除');
+                    },
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    if (selected == 'save-current') {
+      await _saveCurrentAsTemplate(
+        bookId,
+        sourceAccount,
+        selectedCategory,
+        subcategoryId,
+      );
+      return;
+    }
+    if (selected is BookkeepingTemplate) {
+      _applyTemplate(selected, accounts, categories);
+    }
+  }
+
+  Future<void> _saveCurrentAsTemplate(
+    String bookId,
+    Account? sourceAccount,
+    Category? selectedCategory,
+    String? subcategoryId,
+  ) async {
+    if (_type == TransactionType.transfer ||
+        _type == TransactionType.assetPurchase ||
+        _type == TransactionType.assetSale ||
+        _type == TransactionType.adjustment ||
+        _type == TransactionType.refund ||
+        _type == TransactionType.reimbursement) {
+      _showMessage('当前交易类型暂不支持保存为常用模板');
+      return;
+    }
+    final controller = TextEditingController(
+      text: _merchantController.text.trim().isNotEmpty
+          ? _merchantController.text.trim()
+          : selectedCategory?.name ?? '',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('保存为常用模板'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(
+            labelText: '模板名称',
+            hintText: '例如：工作日午餐',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              Navigator.pop(dialogContext, value);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || !mounted) return;
+    await ref.read(bookkeepingTemplateRepositoryProvider).save(
+      bookId: bookId,
+      name: name,
+      type: _type,
+      amount: _amount.isValid ? _amount.amount : null,
+      accountId: sourceAccount?.id,
+      categoryId: selectedCategory?.id,
+      subcategoryId: subcategoryId,
+      merchant: _merchantController.text,
+      note: _noteController.text,
+    );
+    if (mounted) _showMessage('已保存到常用模板');
+  }
+
+  void _applyTemplate(
+    BookkeepingTemplate template,
+    List<Account> accounts,
+    List<Category> categories,
+  ) {
+    final accountExists = template.accountId != null &&
+        accounts.any(
+          (item) => item.id == template.accountId && !item.isArchived,
+        );
+    final categoryExists = template.categoryId != null &&
+        categories.any(
+          (item) => item.id == template.categoryId && !item.isArchived,
+        );
+    final subcategoryExists = template.subcategoryId != null &&
+        categories.any(
+          (item) => item.id == template.subcategoryId && !item.isArchived,
+        );
+    setState(() {
+      _type = template.type;
+      if (_type == TransactionType.borrow ||
+          _type == TransactionType.lend ||
+          _type == TransactionType.repayment) {
+        _debtType = _type;
+      }
+      _amount = template.amount == null
+          ? const AmountInput()
+          : AmountInput(template.amount!.toStringAsFixed(2));
+      _accountId = accountExists ? template.accountId : null;
+      _categoryId = categoryExists ? template.categoryId : null;
+      _subcategoryId = subcategoryExists ? template.subcategoryId : null;
+      _merchantController.text = template.merchant ?? '';
+      _noteController.text = template.note ?? '';
+      _occurredAt = DateTime.now();
+      _isRecurring = false;
+      _isOneTime = true;
+      _reimbursementStatus = ReimbursementStatus.none;
+      _amountError = false;
+    });
+    _showMessage(
+      accountExists || template.accountId == null
+          ? '已套用模板「${template.name}」'
+          : '已套用模板；原账户已不存在，请重新选择账户',
+    );
   }
 
   Future<void> _pickReimbursement() async {
