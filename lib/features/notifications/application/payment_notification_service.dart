@@ -132,6 +132,7 @@ class ParsedPaymentNotification {
     required this.occurredAt,
     required this.orderId,
     required this.transactionType,
+    required this.paymentMethod,
     this.identifierSuffix,
     this.note,
     this.originalAmount,
@@ -145,6 +146,7 @@ class ParsedPaymentNotification {
   final DateTime occurredAt;
   final String? orderId;
   final String transactionType;
+  final String paymentMethod;
   final String? identifierSuffix;
   final String? note;
   final double? originalAmount;
@@ -214,6 +216,8 @@ class PaymentNotificationParser {
       occurredAt: notification.postedAt,
       orderId: _orderIdFor(content),
       transactionType: transactionType,
+      paymentMethod:
+          _paymentMethodFor(content) ?? _displayPaymentMethod(channel),
       identifierSuffix: _identifierSuffixFor(content),
       note: _noteFor(content),
       originalAmount: breakdown.$1,
@@ -318,6 +322,20 @@ class PaymentNotificationParser {
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     return value == null || value.isEmpty ? null : value;
+  }
+
+  String? _paymentMethodFor(String content) {
+    final explicit = RegExp(
+      r'(?:支付方式|付款方式|支付渠道)[：:\s]*([^，。；;\n]{2,40})',
+    ).firstMatch(content)?.group(1)?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    if (content.contains('支付宝')) return '支付宝';
+    if (content.contains('微信支付')) return '微信支付';
+    if (content.contains('云闪付')) return '云闪付';
+    if (content.contains('信用卡')) return '信用卡';
+    if (content.contains('储蓄卡')) return '储蓄卡';
+    if (content.contains('银行卡')) return '银行卡';
+    return null;
   }
 
   String? _counterpartyFor(String content) {
@@ -464,7 +482,7 @@ class PaymentNotificationAutoBookkeepingService {
             fingerprint: stableNotificationKey(fingerprint),
             amountInCents: (parsed.amount * 100).round(),
             merchant: merchant,
-            paymentMethod: _displayPaymentMethod(parsed.channel),
+            paymentMethod: parsed.paymentMethod,
             timestamp: parsed.occurredAt,
             sourceApp: _sourceApp(parsed.channel),
             scene: switch (parsed.transactionType) {
