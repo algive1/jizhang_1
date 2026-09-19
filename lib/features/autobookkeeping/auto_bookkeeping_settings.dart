@@ -145,6 +145,12 @@ class MethodChannelAutoBookkeepingSettings
         foregroundRunning: false,
         notificationListenerGranted: false,
         notificationListenerEnabled: false,
+        notificationListenerConnected: false,
+        screenshotSupported: false,
+        screenshotEnabled: false,
+        ruleSchemaVersion: 0,
+        ruleVersions: '',
+        ruleSource: 'unknown',
       );
     }
   }
