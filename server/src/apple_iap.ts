@@ -1,4 +1,5 @@
 import { createVerify, X509Certificate } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
@@ -49,23 +50,37 @@ function ensureSchema(store:Store){
 
 function b64url(value:string){return Buffer.from(value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'='),'base64');}
 
+function appleRoots():X509Certificate[]{
+  const paths=(process.env.APPLE_ROOT_CA_PATHS??'').split(',').map(v=>v.trim()).filter(Boolean);
+  return paths.filter(existsSync).map(path=>new X509Certificate(readFileSync(path)));
+}
+
 function verifyAppleJws(jws:string):Json{
   const parts=jws.split('.');
   check(parts.length===3,'Apple 签名数据格式无效',400);
   const header=JSON.parse(b64url(parts[0]).toString('utf8')) as Json;
   const chain=header.x5c;
-  check(Array.isArray(chain)&&chain.length>0,'Apple 签名证书缺失',400);
-  const leaf=new X509Certificate(Buffer.from(String(chain[0]),'base64'));
+  check(header.alg==='ES256','Apple JWS 算法无效',400);
+  check(Array.isArray(chain)&&chain.length>=2,'Apple 签名证书链缺失',400);
+  const certs=chain.map(value=>new X509Certificate(Buffer.from(String(value),'base64')));
+  const leaf=certs[0];
   const now=Date.now();
   check(Date.parse(leaf.validFrom)<=now&&Date.parse(leaf.validTo)>=now,'Apple 签名证书已过期',400);
-  // Pinning the full Apple root chain should be configured in production.
-  // This verifies the JWS with the certificate embedded in Apple's signed
-  // envelope; the App Store Server API reconciliation remains authoritative.
-  const verifier=createVerify('RSA-SHA256');
+  for(let i=0;i<certs.length-1;i++){
+    check(certs[i].checkIssued(certs[i+1])&&certs[i].verify(certs[i+1].publicKey),'Apple 证书链校验失败',400);
+  }
+  const roots=appleRoots();
+  check(roots.length>0,'服务端未配置 Apple Root CA',503);
+  const top=certs[certs.length-1];
+  check(roots.some(root=>(top.fingerprint256===root.fingerprint256)||(top.checkIssued(root)&&top.verify(root.publicKey))),'Apple 根证书不受信任',400);
+  const verifier=createVerify('SHA256');
   verifier.update(`${parts[0]}.${parts[1]}`);
   verifier.end();
   check(verifier.verify(leaf.publicKey,b64url(parts[2])),'Apple 签名校验失败',400);
-  return JSON.parse(b64url(parts[1]).toString('utf8')) as Json;
+  const payload=JSON.parse(b64url(parts[1]).toString('utf8')) as Json;
+  const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
+  if(expectedBundle&&payload.bundleId!==undefined) check(String(payload.bundleId)===expectedBundle,'Apple Bundle ID 不匹配',400);
+  return payload;
 }
 
 function transactionPayload(signedTransactionInfo:string):Json{
@@ -94,24 +109,7 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
     purchasedAt?Math.floor(purchasedAt/1000):null,
     expiresAt?Math.floor(expiresAt/1000):null,
     revokedAt?Math.floor(revokedAt/1000):null,raw,store.now());
-  reconcile(store,original);
-}
 
-function reconcile(store:Store,original:string){
-  const rows=store.db.prepare('SELECT * FROM apple_transactions WHERE original_transaction_id=? ORDER BY COALESCE(expires_at,0) DESC').all(original) as Array<Record<string,any>>;
-  if(!rows.length)return;
-  const owner=rows[0].user_id as string;
-  const valid=rows.find(row=>!row.revoked_at&&Number(row.expires_at??0)>store.now());
-  if(!valid){
-    store.db.prepare("DELETE FROM membership_subscriptions WHERE user_id=? AND provider='apple'").run(owner);
-    return;
-  }
-  store.db.prepare(`
-    INSERT INTO membership_subscriptions(user_id,product_id,provider,order_id,started_at,expires_at,updated_at)
-    VALUES(?,?,?,?,?,?,?)
-    ON CONFLICT(user_id) DO UPDATE SET product_id=excluded.product_id,provider='apple',
-      order_id=excluded.order_id,started_at=excluded.started_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at
-  `).run(owner,valid.product_id,'apple',valid.transaction_id,Number(valid.purchased_at??store.now()),valid.expires_at,store.now());
 }
 
 export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authenticate:Authenticate){
