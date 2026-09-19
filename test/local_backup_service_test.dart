@@ -86,6 +86,107 @@ void main() {
     );
   });
 
+  test('encrypted archive protects SQLite contents and restores attachments', () async {
+    final sourceDirectory = await Directory.systemTemp.createTemp(
+      'jizhang-encrypted-backup-source-',
+    );
+    final targetDirectory = await Directory.systemTemp.createTemp(
+      'jizhang-encrypted-backup-target-',
+    );
+    final sourceDatabase = AppDatabase.forTesting(
+      NativeDatabase(
+        File(
+          '${sourceDirectory.path}/${LocalBackupService.databaseFileName}',
+        ),
+      ),
+    );
+    final targetDatabase = createMemoryDatabase();
+    final sourceService = LocalBackupService(
+      sourceDatabase,
+      documentsDirectory: () async => sourceDirectory,
+    );
+    final targetService = LocalBackupService(
+      targetDatabase,
+      documentsDirectory: () async => targetDirectory,
+    );
+
+    addTearDown(() async {
+      await sourceDatabase.close();
+      await targetDatabase.close();
+      await sourceDirectory.delete(recursive: true);
+      await targetDirectory.delete(recursive: true);
+    });
+
+    await sourceDatabase.customSelect('SELECT 1').get();
+    final attachment = File('${sourceDirectory.path}/invoice.txt');
+    await attachment.writeAsString('receipt-content', flush: true);
+    await sourceDatabase.customStatement('PRAGMA foreign_keys = OFF');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await sourceDatabase.customStatement(
+      'INSERT INTO transaction_attachments('
+      'id,book_id,transaction_id,path,name,mime_type,sort_order,size_in_bytes,checksum,created_at,updated_at,deleted_at'
+      ') VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL)',
+      [
+        'attachment-test',
+        'book-personal',
+        'transaction-test',
+        attachment.path,
+        'invoice.txt',
+        'text/plain',
+        0,
+        await attachment.length(),
+        null,
+        now,
+        now,
+      ],
+    );
+
+    final archive = await sourceService.exportEncryptedArchive(
+      password: 'correct horse battery staple',
+    );
+    expect(LocalBackupService.isEncryptedArchive(archive), isTrue);
+    expect(
+      String.fromCharCodes(archive.take(16)),
+      isNot('SQLite format 3\u0000'),
+    );
+
+    await expectLater(
+      targetService.restoreEncryptedArchive(
+        archive,
+        password: 'wrong-password',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      File(
+        '${targetDirectory.path}/${LocalBackupService.databaseFileName}${LocalBackupService.pendingRestoreSuffix}',
+      ).existsSync(),
+      isFalse,
+    );
+
+    await targetService.restoreEncryptedArchive(
+      archive,
+      password: 'correct horse battery staple',
+    );
+    final pending = File(
+      '${targetDirectory.path}/${LocalBackupService.databaseFileName}${LocalBackupService.pendingRestoreSuffix}',
+    );
+    expect(pending.existsSync(), isTrue);
+
+    final restored = sqlite3.open(pending.path);
+    addTearDown(restored.close);
+    final row = restored
+        .select(
+          'SELECT path,size_in_bytes FROM transaction_attachments WHERE id=?',
+          ['attachment-test'],
+        )
+        .single;
+    final restoredPath = row['path'] as String;
+    expect(restoredPath, isNot(attachment.path));
+    expect(await File(restoredPath).readAsString(), 'receipt-content');
+    expect(row['size_in_bytes'], 'receipt-content'.length);
+  });
+
   test('requires the core application tables', () async {
     final directory = await Directory.systemTemp.createTemp('jizhang-backup-');
     final sourcePath = '${directory.path}/invalid.sqlite';
