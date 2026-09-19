@@ -246,7 +246,8 @@ object AutoBookkeepingPendingStore {
         first: JSONObject,
         second: JSONObject,
     ): Boolean {
-        if (first.optString("sourceApp") != second.optString("sourceApp")) return false
+        val sameSource =
+            first.optString("sourceApp") == second.optString("sourceApp")
         if (first.optLong("amountInCents") != second.optLong("amountInCents")) return false
 
         val firstAt = first.optLong("timestamp", 0L)
@@ -259,15 +260,24 @@ object AutoBookkeepingPendingStore {
             return false
         }
 
+        val firstMerchant = MerchantNormalizer.normalize(first.optString("merchant"))
+        val secondMerchant = MerchantNormalizer.normalize(second.optString("merchant"))
+        val sameMerchant =
+            firstMerchant.isNotBlank() &&
+                secondMerchant.isNotBlank() &&
+                firstMerchant == secondMerchant
+
         val firstNotification =
             first.optString("scene") == "PAYMENT_NOTIFICATION"
         val secondNotification =
             second.optString("scene") == "PAYMENT_NOTIFICATION"
-        if (firstNotification != secondNotification) return true
+        if (firstNotification != secondNotification) {
+            // The same marketplace payment may be observed from the merchant
+            // app page and from the underlying Alipay/WeChat notification.
+            return sameSource || sameMerchant
+        }
 
-        val firstMerchant = MerchantNormalizer.normalize(first.optString("merchant"))
-        val secondMerchant = MerchantNormalizer.normalize(second.optString("merchant"))
-        return firstMerchant.isNotBlank() && firstMerchant == secondMerchant
+        return sameSource && sameMerchant
     }
 
     private fun isInvalidLegacyNotification(value: JSONObject): Boolean {
