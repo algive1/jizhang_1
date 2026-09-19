@@ -14,6 +14,7 @@ import '../../accounts/data/account_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../application/local_backup_service.dart';
 import '../domain/transaction_csv.dart';
+import '../../security/application/app_lock_service.dart';
 
 class DataExportPage extends ConsumerStatefulWidget {
   const DataExportPage({super.key});
@@ -25,17 +26,117 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
   bool _saving = false;
   bool _analyticsChanging = false;
   bool? _analyticsEnabled;
+  bool? _appLockEnabled;
+  bool _appLockChanging = false;
   String? _status;
 
   @override
   void initState() {
     super.initState();
     _loadAnalyticsPreference();
+    _loadAppLockPreference();
   }
 
   Future<void> _loadAnalyticsPreference() async {
     final enabled = await ref.read(productAnalyticsProvider).isEnabled();
     if (mounted) setState(() => _analyticsEnabled = enabled);
+  }
+
+  Future<void> _loadAppLockPreference() async {
+    final enabled = await ref.read(appLockServiceProvider).isEnabled();
+    if (mounted) setState(() => _appLockEnabled = enabled);
+  }
+
+  Future<void> _setAppLockEnabled(bool enabled) async {
+    if (_appLockChanging) return;
+    setState(() => _appLockChanging = true);
+    try {
+      final changed = await ref.read(appLockServiceProvider).setEnabled(enabled);
+      if (!mounted) return;
+      if (changed) {
+        setState(() => _appLockEnabled = enabled);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('设备未完成身份验证，应用锁设置没有改变')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('应用锁设置失败：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _appLockChanging = false);
+    }
+  }
+
+  Future<String?> _backupPassword({required bool confirm}) async {
+    final password = TextEditingController();
+    final confirmation = TextEditingController();
+    String? error;
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(confirm ? '设置备份密码' : '输入备份密码'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: password,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '备份密码',
+                  helperText: '至少 8 个字符，请妥善保存；忘记后无法恢复',
+                ),
+              ),
+              if (confirm) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: confirmation,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '再次输入'),
+                ),
+              ],
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    error!,
+                    style: const TextStyle(color: AppColors.warning),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = password.text.trim();
+                if (value.length < 8) {
+                  setDialogState(() => error = '密码至少需要 8 个字符');
+                  return;
+                }
+                if (confirm && value != confirmation.text.trim()) {
+                  setDialogState(() => error = '两次输入的密码不一致');
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: Text(confirm ? '创建备份' : '解密恢复'),
+            ),
+          ],
+        ),
+      ),
+    );
+    password.dispose();
+    confirmation.dispose();
+    return value;
   }
 
   Future<void> _setAnalyticsEnabled(bool enabled) async {
@@ -56,22 +157,28 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
   }
 
   Future<void> _exportBackup() async {
+    final password = await _backupPassword(confirm: true);
+    if (password == null || !mounted) return;
     setState(() {
       _saving = true;
       _status = null;
     });
     try {
-      final bytes = await ref.read(localBackupServiceProvider).exportDatabase();
+      final bytes = await ref
+          .read(localBackupServiceProvider)
+          .exportEncryptedArchive(password: password);
       final date = DateTime.now().toIso8601String().substring(0, 10);
       final uri = await FilePicker.saveFile(
-        fileName: '好好记账完整备份-$date.sqlite',
-        mimeType: 'application/vnd.sqlite3',
+        fileName: '好好记账完整备份-$date.hhbackup',
+        mimeType: 'application/octet-stream',
         bytes: bytes,
-        dialogTitle: '保存完整本地备份',
+        dialogTitle: '保存加密完整备份',
       );
       if (mounted) {
         setState(
-          () => _status = uri == null ? '已取消备份，未保存文件' : '完整本地备份已保存到所选位置',
+          () => _status = uri == null
+              ? '已取消备份，未保存文件'
+              : '加密完整备份已保存，数据库与现有附件均已包含',
         );
       }
     } on Object catch (error) {
@@ -86,7 +193,9 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('恢复本地备份？'),
-        content: const Text('恢复会覆盖当前本机账本。应用会先保留一份恢复前的数据库副本，确认继续吗？'),
+        content: const Text(
+          '恢复会覆盖当前本机账本。应用会先保留恢复前数据库副本；新格式备份还会恢复附件。确认继续吗？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -101,24 +210,39 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
     );
     if (confirmed != true || !mounted) return;
 
+    final result = await FilePicker.pickFile(
+      dialogTitle: '选择好好记账备份',
+      type: FileType.custom,
+      allowedExtensions: ['hhbackup', 'sqlite', 'db'],
+    );
+    final bytes = result == null ? null : await result.readAsBytes();
+    if (bytes == null || !mounted) {
+      setState(() => _status = '已取消恢复，未修改当前账本');
+      return;
+    }
+
+    String? password;
+    if (LocalBackupService.isEncryptedArchive(bytes)) {
+      password = await _backupPassword(confirm: false);
+      if (password == null || !mounted) return;
+    }
+
     setState(() {
       _saving = true;
       _status = null;
     });
     try {
-      final result = await FilePicker.pickFile(
-        dialogTitle: '选择好好记账完整备份',
-        type: FileType.custom,
-        allowedExtensions: ['sqlite', 'db'],
-      );
-      final bytes = result == null ? null : await result.readAsBytes();
-      if (bytes == null) {
-        if (mounted) setState(() => _status = '已取消恢复，未修改当前账本');
-        return;
+      final service = ref.read(localBackupServiceProvider);
+      if (password != null) {
+        await service.restoreEncryptedArchive(bytes, password: password);
+      } else {
+        // Backward compatibility with the old raw SQLite backup format.
+        await service.restoreDatabase(bytes);
       }
-      await ref.read(localBackupServiceProvider).restoreDatabase(bytes);
       if (mounted) {
-        setState(() => _status = '完整备份已准备，请完全关闭并重新打开应用后生效');
+        setState(
+          () => _status = '备份已安全暂存。请完全关闭并重新打开应用后切换到恢复的数据。',
+        );
       }
     } on Object catch (error) {
       if (mounted) setState(() => _status = '恢复失败：$error');
@@ -239,7 +363,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
               children: [
                 Text('完整本地备份', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 12),
-                const Text('备份当前 SQLite 账本，包含流水、账户、分类、目标、预算、账本和本地设置，可在本机恢复。'),
+                const Text('导出密码加密的完整备份，包含 SQLite 账本与现有附件。备份密码不会上传或保存，恢复时必须重新输入。'),
                 const SizedBox(height: 12),
                 if (databaseState.isLoading)
                   const LinearProgressIndicator()
@@ -247,20 +371,43 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                   const Text('本地数据库读取失败，暂时无法备份或恢复')
                 else
                   const Text(
-                    '恢复前会自动保留一份恢复前数据库副本。恢复后需完全关闭并重新打开应用才会切换账本。',
+                    '恢复前会校验密码、文件完整性与数据库结构，并安全暂存到下次启动再切换，避免替换正在使用的数据库。',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: !databaseReady || _saving ? null : _exportBackup,
                   icon: const Icon(Icons.save_alt_outlined),
-                  label: Text(_saving ? '正在处理…' : '导出完整备份'),
+                  label: Text(_saving ? '正在处理…' : '导出加密完整备份'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: !databaseReady || _saving ? null : _restoreBackup,
                   icon: const Icon(Icons.restore_outlined),
                   label: const Text('从备份恢复'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('隐私与设备安全', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                const Text(
+                  '本地 SQLite 数据库已使用设备随机密钥加密；密钥保存在系统安全存储中，不写入数据库或备份文件。',
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('应用锁'),
+                  subtitle: const Text('从后台返回时使用面容、指纹或设备密码验证'),
+                  value: _appLockEnabled ?? false,
+                  onChanged: _appLockEnabled == null || _appLockChanging
+                      ? null
+                      : _setAppLockEnabled,
                 ),
               ],
             ),
@@ -310,7 +457,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 Text('当前账本保存在本机。CSV 适合表格查看和对账；完整 SQLite 备份可用于应用内恢复。'),
                 SizedBox(height: 8),
                 Text(
-                  '卸载应用可能丢失本地账本，请先导出完整备份。备份文件不包含独立保存的附件文件，跨设备恢复前需另行保留附件。',
+                  '卸载应用可能丢失本地账本，请先导出加密完整备份。新格式 .hhbackup 同时包含数据库与现有附件；旧 .sqlite/.db 备份仍可兼容恢复但不含附件。',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
