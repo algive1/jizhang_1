@@ -393,6 +393,14 @@ class SessionRepository {
         'confirmation': 'DELETE',
       },
     );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await database.ensureDataBindingSchema();
+    await database.customStatement(
+      'UPDATE device_data_binding SET '
+      'bound_user_id=NULL,cloud_sync_enabled=0,bound_at=NULL,last_sync_at=NULL,'
+      'last_cloud_revision=0,last_seen_remote_revision=0,updated_at=? WHERE id=1',
+      [now],
+    );
     await invalidate();
   }
 
