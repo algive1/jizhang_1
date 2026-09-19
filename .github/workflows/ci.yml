@@ -87,6 +87,11 @@ jobs:
       - name: Build iOS simulator
         run: flutter build ios --simulator --debug
 
+      - name: Verify APNs build environments
+        run: |
+          xcodebuild -project ios/Runner.xcodeproj -scheme Runner -configuration Debug -showBuildSettings | grep -q "APS_ENVIRONMENT = development"
+          xcodebuild -project ios/Runner.xcodeproj -scheme Runner -configuration Release -showBuildSettings | grep -q "APS_ENVIRONMENT = production"
+
   server-core:
     name: Server core checks
     runs-on: ubuntu-latest
