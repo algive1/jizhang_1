@@ -46,6 +46,9 @@ object AutoBookkeepingPendingStore {
         val pending = parse(preferences.getString(KEY_PENDING, null))
 
         if (pending != null) {
+            if (isInvalidLegacyNotification(pending)) {
+                preferences.edit().remove(KEY_PENDING).apply()
+            } else {
             val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
             if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
                 preferences.edit().remove(KEY_PENDING).apply()
@@ -69,6 +72,7 @@ object AutoBookkeepingPendingStore {
                     return PendingEnqueueDecision.ACCEPTED
                 }
                 return PendingEnqueueDecision.BUSY
+            }
             }
         }
 
@@ -120,6 +124,10 @@ object AutoBookkeepingPendingStore {
     fun readCandidate(context: Context): PaymentCandidate? {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val value = parse(preferences.getString(KEY_PENDING, null)) ?: return null
+        if (isInvalidLegacyNotification(value)) {
+            complete(context, remember = false)
+            return null
+        }
         val createdAt = value.optLong(KEY_CREATED_AT, 0L)
         if (createdAt <= 0L || System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS) {
             complete(context, remember = false)
@@ -142,6 +150,10 @@ object AutoBookkeepingPendingStore {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY_PENDING, null),
         ) ?: return null
+        if (isInvalidLegacyNotification(value)) {
+            complete(context, remember = false)
+            return null
+        }
         val createdAt = value.optLong(KEY_CREATED_AT, 0L)
         if (createdAt <= 0L || System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS) {
             complete(context, remember = false)
@@ -211,6 +223,12 @@ object AutoBookkeepingPendingStore {
         val firstMerchant = MerchantNormalizer.normalize(first.optString("merchant"))
         val secondMerchant = MerchantNormalizer.normalize(second.optString("merchant"))
         return firstMerchant.isNotBlank() && firstMerchant == secondMerchant
+    }
+
+    private fun isInvalidLegacyNotification(value: JSONObject): Boolean {
+        if (value.optString("scene") != "PAYMENT_NOTIFICATION") return false
+        val merchant = value.optString("merchant").trim()
+        return merchant.isBlank() || merchant == "支付通知待确认"
     }
 
     private fun parse(raw: String?): JSONObject? = raw?.let {
