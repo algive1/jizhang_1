@@ -117,7 +117,7 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
           ),
           const SizedBox(height: 16),
           if (records.isEmpty)
-            const AppCard(
+            AppCard(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 28),
                 child: Center(
