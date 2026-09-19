@@ -34,7 +34,7 @@ enum _CalendarHeaderAction {
 class _ConsumptionCalendarPageState
     extends ConsumerState<ConsumptionCalendarPage> {
   DateTime get _today => DateTime.now();
-  late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _month;
   int? _selectedDay;
   String? _bookFilterId;
   _CalendarViewMode _viewMode = _CalendarViewMode.month;
@@ -45,7 +45,9 @@ class _ConsumptionCalendarPageState
     // Calendar scope starts from the app's active ledger, but remains local to
     // this page. Changing it must never switch the global active ledger.
     _bookFilterId = ref.read(activeBookIdProvider);
-    _selectedDay = _today.day;
+    final now = _today;
+    _month = DateTime(now.year, now.month);
+    _selectedDay = now.day;
   }
 
   @override
