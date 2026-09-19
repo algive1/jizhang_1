@@ -94,19 +94,22 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
 
   Future<void> _loadMembers() async {
     if (mounted) setState(() => _membersLoading = true);
-    final book = ref.read(activeBookProvider);
-    if (book?.sharedId == null) return;
-    final service = ref.read(familyServiceProvider);
-    final members = await service.memberDetails(book!.sharedId!);
-    final invites = book.canManage
-        ? await service.invitations(book.sharedId!)
-        : <FamilyInvitation>[];
-    if (mounted) {
-      setState(() {
-        _members = members;
-        _invitations = invites;
-        _membersLoading = false;
-      });
+    try {
+      final book = ref.read(activeBookProvider);
+      if (book?.sharedId == null) return;
+      final service = ref.read(familyServiceProvider);
+      final members = await service.memberDetails(book!.sharedId!);
+      final invites = book.canManage
+          ? await service.invitations(book.sharedId!)
+          : <FamilyInvitation>[];
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _invitations = invites;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _membersLoading = false);
     }
   }
 
