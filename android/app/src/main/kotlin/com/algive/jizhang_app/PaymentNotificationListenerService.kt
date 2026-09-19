@@ -165,11 +165,15 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 title = title,
                 text = text,
                 timestamp = timestamp,
-            ) ?: run {
-                PaymentNotificationStore.acknowledge(
-                    this,
-                    listOfNotNull(raw["id"]),
-                )
+            )
+            if (candidate == null) {
+                val rejectedId = raw["id"].orEmpty()
+                if (rejectedId.isNotEmpty()) {
+                    PaymentNotificationStore.acknowledge(
+                        this,
+                        listOf(rejectedId),
+                    )
+                }
                 continue
             }
             val id = raw["id"].orEmpty()
