@@ -67,22 +67,24 @@ function verifyAppleJws(jws:string):Json{
   const chain=header.x5c;
   check(header.alg==='ES256','Apple JWS 算法无效',400);
   check(Array.isArray(chain)&&chain.length>=2,'Apple 签名证书链缺失',400);
-  const certs=chain.map(value=>new X509Certificate(Buffer.from(String(value),'base64')));
-  const leaf=certs[0];
+  const certs=(chain as unknown[]).map(value=>new X509Certificate(Buffer.from(String(value),'base64')));
+  const leaf=certs[0]!;
   const now=Date.now();
   check(Date.parse(leaf.validFrom)<=now&&Date.parse(leaf.validTo)>=now,'Apple 签名证书已过期',400);
   for(let i=0;i<certs.length-1;i++){
-    check(certs[i].checkIssued(certs[i+1])&&certs[i].verify(certs[i+1].publicKey),'Apple 证书链校验失败',400);
+    const child=certs[i]!;
+    const issuer=certs[i+1]!;
+    check(child.checkIssued(issuer)&&child.verify(issuer.publicKey),'Apple 证书链校验失败',400);
   }
   const roots=appleRoots();
   check(roots.length>0,'服务端未配置 Apple Root CA',503);
-  const top=certs[certs.length-1];
+  const top=certs[certs.length-1]!;
   check(roots.some(root=>(top.fingerprint256===root.fingerprint256)||(top.checkIssued(root)&&top.verify(root.publicKey))),'Apple 根证书不受信任',400);
   const verifier=createVerify('SHA256');
-  verifier.update(`${parts[0]}.${parts[1]}`);
+  verifier.update(`${parts[0]!}.${parts[1]!}`);
   verifier.end();
-  check(verifier.verify(leaf.publicKey,b64url(parts[2])),'Apple 签名校验失败',400);
-  const payload=JSON.parse(b64url(parts[1]).toString('utf8')) as Json;
+  check(verifier.verify(leaf.publicKey,b64url(parts[2]!)),'Apple 签名校验失败',400);
+  const payload=JSON.parse(b64url(parts[1]!).toString('utf8')) as Json;
   const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
   if(expectedBundle&&payload.bundleId!==undefined) check(String(payload.bundleId)===expectedBundle,'Apple Bundle ID 不匹配',400);
   return payload;
