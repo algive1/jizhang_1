@@ -235,7 +235,7 @@ class _AutoBookkeepingConfirmPageState
               children: [
                 AppSelect<String>(
                   initialValue: selectedBookId,
-                  decoration: const InputDecoration(labelText: '账本'),
+                  decoration: appFieldDecoration('账本'),
                   items: [
                     for (final book in books)
                       DropdownMenuItem(value: book.id, child: Text(book.name)),
@@ -251,7 +251,7 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedAccountId,
-                  decoration: const InputDecoration(labelText: '支付账户'),
+                  decoration: appFieldDecoration('支付账户'),
                   items: [
                     for (final account in accounts)
                       DropdownMenuItem(
@@ -266,7 +266,7 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedCategoryId,
-                  decoration: const InputDecoration(labelText: '支出分类'),
+                  decoration: appFieldDecoration('支出分类'),
                   items: [
                     for (final category in expenseCategories)
                       DropdownMenuItem(
