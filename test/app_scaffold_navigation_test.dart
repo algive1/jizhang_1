@@ -78,7 +78,7 @@ void main() {
       final lines = File(path).readAsLinesSync();
       for (var index = 0; index < lines.length; index++) {
         if (!lines[index].contains('showModalBottomSheet')) continue;
-        final end = (index + 12).clamp(0, lines.length);
+        final end = index + 12 < lines.length ? index + 12 : lines.length;
         final callHead = lines.sublist(index, end).join('\n');
         expect(
           callHead,
