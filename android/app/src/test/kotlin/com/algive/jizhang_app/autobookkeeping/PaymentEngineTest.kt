@@ -7,6 +7,8 @@ import com.algive.jizhang_app.autobookkeeping.parser.PaymentNotificationCandidat
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.*
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentParserKind
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -26,6 +28,69 @@ class PaymentEngineTest {
     @Test fun chatQuoteRejected() { assertNull(parse("他说支付成功", "收款方", "商店", "￥20")) }
     @Test fun wrongAppRejected() { assertNull(PaymentSceneDetector().detect("other", nodes("支付成功", "收款方", "商店", "￥20"))) }
     @Test fun failureRejected() { assertNull(parse("支付失败", "收款方", "商店", "￥20")) }
+    @Test fun builtInRuleRegistryCoversEverySupportedPackage() {
+        val registry = AutoBookkeepingRuleRegistry.builtIn()
+        assertEquals(
+            setOf(
+                "com.tencent.mm",
+                "com.eg.android.AlipayGphone",
+                "com.unionpay",
+                "com.sankuai.meituan",
+                "com.sankuai.meituan.takeout",
+                "com.jingdong.app.mall",
+                "com.xunmeng.pinduoduo",
+                "com.ss.android.ugc.aweme",
+                "com.ss.android.ugc.aweme.mobile",
+            ),
+            registry.supportedPackages,
+        )
+        assertEquals(
+            setOf(
+                "WalletPayUI",
+                "WalletOrderInfo",
+                "WalletOfflineCoinPurseUI",
+                "WalletOrderInfoNewUI",
+                "UIPageFragmentActivity",
+            ),
+            registry.ruleForKind(PaymentParserKind.WECHAT)?.activityHints,
+        )
+    }
+
+    @Test fun registryKeepsSourceAndScenePerPaymentApp() {
+        val expected = mapOf(
+            "com.eg.android.AlipayGphone" to
+                ("ALIPAY" to "ALIPAY_PAYMENT_SUCCESS"),
+            "com.unionpay" to
+                ("UNIONPAY" to "UNIONPAY_PAYMENT_SUCCESS"),
+            "com.jingdong.app.mall" to
+                ("JD" to "JD_PAYMENT_SUCCESS"),
+            "com.xunmeng.pinduoduo" to
+                ("PINDUODUO" to "PINDUODUO_PAYMENT_SUCCESS"),
+            "com.ss.android.ugc.aweme" to
+                ("DOUYIN" to "DOUYIN_PAYMENT_SUCCESS"),
+        )
+        val detector = PaymentSceneDetector(AutoBookkeepingRuleRegistry.builtIn())
+        expected.forEach { (packageName, sourceAndScene) ->
+            val candidate = detector.detect(
+                packageName,
+                nodes(
+                    "支付成功",
+                    "商户",
+                    "测试商户",
+                    "实付金额",
+                    "18.80元",
+                ),
+                100000,
+            )
+            assertEquals(packageName, sourceAndScene.first, candidate?.sourceApp)
+            assertEquals(
+                packageName,
+                sourceAndScene.second,
+                candidate?.scene?.scene,
+            )
+        }
+    }
+
     @Test fun supportedAppsUseConservativeGenericParser() {
         val candidate = PaymentSceneDetector().detect(
             "com.sankuai.meituan",
