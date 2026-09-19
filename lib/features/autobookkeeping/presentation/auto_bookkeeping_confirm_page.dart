@@ -172,39 +172,49 @@ class _AutoBookkeepingConfirmPageState
               _matchedRefundOriginal?.bookId == bookId
           ? _matchedRefundOriginal
           : null;
-      final saved = matchedRefund == null
-          ? await ref
-                .read(quickBookkeepingServiceProvider)
-                .save(
-                  QuickBookkeepingRequest(
-                    transactionId: 'auto-${candidate.fingerprint}',
-                    bookId: bookId,
-                    type: transactionType,
-                    amount: candidate.amountInCents / 100,
-                    accountId: account.id,
-                    categoryId: category.id,
-                    categoryName: category.name,
-                    merchant: candidate.merchant,
-                    note: candidate.note,
-                    occurredAt: candidate.timestamp,
-                    source: TransactionSource.auto,
-                    userCorrected: true,
-                    metadata: metadata,
-                  ),
-                )
-          : await RefundService(
-              ref.read(databaseProvider),
-              bookId: bookId,
-            ).register(
-              original: matchedRefund,
-              amount: candidate.amountInCents / 100,
-              category: category,
-              occurredAt: candidate.timestamp,
-              transactionId: 'auto-${candidate.fingerprint}',
-              note: candidate.note ?? '自动识别退款：${candidate.merchant}',
-              metadataJson: jsonEncode(metadata),
-              source: TransactionSource.auto,
-            );
+      TransactionRecord saved;
+      String? committedWarning;
+      if (matchedRefund != null) {
+        saved = await RefundService(
+          ref.read(databaseProvider),
+          bookId: bookId,
+        ).register(
+          original: matchedRefund,
+          amount: candidate.amountInCents / 100,
+          category: category,
+          occurredAt: candidate.timestamp,
+          transactionId: 'auto-${candidate.fingerprint}',
+          note: candidate.note ?? '自动识别退款：${candidate.merchant}',
+          metadataJson: jsonEncode(metadata),
+          source: TransactionSource.auto,
+        );
+      } else {
+        try {
+          saved = await ref
+              .read(quickBookkeepingServiceProvider)
+              .save(
+                QuickBookkeepingRequest(
+                  transactionId: 'auto-${candidate.fingerprint}',
+                  bookId: bookId,
+                  type: transactionType,
+                  amount: candidate.amountInCents / 100,
+                  accountId: account.id,
+                  categoryId: category.id,
+                  categoryName: category.name,
+                  merchant: candidate.merchant,
+                  note: candidate.note,
+                  occurredAt: candidate.timestamp,
+                  source: TransactionSource.auto,
+                  userCorrected: true,
+                  metadata: metadata,
+                ),
+              );
+        } on BookkeepingCommittedException catch (error) {
+          if (error.records.length != 1) rethrow;
+          saved = error.records.single;
+          committedWarning = error.stage;
+        }
+      }
 
       var screenshotWarning = false;
       if (screenshotPath != null) {
@@ -260,12 +270,16 @@ class _AutoBookkeepingConfirmPageState
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       context.pop();
+      final warningParts = <String>[
+        if (committedWarning != null) '部分本地增强处理未完成',
+        if (screenshotWarning) '支付截图未能附加',
+      ];
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            screenshotWarning
-                ? '流水已保存，但支付截图未能附加'
-                : '已保存到本地账本',
+            warningParts.isEmpty
+                ? '已保存到本地账本'
+                : '流水已保存，但${warningParts.join('、')}',
           ),
         ),
       );
