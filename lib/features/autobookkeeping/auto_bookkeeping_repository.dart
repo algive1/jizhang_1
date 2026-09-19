@@ -7,6 +7,7 @@ import '../../core/database/database_seeder.dart';
 import '../../core/models/transaction_record.dart';
 import '../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../settings/data/app_settings_repository.dart';
+import '../intelligence/domain/merchant_classification_service.dart';
 import '../transactions/data/transactions_repository.dart';
 
 /// This adapter deliberately uses the existing ledger service without its AI
@@ -75,12 +76,13 @@ class AutoBookkeepingRepository {
   Future<bool> possibleDuplicate(Map<String, dynamic> data) async {
     final cents = (data['amountInCents'] as num).toInt();
     final merchant = data['merchant'] as String;
+    final type = _transactionType(data['transactionType']?.toString());
     final since = DateTime.now().subtract(const Duration(minutes: 5));
     final rows =
         await (db.select(db.transactionEntries)..where(
               (t) =>
                   t.deletedAt.isNull() &
-                  t.type.equals('expense') &
+                  t.type.equals(type.name) &
                   t.amountInCents.equals(cents) &
                   (t.createdAt.isBiggerOrEqualValue(since) |
                       t.occurredAt.isBiggerOrEqualValue(since)),
@@ -105,6 +107,10 @@ class AutoBookkeepingRepository {
         throw StateError('请选择可用的个人账本');
       final accountId = data['accountId'] as String;
       final categoryId = data['categoryId'] as String;
+      final transactionType = _transactionType(
+        data['transactionType']?.toString(),
+      );
+      final expectedCategoryType = _categoryType(transactionType);
       final account = await db.accountDao.findById(accountId);
       final category = await db.categoryDao.findById(categoryId);
       if (account == null ||
@@ -114,7 +120,7 @@ class AutoBookkeepingRepository {
         throw StateError('账户已失效，请重新选择');
       if (category == null ||
           category.isArchived ||
-          category.type != 'expense' ||
+          category.type != expectedCategoryType ||
           category.bookId != bookId)
         throw StateError('分类已失效，请重新选择');
       final cents = (data['amountInCents'] as num).toInt();
@@ -133,12 +139,13 @@ class AutoBookkeepingRepository {
         QuickBookkeepingRequest(
           transactionId: 'auto-$id',
           bookId: bookId,
-          type: TransactionType.expense,
+          type: transactionType,
           amount: cents / 100,
           accountId: accountId,
           categoryId: categoryId,
           categoryName: category.name,
           merchant: merchant,
+          note: data['note']?.toString(),
           occurredAt: DateTime.fromMillisecondsSinceEpoch(
             (data['timestamp'] as num).toInt(),
           ),
@@ -146,11 +153,19 @@ class AutoBookkeepingRepository {
           userCorrected: true,
           metadata: {
             'autobookkeeping': {
-              'sourceApp': 'WECHAT',
-              'scene': 'PAYMENT_SUCCESS',
+              'sourceApp': data['sourceApp']?.toString() ?? 'PAYMENT_APP',
+              'scene': data['scene']?.toString() ?? 'PAYMENT_SUCCESS',
               'paymentMethod': data['paymentMethod'],
               'fingerprint': data['fingerprint'],
-              'ruleVersion': 1,
+              'transactionType': transactionType.name,
+              if (data['orderId'] != null) 'orderId': data['orderId'],
+              if (data['identifierSuffix'] != null)
+                'identifierSuffix': data['identifierSuffix'],
+              if (data['originalAmountInCents'] != null)
+                'originalAmountInCents': data['originalAmountInCents'],
+              if (data['discountAmountInCents'] != null)
+                'discountAmountInCents': data['discountAmountInCents'],
+              'ruleVersion': 2,
             },
           },
         ),
@@ -158,9 +173,14 @@ class AutoBookkeepingRepository {
       final preferences = jsonDecode(
         await settings.get(preferenceKey) ?? '{}',
       ) as Map<String, dynamic>;
-      final old = preferences[merchant] as Map<String, dynamic>?;
-      preferences[merchant] = {
-        'merchantKey': merchant,
+      final merchantKey = const MerchantNormalizer().normalize(merchant);
+      final old =
+          (preferences[merchantKey] ?? preferences[merchant])
+              as Map<String, dynamic>?;
+      preferences.remove(merchant);
+      preferences[merchantKey] = {
+        'merchantKey': merchantKey,
+        'merchantDisplay': merchant,
         'categoryId': categoryId,
         'accountId': accountId,
         'bookId': bookId,
@@ -180,4 +200,18 @@ class AutoBookkeepingRepository {
       return {'saved': true, 'id': 'auto-$id'};
     });
   }
+  TransactionType _transactionType(String? value) => switch (value) {
+    'INCOME' || 'income' => TransactionType.income,
+    'REFUND' || 'refund' => TransactionType.refund,
+    'REIMBURSEMENT' || 'reimbursement' => TransactionType.reimbursement,
+    _ => TransactionType.expense,
+  };
+
+  String _categoryType(TransactionType type) => switch (type) {
+    TransactionType.income ||
+    TransactionType.refund ||
+    TransactionType.reimbursement ||
+    TransactionType.borrow => 'income',
+    _ => 'expense',
+  };
 }
