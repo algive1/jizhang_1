@@ -63,7 +63,7 @@ function appleRoots():X509Certificate[]{
 function verifyAppleJws(jws:string):Json{
   const parts=jws.split('.');
   check(parts.length===3,'Apple 签名数据格式无效',400);
-  const header=JSON.parse(b64url(parts[0]).toString('utf8')) as Json;
+  const header=JSON.parse(b64url(parts[0]!).toString('utf8')) as Json;
   const chain=header.x5c;
   check(header.alg==='ES256','Apple JWS 算法无效',400);
   check(Array.isArray(chain)&&chain.length>=2,'Apple 签名证书链缺失',400);
