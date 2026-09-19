@@ -584,10 +584,26 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun isAccessibilityGranted(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            ?: return false
-        val expected = ComponentName(this, "${packageName}.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService")
-        return enabled.split(":").any { ComponentName.unflattenFromString(it) == expected }
+        val accessibilityEnabled = runCatching {
+            Settings.Secure.getInt(
+                contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED,
+                0,
+            ) == 1
+        }.getOrDefault(false)
+        if (!accessibilityEnabled) return false
+
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+        val expected = ComponentName(
+            this,
+            "${packageName}.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService",
+        )
+        return enabled.split(":").any {
+            ComponentName.unflattenFromString(it) == expected
+        }
     }
 
     private fun reconcileAutoBookkeepingRuntime() {
