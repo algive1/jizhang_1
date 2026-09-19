@@ -91,6 +91,7 @@ flutter:
 
   assets:
     - assets/images/
+    - 微信图片_20260919140237_156_240.png
     - assets/images/membership/
     - assets/config/
 
