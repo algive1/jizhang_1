@@ -57,7 +57,7 @@ class TransactionTile extends StatelessWidget {
               ),
             ),
             if (showDivider)
-              const Divider(height: 1, indent: 50, color: context.appDivider),
+              Divider(height: 1, indent: 50, color: context.appDivider),
           ],
         ),
       ),
