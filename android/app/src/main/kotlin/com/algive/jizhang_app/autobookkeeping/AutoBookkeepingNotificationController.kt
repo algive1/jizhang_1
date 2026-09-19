@@ -64,7 +64,7 @@ object AutoBookkeepingNotificationController {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setContentTitle("好好记账 · 自动记账已开启")
-            .setContentText("正在监听支持的付款页面，点击查看设置")
+            .setContentText("正在监听支持的交易结果页面，点击查看设置")
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
