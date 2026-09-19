@@ -8,7 +8,7 @@ abstract interface class AutoBookkeepingSettingsBridge {
   Future<void> openOverlaySettings();
   Future<bool> isEnabled();
   Future<bool> isNotificationGranted();
-  Future<void> requestNotificationPermission();
+  Future<bool> requestNotificationPermission();
   Future<void> setEnabled(bool enabled);
 }
 
@@ -64,8 +64,14 @@ class MethodChannelAutoBookkeepingSettings
   }
 
   @override
-  Future<void> requestNotificationPermission() =>
-      _invokeSettings('requestNotificationPermission');
+  Future<bool> requestNotificationPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestNotificationPermission') ??
+          false;
+    } on MissingPluginException {
+      throw StateError('自动记账仅支持 Android');
+    }
+  }
 
   @override
   Future<void> setEnabled(bool enabled) async {
