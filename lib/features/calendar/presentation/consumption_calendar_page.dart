@@ -147,7 +147,6 @@ class _ConsumptionCalendarPageState
         padding: EdgeInsets.zero,
         children: [
           _CalendarHeroHeader(
-            month: _month,
             previousRecordedMonth: previousRecorded,
             nextRecordedMonth: nextRecorded,
             onBack: () => context.canPop() ? context.pop() : context.go('/'),
@@ -362,7 +361,6 @@ class _ConsumptionCalendarPageState
 
 class _CalendarHeroHeader extends StatelessWidget {
   const _CalendarHeroHeader({
-    required this.month,
     required this.previousRecordedMonth,
     required this.nextRecordedMonth,
     required this.onBack,
@@ -370,7 +368,6 @@ class _CalendarHeroHeader extends StatelessWidget {
     required this.onAction,
   });
 
-  final DateTime month;
   final DateTime? previousRecordedMonth;
   final DateTime? nextRecordedMonth;
   final VoidCallback onBack;
@@ -510,7 +507,7 @@ class _CalendarToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 350;
+        final compact = constraints.maxWidth < 330;
         if (compact) {
           return Column(
             children: [
