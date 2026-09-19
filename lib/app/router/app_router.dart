@@ -31,6 +31,8 @@ import '../../features/messages/presentation/message_center_page.dart';
 import '../../features/support/presentation/feedback_page.dart';
 import '../../features/support/presentation/help_page.dart';
 import '../../features/support/presentation/about_page.dart';
+import '../../features/support/presentation/support_tickets_page.dart';
+import '../../features/support/presentation/support_ticket_detail_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_logs_page.dart';
@@ -213,6 +215,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'feedback',
                 builder: (context, state) => const FeedbackPage(),
+              ),
+              GoRoute(
+                path: 'support-tickets',
+                builder: (context, state) => const SupportTicketsPage(),
+                routes: [
+                  GoRoute(
+                    path: ':ticketId',
+                    builder: (context, state) => SupportTicketDetailPage(
+                      ticketId: state.pathParameters['ticketId']!,
+                    ),
+                  ),
+                ],
               ),
               GoRoute(
                 path: 'about',
