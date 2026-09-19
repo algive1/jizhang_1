@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../sharing/data/shared_api.dart';
+import '../../sharing/data/session_repository.dart';
 
 class SystemMessage {
   const SystemMessage({
@@ -91,3 +92,15 @@ class SystemMessageService {
 final systemMessageServiceProvider = Provider<SystemMessageService>(
   (ref) => SystemMessageService(ref.watch(sharedApiProvider)),
 );
+
+
+final systemUnreadCountProvider = FutureProvider<int>((ref) async {
+  final session = ref.read(sessionRepositoryProvider);
+  await session.initialize();
+  if (session.userId == null) return 0;
+  try {
+    return (await ref.read(systemMessageServiceProvider).load()).unread;
+  } on Object {
+    return 0;
+  }
+});
