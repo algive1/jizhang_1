@@ -29,6 +29,14 @@ class PaymentNotificationCandidateParser {
             else -> "EXPENSE"
         }
 
+        if (
+            packageName == WECHAT_PACKAGE &&
+            transactionType != "EXPENSE" &&
+            !WECHAT_CONTEXT_PATTERN.containsMatchIn(content)
+        ) {
+            return null
+        }
+
         if (transactionType == "EXPENSE") {
             if (REJECT_PATTERN.containsMatchIn(content)) return null
             val hasStrongSuccess = SUCCESS_PATTERN.containsMatchIn(content)
