@@ -15,6 +15,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../voice/application/speech_recognition_service.dart';
 import '../application/local_ocr_service.dart';
+import '../application/bill_screenshot_parser.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class ReceiptOcrPage extends ConsumerStatefulWidget {
@@ -326,9 +327,9 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
       );
       if (image == null) return;
       final ocr = await const LocalOcrService().recognize(image.path);
-      final parsed = await ref
-          .read(voiceTransactionParserProvider)
-          .parse(ocr.text);
+      final structured = const BillScreenshotParser().parse(ocr);
+      final parsed = structured ??
+          await ref.read(voiceTransactionParserProvider).parse(ocr.text);
       if (!mounted) return;
       setState(() {
         _rawText = ocr.text;
@@ -390,6 +391,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
           metadata: {
             'ocrParser': item.source.name,
             'ocrConfidence': item.confidence,
+            'ocrLayoutAware': true,
           },
         ),
       );
