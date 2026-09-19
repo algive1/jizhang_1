@@ -248,14 +248,14 @@ class _AutoBookkeepingConfirmPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '已识别支付结果',
+                '已识别${_transactionLabel(transactionType)}',
                 style: TextStyle(color: context.appSecondaryText),
               ),
               const SizedBox(height: 8),
               Text(
                 '¥${(candidate.amountInCents / 100).toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: AppColors.expense,
+                style: TextStyle(
+                  color: _amountColor(transactionType),
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
                 ),
@@ -383,7 +383,10 @@ class _AutoBookkeepingConfirmPageState
                       .where((item) => item.id == selectedCategoryId)
                       .firstOrNull;
                   if (account == null || category == null) {
-                    setState(() => _message = '请选择支付账户和支出分类');
+                    setState(
+                      () => _message =
+                          '请选择支付账户和${categoryType == CategoryType.income ? '收入' : '支出'}分类',
+                    );
                     return;
                   }
                   unawaited(
@@ -453,6 +456,21 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.reimbursement ||
     TransactionType.borrow => CategoryType.income,
     _ => CategoryType.expense,
+  };
+
+  String _transactionLabel(TransactionType type) => switch (type) {
+    TransactionType.income => '收入',
+    TransactionType.refund => '退款',
+    TransactionType.reimbursement => '报销回款',
+    _ => '支出',
+  };
+
+  Color _amountColor(TransactionType type) => switch (type) {
+    TransactionType.income ||
+    TransactionType.refund ||
+    TransactionType.reimbursement ||
+    TransactionType.borrow => AppColors.income,
+    _ => AppColors.expense,
   };
 
   String _paymentChannel(String source) => switch (source) {
