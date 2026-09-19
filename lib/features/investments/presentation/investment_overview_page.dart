@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../data/investment_repository.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_portfolio.dart';
@@ -13,6 +12,7 @@ import 'investment_states.dart';
 import 'investment_summary_card.dart';
 import 'investment_type_picker.dart';
 import 'investment_widgets.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// The five top-level tabs. `null` is the 总览 tab.
 typedef _InvestmentTab = InvestmentAssetType?;
@@ -169,7 +169,7 @@ class _InvestmentTabBar extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: selected == item.$1
-                        ? AppColors.primary
+                        ? context.appPrimary
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -184,7 +184,7 @@ class _InvestmentTabBar extends StatelessWidget {
                           : FontWeight.w500,
                       color: selected == item.$1
                           ? Colors.white
-                          : AppColors.textSecondary,
+                          : context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -210,8 +210,8 @@ class _Header extends StatelessWidget {
         IconButton(
           key: const ValueKey('investment-back'),
           onPressed: onBack,
-          icon: const Icon(Icons.chevron_left, size: 26),
-          color: AppColors.textPrimary,
+          icon: Icon(Icons.chevron_left, size: 26),
+          color: context.appPrimaryText,
           tooltip: '返回资产总览',
         ),
         const Expanded(
@@ -221,15 +221,15 @@ class _Header extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
         ),
         IconButton(
           key: const ValueKey('investment-add-action'),
           onPressed: onAdd,
-          icon: const Icon(Icons.add_circle_outline, size: 22),
-          color: AppColors.primaryDark,
+          icon: Icon(Icons.add_circle_outline, size: 22),
+          color: context.appPrimary,
           tooltip: '添加投资',
         ),
       ],
@@ -363,7 +363,7 @@ class _TrendSection extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +378,7 @@ class _TrendSection extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: context.appPrimaryText,
                   ),
                 ),
               ),
@@ -442,7 +442,7 @@ class _PositionsList extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xF7FFFFFC),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+      border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
     child: Column(
       children: [
@@ -453,7 +453,7 @@ class _PositionsList extends StatelessWidget {
             onTap: () => onOpenHolding(positions[i].holding.id),
           ),
           if (i != positions.length - 1)
-            const Divider(height: 1, color: AppColors.divider),
+            const Divider(height: 1, color: context.appDivider),
         ],
       ],
     ),
@@ -493,10 +493,10 @@ class _CategoryTab extends StatelessWidget {
             trailing: TextButton.icon(
               key: ValueKey('investment-category-add-${type.name}'),
               onPressed: onAdd,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('添加', style: TextStyle(fontSize: 12)),
+              icon: Icon(Icons.add, size: 16),
+              label: Text('添加', style: TextStyle(fontSize: 12)),
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.primaryDark,
+                foregroundColor: context.appPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 minimumSize: const Size(0, 28),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -532,7 +532,7 @@ class _CategorySummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xF7FFFFFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,10 +546,10 @@ class _CategorySummaryCard extends StatelessWidget {
                   '${type.label}总资产',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                   ),
                 ),
               ),
@@ -568,7 +568,7 @@ class _CategorySummaryCard extends StatelessWidget {
               summary.value,
               hidden: hidden,
               size: 26,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
           const SizedBox(height: 2),
@@ -576,9 +576,9 @@ class _CategorySummaryCard extends StatelessWidget {
           // 1.6 text scale shrinks them instead of breaking the card.
           Row(
             children: [
-              const Text(
+              Text(
                 '累计收益',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: context.appSecondaryText),
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -588,7 +588,7 @@ class _CategorySummaryCard extends StatelessWidget {
                   signed: true,
                   size: 13,
                   color: summary.profitPercent == null
-                      ? AppColors.textSecondary
+                      ? context.appSecondaryText
                       : profitColor(summary.profit),
                 ),
               ),
