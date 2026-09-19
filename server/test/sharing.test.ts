@@ -140,6 +140,9 @@ test('家庭第一阶段：付款归属、所有权转让与解散生命周期',
  assert.equal(stored.created_by,owner.user.id);
  assert.equal(stored.user_id,member.user.id);
 
+ const memberEdit={...stored,note:'member edited own attributed expense'};
+ assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${member.token}`},payload:{operations:[{...op('transactions',memberEdit),expectedVersion:stored.version??1}]}})).statusCode,403);
+
  const invalid={...tx(book,'outsider-payer',100),user_id:outsider.user.id};
  assert.equal((await app.inject({method:'POST',url:`/api/v1/books/${book}/mutations`,headers:{authorization:`Bearer ${owner.token}`},payload:{operations:[op('transactions',invalid)]}})).statusCode,400);
 
