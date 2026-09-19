@@ -18,11 +18,17 @@ import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnos
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingBridge
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 
 class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val reader = AccessibilityTreeReader()
-    private val detector = PaymentSceneDetector()
+    private val ruleRegistry by lazy {
+        AutoBookkeepingRuleRegistry.load(this)
+    }
+    private val detector by lazy {
+        PaymentSceneDetector(ruleRegistry)
+    }
     private var scheduled = false
     private var lastPage: String? = null
     private var lastWindow = -1
@@ -34,14 +40,21 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         Diagnostics.accessibilityConnected = true
         ensureOverlayService()
-        AutoBookkeepingLogStore.record(this, "service_connected", "accessibility service connected")
+        AutoBookkeepingLogStore.record(
+            this,
+            "service_connected",
+            "accessibility service connected rules=" +
+                "${ruleRegistry.versionsSummary()} source=" +
+                if (ruleRegistry.loadedFromAsset) "asset" else "built_in",
+        )
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val actualEvent = event ?: return
         val eventPackage = actualEvent.packageName?.toString()
-        if (!AutoBookkeepingSettings.enabled(this) || eventPackage !in SUPPORTED_PACKAGES) return
+        val eventRule = eventPackage?.let(ruleRegistry::ruleFor)
+        if (!AutoBookkeepingSettings.enabled(this) || eventRule == null) return
         if (actualEvent.eventType !in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED)) return
-        if (eventPackage != "com.tencent.mm") {
+        if (eventRule.sourceApp != "WECHAT") {
             // Marketplace/payment apps frequently update WebView/Compose content
             // without a stable Activity transition. Any relevant accessibility
             // event may therefore trigger a scan; parsers still require explicit
@@ -57,17 +70,14 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 "window_event",
                 "${eventPackage.orEmpty()}:${activity.substringAfterLast('.')}",
             )
-            if (eventPackage == "com.tencent.mm" && activity.startsWith("com.tencent.mm.")) {
-                val isPaymentActivity = listOf(
-                    "WalletPayUI",
-                    "WalletOrderInfo",
-                    "WalletOfflineCoinPurseUI",
-                    "WalletOrderInfoNewUI",
-                    // New WeChat transfer/payment pages are hosted by this
-                    // generic container; the parser still requires a payment
-                    // success marker before accepting the page.
-                    "UIPageFragmentActivity",
-                ).any { activity.substringAfterLast('.').startsWith(it) }
+            if (
+                eventRule.sourceApp == "WECHAT" &&
+                activity.startsWith("${eventPackage.orEmpty()}.")
+            ) {
+                val activityName = activity.substringAfterLast('.')
+                val isPaymentActivity = eventRule.activityHints.any {
+                    activityName.startsWith(it)
+                }
                 if (isPaymentActivity) {
                     paymentActivity = true
                     lastPaymentActivityAt = System.currentTimeMillis()
@@ -189,7 +199,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         rootInActiveWindow?.let { roots.add(it.windowId to it) }
         runCatching { windows }.getOrDefault(emptyList()).forEach { window ->
             val root = runCatching { window.root }.getOrNull() ?: return@forEach
-            if (root.packageName?.toString() !in SUPPORTED_PACKAGES) {
+            if (ruleRegistry.ruleFor(root.packageName?.toString().orEmpty()) == null) {
                 root.recycle()
                 return@forEach
             }
@@ -202,7 +212,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         visibleWindowCount = roots.size
         return try {
             roots.firstNotNullOfOrNull { (windowId, root) ->
-                if (root.packageName?.toString() !in SUPPORTED_PACKAGES) return@firstNotNullOfOrNull null
+                if (ruleRegistry.ruleFor(root.packageName?.toString().orEmpty()) == null) return@firstNotNullOfOrNull null
                 val packageName = root.packageName?.toString().orEmpty()
                 val snapshot = reader.readSnapshot(root)
                 val result = detector.inspect(packageName, snapshot.nodes)
@@ -272,16 +282,5 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         const val PAYMENT_ACTIVITY_GRACE_MS = 5000L
         const val ROOT_RETRY_DELAY_MS = 200L
         const val MAX_ROOT_RETRIES = 10
-        val SUPPORTED_PACKAGES = setOf(
-            "com.tencent.mm",
-            "com.eg.android.AlipayGphone",
-            "com.unionpay",
-            "com.sankuai.meituan",
-            "com.sankuai.meituan.takeout",
-            "com.jingdong.app.mall",
-            "com.xunmeng.pinduoduo",
-            "com.ss.android.ugc.aweme",
-            "com.ss.android.ugc.aweme.mobile",
-        )
     }
 }
