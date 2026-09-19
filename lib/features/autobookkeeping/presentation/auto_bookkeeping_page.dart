@@ -153,7 +153,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             ],
           ),
           const SizedBox(height: 12),
-          const AppCard(
+          AppCard(
             color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,14 +258,14 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             ),
           ),
           const SizedBox(height: 10),
-          const AppCard(
+          AppCard(
             child: Text(
               '通知栏说明：开启后会有一条低打扰的常驻通知。点击通知正文会打开自动记账设置，通知上的“关闭自动记账”按钮可直接关闭。关闭后通知会自动消失。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
           const SizedBox(height: 10),
-          const AppCard(
+          AppCard(
             child: Text(
               '隐私说明：自动识别只处理支持的付款页面中的必要信息；识别结果会先显示在悬浮卡片中，需用户确认后才写入本地账本。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
@@ -294,7 +294,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             ],
           ),
           const SizedBox(height: 12),
-          const AppCard(
+          AppCard(
             color: context.appPrimarySoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,7 +368,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             ),
           ),
           const SizedBox(height: 10),
-          const AppCard(
+          AppCard(
             child: Text(
               '快捷指令用法：在系统「快捷指令」App 中搜索“好好记账”，选择「记一笔到好好记账」，把剪贴板文字、语音转写或你自己自动化得到的账单文本传入。运行后会打开好好记账的确认页，不会后台静默保存。',
               style: TextStyle(
