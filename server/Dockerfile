@@ -12,7 +12,7 @@ ENV NODE_ENV=production
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/server/dist ./dist
 COPY server/scripts ./scripts
 COPY --from=build /app/assets /app/assets
 RUN mkdir -p /data /backups && chown -R node:node /app /data /backups
