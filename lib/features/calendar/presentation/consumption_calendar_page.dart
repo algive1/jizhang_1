@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/app_card.dart';
@@ -113,7 +114,7 @@ class _ConsumptionCalendarPageState
           });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6EC),
+      backgroundColor: context.appBackground,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -165,7 +166,7 @@ class _ConsumptionCalendarPageState
                               day,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: context.appSecondaryText,
                               ),
                             ),
                           ),
@@ -225,7 +226,7 @@ class _ConsumptionCalendarPageState
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final columns = constraints.maxWidth < 430 ? 2 : 4;
@@ -283,7 +284,7 @@ class _ConsumptionCalendarPageState
                   if (selected.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Text('当天没有流水记录', style: TextStyle(color: AppColors.textSecondary)),
+                      child: Text('当天没有流水记录', style: TextStyle(color: context.appSecondaryText)),
                     )
                   else
                     ...selected.asMap().entries.map(
@@ -353,7 +354,7 @@ class _ConsumptionCalendarPageState
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -369,12 +370,12 @@ class _ConsumptionCalendarPageState
               contentPadding: EdgeInsets.zero,
               leading: const Icon(
                 Icons.all_inclusive,
-                color: AppColors.primary,
+                color: context.appPrimary,
               ),
               title: const Text('全部账本'),
               subtitle: const Text('汇总当前账号可访问的账本'),
               trailing: _bookFilterId == null
-                  ? const Icon(Icons.check, color: AppColors.primary)
+                  ? const Icon(Icons.check, color: context.appPrimary)
                   : null,
               onTap: () => Navigator.pop(context, _allBooksFilterValue),
             ),
@@ -385,7 +386,7 @@ class _ConsumptionCalendarPageState
                 title: Text(book.name),
                 subtitle: Text(book.type.label),
                 trailing: _bookFilterId == book.id
-                    ? const Icon(Icons.check, color: AppColors.primary)
+                    ? const Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, book.id),
               ),
@@ -428,8 +429,8 @@ class _CalendarBookFilter extends StatelessWidget {
             : BookColorDot(book: selected, size: 10),
         label: Text(selected?.name ?? '全部账本'),
         onPressed: onTap,
-        side: BorderSide(color: AppColors.divider),
-        backgroundColor: AppColors.surface,
+        side: BorderSide(color: context.appDivider),
+        backgroundColor: context.appSurface,
       ),
     );
   }
@@ -476,28 +477,28 @@ class _CalendarGrid extends StatelessWidget {
           margin: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.primary.withValues(alpha: .22)
+                ? context.appPrimary.withValues(alpha: .22)
                 : !inMonth
-                ? AppColors.background.withValues(alpha: .55)
+                ? context.appBackground.withValues(alpha: .55)
                 : amount == 0
                 ? Colors.transparent
-                : Color.lerp(AppColors.surface, AppColors.primarySoft, .25 + intensity * .45),
+                : Color.lerp(context.appSurface, context.appPrimarySoft, .25 + intensity * .45),
             borderRadius: BorderRadius.circular(12),
-            border: selected ? Border.all(color: AppColors.primary) : null,
+            border: selected ? Border.all(color: context.appPrimary) : null,
           ),
           child: Opacity(
             opacity: inMonth ? 1 : .38,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${date.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isFuture ? AppColors.textSecondary : null)),
+                Text('${date.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isFuture ? context.appSecondaryText : null)),
                 if (amount > 0 || income > 0) ...[
                   const SizedBox(height: 2),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       amount > 0 ? '¥${amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2)}' : '+¥${income.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 10, color: amount > 0 ? AppColors.primaryDark : AppColors.primary),
+                      style: TextStyle(fontSize: 10, color: amount > 0 ? context.appPrimary : context.appPrimary),
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -542,7 +543,7 @@ class _CalendarStat extends StatelessWidget {
     children: [
       Text(
         label,
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        style: const TextStyle(fontSize: 12, color: context.appSecondaryText),
       ),
       const SizedBox(height: 4),
       suffix != null
@@ -551,7 +552,7 @@ class _CalendarStat extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             )
           : integer
@@ -560,7 +561,7 @@ class _CalendarStat extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             )
           : MoneyText(
@@ -568,7 +569,7 @@ class _CalendarStat extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             ),
     ],
@@ -596,11 +597,11 @@ class _CalendarLegend extends StatelessWidget {
     children: [
       _CalendarDot(color: Color(0xFFFF7A45)),
       SizedBox(width: 5),
-      Text('支出', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text('支出', style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
       SizedBox(width: 10),
       _CalendarDot(color: Color(0xFF5BAE61)),
       SizedBox(width: 5),
-      Text('收入', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text('收入', style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
     ],
   );
 }
@@ -618,9 +619,9 @@ class _SelectedDayHeader extends StatelessWidget {
     return Row(children: [
       Text('${date.month}月${date.day}日', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(width: 8),
-      Text('周${weekdays[date.weekday - 1]}', style: const TextStyle(color: AppColors.textSecondary)),
+      Text('周${weekdays[date.weekday - 1]}', style: const TextStyle(color: context.appSecondaryText)),
       const Spacer(),
-      Text('共 ${transactions.length} 笔', style: const TextStyle(color: AppColors.textSecondary)),
+      Text('共 ${transactions.length} 笔', style: const TextStyle(color: context.appSecondaryText)),
       const SizedBox(width: 12),
       Text('支出 ¥${expense.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFFFF6B35), fontWeight: FontWeight.w600)),
       const SizedBox(width: 10),
