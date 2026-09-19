@@ -377,7 +377,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         child: FractionallySizedBox(
           heightFactor: 1,
           child: Material(
-            key: const ValueKey('quick-sheet-surface'),
+            key: ValueKey('quick-sheet-surface'),
             color: context.appBackground,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
@@ -397,7 +397,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           height: 48,
                         ),
                         padding: EdgeInsets.zero,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_back_rounded,
                           color: context.appPrimaryText,
                           size: 24,
@@ -545,7 +545,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       return Text(
         _transactionTypeLabel(_type),
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           color: context.appSecondaryText,
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -553,7 +553,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       );
     }
     if (_isEditing) {
-      return const Text(
+      return Text(
         '编辑中',
         textAlign: TextAlign.center,
         style: TextStyle(
@@ -564,7 +564,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       );
     }
     return TextButton(
-      key: const ValueKey('quick-edit-categories'),
+      key: ValueKey('quick-edit-categories'),
       style: TextButton.styleFrom(
         backgroundColor: context.appPrimarySoft,
         foregroundColor: context.appPrimaryText,
@@ -593,7 +593,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Account? sourceAccount,
   }) {
     return Container(
-      key: const ValueKey('quick-detail-card'),
+      key: ValueKey('quick-detail-card'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -608,7 +608,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             onAi: _openAi,
             onVoice: _openVoice,
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           AmountInputView(
             input: input,
             currency: _currencySymbol(sourceAccount),
@@ -669,7 +669,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   key: const ValueKey('quick-book-selector'),
                   label: selectedBook?.name ?? '选择账本',
                   leading: selectedBook == null
-                      ? const Icon(
+                      ? Icon(
                           Icons.menu_book_outlined,
                           size: 16,
                           color: context.appPrimary,
@@ -682,10 +682,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 )
               else
                 _QuickChip(
-                  key: const ValueKey('quick-book-selector'),
+                  key: ValueKey('quick-book-selector'),
                   label: selectedBook?.name ?? '当前账本',
                   leading: selectedBook == null
-                      ? const Icon(
+                      ? Icon(
                           Icons.menu_book_outlined,
                           size: 16,
                           color: context.appPrimary,
@@ -696,7 +696,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _ChipRow(
             children: [
               _QuickChip(
@@ -736,7 +736,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               child: Text(
                 '已设置${_recurringDraft!.scheduleLabel}，点击完成会同时保存首笔流水和周期规则',
                 key: const ValueKey('quick-recurring-summary'),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: context.appPrimary,
                   fontWeight: FontWeight.w600,
@@ -809,7 +809,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: Text(
                   '这笔钱由谁支付？',
@@ -830,7 +830,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     _ => '家庭成员',
                   }),
                   trailing: member['user_id'] == _payerUserId
-                      ? const Icon(Icons.check, color: context.appPrimary)
+                      ? Icon(Icons.check, color: context.appPrimary)
                       : null,
                   onTap: () => Navigator.pop(context, member),
                 ),
@@ -920,13 +920,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
                 TextButton.icon(
                   onPressed: () => Navigator.pop(sheetContext, 'save-current'),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('保存当前'),
+                  icon: Icon(Icons.add, size: 18),
+                  label: Text('保存当前'),
                 ),
               ],
             ),
             if (templates.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 28),
                 child: Center(
                   child: Text(
@@ -1134,7 +1134,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 key: ValueKey('quick-reimbursement-${status.name}'),
                 title: Text(_reimbursementLabelFor(status)),
                 trailing: status == _reimbursementStatus
-                    ? const Icon(Icons.check, color: context.appPrimary)
+                    ? Icon(Icons.check, color: context.appPrimary)
                     : null,
                 onTap: () => Navigator.pop(context, status),
               ),
@@ -2074,7 +2074,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
 /// Visual identity for one account type, shared by chips and the picker.
 (IconData, Color) _accountVisual(AccountType? type) => switch (type) {
-  AccountType.wechat => (Icons.chat_bubble_rounded, const Color(0xFF07C160)),
+  AccountType.wechat => (Icons.chat_bubble_rounded, Color(0xFF07C160)),
   AccountType.alipay => (
     Icons.account_balance_wallet_rounded,
     const Color(0xFF1677FF),
@@ -2274,7 +2274,7 @@ class _AccountPairCard extends StatelessWidget {
         children: [
           Expanded(
             child: _AccountPairButton(
-              key: const ValueKey('quick-account-chip'),
+              key: ValueKey('quick-account-chip'),
               label: isRepayment ? '还款账户' : '转出',
               account: source,
               onTap: onSourceTap,
@@ -2331,12 +2331,12 @@ class _AccountPairButton extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Row(
               children: [
                 Icon(visual.$1, size: 16, color: visual.$2),
@@ -2346,7 +2346,7 @@ class _AccountPairButton extends StatelessWidget {
                     account?.displayName ?? '请选择',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                       color: context.appPrimaryText,
@@ -2383,12 +2383,12 @@ class _NoteRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.edit_outlined,
             size: 18,
             color: context.appSecondaryText,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: TextField(
               key: const ValueKey('quick-note-field'),
@@ -2398,11 +2398,11 @@ class _NoteRow extends StatelessWidget {
               textAlignVertical: TextAlignVertical.center,
               onTapOutside: (_) =>
                   FocusManager.instance.primaryFocus?.unfocus(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 color: context.appPrimaryText,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 // This is an integrated row, not a standalone form field.
                 // Explicitly neutralize the app-wide 52dp outlined field theme
                 // so the note area stays borderless and compact like the
@@ -2430,7 +2430,7 @@ class _NoteRow extends StatelessWidget {
       ),
     );
     final aiAction = _QuickChip(
-      key: const ValueKey('quick-ai-entry'),
+      key: ValueKey('quick-ai-entry'),
       label: 'AI帮我记',
       icon: Icons.auto_awesome_outlined,
       iconColor: context.appPrimary,
@@ -2608,7 +2608,7 @@ class _QuickChip extends StatelessWidget {
                   SizedBox(width: iconGap),
                 ],
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
+                  constraints: BoxConstraints(maxWidth: 120),
                   child: Text(
                     label,
                     maxLines: 1,
@@ -2623,8 +2623,8 @@ class _QuickChip extends StatelessWidget {
                   ),
                 ),
                 if (showChevron) ...[
-                  const SizedBox(width: 2),
-                  const Icon(
+                  SizedBox(width: 2),
+                  Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
                     color: context.appSecondaryText,
@@ -2657,7 +2657,7 @@ class _AttachmentThumbnail extends StatelessWidget {
       );
     }
     if (attachment.status == AttachmentUploadStatus.uploading) {
-      return const DecoratedBox(
+      return DecoratedBox(
         decoration: BoxDecoration(
           color: context.appPrimarySoft,
           borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -2682,7 +2682,7 @@ class _AttachmentThumbnail extends StatelessWidget {
     if (!isImage) {
       return GestureDetector(
         onTap: () => _preview(context, isImage: false),
-        child: const DecoratedBox(
+        child: DecoratedBox(
           decoration: BoxDecoration(
             color: context.appPrimarySoft,
             borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -2701,7 +2701,7 @@ class _AttachmentThumbnail extends StatelessWidget {
         child: Image.file(
           File(attachment.path),
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) => const DecoratedBox(
+          errorBuilder: (context, error, stack) => DecoratedBox(
             decoration: BoxDecoration(color: context.appPrimarySoft),
             child: Icon(Icons.broken_image_outlined, color: context.appPrimary),
           ),
