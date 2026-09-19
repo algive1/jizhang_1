@@ -135,7 +135,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       if (!mounted) return;
       setState(() {
         _enabled = enabled;
-        _message = enabled ? '已开启。支付成功页会显示识别结果，确认后才会保存流水。' : '已关闭自动记账。';
+        _message = enabled ? '已开启。识别到可信交易结果后会先确认，再保存流水。' : '已关闭自动记账。';
       });
       if (enabled) await _load();
     } on Object catch (error) {
@@ -173,12 +173,12 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '识别付款结果，少填一遍账',
+                  '识别交易结果，少填一遍账',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音付款页面；识别金额和商户后会先弹出本机确认卡片，未确认前不会写入流水。',
+                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度交易结果；支出、明确收款和明确退款会先弹出本机确认卡片，未确认前不会写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -268,7 +268,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.article_outlined),
                 title: Text('运行日志'),
-                subtitle: Text('查看最近一次支付识别和弹窗处理结果'),
+                subtitle: Text('查看最近一次交易识别和弹窗处理结果'),
                 trailing: Icon(Icons.chevron_right),
                 onTap: () => context.push('/profile/autobookkeeping/logs'),
               ),
@@ -277,7 +277,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const SizedBox(height: 10),
           AppCard(
             child: Text(
-              '双通道说明：无障碍负责实时读取支付成功页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度支付通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
+              '双通道说明：无障碍负责实时读取交易结果页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度交易通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
@@ -291,7 +291,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const SizedBox(height: 10),
           AppCard(
             child: Text(
-              '隐私说明：自动识别只处理支持的付款页面中的必要信息；识别结果会先显示在悬浮卡片中，需用户确认后才写入本地账本。',
+              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成，需用户确认后才写入本地账本。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
