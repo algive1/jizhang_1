@@ -228,7 +228,7 @@ export class Store {
         check(data.id===e.id && (!('book_id' in data) || data.book_id===id),'数据不属于目标账本');
         if (e.kind==='accounts') this.validateAccountIdentity(id, data, e.id);
         if (e.kind==='transactions') this.validateMetadata(data);
-        if (e.kind==='transactions') Object.assign(data,{created_by:user,updated_by:user,user_id:user,payer_user_id:data.payer_user_id??data.user_id??user,visibility:'shared',sync_status:'synced'});
+        if (e.kind==='transactions') Object.assign(data,{created_by:user,updated_by:user,user_id:user,visibility:'shared',sync_status:'synced'});
         if (e.kind==='goals') Object.assign(data,{created_by:user,updated_by:user});
         if (e.kind==='goal_contributions') data.contributor_user_id=user;
         check(!this.get(id,e.kind,e.id),'快照中记录标识重复');
@@ -269,9 +269,9 @@ export class Store {
         if (op.kind==='transactions') {
           if (!previous) {for(const field of ['account_id','destination_account_id']) if(data[field]) check(this.get(book,'accounts',String(data[field]))?.data.is_archived===0,'新流水不能使用已归档或不存在的账户');}
           if (previous) check(data.created_at===previous.data.created_at,'不能修改创建时间');
-          const requestedPayer=data.payer_user_id??previous?.data.payer_user_id??previous?.data.user_id??user;
+          const requestedPayer=data.user_id??previous?.data.user_id??user;
           check(this.db.prepare('SELECT 1 FROM members WHERE book_id=? AND user_id=?').get(book,String(requestedPayer)),'付款人必须是当前共享账本成员',400);
-          Object.assign(data,{created_by:previous?.data.created_by??user,updated_by:user,user_id:previous?.data.user_id??user,payer_user_id:requestedPayer,visibility:'shared',sync_status:'synced'});
+          Object.assign(data,{created_by:previous?.data.created_by??user,updated_by:user,user_id:requestedPayer,visibility:'shared',sync_status:'synced'});
           if (data.type==='adjustment' && !previous) {
             const account=this.get(book,'accounts',String(data.account_id));
             if (account?.version!==op.expectedAccountVersion) throw new ApiError(409,'校准期间账户余额已改变',{operationId:op.operationId,remote:account});
