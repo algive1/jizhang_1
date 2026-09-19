@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/analysis.dart';
@@ -11,6 +10,7 @@ import '../../../core/widgets/cashflow_trend_chart.dart';
 import '../../../core/widgets/sliding_segmented_control.dart';
 import '../../analysis/data/analysis_repository.dart';
 import 'home_cards.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class HomeExpenseTrend extends ConsumerStatefulWidget {
   const HomeExpenseTrend({super.key, this.amountHidden = false});
@@ -63,13 +63,13 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '支出趋势',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                   ),
@@ -77,9 +77,9 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                     width: 132,
                     child: SlidingSegmentedControl<AnalysisPeriod>(
                       compact: true,
-                      colors: const [AppColors.primary, AppColors.primaryDark],
-                      backgroundColor: AppColors.surfaceSoft,
-                      inactiveTextColor: AppColors.textSecondary,
+                      colors: [context.appPrimary, context.appPrimary],
+                      backgroundColor: context.appSurfaceSoft,
+                      inactiveTextColor: context.appSecondaryText,
                       keyPrefix: 'home-trend',
                       items: const [
                         (AnalysisPeriod.last7Days, '周'),
@@ -105,8 +105,8 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                           ? '金额已隐藏'
                           : '本期累计支出 ¥${MoneyFormatter.whole(snapshot.totalExpense)}  · 日均 ¥${MoneyFormatter.whole(average)}',
                       key: const ValueKey('home-trend-value'),
-                      style: const TextStyle(
-                        color: AppColors.primaryDark,
+                      style: TextStyle(
+                        color: context.appPrimary,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -116,13 +116,13 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
               ),
               const SizedBox(height: 5),
               if (widget.amountHidden)
-                const SizedBox(
+                SizedBox(
                   height: 88,
                   child: Center(
                     child: Text(
                       '趋势金额已隐藏',
                       style: TextStyle(
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -155,12 +155,12 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                   ),
                 ),
               if (snapshot.expenseCount == 0)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     '这段时间还没有支出，记下一笔就能看到变化',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       fontSize: 11,
                     ),
                   ),

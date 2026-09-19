@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../../app/theme/app_theme_tokens.dart';
 
 class NumberKeyboard extends StatelessWidget {
   const NumberKeyboard({
@@ -187,7 +187,7 @@ class _KeypadKey extends StatelessWidget {
         button: true,
         child: Material(
           color: primary
-              ? AppColors.primary
+              ? context.appPrimary
               : muted
               ? const Color(0xFFEFEDEE)
               : Colors.white,
@@ -210,13 +210,13 @@ class _KeypadKey extends StatelessWidget {
                         ),
                       )
                     : icon != null
-                    ? Icon(icon, color: AppColors.textPrimary, size: 20)
+                    ? Icon(icon, color: context.appPrimaryText, size: 20)
                     : Text(
                         label!,
                         style: TextStyle(
                           fontSize: fontSize,
                           fontWeight: FontWeight.w500,
-                          color: primary ? Colors.white : AppColors.textPrimary,
+                          color: primary ? Colors.white : context.appPrimaryText,
                         ),
                       ),
               ),

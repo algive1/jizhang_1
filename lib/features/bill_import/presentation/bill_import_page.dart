@@ -16,6 +16,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../application/bill_import_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class BillImportPage extends ConsumerStatefulWidget {
   const BillImportPage({super.key});
@@ -64,18 +65,18 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                     ),
                     FilledButton.icon(
                       onPressed: _loading ? null : _pick,
-                      icon: const Icon(Icons.upload_file, size: 18),
-                      label: const Text('选择文件'),
+                      icon: Icon(Icons.upload_file, size: 18),
+                      label: Text('选择文件'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     '支持微信支付、支付宝官方导出的 CSV 账单。导入前会预览，不会直接写入；退款、关闭交易会自动跳过。',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       height: 1.45,
                     ),
                   ),
@@ -135,15 +136,15 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             children: [
               Text(
                 _fileName ?? '账单文件',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 3),
               Text(
                 '${result.provider == BillImportProvider.wechat ? '微信支付' : '支付宝'}'
                 ' · 可导入 ${result.rows.length} 笔'
                 '${result.skipped == 0 ? '' : ' · 已跳过 ${result.skipped} 行'}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appSecondaryText,
                   fontSize: 12,
                 ),
               ),
@@ -247,11 +248,11 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             const Divider(height: 1),
         ],
         if (result.rows.length > 200)
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(12),
             child: Text(
               '预览仅展示前 200 笔；导入仍按全部已选记录执行。',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: context.appSecondaryText),
             ),
           ),
       ],
@@ -281,8 +282,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           style: TextStyle(
             fontWeight: FontWeight.w700,
             color: row.type == TransactionType.expense
-                ? AppColors.textPrimary
-                : AppColors.primary,
+                ? context.appPrimaryText
+                : context.appPrimary,
           ),
         ),
       ],

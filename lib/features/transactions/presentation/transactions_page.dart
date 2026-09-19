@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
@@ -99,13 +100,13 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   spending: _monthlyTotal(all, expense: true),
                   income: _monthlyTotal(all, expense: false),
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     '月度汇总为 CNY · 全部分类 · 截至当前',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -117,9 +118,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                       child: InputChip(
                         label: Text(_categoryFilter!),
                         selected: true,
-                        selectedColor: AppColors.primarySoft,
-                        labelStyle: const TextStyle(
-                          color: AppColors.primaryDark,
+                        selectedColor: context.appPrimarySoft,
+                        labelStyle: TextStyle(
+                          color: context.appPrimary,
                         ),
                         side: BorderSide.none,
                         onDeleted: () => setState(() => _categoryFilter = null),
@@ -128,12 +129,12 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   ),
                 const SizedBox(height: 18),
                 if (transactions.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 48),
                     child: Center(
                       child: Text(
                         '没有找到匹配的记录',
-                        style: TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: context.appSecondaryText),
                       ),
                     ),
                   )
@@ -192,7 +193,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         child: FractionallySizedBox(
           heightFactor: .68,
           child: Material(
-            color: AppColors.surface,
+            color: context.appSurface,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -205,12 +206,12 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                     width: 38,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: AppColors.divider,
+                      color: context.appDivider,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     '筛选分类',
                     style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
                   ),
@@ -226,9 +227,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                               ),
                               title: Text(item),
                               trailing: item == (_categoryFilter ?? '全部')
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.check,
-                                      color: AppColors.primary,
+                                      color: context.appPrimary,
                                     )
                                   : null,
                               onTap: () => Navigator.pop(context, item),
@@ -351,7 +352,7 @@ class _TransactionsToolbar extends StatelessWidget {
         const SizedBox(width: 8),
         IconButton(
           onPressed: onSearch,
-          icon: const Icon(Icons.search, size: 30),
+          icon: Icon(Icons.search, size: 30),
           tooltip: '搜索流水',
         ),
         IconButton(
@@ -364,16 +365,16 @@ class _TransactionsToolbar extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onFilter,
-              icon: const Icon(Icons.filter_alt_outlined, size: 28),
+              icon: Icon(Icons.filter_alt_outlined, size: 28),
               tooltip: '筛选流水',
             ),
             if (hasCategoryFilter)
-              const Positioned(
+              Positioned(
                 right: 6,
                 top: 5,
                 child: CircleAvatar(
                   radius: 4,
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: context.appPrimary,
                 ),
               ),
           ],
@@ -408,7 +409,7 @@ class _FilterSegment extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.surface : Colors.transparent,
+                  color: selected ? context.appSurface : Colors.transparent,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: selected
                       ? const [
@@ -421,8 +422,8 @@ class _FilterSegment extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: selected
-                        ? AppColors.primaryDark
-                        : AppColors.textSecondary,
+                        ? context.appPrimary
+                        : context.appSecondaryText,
                     fontSize: 15,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),

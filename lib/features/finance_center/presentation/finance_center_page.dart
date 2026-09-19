@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/finance_center_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class FinanceCenterPage extends ConsumerStatefulWidget {
   const FinanceCenterPage({super.key});
@@ -47,18 +47,18 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
                     ),
                     FilledButton.icon(
                       onPressed: _addCurrent,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('新增'),
+                      icon: Icon(Icons.add, size: 18),
+                      label: Text('新增'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     '发票与报税仅作为台账管理，不替代税务申报或专业税务意见；银行卡账单用于核对结算与还款状态。',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       height: 1.45,
                     ),
                   ),
@@ -339,7 +339,7 @@ class _FutureList<T> extends StatelessWidget {
     future: future,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
-        return const Padding(
+        return Padding(
           padding: EdgeInsets.all(30),
           child: Center(child: CircularProgressIndicator()),
         );
@@ -355,7 +355,7 @@ class _FutureList<T> extends StatelessWidget {
             child: Center(
               child: Text(
                 emptyText,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ),
           ),
@@ -397,9 +397,9 @@ class _RowMenu extends StatelessWidget {
           if (amountLabel != null)
             Text(
               amountLabel!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
           Text(

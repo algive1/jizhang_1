@@ -14,6 +14,7 @@ import '../data/market_data_provider.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_input.dart';
 import 'investment_widgets.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// 添加投资 — 搜索添加 or 手动添加.
 ///
@@ -139,18 +140,18 @@ class _Header extends StatelessWidget {
             IconButton(
               key: const ValueKey('investment-add-back'),
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left, size: 26),
-              color: AppColors.textPrimary,
+              icon: Icon(Icons.chevron_left, size: 26),
+              color: context.appPrimaryText,
               tooltip: '返回',
             ),
-            const Expanded(
+            Expanded(
               child: Text(
                 '添加投资',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                 ),
               ),
             ),
@@ -200,7 +201,7 @@ class _Header extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: mode == entry.$1
-                              ? AppColors.primary
+                              ? context.appPrimary
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -213,7 +214,7 @@ class _Header extends StatelessWidget {
                                 : FontWeight.w500,
                             color: mode == entry.$1
                                 ? Colors.white
-                                : AppColors.textSecondary,
+                                : context.appSecondaryText,
                           ),
                         ),
                       ),
@@ -350,20 +351,20 @@ class _SearchHint extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xF7FFFFFC),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+      border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
-    child: const Column(
+    child: Column(
       children: [
-        Icon(Icons.travel_explore, size: 26, color: AppColors.primary),
+        Icon(Icons.travel_explore, size: 26, color: context.appPrimary),
         SizedBox(height: 8),
         Text(
           '输入名称、代码或 Symbol 搜索',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 13, color: context.appSecondaryText),
         ),
         SizedBox(height: 4),
         Text(
           '支持股票、基金、债券、虚拟币',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 11, color: context.appSecondaryText),
         ),
       ],
     ),
@@ -379,20 +380,20 @@ class _SearchEmpty extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xF7FFFFFC),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+      border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
-    child: const Column(
+    child: Column(
       children: [
-        Icon(Icons.search_off, size: 26, color: AppColors.textSecondary),
+        Icon(Icons.search_off, size: 26, color: context.appSecondaryText),
         SizedBox(height: 8),
         Text(
           '没有找到匹配的投资',
-          style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 13, color: context.appPrimaryText),
         ),
         SizedBox(height: 4),
         Text(
           '可以切换到「手动添加」自行填写',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 11, color: context.appSecondaryText),
         ),
       ],
     ),
@@ -411,16 +412,16 @@ class _SearchError extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xF7FFFFFC),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+      border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
     child: Column(
       children: [
-        const Icon(Icons.cloud_off_outlined, size: 26, color: AppColors.warning),
-        const SizedBox(height: 8),
+        Icon(Icons.cloud_off_outlined, size: 26, color: AppColors.warning),
+        SizedBox(height: 8),
         Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 13, color: context.appSecondaryText),
         ),
         const SizedBox(height: 10),
         OutlinedButton(onPressed: onRetry, child: const Text('重试')),
@@ -448,7 +449,7 @@ class _SearchResultRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xF7FFFFFC),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+          border: Border.all(color: context.appDivider.withValues(alpha: .7)),
         ),
         child: Row(
           children: [
@@ -462,20 +463,20 @@ class _SearchResultRow extends StatelessWidget {
                     result.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      color: context.appPrimaryText,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Row(
                     children: [
                       Text(
                         result.symbol,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -489,16 +490,16 @@ class _SearchResultRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
                   '¥${InvestmentInput.formatPriceLabel(result.price)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.appPrimaryText,
                   ),
                 ),
                 ProfitText(percent: result.changePercent, fontSize: 10),
@@ -726,12 +727,12 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             controller: _note,
             decoration: const InputDecoration(labelText: '备注（可选）'),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           FilledButton(
             key: const ValueKey('investment-form-submit'),
             onPressed: widget.saving ? null : _save,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: context.appPrimary,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(
@@ -794,7 +795,7 @@ class _SelectedBanner extends StatelessWidget {
     child: Row(
       children: [
         InvestmentTypeAvatar(type: type, size: 32),
-        const SizedBox(width: 9),
+        SizedBox(width: 9),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -803,19 +804,19 @@ class _SelectedBanner extends StatelessWidget {
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                 ),
               ),
               Text(
                 '$symbol · 点击下方确认买入价格与数量',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
               ),
             ],
@@ -825,7 +826,7 @@ class _SelectedBanner extends StatelessWidget {
           key: const ValueKey('investment-form-reselect'),
           onPressed: onCancel,
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.textSecondary,
+            foregroundColor: context.appSecondaryText,
             minimumSize: const Size(0, 32),
           ),
           child: const Text('重选', style: TextStyle(fontSize: 12)),

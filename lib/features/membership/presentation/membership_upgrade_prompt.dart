@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/membership.dart';
 import '../data/membership_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// Checks a server-controlled capability and opens the shared upgrade prompt
 /// when the current member snapshot does not grant it.
@@ -48,7 +48,7 @@ Future<void> showMembershipUpgradePrompt(
           const SizedBox(height: 8),
           Text(
             '该功能的开放范围由后台会员策略控制，开通会员后即可继续使用。',
-            style: const TextStyle(color: AppColors.textSecondary, height: 1.5),
+            style: TextStyle(color: context.appSecondaryText, height: 1.5),
           ),
           const SizedBox(height: 18),
           SizedBox(

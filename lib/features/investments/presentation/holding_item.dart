@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../domain/investment_portfolio.dart';
 import 'investment_widgets.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// One 持仓列表 row: name, code, current market value, profit and return.
 ///
@@ -39,7 +40,7 @@ class HoldingItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xF7FFFFFC),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+            border: Border.all(color: context.appDivider.withValues(alpha: .7)),
           ),
           child: LayoutBuilder(
             builder: (context, box) => Row(
@@ -55,10 +56,10 @@ class HoldingItem extends StatelessWidget {
                         asset.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -69,9 +70,9 @@ class HoldingItem extends StatelessWidget {
                               asset.displayCode,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: AppColors.textSecondary,
+                                color: context.appSecondaryText,
                               ),
                             ),
                           ),
@@ -110,7 +111,7 @@ class HoldingItem extends StatelessWidget {
                         size: 11,
                         weight: FontWeight.w600,
                         color: percent == null
-                            ? AppColors.textSecondary
+                            ? context.appSecondaryText
                             : profitColor(percent),
                       ),
                       ProfitText(
@@ -167,19 +168,19 @@ class HoldingMiniRow extends StatelessWidget {
                       asset.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                     Text(
                       asset.displayCode,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                       ),
                     ),
                   ],

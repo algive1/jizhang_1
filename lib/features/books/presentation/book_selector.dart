@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
@@ -17,6 +16,8 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../membership/data/membership_repository.dart';
 import '../data/book_repository.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class BookSelectorButton extends ConsumerWidget {
   const BookSelectorButton({super.key});
@@ -40,17 +41,17 @@ class BookSelectorButton extends ConsumerWidget {
                   book?.name ?? '选择账本',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: context.appPrimaryText,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 18,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ],
           ),
@@ -91,7 +92,7 @@ Future<LedgerBook?> showBookChoiceSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: AppColors.background,
+    backgroundColor: context.appBackground,
     builder: (_) => _BookChoiceSheet(books: books, selectedId: selectedId),
   );
 }
@@ -115,18 +116,18 @@ class _BookChoiceSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 '选择记账账本',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                   fontSize: 21,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 '分类、账户和流水会跟随所选账本',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
               ),
               const SizedBox(height: 10),
               Flexible(
@@ -187,7 +188,7 @@ class _BookChoiceRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Row(
               children: [
-                Icon(icon, color: AppColors.primaryDark),
+                Icon(icon, color: context.appPrimary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -202,8 +203,8 @@ class _BookChoiceRow extends StatelessWidget {
                               book.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
+                              style: TextStyle(
+                                color: context.appPrimaryText,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -214,8 +215,8 @@ class _BookChoiceRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         book.type.label,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appSecondaryText,
                           fontSize: 11,
                         ),
                       ),
@@ -223,7 +224,7 @@ class _BookChoiceRow extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Icon(Icons.check_circle, color: AppColors.primary),
+                  Icon(Icons.check_circle, color: context.appPrimary),
               ],
             ),
           ),
@@ -322,16 +323,16 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                       Text(
                                         formatBookTitle(active),
                                         style: TextStyle(
-                                          color: AppColors.textPrimary,
+                                          color: context.appPrimaryText,
                                           fontSize: 20,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                         Icons.keyboard_arrow_up_rounded,
                                         size: 20,
-                                        color: AppColors.textPrimary,
+                                        color: context.appPrimaryText,
                                       ),
                                     ],
                                   ),
@@ -341,7 +342,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                   maxLines: largeText ? 2 : 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: AppColors.textSecondary,
+                                    color: context.appSecondaryText,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -365,7 +366,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                             ),
                             icon: Icon(
                               Icons.notifications_none_rounded,
-                              color: AppColors.textPrimary,
+                              color: context.appPrimaryText,
                               size: 24,
                             ),
                           ),
@@ -392,7 +393,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                             ),
                             icon: Icon(
                               Icons.search_rounded,
-                              color: AppColors.textPrimary,
+                              color: context.appPrimaryText,
                               size: 21,
                             ),
                           ),
@@ -458,9 +459,9 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                         ),
                       ),
                       if (booksState.isLoading)
-                        const Center(
+                        Center(
                           child: CircularProgressIndicator(
-                            color: AppColors.primary,
+                            color: context.appPrimary,
                           ),
                         ),
                       if (booksState.hasError)
@@ -519,8 +520,8 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                   Container(
                                     width: imageHeight * .06,
                                     height: imageHeight * .06,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primary,
+                                    decoration: BoxDecoration(
+                                      color: context.appPrimary,
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
@@ -621,7 +622,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     final largeText = MediaQuery.textScalerOf(context).scale(14) > 18;
     final columns = width < 360 || largeText ? 2 : 3;
     return Material(
-      color: AppColors.background,
+      color: context.appBackground,
       elevation: 18,
       shadowColor: Colors.black54,
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
@@ -663,7 +664,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                       style: TextStyle(
                         fontSize: 21,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                   ),
@@ -976,8 +977,8 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                     : null,
               ),
             ListTile(
-              leading: const Icon(Icons.swap_vert_rounded),
-              title: const Text('排序账本'),
+              leading: Icon(Icons.swap_vert_rounded),
+              title: Text('排序账本'),
               onTap: () => Navigator.pop(context, _BookAction.sort),
             ),
             ListTile(
@@ -985,7 +986,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                 book.id == ref.read(activeBookIdProvider)
                     ? Icons.star
                     : Icons.star_border,
-                color: AppColors.primary,
+                color: context.appPrimary,
               ),
               title: Text(
                 book.id == ref.read(activeBookIdProvider)
@@ -1187,7 +1188,7 @@ class _AllBooksSheetState extends ConsumerState<_AllBooksSheet> {
               .where((book) => book.name.toLowerCase().contains(query))
               .toList();
     return Material(
-      color: AppColors.background,
+      color: context.appBackground,
       child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -1201,11 +1202,11 @@ class _AllBooksSheetState extends ConsumerState<_AllBooksSheet> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '全部账本',
                         style: TextStyle(
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1285,7 +1286,7 @@ class _AllBookListRow extends StatelessWidget {
       BookType.enterprise => Icons.business,
     };
     final iconColor = switch (book.type) {
-      BookType.personal => AppColors.primaryDark,
+      BookType.personal => AppColors.primary,
       BookType.family => const Color(0xFF976537),
       BookType.enterprise => const Color(0xFF44677E),
     };
@@ -1300,7 +1301,7 @@ class _AllBookListRow extends StatelessWidget {
       label:
           '${book.name}，${book.type.label}，$syncLabel${selected ? '，当前账本' : ''}',
       child: Material(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onSelect,
@@ -1324,8 +1325,8 @@ class _AllBookListRow extends StatelessWidget {
                         book.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appPrimaryText,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1339,9 +1340,9 @@ class _AllBookListRow extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 2),
-                    child: Icon(Icons.check_circle, color: AppColors.primary),
+                    child: Icon(Icons.check_circle, color: context.appPrimary),
                   ),
                 IconButton(
                   key: ValueKey('book-manage-${book.id}'),
@@ -1426,11 +1427,11 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       '新建账本',
                       style: TextStyle(
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1439,13 +1440,13 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
                   TextButton(
                     key: const ValueKey('book-create-cancel'),
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
+                    child: Text('取消'),
                   ),
                 ],
               ),
-              const Text(
+              Text(
                 '填写名称，选择一种用途，再开始记录。',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -1463,10 +1464,10 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 '选择用途',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1567,7 +1568,7 @@ class _BookCreatePreview extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   type.label,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -1585,7 +1586,7 @@ IconData _bookTypeIcon(BookType type) => switch (type) {
 };
 
 Color _bookTypeColor(BookType type) => switch (type) {
-  BookType.personal => AppColors.primaryDark,
+  BookType.personal => AppColors.primary,
   BookType.family => const Color(0xFF976537),
   BookType.enterprise => const Color(0xFF44677E),
 };
@@ -1957,14 +1958,14 @@ class _BookOrderSheetState extends State<_BookOrderSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 '排序账本',
                 style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 '长按拖动，顺序会同步到书架和首页切换列表',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
               ),
               const SizedBox(height: 10),
               Flexible(
@@ -2038,7 +2039,7 @@ class _BookCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (book.type) {
-      BookType.personal => AppColors.primaryDark,
+      BookType.personal => AppColors.primary,
       BookType.family => const Color(0xFF976537),
       BookType.enterprise => const Color(0xFF44677E),
     };

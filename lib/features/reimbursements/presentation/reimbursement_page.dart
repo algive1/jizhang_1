@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
@@ -79,7 +79,7 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go('/transactions'),
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back),
                 tooltip: '返回流水',
               ),
               Expanded(
@@ -91,13 +91,13 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
+            color: context.appPrimarySoft,
             child: Row(
               children: [
                 Expanded(
                   child: _Summary(label: '待报销', amount: pending),
                 ),
-                Container(width: 1, height: 42, color: AppColors.divider),
+                Container(width: 1, height: 42, color: context.appDivider),
                 Expanded(
                   child: _Summary(label: '已报销', amount: reimbursed),
                 ),
@@ -117,13 +117,13 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
           ),
           const SizedBox(height: 16),
           if (records.isEmpty)
-            const AppCard(
+            AppCard(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 28),
                 child: Center(
                   child: Text(
                     '还没有需要报销的流水',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   ),
                 ),
               ),
@@ -220,7 +220,7 @@ class _Summary extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+        Text(label, style: TextStyle(color: context.appSecondaryText)),
         const SizedBox(height: 4),
         MoneyText(
           amount,
@@ -267,30 +267,30 @@ class _ReimbursementCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     transaction.displayTitle,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 MoneyText(
                   -transaction.amount,
                   showSign: true,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
             const SizedBox(height: 7),
             Text(
               '${transaction.occurredAt.month}月${transaction.occurredAt.day}日 · ${transaction.displayCategoryLabel}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               '账本：$bookName · 账户：$accountName',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
             const SizedBox(height: 10),
@@ -302,14 +302,14 @@ class _ReimbursementCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
+                    color: context.appPrimarySoft,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     status,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.primaryDark,
+                      color: context.appPrimary,
                     ),
                   ),
                 ),

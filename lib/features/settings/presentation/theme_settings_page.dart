@@ -43,7 +43,7 @@ class ThemeSettingsPage extends ConsumerWidget {
                         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           Text('会员主题', style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 8),
-                          const Text('该主题属于会员个性化权益。开通会员后即可使用，并可在多设备上保留主题偏好。'),
+                          const Text('该主题属于会员个性化权益。开通会员后即可使用；会员到期后会暂时恢复默认主题，并保留本机主题偏好。'),
                           const SizedBox(height: 18),
                           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('查看会员')),
                         ]),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/transaction_tile.dart';
@@ -11,6 +10,7 @@ import '../../recurring/data/recurring_bill_repository.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class TransactionSearchPage extends ConsumerStatefulWidget {
   const TransactionSearchPage({super.key, this.month});
@@ -82,7 +82,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                                     _controller.clear();
                                     setState(() => _query = '');
                                   },
-                                  icon: const Icon(Icons.close),
+                                  icon: Icon(Icons.close),
                                 ),
                         ),
                       ),
@@ -92,26 +92,26 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                 const SizedBox(height: 16),
                 Text(
                   _query.isEmpty ? '全部记录' : '找到 ${results.length} 笔记录',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appSecondaryText,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 10),
                 if (results.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(vertical: 72),
                     child: Column(
                       children: [
                         Icon(
                           Icons.search_off,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                           size: 44,
                         ),
                         SizedBox(height: 12),
                         Text(
                           '没有找到匹配的记录',
-                          style: TextStyle(color: AppColors.textSecondary),
+                          style: TextStyle(color: context.appSecondaryText),
                         ),
                       ],
                     ),
@@ -147,10 +147,10 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                 if (_query.trim().isNotEmpty &&
                     recurringResults.isNotEmpty) ...[
                   const SizedBox(height: 18),
-                  const Text(
+                  Text(
                     '匹配的周期账单',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       fontSize: 14,
                     ),
                   ),

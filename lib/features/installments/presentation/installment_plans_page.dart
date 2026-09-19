@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/installment_plan.dart';
 import '../../../core/models/transaction_record.dart';
@@ -15,6 +14,7 @@ import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/installment_plan_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class InstallmentPlansPage extends ConsumerWidget {
   const InstallmentPlansPage({super.key});
@@ -45,29 +45,29 @@ class InstallmentPlansPage extends ConsumerWidget {
                 onPressed: plans.isEmpty
                     ? null
                     : () => _processDueRepayments(context, ref),
-                icon: const Icon(Icons.play_circle_outline),
+                icon: Icon(Icons.play_circle_outline),
                 tooltip: '执行到期还款',
               ),
               IconButton(
                 onPressed: () => _openCreate(context, ref),
-                icon: const Icon(Icons.add_circle_outline),
+                icon: Icon(Icons.add_circle_outline),
                 tooltip: '新增分期计划',
               ),
             ],
           ),
           AppCard(
-            color: AppColors.primarySoft,
-            child: const Text(
+            color: context.appPrimarySoft,
+            child: Text(
               '原始消费只记账一次；每期还款只改变现金与负债，不会重复计入消费。',
-              style: TextStyle(color: AppColors.primaryDark),
+              style: TextStyle(color: context.appPrimary),
             ),
           ),
           const SizedBox(height: 14),
           if (plans.isEmpty)
-            const AppCard(
+            AppCard(
               child: Text(
                 '还没有分期计划',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             )
           else
@@ -152,45 +152,45 @@ class _PlanCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.credit_score_outlined,
-                  color: AppColors.primary,
+                  color: context.appPrimary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     plan.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 MoneyText(
                   plan.monthlyPayment,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
               '第 ${plan.currentPeriod} / ${plan.totalPeriods} 期 · 每月 ${plan.dueDay} 日还款',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               '剩余本金',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appSecondaryText,
                 fontSize: 12,
               ),
             ),
             MoneyText(
               plan.remainingPrincipal,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
               ),
             ),
             if (original != null)

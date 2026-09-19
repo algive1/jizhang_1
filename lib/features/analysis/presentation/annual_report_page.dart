@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/analysis_report_export_service.dart';
 import '../data/analysis_repository.dart';
 import '../domain/annual_financial_report_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AnnualReportPage extends ConsumerStatefulWidget {
   const AnnualReportPage({super.key});
@@ -211,10 +211,10 @@ class _ScopeSelector extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       children: [
-        const Text(
+        Text(
           '统计范围',
           style: TextStyle(
-            color: AppColors.textSecondary,
+            color: context.appSecondaryText,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -268,7 +268,7 @@ class _AnnualReportCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '$scopeLabel · ${report.currency}',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
                 const SizedBox(height: 18),
                 Wrap(
@@ -334,7 +334,7 @@ class _AnnualReportCard extends StatelessWidget {
                                 : (month.expense / maxMonthly).clamp(0, 1),
                             minHeight: 8,
                             borderRadius: BorderRadius.circular(8),
-                            backgroundColor: AppColors.primarySoft,
+                            backgroundColor: context.appPrimarySoft,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -356,9 +356,9 @@ class _AnnualReportCard extends StatelessWidget {
           const SizedBox(height: 8),
           AppCard(
             child: report.topExpenseCategories.isEmpty
-                ? const Text(
+                ? Text(
                     '本年度暂无支出记录',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   )
                 : Column(
                     children: [
@@ -400,11 +400,11 @@ class _Metric extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+        Text(label, style: TextStyle(color: context.appSecondaryText)),
         const SizedBox(height: 3),
         Text(
           value,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ],
     ),
@@ -424,7 +424,7 @@ class _YearOverYearLine extends StatelessWidget {
       value == null
           ? '$label：上年数据不足'
           : '$label：${value! >= 0 ? '+' : ''}${value!.toStringAsFixed(1)}%',
-      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      style: TextStyle(color: context.appSecondaryText, fontSize: 12),
     ),
   );
 }
@@ -446,7 +446,7 @@ class _HealthCheckTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primaryDark),
+          Icon(icon, color: context.appPrimary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -457,7 +457,7 @@ class _HealthCheckTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         check.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                     Text(check.value),
@@ -466,8 +466,8 @@ class _HealthCheckTile extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   check.description,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appSecondaryText,
                     fontSize: 12,
                   ),
                 ),

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_intelligence.dart';
 import '../../../core/widgets/app_card.dart';
@@ -13,6 +12,7 @@ import '../data/bill_inbox_repository.dart';
 import '../data/merchant_rule_repository.dart';
 import '../application/transaction_intelligence_service.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class BillInboxPage extends ConsumerWidget {
   const BillInboxPage({super.key});
@@ -31,7 +31,7 @@ class BillInboxPage extends ConsumerWidget {
                   children: [
                     IconButton(
                       onPressed: context.pop,
-                      icon: const Icon(Icons.arrow_back),
+                      icon: Icon(Icons.arrow_back),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -41,12 +41,12 @@ class BillInboxPage extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     '分类不确定、疑似重复和缺少账户的记录会留在这里，系统不会自动删除流水。',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       height: 1.45,
                     ),
                   ),
@@ -103,18 +103,18 @@ class _InboxItemCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.fact_check_outlined, color: AppColors.primary),
+              Icon(Icons.fact_check_outlined, color: context.appPrimary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 7),
-          Text(detail, style: const TextStyle(color: AppColors.textSecondary)),
+          Text(detail, style: TextStyle(color: context.appSecondaryText)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -202,7 +202,7 @@ class _InboxItemCard extends ConsumerWidget {
     final result = await showModalBottomSheet<(String, bool)>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setState) => SafeArea(
           child: Padding(

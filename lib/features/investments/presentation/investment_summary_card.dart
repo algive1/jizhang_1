@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../domain/investment_asset.dart';
 import '../domain/investment_portfolio.dart';
 import 'investment_widgets.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 /// Top card on 投资管理总览.
 ///
@@ -188,7 +188,7 @@ class _SummaryMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 10, color: Color(0xFF7C8570)),
+          style: TextStyle(fontSize: 10, color: Color(0xFF7C8570)),
         ),
         const SizedBox(height: 2),
         InvestmentAmountText(
@@ -198,7 +198,7 @@ class _SummaryMetric extends StatelessWidget {
           size: 15,
           currency: currency,
           color: percent == null
-              ? AppColors.textSecondary
+              ? context.appSecondaryText
               : profitColor(percent!),
         ),
         ProfitText(percent: percent, fontSize: 10),
@@ -261,7 +261,7 @@ class InvestmentCategoryCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xF5FFFFFC),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+            border: Border.all(color: context.appDivider.withValues(alpha: .7)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,10 +283,10 @@ class InvestmentCategoryCard extends StatelessWidget {
                       type.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                   ),

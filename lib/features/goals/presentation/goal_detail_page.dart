@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/goal.dart';
@@ -18,6 +17,7 @@ import '../../../core/widgets/goal_progress_card.dart';
 import '../../../core/widgets/money_text.dart';
 import '../data/goal_repository.dart';
 import 'goal_planning_sheet.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class GoalDetailPage extends ConsumerStatefulWidget {
   const GoalDetailPage({required this.goalId, super.key});
@@ -75,15 +75,15 @@ class _GoalDetailPageState extends ConsumerState<GoalDetailPage> {
                   const SizedBox(height: 12),
                 ],
                 GoalProgressCard(goal: goal),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 AppCard(
                   padding: const EdgeInsets.all(6),
                   child: Material(
                     color: Colors.transparent,
                     child: ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.savings_outlined,
-                        color: AppColors.primary,
+                        color: context.appPrimary,
                       ),
                       title: const Text('每月目标预留'),
                       subtitle: Text(
@@ -284,7 +284,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         child: Material(
-          color: AppColors.surface,
+          color: context.appSurface,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
           ),
@@ -298,7 +298,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
                   child: Container(
                     width: 38,
                     height: 4,
-                    color: AppColors.divider,
+                    color: context.appDivider,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -438,23 +438,23 @@ class _MilestoneListDialogState extends State<_MilestoneListDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('调整阶段节点'),
+    title: Text('调整阶段节点'),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('用逗号分隔中间节点；最终目标节点会始终保留。'),
-        const SizedBox(height: 10),
+        Text('用逗号分隔中间节点；最终目标节点会始终保留。'),
+        SizedBox(height: 10),
         TextField(
           controller: _controller,
           autofocus: true,
           maxLines: 3,
           decoration: const InputDecoration(hintText: '20000, 40000, 60000'),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Text(
           '最终节点 ¥${widget.targetAmount.toStringAsFixed(2)}（不可删除）',
-          style: const TextStyle(color: AppColors.primaryDark),
+          style: TextStyle(color: context.appPrimary),
         ),
       ],
     ),
@@ -550,7 +550,7 @@ class _GoalIntro extends StatelessWidget {
           width: 92,
           height: 92,
           clipBehavior: Clip.antiAlias,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Color(0xFFF0EBDD),
             shape: BoxShape.circle,
           ),
@@ -563,11 +563,11 @@ class _GoalIntro extends StatelessWidget {
                 )
               : Icon(
                   _goalIcon(goal.goalType),
-                  color: AppColors.primaryDark,
+                  color: context.appPrimary,
                   size: 42,
                 ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,10 +576,10 @@ class _GoalIntro extends StatelessWidget {
                 goal.name,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 5),
+              SizedBox(height: 5),
               Text(
                 goal.goalType.label,
-                style: const TextStyle(color: AppColors.primaryDark),
+                style: TextStyle(color: context.appPrimary),
               ),
               if (goal.description != null) ...[
                 const SizedBox(height: 5),
@@ -676,27 +676,27 @@ class _StatCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.primary, size: 19),
-              const SizedBox(width: 5),
+              Icon(icon, color: context.appPrimary, size: 19),
+              SizedBox(width: 5),
               Expanded(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appSecondaryText,
                     fontSize: 11,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           FittedBox(
             child: Text(
               value,
               style: TextStyle(
-                color: emphasize ? AppColors.primary : AppColors.textPrimary,
+                color: emphasize ? context.appPrimary : context.appPrimaryText,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -725,9 +725,9 @@ class _NextMilestoneCard extends StatelessWidget {
           Icon(
             next == null ? Icons.celebration_outlined : Icons.spa_outlined,
             size: 40,
-            color: AppColors.primary,
+            color: context.appPrimary,
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -736,18 +736,18 @@ class _NextMilestoneCard extends StatelessWidget {
                   next == null
                       ? '目标已经完成！'
                       : '下一站 ¥${MoneyFormatter.whole(next.amount)}',
-                  style: const TextStyle(
-                    color: AppColors.primaryDark,
+                  style: TextStyle(
+                    color: context.appPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   next == null
                       ? '成果会一直保留在已完成目标中。'
                       : '还差 ¥${MoneyFormatter.whole(next.amount - goal.currentAmount)}',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
               ],
             ),
@@ -771,12 +771,12 @@ class _ForecastCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('存入速度预测', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 5),
-          const Text(
+          SizedBox(height: 5),
+          Text(
             '仅根据所选窗口内已发生的存入和取出记录计算；初始金额、调整和未来日期不会影响速度。',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 12),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: forecasts.map((forecast) {
               final date = forecast.estimatedCompletionDate;
@@ -785,7 +785,7 @@ class _ForecastCard extends StatelessWidget {
                   children: [
                     Text(
                       '${forecast.windowDays}天',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: context.appSecondaryText),
                     ),
                     const SizedBox(height: 3),
                     FittedBox(
@@ -823,12 +823,12 @@ class _RecentContributions extends StatelessWidget {
               const Spacer(),
               Text(
                 '${goal.contributions.length} 笔',
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             ],
           ),
           if (contributions.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 22),
               child: Text('还没有资金操作'),
             )
@@ -842,10 +842,10 @@ class _RecentContributions extends StatelessWidget {
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
-                  backgroundColor: AppColors.primarySoft,
+                  backgroundColor: context.appPrimarySoft,
                   child: Icon(
                     positive ? Icons.south_west : Icons.north_east,
-                    color: AppColors.primaryDark,
+                    color: context.appPrimary,
                   ),
                 ),
                 title: Text(switch (contribution.type) {
@@ -944,7 +944,7 @@ class _CompletedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppCard(
+    return AppCard(
       color: Color(0xFFE9EFD8),
       child: Row(
         children: [
@@ -954,7 +954,7 @@ class _CompletedBanner extends StatelessWidget {
             child: Text(
               '目标完成！这份成果会继续为你保留。',
               style: TextStyle(
-                color: AppColors.primaryDark,
+                color: context.appPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1006,7 +1006,7 @@ class _CelebrationOverlayState extends State<_CelebrationOverlay>
               width: 250,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: const [
                   BoxShadow(color: Color(0x4473963B), blurRadius: 32),
@@ -1026,33 +1026,33 @@ class _CelebrationOverlayState extends State<_CelebrationOverlay>
                             43 * math.cos(angle),
                             43 * math.sin(angle),
                           ),
-                          child: const CircleAvatar(
+                          child: CircleAvatar(
                             radius: 3,
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: context.appPrimary,
                           ),
                         );
                       }),
                       CircleAvatar(
                         radius: 34,
-                        backgroundColor: AppColors.primarySoft,
+                        backgroundColor: context.appPrimarySoft,
                         child: Icon(
                           widget.goalCompleted
                               ? Icons.celebration
                               : Icons.check,
                           size: 38,
-                          color: AppColors.primaryDark,
+                          color: context.appPrimary,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   Text(
                     widget.goalCompleted
                         ? '目标完成 🎉'
                         : '解锁 ${widget.milestoneCount} 个新节点',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.primaryDark,
+                    style: TextStyle(
+                      color: context.appPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),

@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/goal.dart';
 import '../application/goal_cover_storage_service.dart';
 import '../data/goal_repository.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class GoalCreationDraft {
   const GoalCreationDraft({
@@ -74,7 +74,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
       child: FractionallySizedBox(
         heightFactor: .93,
         child: Material(
-          color: AppColors.surface,
+          color: context.appSurface,
           clipBehavior: Clip.antiAlias,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -86,7 +86,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                 width: 38,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.divider,
+                  color: context.appDivider,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -168,18 +168,18 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                     ),
                     const SizedBox(height: 12),
                     ListTile(
-                      tileColor: AppColors.surfaceSoft,
+                      tileColor: context.appSurfaceSoft,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.calendar_month_outlined,
-                        color: AppColors.primary,
+                        color: context.appPrimary,
                       ),
-                      title: const Text('目标日期'),
+                      title: Text('目标日期'),
                       trailing: Text(
                         '${_targetDate.year}年${_targetDate.month}月',
-                        style: const TextStyle(color: AppColors.primaryDark),
+                        style: TextStyle(color: context.appPrimary),
                       ),
                       onTap: _pickTargetDate,
                     ),
@@ -216,15 +216,15 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                         const Spacer(),
                         TextButton.icon(
                           onPressed: target > 0 ? () => _editMilestone() : null,
-                          icon: const Icon(Icons.add),
-                          label: const Text('新增节点'),
+                          icon: Icon(Icons.add),
+                          label: Text('新增节点'),
                         ),
                       ],
                     ),
-                    const Text(
+                    Text(
                       '已根据目标金额自动建议，可点击修改；最终节点不可删除。',
                       style: TextStyle(
-                        color: AppColors.textSecondary,
+                        color: context.appSecondaryText,
                         fontSize: 12,
                       ),
                     ),

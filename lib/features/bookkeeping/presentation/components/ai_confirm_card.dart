@@ -8,6 +8,7 @@ import '../../../../core/models/account.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/models/voice_bookkeeping.dart';
+import '../../../../../app/theme/app_theme_tokens.dart';
 
 class AIConfirmCard extends StatelessWidget {
   const AIConfirmCard({
@@ -67,11 +68,11 @@ class AIConfirmCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         border: Border.all(
           color: transaction.needsReview
               ? AppColors.warning
-              : AppColors.divider,
+              : context.appDivider,
         ),
         borderRadius: BorderRadius.circular(18),
       ),
@@ -82,13 +83,13 @@ class AIConfirmCard extends StatelessWidget {
             children: [
               Text(
                 '第 ${index + 1} 笔 · ${transaction.type == TransactionType.income ? '收入' : '支出'}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const Spacer(),
               Text(
                 '${(transaction.confidence * 100).round()}% 置信度',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appSecondaryText,
                   fontSize: 12,
                 ),
               ),

@@ -15,6 +15,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../voice/application/speech_recognition_service.dart';
 import '../application/local_ocr_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class ReceiptOcrPage extends ConsumerStatefulWidget {
   const ReceiptOcrPage({super.key});
@@ -62,12 +63,12 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     '图片文字先在设备本地 OCR，再用本地规则解析；会员且需要补充理解时才会调用服务端 AI。保存前始终需要你确认。',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                       height: 1.45,
                     ),
                   ),
@@ -111,7 +112,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                     child: ExpansionTile(
                       tilePadding: EdgeInsets.zero,
                       childrenPadding: EdgeInsets.zero,
-                      title: const Text(
+                      title: Text(
                         '识别文字',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
@@ -123,8 +124,8 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                           alignment: Alignment.centerLeft,
                           child: SelectableText(
                             _rawText!,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: context.appSecondaryText,
                               height: 1.45,
                             ),
                           ),

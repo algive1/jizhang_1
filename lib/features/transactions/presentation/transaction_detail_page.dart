@@ -19,6 +19,7 @@ import '../data/transaction_attachment_repository.dart';
 import '../data/transactions_repository.dart';
 import '../domain/transaction_attachment.dart';
 import 'transaction_actions.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class TransactionDetailPage extends ConsumerStatefulWidget {
   const TransactionDetailPage({
@@ -327,7 +328,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           Row(
             children: [
               Text('附件', style: Theme.of(context).textTheme.titleMedium),
@@ -335,23 +336,23 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               if (attachments.isNotEmpty)
                 Text(
                   '${attachments.length} 个',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
             ],
           ),
           const SizedBox(height: 8),
           if (_attachmentsLoading && attachments.isEmpty)
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(18),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (attachments.isEmpty &&
               !legacyMetadata.hasMalformedAttachments)
-            const AppCard(
+            AppCard(
               padding: EdgeInsets.all(18),
               child: Text(
                 '暂无附件。需要补充时可点击右上角编辑流水。',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: context.appSecondaryText),
               ),
             )
           else ...[
@@ -434,7 +435,7 @@ class _DetailRow extends StatelessWidget {
             width: 76,
             child: Text(
               label,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: context.appSecondaryText),
             ),
           ),
           const SizedBox(width: 12),
@@ -554,7 +555,7 @@ class _AttachmentTile extends StatelessWidget {
                       : Icons.insert_drive_file_outlined,
                   color: attachment.isPdf
                       ? AppColors.warning
-                      : AppColors.primary,
+                      : context.appPrimary,
                   size: 40,
                 ),
               const SizedBox(width: 12),
@@ -567,15 +568,15 @@ class _AttachmentTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    SizedBox(height: 3),
                     Text(
                       attachment.isImage
                           ? '点击缩略图预览'
                           : attachment.isPdf
                           ? '打开 PDF 预览'
                           : '通过系统应用打开',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: context.appSecondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -611,10 +612,10 @@ class _DetailLoadFailure extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.receipt_long_outlined,
               size: 48,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
             const SizedBox(height: 12),
             Text(

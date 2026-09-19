@@ -24,6 +24,7 @@ import '../../sharing/data/session_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../data/profile_stats.dart';
 import 'profile_cards.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -119,7 +120,7 @@ class ProfilePage extends ConsumerWidget {
                 Expanded(
                   child: ProfileQuickStat(
                     icon: Icons.savings,
-                    color: AppColors.primary,
+                    color: context.appPrimary,
                     value: '未开放',
                     label: '我的积分',
                     onTap: () =>
@@ -247,7 +248,7 @@ class ProfilePage extends ConsumerWidget {
                 ProfileMenuItem(
                   Icons.checkroom_outlined,
                   '个性化设置',
-                  '主题、字体、图标',
+                  '主题外观',
                   () => push('/profile/appearance'),
                 ),
                 ProfileMenuItem(
@@ -327,7 +328,7 @@ class ProfilePage extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   '@${user.username}',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
               ],
               const SizedBox(height: 12),

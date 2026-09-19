@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 Future<DateTime?> showHomeMonthPicker(
   BuildContext context,
@@ -64,7 +64,7 @@ class _MonthPickerState extends State<_MonthPicker> {
                         backgroundColor:
                             year == widget.selected.year &&
                                 month == widget.selected.month
-                            ? AppColors.primarySoft
+                            ? context.appPrimarySoft
                             : null,
                       ),
                       onPressed: year == now.year && month > now.month

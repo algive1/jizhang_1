@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/account_repository.dart';
 import 'account_forms.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class AccountManagementPage extends ConsumerWidget {
   const AccountManagementPage({super.key});
@@ -64,9 +64,9 @@ class AccountManagementPage extends ConsumerWidget {
                     borderRadius: 18,
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.drag_handle,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                         ),
                         const SizedBox(width: 4),
                         CircleAvatar(
@@ -82,15 +82,15 @@ class AccountManagementPage extends ConsumerWidget {
                             children: [
                               Text(
                                 account.displayName,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 _accountTypeLabel(account.type),
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
+                                style: TextStyle(
+                                  color: context.appSecondaryText,
                                   fontSize: 12,
                                 ),
                               ),

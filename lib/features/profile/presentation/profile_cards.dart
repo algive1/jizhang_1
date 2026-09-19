@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/models/membership.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../data/profile_stats.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 const profileCream = Color(0xFFF7F7ED);
 const profileSurface = Color(0xFFFFFEF9);
@@ -43,10 +43,10 @@ class ProfileHero extends StatelessWidget {
                 child: IgnorePointer(
                   child: Transform.rotate(
                     angle: -.17,
-                    child: const Text(
+                    child: Text(
                       '好好花钱\n  也好好生活 ♥',
                       style: TextStyle(
-                        color: AppColors.primary,
+                        color: context.appPrimary,
                         fontSize: 12,
                         height: 1.4,
                         letterSpacing: 1,
@@ -94,21 +94,21 @@ class ProfileHero extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 5),
-                              const Text(
+                              Text(
                                 '♧  记录生活 更好地生活',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: AppColors.textSecondary,
+                                  color: context.appSecondaryText,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 '▣  已记账 $days 天',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
-                                  color: AppColors.textSecondary,
+                                  color: context.appSecondaryText,
                                 ),
                               ),
                             ],
@@ -243,7 +243,7 @@ class ProfileMembershipCard extends StatelessWidget {
                       sub == null
                           ? '本地免费方案 · 暂无付费订阅'
                           : '${DateFormat('yyyy-MM-dd').format(sub.expiresAt)} 到期 · ${active ? '还有 $days 天' : '已到期'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: Color(0xFF77633D),
                       ),
@@ -253,7 +253,7 @@ class ProfileMembershipCard extends StatelessWidget {
                       value: progress,
                       minHeight: 4,
                       borderRadius: BorderRadius.circular(8),
-                      color: AppColors.primary,
+                      color: context.appPrimary,
                       backgroundColor: const Color(0xFFFBF6E7),
                     ),
                   ],
@@ -297,10 +297,10 @@ class ProfileQuickStat extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: context.appPrimaryText,
                 ),
               ),
             ),
@@ -309,9 +309,9 @@ class ProfileQuickStat extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 '$label ›',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
               ),
             ),
@@ -356,11 +356,11 @@ class ProfileMonthlyCard extends StatelessWidget {
             child: IgnorePointer(
               child: Transform.rotate(
                 angle: -.15,
-                child: const Text(
+                child: Text(
                   '小小坚持\n  大大改变',
                   style: TextStyle(
                     fontSize: 11,
-                    color: AppColors.primary,
+                    color: context.appPrimary,
                     letterSpacing: 1,
                   ),
                 ),
@@ -379,7 +379,7 @@ class ProfileMonthlyCard extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 4,
                     children: [
-                      const Text(
+                      Text(
                         '本月记账进度',
                         style: TextStyle(
                           fontSize: 13,
@@ -390,9 +390,9 @@ class ProfileMonthlyCard extends StatelessWidget {
                         loading
                             ? '加载中'
                             : '已记 ${activity.recordedDays} 天 / ${activity.monthDays} 天',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
-                          color: AppColors.textSecondary,
+                          color: context.appSecondaryText,
                         ),
                       ),
                     ],
@@ -404,15 +404,15 @@ class ProfileMonthlyCard extends StatelessWidget {
                         : activity.recordedDays / activity.monthDays,
                     minHeight: 11,
                     borderRadius: BorderRadius.circular(10),
-                    color: AppColors.primary,
+                    color: context.appPrimary,
                     backgroundColor: const Color(0xFFE8EBDF),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     '坚持下去，遇见更好的自己！',
                     style: TextStyle(
                       fontSize: 10,
-                      color: AppColors.textSecondary,
+                      color: context.appSecondaryText,
                     ),
                   ),
                 ],
@@ -451,15 +451,15 @@ class ProfileMenuCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(
                   children: [
-                    Icon(items[i].icon, size: 23, color: AppColors.primary),
+                    Icon(items[i].icon, size: 23, color: context.appPrimary),
                     const SizedBox(width: 18),
                     Expanded(
                       flex: 5,
                       child: Text(
                         items[i].label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
-                          color: AppColors.textPrimary,
+                          color: context.appPrimaryText,
                         ),
                       ),
                     ),

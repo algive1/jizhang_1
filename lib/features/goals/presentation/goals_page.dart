@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/placement.dart';
 import '../../../core/widgets/goal_progress_card.dart';
@@ -200,7 +200,7 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Text(title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(width: 8),
-        Text('$count', style: const TextStyle(color: AppColors.textSecondary)),
+        Text('$count', style: TextStyle(color: context.appSecondaryText)),
       ],
     );
   }
@@ -216,13 +216,13 @@ class _EmptyGoal extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Column(
         children: [
-          const Icon(Icons.flag_outlined, size: 42, color: AppColors.primary),
+          Icon(Icons.flag_outlined, size: 42, color: context.appPrimary),
           const SizedBox(height: 8),
           const Text('从一个真正在意的目标开始'),
           TextButton(onPressed: onCreate, child: const Text('创建第一个目标')),

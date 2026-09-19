@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../formatters/transaction_date_formatter.dart';
 import '../models/transaction_record.dart';
 import 'category_icon.dart';
 import 'money_text.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class TransactionTile extends StatelessWidget {
   const TransactionTile({
@@ -57,7 +57,7 @@ class TransactionTile extends StatelessWidget {
               ),
             ),
             if (showDivider)
-              const Divider(height: 1, indent: 50, color: AppColors.divider),
+              Divider(height: 1, indent: 50, color: context.appDivider),
           ],
         ),
       ),
@@ -110,10 +110,10 @@ class _TransactionRow extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary,
+                        color: context.appPrimaryText,
                       ),
                     ),
                   ),
@@ -133,10 +133,10 @@ class _TransactionRow extends StatelessWidget {
                                     ? transaction.amount > 0
                                     : transaction.isIncome),
                           showSign: !isTransfer,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                            color: context.appPrimaryText,
                           ),
                           hidden: amountHidden,
                         ),
@@ -150,10 +150,10 @@ class _TransactionRow extends StatelessWidget {
                 subtitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   height: 1.4,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
               ),
             ],
