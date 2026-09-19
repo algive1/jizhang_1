@@ -108,7 +108,7 @@ class SharedFamilyService implements FamilyService {
     String userId,
     FamilyRole role,
   ) async {
-    if (role == FamilyRole.owner) throw ArgumentError('当前不支持所有权转让');
+    if (role == FamilyRole.owner) throw ArgumentError('请使用所有权转让操作');
     await _request(
       '/books/$familyId/members/$userId',
       method: 'PATCH',
@@ -126,7 +126,8 @@ class SharedFamilyService implements FamilyService {
   @override
   Future<void> disband(String familyId) async {
     await _request('/books/$familyId/disband', method: 'POST', body: {});
-    await sync.sync();
+    // The server has already archived the shared book. Do not immediately
+    // push local drafts back into a book that is intentionally read-only.
   }
 
   @override
