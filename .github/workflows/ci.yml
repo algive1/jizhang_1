@@ -35,6 +35,22 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Validate release scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n build_apk_release.sh
+          bash -n scripts/build_install_android.sh
+          bash -n scripts/android_release_preflight.sh
+          bash scripts/android_release_preflight.sh --local
+          if SHARED_API_BASE_URL=https://api.invalid.example bash scripts/android_release_preflight.sh --production; then
+            echo "::error::Production preflight unexpectedly passed without a private keystore"
+            exit 1
+          fi
+
+      - name: Validate Android native build configuration
+        run: flutter build apk --debug --no-pub
+
       - name: Analyze
         run: flutter analyze
 

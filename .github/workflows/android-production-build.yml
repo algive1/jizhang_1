@@ -1,0 +1,135 @@
+name: Android Production Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Production HTTPS API base URL, e.g. https://api.example.com"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-production-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Signed AAB + APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+
+    env:
+      SHARED_API_BASE_URL: ${{ inputs.api_base_url }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      WECHAT_APP_ID: ${{ vars.WECHAT_APP_ID }}
+      WECHAT_UNIVERSAL_LINK: ${{ vars.WECHAT_UNIVERSAL_LINK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate production inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in             ANDROID_KEYSTORE_BASE64             ANDROID_KEYSTORE_PASSWORD             ANDROID_KEY_ALIAS             ANDROID_KEY_PASSWORD             WECHAT_APP_ID             WECHAT_UNIVERSAL_LINK             SHARED_API_BASE_URL
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing production value: $name"
+              exit 1
+            fi
+          done
+          case "$SHARED_API_BASE_URL" in
+            https://*) ;;
+            *) echo "::error::api_base_url must use HTTPS"; exit 1 ;;
+          esac
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Materialize Android signing files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-upload.jks
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          def esc(value: str) -> str:
+              return (
+                  value.replace("\\", "\\\\")
+                  .replace("\n", "\\n")
+                  .replace("\r", "\\r")
+              )
+
+          values = {
+              "storeFile": "release-upload.jks",
+              "storePassword": os.environ["ANDROID_KEYSTORE_PASSWORD"],
+              "keyAlias": os.environ["ANDROID_KEY_ALIAS"],
+              "keyPassword": os.environ["ANDROID_KEY_PASSWORD"],
+          }
+          Path("android/key.properties").write_text(
+              "".join(f"{key}={esc(value)}\n" for key, value in values.items()),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Inject non-secret release app identifiers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("pubspec.yaml")
+          text = path.read_text(encoding="utf-8")
+          text, app_count = re.subn(
+              r"(?m)^(\s*app_id:\s*).+$",
+              lambda m: m.group(1) + os.environ["WECHAT_APP_ID"],
+              text,
+              count=1,
+          )
+          text, link_count = re.subn(
+              r"(?m)^(\s*universal_link:\s*).+$",
+              lambda m: m.group(1) + os.environ["WECHAT_UNIVERSAL_LINK"],
+              text,
+              count=1,
+          )
+          if app_count != 1 or link_count != 1:
+              raise SystemExit("Unable to inject WeChat release values")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Build signed production artifacts
+        shell: bash
+        run: bash build_apk_release.sh
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-production-${{ github.run_number }}
+          path: |
+            dist/*-release.aab
+            dist/*-release.apk
+            dist/*-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/key.properties android/app/release-upload.jks
