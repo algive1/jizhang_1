@@ -60,11 +60,11 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
         ? null
         : AssetHistory(selected.accounts, records, DateTime.now());
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF3F6E9), Color(0xFFF7F8EE)],
+          colors: [context.appPrimarySoft.withValues(alpha: .72), context.appBackground],
         ),
       ),
       child: SafeArea(
@@ -312,7 +312,7 @@ class _Header extends StatelessWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xEFFFFFFB),
+                  color: context.appSurface.withValues(alpha: .94),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -662,7 +662,7 @@ class _RecentChangesState extends State<_RecentChanges> {
             for (var index = 0; index < visible.length; index++) ...[
               _RecentRow(record: visible[index], accountIds: accountIds),
               if (index < visible.length - 1)
-                Divider(height: 1, indent: 44, color: Color(0xFFE8EBDD)),
+                Divider(height: 1, indent: 44, color: context.appDivider),
             ],
           if (_showTip) ...[
             SizedBox(height: 5),
@@ -739,8 +739,8 @@ class _RecentRow extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3F5E8),
+            decoration: BoxDecoration(
+              color: context.appSurfaceSoft,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -928,7 +928,7 @@ class _AssetSheetFrame extends StatelessWidget {
               width: 42,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xffd6dcc8),
+                color: context.appDivider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
