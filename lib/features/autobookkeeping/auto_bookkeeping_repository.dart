@@ -33,10 +33,7 @@ class AutoBookkeepingRepository {
       await db.appSettingsDao.getValue(preferenceKey) ?? '{}',
     ) as Map<String, dynamic>;
     final merchantKey = const MerchantNormalizer().normalize(merchant);
-    final preference =
-        preferences['expense|$merchantKey'] ??
-        preferences[merchantKey] ??
-        preferences[merchant];
+    final preference = preferences['expense|$merchantKey'];
     return {
       'books': books
           .map(
@@ -179,16 +176,7 @@ class AutoBookkeepingRepository {
       ) as Map<String, dynamic>;
       final merchantKey = const MerchantNormalizer().normalize(merchant);
       final typedMerchantKey = '${transactionType.name}|$merchantKey';
-      final old =
-          (preferences[typedMerchantKey] ??
-                  (transactionType == TransactionType.expense
-                      ? preferences[merchantKey] ?? preferences[merchant]
-                      : null))
-              as Map<String, dynamic>?;
-      if (transactionType == TransactionType.expense) {
-        preferences.remove(merchant);
-        preferences.remove(merchantKey);
-      }
+      final old = preferences[typedMerchantKey] as Map<String, dynamic>?;
       preferences[typedMerchantKey] = {
         'merchantKey': merchantKey,
         'transactionType': transactionType.name,
