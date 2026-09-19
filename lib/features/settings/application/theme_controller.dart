@@ -31,18 +31,15 @@ final preferredThemeProvider = AsyncNotifierProvider<ThemeController, String>(Th
 
 final themeCatalogProvider = FutureProvider<ThemeCatalog>((ref) async {
   final session = ref.watch(sessionRepositoryProvider);
-  const baseUrl = String.fromEnvironment('SHARED_API_BASE_URL');
-  if (baseUrl.isNotEmpty) {
-    try {
+  try {
       final data = await ref.read(sharedApiProvider).request('/themes/catalog');
       final items = (data['themes'] as List? ?? const [])
           .whereType<Map>()
           .map((e) => AppThemeDefinition.fromJson(Map<String, dynamic>.from(e)))
           .toList();
       if (items.any((e) => e.id == BuiltInThemes.freshGreen.id)) return ThemeCatalog(items);
-    } on Object {
-      // Remote appearance config is best-effort. Never block app startup.
-    }
+  } on Object {
+    // Remote appearance config is best-effort. Never block app startup.
   }
   // Keep the dependency alive so a login/logout refresh can rebuild this provider.
   session.user;
