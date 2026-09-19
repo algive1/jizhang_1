@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/widgets/app_bottom_navigation.dart';
+import 'package:jizhang_app/core/widgets/app_bottom_sheet.dart';
 import 'package:jizhang_app/core/widgets/app_scaffold.dart';
 
 void main() {
@@ -58,6 +61,74 @@ void main() {
     }
   });
 
+  test('primary workspace modal sheets are promoted above the app shell', () {
+    const paths = [
+      'lib/core/widgets/app_bottom_sheet.dart',
+      'lib/core/widgets/app_scaffold.dart',
+      'lib/features/books/presentation/book_selector.dart',
+      'lib/features/goals/presentation/goal_creation_sheet.dart',
+      'lib/features/goals/presentation/goal_planning_sheet.dart',
+      'lib/features/home/presentation/home_page.dart',
+      'lib/features/profile/presentation/profile_page.dart',
+      'lib/features/transactions/presentation/transaction_actions.dart',
+      'lib/features/transactions/presentation/transactions_page.dart',
+    ];
+
+    for (final path in paths) {
+      final lines = File(path).readAsLinesSync();
+      for (var index = 0; index < lines.length; index++) {
+        if (!lines[index].contains('showModalBottomSheet')) continue;
+        final end = index + 12 < lines.length ? index + 12 : lines.length;
+        final callHead = lines.sublist(index, end).join('\n');
+        expect(
+          callHead,
+          contains('useRootNavigator: true'),
+          reason:
+              '$path:${index + 1} must present above the ShellRoute navigator '
+              'so primary navigation cannot remain visible.',
+        );
+      }
+    }
+  });
+
+  testWidgets('AppBottomSheet pushes onto the root navigator', (tester) async {
+    final rootObserver = _RecordingNavigatorObserver();
+    final nestedObserver = _RecordingNavigatorObserver();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorObservers: [rootObserver],
+        home: Navigator(
+          observers: [nestedObserver],
+          onGenerateRoute: (_) => MaterialPageRoute<void>(
+            builder: (nestedContext) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  key: const ValueKey('open-root-sheet'),
+                  onPressed: () => AppBottomSheet.show<void>(
+                    context: nestedContext,
+                    builder: (_) => const SizedBox(
+                      height: 120,
+                      child: Center(child: Text('root sheet')),
+                    ),
+                  ),
+                  child: const Text('Open sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-root-sheet')));
+    await tester.pumpAndSettle();
+
+    expect(rootObserver.popupPushes, 1);
+    expect(nestedObserver.popupPushes, 0);
+    expect(find.text('root sheet'), findsOneWidget);
+  });
+
   testWidgets(
     'bottom app bar keeps full scaffold width so FAB and notch share X coordinates',
     (tester) async {
@@ -99,4 +170,14 @@ void main() {
       );
     },
   );
+}
+
+class _RecordingNavigatorObserver extends NavigatorObserver {
+  int popupPushes = 0;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route is PopupRoute<dynamic>) popupPushes++;
+  }
 }

@@ -90,6 +90,7 @@ Future<LedgerBook?> showBookChoiceSheet(
 }) {
   return showModalBottomSheet<LedgerBook>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: context.appBackground,
@@ -880,6 +881,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     );
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _AllBooksSheet(
@@ -913,6 +915,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     if (!context.mounted || books.length < 2) return;
     final order = await showModalBottomSheet<List<String>>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _BookOrderSheet(books: books),
@@ -1132,6 +1135,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
   Future<_CreateBookDraft?> _askCreateBook(BuildContext context) {
     return showModalBottomSheet<_CreateBookDraft>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,

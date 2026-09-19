@@ -434,6 +434,7 @@ class _HomePageState extends ConsumerState<HomePage>
   Future<void> _showCalculation(DashboardSnapshot snapshot) =>
       showModalBottomSheet<void>(
         context: context,
+        useRootNavigator: true,
         showDragHandle: true,
         isScrollControlled: true,
         builder: (context) => SafeArea(
@@ -511,6 +512,7 @@ class _HomePageState extends ConsumerState<HomePage>
   ) {
     return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => Consumer(
