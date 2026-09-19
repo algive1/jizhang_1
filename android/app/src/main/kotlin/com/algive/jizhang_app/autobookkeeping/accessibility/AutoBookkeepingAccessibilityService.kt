@@ -39,13 +39,16 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var visibleWindowCount = 0
     override fun onServiceConnected() {
         Diagnostics.accessibilityConnected = true
+        Diagnostics.ruleSchemaVersion = ruleRegistry.schemaVersion
+        Diagnostics.ruleVersions = ruleRegistry.versionsSummary()
+        Diagnostics.ruleSource =
+            if (ruleRegistry.loadedFromAsset) "asset" else "built_in"
         ensureOverlayService()
         AutoBookkeepingLogStore.record(
             this,
             "service_connected",
             "accessibility service connected rules=" +
-                "${ruleRegistry.versionsSummary()} source=" +
-                if (ruleRegistry.loadedFromAsset) "asset" else "built_in",
+                "${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource}",
         )
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
