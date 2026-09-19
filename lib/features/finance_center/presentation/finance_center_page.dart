@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_form.dart';
 import '../data/finance_center_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -470,7 +471,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
           children: [
             DropdownButtonFormField<InvoiceDirection>(
               initialValue: direction,
-              decoration: _selectDecoration('方向'),
+              decoration: appFieldDecoration('方向'),
               items: const [
                 DropdownMenuItem(
                   value: InvoiceDirection.incoming,
@@ -494,7 +495,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
             ),
             DropdownButtonFormField<InvoiceStatus>(
               initialValue: status,
-              decoration: _selectDecoration('状态'),
+              decoration: appFieldDecoration('状态'),
               items: InvoiceStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -602,7 +603,7 @@ class _TaxDialogState extends State<_TaxDialog> {
             ),
             DropdownButtonFormField<TaxFilingStatus>(
               initialValue: status,
-              decoration: _selectDecoration('状态'),
+              decoration: appFieldDecoration('状态'),
               items: TaxFilingStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -727,7 +728,7 @@ class _StatementDialogState extends State<_StatementDialog> {
           children: [
             DropdownButtonFormField<CardStatementType>(
               initialValue: type,
-              decoration: _selectDecoration('账单类型'),
+              decoration: appFieldDecoration('账单类型'),
               items: const [
                 DropdownMenuItem(
                   value: CardStatementType.credit,
@@ -755,7 +756,7 @@ class _StatementDialogState extends State<_StatementDialog> {
               ),
             DropdownButtonFormField<CardStatementStatus>(
               initialValue: status,
-              decoration: _selectDecoration('状态'),
+              decoration: appFieldDecoration('状态'),
               items: CardStatementStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -828,9 +829,6 @@ InputDecoration _financeDecoration({
   constraints: const BoxConstraints(minHeight: _financeFieldHeight),
   suffixIcon: suffixIcon,
 );
-
-InputDecoration _selectDecoration(String label) =>
-    _financeDecoration(hintText: label);
 
 Widget _field(
   TextEditingController controller,
