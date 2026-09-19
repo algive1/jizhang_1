@@ -72,7 +72,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
             AppSelect<AccountType>(
               initialValue: _type,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: '账户渠道 / 类型'),
+              decoration: appFieldDecoration('账户渠道 / 类型'),
               items: [
                 for (final t in AccountType.values)
                   DropdownMenuItem(value: t, child: Text(t.label)),
@@ -111,7 +111,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
               AppSelect<AssetForm>(
                 initialValue: _assetForm,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: '资金形式'),
+                decoration: appFieldDecoration('资金形式'),
                 items: [
                   for (final f in AssetForm.values)
                     DropdownMenuItem(value: f, child: Text(f.label)),
@@ -126,7 +126,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
               AppSelect<String>(
                 initialValue: _currency,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: '币种（分别统计，不折算）'),
+                decoration: appFieldDecoration('币种（分别统计，不折算）'),
                 items: [
                   for (final c in {'CNY', 'USD', 'EUR', 'HKD', _currency})
                     DropdownMenuItem(value: c, child: Text(c)),
