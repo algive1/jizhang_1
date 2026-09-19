@@ -5,7 +5,10 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../../core/models/membership.dart';
 import '../../membership/data/membership_repository.dart';
+import '../../sharing/data/session_repository.dart';
+import '../../sharing/data/shared_api.dart';
 import '../domain/transaction_parser.dart';
+import 'remote_ai_parsing_gateway.dart';
 
 enum SpeechRecognitionStatus { idle, listening, stopped, unavailable, error }
 
@@ -197,6 +200,12 @@ final voiceTransactionParserProvider = Provider<TransactionParser>((ref) {
   final membership = ref.watch(membershipProvider).value;
   return HybridTransactionParser(
     rules: const RuleBasedTransactionParser(),
+    ai: CachedRetryingAiTransactionParser(
+      gateway: RemoteAiParsingGateway(
+        ref.watch(sharedApiProvider),
+        ref.watch(sessionRepositoryProvider),
+      ),
+    ),
     canUseAi: () {
       final quota = membership?.quotaFor(EntitlementKey.voiceAi);
       return (membership?.has(EntitlementKey.voiceAi) ?? false) &&
