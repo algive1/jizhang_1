@@ -125,6 +125,26 @@ class PaymentEngineTest {
         assertEquals("PAYMENT_NOTIFICATION_REFUND", refund?.scene?.scene)
     }
 
+    @Test fun nativeNotificationParserRejectsWechatChatIncomeAndRefundQuotes() {
+        val parser = PaymentNotificationCandidateParser()
+        assertNull(
+            parser.parse(
+                "com.tencent.mm",
+                "小王",
+                "收款成功 ￥88.00，来自张三",
+                100000,
+            ),
+        )
+        assertNull(
+            parser.parse(
+                "com.tencent.mm",
+                "小王",
+                "退款成功 ￥28.50，退款方：测试餐厅",
+                100000,
+            ),
+        )
+    }
+
     @Test fun nativeNotificationParserRejectsPendingAndWechatChat() {
         val parser = PaymentNotificationCandidateParser()
         assertNull(
