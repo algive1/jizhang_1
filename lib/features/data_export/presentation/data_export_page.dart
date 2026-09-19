@@ -15,6 +15,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../application/local_backup_service.dart';
 import '../domain/transaction_csv.dart';
 import '../../security/application/app_lock_service.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 class DataExportPage extends ConsumerStatefulWidget {
   const DataExportPage({super.key});
@@ -294,18 +295,18 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 if (transactions.isLoading || accounts.isLoading)
                   const LinearProgressIndicator()
                 else if (!ready) ...[
-                  const Text('本地数据读取失败，暂时无法导出'),
+                  Text('本地数据读取失败，暂时无法导出'),
                   TextButton(
                     onPressed: () {
                       ref.invalidate(transactionsProvider);
                       ref.invalidate(allAccountsProvider);
                     },
-                    child: const Text('重新加载'),
+                    child: Text('重新加载'),
                   ),
                 ] else
                   Text(
                     '可导出 ${transactions.value!.length} 笔记录',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -363,16 +364,16 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
               children: [
                 Text('完整本地备份', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 12),
-                const Text('导出密码加密的完整备份，包含 SQLite 账本与现有附件。备份密码不会上传或保存，恢复时必须重新输入。'),
+                Text('导出密码加密的完整备份，包含 SQLite 账本与现有附件。备份密码不会上传或保存，恢复时必须重新输入。'),
                 const SizedBox(height: 12),
                 if (databaseState.isLoading)
                   const LinearProgressIndicator()
                 else if (databaseState.hasError)
-                  const Text('本地数据库读取失败，暂时无法备份或恢复')
+                  Text('本地数据库读取失败，暂时无法备份或恢复')
                 else
-                  const Text(
+                  Text(
                     '恢复前会校验密码、文件完整性与数据库结构，并安全暂存到下次启动再切换，避免替换正在使用的数据库。',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.appSecondaryText),
                   ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -458,7 +459,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 SizedBox(height: 8),
                 Text(
                   '卸载应用可能丢失本地账本，请先导出加密完整备份。新格式 .hhbackup 同时包含数据库与现有附件；旧 .sqlite/.db 备份仍可兼容恢复但不含附件。',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appSecondaryText),
                 ),
               ],
             ),
