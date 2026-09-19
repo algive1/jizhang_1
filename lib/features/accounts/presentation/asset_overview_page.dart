@@ -154,8 +154,8 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 onViewAll: () => context.push('/transactions'),
               ),
               if (activeBook?.usesPrimaryAssets == true)
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     '当前账本使用主账本资产；归档账户仍计入资产合计。',
                     style: TextStyle(
