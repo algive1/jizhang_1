@@ -58,7 +58,7 @@ final effectiveThemeProvider = Provider<AppThemeDefinition>((ref) {
   final selected = catalog.byId(preferred);
   if (!selected.premium) return selected;
   final membership = ref.watch(membershipProvider).value;
-  if (membership != null && membership.membership.plan != MembershipPlan.free && membership.membership.canUseGrantedEntitlements) {
+  if (membership != null && membership.has(EntitlementKey.customTheme)) {
     return selected;
   }
   // Preserve the preferred id locally. If membership is restored the chosen
