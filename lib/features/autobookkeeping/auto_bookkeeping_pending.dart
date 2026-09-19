@@ -119,12 +119,6 @@ class MethodChannelAutoBookkeepingPendingBridge
         if (candidate.identifierSuffix != null)
           'identifierSuffix': candidate.identifierSuffix,
       });
-      if (raw is bool) {
-        // Backward compatibility with older native builds during hot reload.
-        return raw
-            ? AutoBookkeepingEnqueueResult.accepted
-            : AutoBookkeepingEnqueueResult.busy;
-      }
       if (raw is Map) {
         return switch (raw['status']?.toString()) {
           'accepted' => AutoBookkeepingEnqueueResult.accepted,
