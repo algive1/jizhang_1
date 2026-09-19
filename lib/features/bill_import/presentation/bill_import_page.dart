@@ -329,19 +329,16 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       _error = null;
     });
     try {
-      final picked = await FilePicker().pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['csv', 'txt'],
-        allowMultiple: false,
-        withData: false,
       );
-      final file = picked?.files.single;
       final path = file?.path;
       if (path == null) return;
       final result = await const BillImportService().parseFile(path);
       if (!mounted) return;
       setState(() {
-        _fileName = file?.name;
+        _fileName = file.name;
         _result = result;
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
