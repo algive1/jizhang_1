@@ -2,6 +2,7 @@ import '../../../core/widgets/app_form.dart';
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,7 @@ import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
 import '../../transactions/data/refund_service.dart';
+import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
@@ -43,6 +45,7 @@ class _AutoBookkeepingConfirmPageState
   AutoBookkeepingRecommendation? _recommendation;
   TransactionRecord? _matchedRefundOriginal;
   bool _rememberForMerchant = true;
+  bool _keepScreenshot = true;
   bool _loading = true;
   bool _saving = false;
   bool _closing = false;
@@ -85,6 +88,9 @@ class _AutoBookkeepingConfirmPageState
         _categoryId = recommendation?.categoryId;
         _loading = false;
       });
+      if (candidate != null && candidate.screenshotPath == null) {
+        unawaited(_refreshScreenshot(candidate.fingerprint));
+      }
     } on Object catch (error) {
       if (!mounted) return;
       setState(() {
@@ -94,10 +100,27 @@ class _AutoBookkeepingConfirmPageState
     }
   }
 
-  Future<void> _completePending() async {
+  Future<void> _refreshScreenshot(String fingerprint) async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted || _saving || _closing) return;
+    final refreshed = await ref
+        .read(autoBookkeepingPendingBridgeProvider)
+        .getPending();
+    if (!mounted ||
+        refreshed == null ||
+        refreshed.fingerprint != fingerprint ||
+        refreshed.screenshotPath == null) {
+      return;
+    }
+    setState(() => _candidate = refreshed);
+  }
+
+  Future<void> _completePending({bool keepScreenshot = false}) async {
     if (_closing) return;
     _closing = true;
-    await ref.read(autoBookkeepingPendingBridgeProvider).complete();
+    await ref
+        .read(autoBookkeepingPendingBridgeProvider)
+        .complete(keepScreenshot: keepScreenshot);
   }
 
   Future<void> _close() async {
@@ -138,6 +161,10 @@ class _AutoBookkeepingConfirmPageState
           'confirmedIn': 'autobookkeeping_confirm_page',
         },
       };
+      final screenshotPath =
+          _keepScreenshot && candidate.screenshotPath != null
+          ? candidate.screenshotPath
+          : null;
       final transactionType = _transactionTypeFor(candidate.transactionType);
       final matchedRefund = transactionType == TransactionType.refund &&
               _matchedRefundOriginal?.bookId == bookId
@@ -160,6 +187,9 @@ class _AutoBookkeepingConfirmPageState
                     occurredAt: candidate.timestamp,
                     source: TransactionSource.auto,
                     userCorrected: true,
+                    attachmentPaths: screenshotPath == null
+                        ? const []
+                        : [screenshotPath],
                     metadata: metadata,
                   ),
                 )
@@ -176,6 +206,23 @@ class _AutoBookkeepingConfirmPageState
               metadataJson: jsonEncode(metadata),
               source: TransactionSource.auto,
             );
+
+      var screenshotAttached = screenshotPath == null || matchedRefund == null;
+      if (matchedRefund != null && screenshotPath != null) {
+        try {
+          await ref
+              .read(transactionAttachmentRepositoryProvider)
+              .replaceForTransaction(
+                transactionId: saved.id,
+                bookId: saved.bookId,
+                paths: [screenshotPath],
+              );
+          screenshotAttached = true;
+        } on Object {
+          screenshotAttached = false;
+        }
+      }
+
       try {
         await ref
             .read(autoBookkeepingLearningServiceProvider)
@@ -192,7 +239,9 @@ class _AutoBookkeepingConfirmPageState
         // must never be rolled back or shown as failed because memory could
         // not be updated.
       }
-      await _completePending();
+      await _completePending(
+        keepScreenshot: screenshotPath != null && screenshotAttached,
+      );
       await BookkeepingFeedback.notifySuccess(count: 1);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
@@ -326,6 +375,37 @@ class _AutoBookkeepingConfirmPageState
                 Text(
                   '已按订单号匹配原消费，将同步冲减原消费净支出',
                   style: TextStyle(color: context.appPrimary),
+                ),
+              ],
+              if (candidate.screenshotPath != null) ...[
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    File(candidate.screenshotPath!),
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      height: 72,
+                      alignment: Alignment.center,
+                      color: context.appSurfaceSoft,
+                      child: Text(
+                        '支付截图暂时无法预览',
+                        style: TextStyle(color: context.appSecondaryText),
+                      ),
+                    ),
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('保存这张支付截图'),
+                  subtitle: const Text('关闭后，完成记账时会删除临时截图'),
+                  value: _keepScreenshot,
+                  onChanged: _saving
+                      ? null
+                      : (value) =>
+                            setState(() => _keepScreenshot = value),
                 ),
               ],
             ],
