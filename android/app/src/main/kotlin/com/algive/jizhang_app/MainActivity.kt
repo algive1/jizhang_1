@@ -13,6 +13,9 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
@@ -274,6 +277,48 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/local_ocr")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "recognize") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val path = call.argument<String>("path")
+                if (path.isNullOrBlank()) {
+                    result.error("INVALID_IMAGE", "OCR image path is empty", null)
+                    return@setMethodCallHandler
+                }
+                val file = File(path)
+                if (!file.exists() || !file.isFile) {
+                    result.error("IMAGE_NOT_FOUND", "OCR image does not exist", null)
+                    return@setMethodCallHandler
+                }
+                val image = try {
+                    InputImage.fromFilePath(this, Uri.fromFile(file))
+                } catch (error: Exception) {
+                    result.error("IMAGE_DECODE", error.localizedMessage, null)
+                    return@setMethodCallHandler
+                }
+                val recognizer = TextRecognition.getClient(
+                    ChineseTextRecognizerOptions.Builder().build(),
+                )
+                recognizer.process(image)
+                    .addOnSuccessListener { recognized ->
+                        result.success(
+                            mapOf(
+                                "text" to recognized.text,
+                                "blocks" to recognized.textBlocks.map { it.text },
+                            ),
+                        )
+                    }
+                    .addOnFailureListener { error ->
+                        result.error("OCR_FAILED", error.localizedMessage, null)
+                    }
+                    .addOnCompleteListener {
+                        recognizer.close()
+                    }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, fileChannelName)
             .setMethodCallHandler { call, result ->
                 if (call.method != "openFile") {
