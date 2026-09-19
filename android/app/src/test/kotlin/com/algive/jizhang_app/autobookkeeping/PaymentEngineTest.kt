@@ -166,6 +166,17 @@ class PaymentEngineTest {
         assertEquals("晚餐", candidate?.note)
     }
 
+    @Test fun nativeNotificationParserDoesNotTreatPaymentOrderIdAsAmount() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "支付成功 ￥28.50，商户：瑞幸咖啡，支付单号：PAY202609200001",
+            100000,
+        )
+        assertEquals(2850L, candidate?.amountInCents)
+        assertEquals("PAY202609200001", candidate?.orderId)
+    }
+
     @Test fun nativeNotificationParserClassifiesIncomeAndRefund() {
         val parser = PaymentNotificationCandidateParser()
         val income = parser.parse(
