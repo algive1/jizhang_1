@@ -279,7 +279,7 @@ class ProfileQuickStat extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-    color: profileSurface,
+    color: context.appSurface,
     borderRadius: BorderRadius.circular(15),
     child: InkWell(
       onTap: onTap,
@@ -434,7 +434,7 @@ class ProfileMenuCard extends StatelessWidget {
   final List<ProfileMenuItem> items;
   @override
   Widget build(BuildContext context) => Material(
-    color: profileSurface,
+    color: context.appSurface,
     borderRadius: BorderRadius.circular(19),
     clipBehavior: Clip.antiAlias,
     child: Padding(
