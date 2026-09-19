@@ -112,12 +112,18 @@ Future<void> scheduledFinanceMain() async {
     };
     final market = HttpMarketDataProvider(marketApi);
     for (final assetBookId in assetBookIds) {
-      await DriftInvestmentRepository(
-        database,
-        market,
-        bookId: assetBookId,
-        cache: MemoryQuoteCache(),
-      ).ensureTodaySnapshot();
+      try {
+        await DriftInvestmentRepository(
+          database,
+          market,
+          bookId: assetBookId,
+          cache: MemoryQuoteCache(),
+        ).ensureTodaySnapshot();
+      } on Object {
+        // Market data is auxiliary to recurring bills and installment
+        // processing. A provider/network outage must not fail the whole daily
+        // finance task; the next foreground/background run will retry.
+      }
     }
 
     // Read the complete table for notification cleanup as well. This also
