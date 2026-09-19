@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/formatters/money_formatter.dart';
+import '../../../core/models/transaction_record.dart';
 import '../../account/application/account_auth_gate.dart';
 import '../../account/application/account_pending_intent.dart';
 import '../../account/application/account_session_controller.dart';
@@ -17,6 +19,7 @@ import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/application/shared_book_sync_service.dart';
+import '../../transactions/data/transactions_repository.dart';
 import '../data/shared_family_service.dart';
 import 'unavailable_drafts_card.dart';
 
@@ -33,6 +36,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
   List<Json> _members = [];
   List<FamilyInvitation> _invitations = [];
   String? _loadedBook;
+  bool _membersLoading = false;
   @override
   void dispose() {
     _code.dispose();
@@ -89,18 +93,24 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
   }
 
   Future<void> _loadMembers() async {
-    final book = ref.read(activeBookProvider);
-    if (book?.sharedId == null) return;
-    final service = ref.read(familyServiceProvider);
-    final members = await service.memberDetails(book!.sharedId!);
-    final invites = book.canManage
-        ? await service.invitations(book.sharedId!)
-        : <FamilyInvitation>[];
-    if (mounted)
-      setState(() {
-        _members = members;
-        _invitations = invites;
-      });
+    if (mounted) setState(() => _membersLoading = true);
+    try {
+      final book = ref.read(activeBookProvider);
+      if (book?.sharedId == null) return;
+      final service = ref.read(familyServiceProvider);
+      final members = await service.memberDetails(book!.sharedId!);
+      final invites = book.canManage
+          ? await service.invitations(book.sharedId!)
+          : <FamilyInvitation>[];
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _invitations = invites;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _membersLoading = false);
+    }
   }
 
   Future<bool> _confirm(String title, String body) async =>
@@ -122,6 +132,102 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
         ),
       ) ??
       false;
+  bool _canActOnMember({
+    required String? bookRole,
+    required String viewerUserId,
+    required Json member,
+  }) {
+    if (member['role'] == 'owner') return false;
+    final memberId = member['user_id'] as String?;
+    if (memberId == null || memberId.isEmpty) return false;
+    if (memberId == viewerUserId) return true;
+    if (bookRole == 'owner') return true;
+    return bookRole == 'admin' && member['role'] == 'member';
+  }
+
+  String _memberName(Json member) {
+    final displayName = (member['display_name'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final username = (member['username'] as String?)?.trim();
+    if (username != null && username.isNotEmpty) return username;
+    final userId = (member['user_id'] as String?)?.trim();
+    return userId == null || userId.isEmpty ? '家庭成员' : userId;
+  }
+
+  Widget _memberSpendingCard(List<TransactionRecord> transactions, {required bool loading}) {
+    if (loading) {
+      return const AppCard(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 10),
+          child: Row(children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 10),
+            Text('正在统计本月成员消费…', style: TextStyle(color: AppColors.textSecondary)),
+          ]),
+        ),
+      );
+    }
+    final now = DateTime.now();
+    final spending = <String, double>{};
+    for (final transaction in transactions) {
+      if (!transaction.isConsumptionExpense ||
+          transaction.deletedAt != null ||
+          transaction.occurredAt.year != now.year ||
+          transaction.occurredAt.month != now.month) continue;
+      final payer = transaction.userId;
+      if (payer == null) continue;
+      spending.update(payer, (value) => value + transaction.netExpenseAmount,
+          ifAbsent: () => transaction.netExpenseAmount);
+    }
+    final total = spending.values.fold<double>(0, (sum, value) => sum + value);
+    final currentMemberIds = _members
+        .map((member) => member['user_id'] as String?)
+        .whereType<String>()
+        .toSet();
+    final formerMemberAmount = spending.entries
+        .where((entry) => !currentMemberIds.contains(entry.key))
+        .fold<double>(0, (sum, entry) => sum + entry.value);
+    final rows = _members.map((member) {
+      final id = member['user_id'] as String?;
+      return (id: id ?? '', name: _memberName(member), amount: id == null ? 0.0 : spending[id] ?? 0);
+    }).toList();
+    if (formerMemberAmount > 0) {
+      rows.add((id: '_former', name: '已退出成员', amount: formerMemberAmount));
+    }
+    rows.sort((a, b) => b.amount.compareTo(a.amount));
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('本月成员消费',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text('家庭消费 ¥${MoneyFormatter.decimal(total)}',
+              style: const TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            const Text('暂无成员消费记录')
+          else
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(children: [
+                  const Icon(Icons.person_outline_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(row.name)),
+                  Text('¥${MoneyFormatter.decimal(row.amount)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ]),
+              ),
+          const SizedBox(height: 4),
+          const Text('按流水付款成员归属统计；记录人和付款人可以不同。',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountState = ref.watch(accountSessionProvider);
@@ -131,6 +237,11 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     final book = ref.watch(activeBookProvider);
     final sync = ref.watch(activeSharedStateProvider).value;
     final pending = (sync?['pending'] as List? ?? []).cast<Json>();
+    final familyTransactionsState = book != null && book.type == BookType.family
+        ? ref.watch(transactionsByBookProvider(book.id))
+        : const AsyncValue<List<TransactionRecord>>.data(<TransactionRecord>[]);
+    final familyTransactions =
+        familyTransactionsState.value ?? const <TransactionRecord>[];
     if (user != null &&
         book?.sharedId != null &&
         book!.sharedPhase != 'promoting' &&
@@ -138,6 +249,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
       _loadedBook = book.id;
       _members = [];
       _invitations = [];
+      _membersLoading = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _run(_loadMembers);
       });
@@ -481,6 +593,13 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                   ),
                 ),
               ],
+              if (book.sharedPhase != 'promoting' && book.type == BookType.family) ...[
+                _memberSpendingCard(
+                  familyTransactions,
+                  loading: _membersLoading || familyTransactionsState.isLoading,
+                ),
+                const SizedBox(height: 12),
+              ],
               if (book.sharedPhase != 'promoting')
                 AppCard(
                   child: Column(
@@ -512,7 +631,11 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                             'admin' => '管理员',
                             _ => '普通成员',
                           }),
-                          trailing: member['role'] == 'owner'
+                          trailing: !_canActOnMember(
+                                  bookRole: book.role,
+                                  viewerUserId: user.id,
+                                  member: member,
+                                )
                               ? null
                               : AppActionMenuButton<String>(
                                   onSelected: (action) => _run(() async {

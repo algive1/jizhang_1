@@ -157,6 +157,25 @@ class SharedBookSyncService {
     _retryAfter = DateTime.now().add(Duration(seconds: 5 * (1 << _failures)));
   }
 
+  /// Revokes this device's access immediately after a destructive remote
+  /// lifecycle action. This intentionally does not flush the outbox.
+  Future<void> revokeLocalAccess(String remoteBookId) async {
+    await session.initialize();
+    final userId = session.user?.id;
+    if (userId == null) return;
+    _applying = true;
+    try {
+      await database.customStatement(
+        'UPDATE sync_books SET access=0,last_error=? WHERE remote_id=? AND user_id=?',
+        ['账本已解散', remoteBookId, userId],
+      );
+      database.notifyUpdates({TableUpdate.onTable(database.bookEntries)});
+    } finally {
+      _applying = false;
+      if (!_disposed) _changes.add(null);
+    }
+  }
+
   Future<List<Json>> states() async =>
       (await database.customSelect('SELECT * FROM sync_books').get())
           .map((r) => r.data)
