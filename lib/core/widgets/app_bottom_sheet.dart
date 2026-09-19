@@ -8,6 +8,7 @@ abstract final class AppBottomSheet {
     required WidgetBuilder builder,
   }) => showModalBottomSheet<T>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: context.appSurface,
