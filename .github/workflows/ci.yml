@@ -32,6 +32,11 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
       - name: Install Flutter dependencies
         run: flutter pub get
 
@@ -70,10 +75,10 @@ jobs:
           test/autobookkeeping_refund_matcher_test.dart
 
       - name: Run Android auto-bookkeeping unit tests
-        run: >-
-          cd android &&
-          ./gradlew :app:testDebugUnitTest
-          --tests "com.algive.jizhang_app.autobookkeeping.PaymentEngineTest"
+        run: |
+          printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" > android/local.properties
+          gradle -p android :app:testDebugUnitTest \
+            --tests "com.algive.jizhang_app.autobookkeeping.PaymentEngineTest"
 
       - name: Build Android debug APK
         run: flutter build apk --debug
