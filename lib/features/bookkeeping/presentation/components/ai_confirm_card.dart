@@ -8,7 +8,7 @@ import '../../../../core/models/account.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/models/voice_bookkeeping.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../../../../app/theme/app_theme_tokens.dart';
 
 class AIConfirmCard extends StatelessWidget {
   const AIConfirmCard({
