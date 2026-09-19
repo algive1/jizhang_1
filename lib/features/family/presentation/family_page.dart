@@ -237,9 +237,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
     final book = ref.watch(activeBookProvider);
     final sync = ref.watch(activeSharedStateProvider).value;
     final pending = (sync?['pending'] as List? ?? []).cast<Json>();
-    final familyTransactions = book != null && book.type == BookType.family
-        ? ref.watch(transactionsByBookProvider(book.id)).value ?? const <TransactionRecord>[]
-        : const <TransactionRecord>[];
+    final familyTransactionsState = book != null && book.type == BookType.family
+        ? ref.watch(transactionsByBookProvider(book.id))
+        : const AsyncValue<List<TransactionRecord>>.data(<TransactionRecord>[]);
+    final familyTransactions = familyTransactionsState.value ?? const <TransactionRecord>[];
     if (user != null &&
         book?.sharedId != null &&
         book!.sharedPhase != 'promoting' &&
@@ -592,7 +593,10 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                 ),
               ],
               if (book.sharedPhase != 'promoting' && book.type == BookType.family) ...[
-                _memberSpendingCard(familyTransactions, loading: _membersLoading),
+                _memberSpendingCard(
+                  familyTransactions,
+                  loading: _membersLoading || familyTransactionsState.isLoading,
+                ),
                 const SizedBox(height: 12),
               ],
               if (book.sharedPhase != 'promoting')
