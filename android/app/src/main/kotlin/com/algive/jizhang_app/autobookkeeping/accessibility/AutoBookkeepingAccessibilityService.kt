@@ -118,21 +118,69 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             AutoBookkeepingLogStore.record(this, "deduplicated", "pending store rejected duplicate")
             return
         }
-        if (AutoBillOverlayService.instance?.offer(candidate) != true) {
+
+        if (AutoBookkeepingSettings.screenshotEnabled(this)) {
+            val fingerprint = BillFingerprint.of(candidate)
+            AutoBookkeepingScreenshotCapture.capture(
+                service = this,
+                candidate = candidate,
+                onCaptured = {
+                    offerCandidate(candidate, identity, windowId)
+                },
+                onComplete = { path ->
+                    if (path != null) {
+                        AutoBookkeepingPendingStore.attachScreenshotIfCurrent(
+                            this,
+                            fingerprint,
+                            path,
+                        )
+                    }
+                },
+            )
+        } else {
+            offerCandidate(candidate, identity, windowId)
+        }
+    }
+    private fun offerCandidate(
+        candidate: com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate,
+        identity: String,
+        windowId: Int,
+    ) {
+        val current = AutoBookkeepingPendingStore.readCandidate(this)
+        if (
+            current == null ||
+            BillFingerprint.of(current) != BillFingerprint.of(candidate)
+        ) {
+            AutoBookkeepingLogStore.record(
+                this,
+                "overlay_skipped",
+                "pending candidate changed before overlay",
+            )
+            return
+        }
+
+        if (AutoBillOverlayService.instance?.offer(current) != true) {
             Log.e(TAG, "overlay offer failed")
             AutoBookkeepingLogStore.record(this, "overlay_failed", "offer returned false")
             AutoBookkeepingPendingStore.complete(this, remember = false)
             Diagnostics.error = "请返回自动记账设置开启后台运行和悬浮窗"
             return
         }
-        lastPage = identity; lastWindow = windowId
-        AutoBookkeepingBridge.call(this, "catalog", mapOf("merchant" to candidate.merchantNormalized)) { _, _ -> }
-        Diagnostics.lastScene = candidate.scene.scene
+        lastPage = identity
+        lastWindow = windowId
+        AutoBookkeepingBridge.call(
+            this,
+            "catalog",
+            mapOf("merchant" to current.merchantNormalized),
+        ) { _, _ -> }
+        Diagnostics.lastScene = current.scene.scene
         Diagnostics.lastResult =
-            "source=${candidate.sourceApp} amountConfidence=${candidate.amountConfidence} merchantConfidence=${candidate.merchantConfidence}"
+            "source=${current.sourceApp} amountConfidence=${current.amountConfidence} " +
+                "merchantConfidence=${current.merchantConfidence}"
         Log.i(TAG, "payment candidate offered")
         AutoBookkeepingLogStore.record(this, "overlay_offered", "payment candidate offered")
     }
+
     private var paymentActivity = false
 
     @Suppress("DEPRECATION")
