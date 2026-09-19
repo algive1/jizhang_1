@@ -63,8 +63,8 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
       type == BookType.personal ? key : '${type.name}-$key',
     );
     final defaultCategory = switch (transactionType) {
+      TransactionType.refund => seeded('income-refund'),
       TransactionType.income ||
-      TransactionType.refund ||
       TransactionType.reimbursement ||
       TransactionType.borrow => seeded('income-other'),
       TransactionType.transfer ||
