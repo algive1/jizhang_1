@@ -458,6 +458,78 @@ test('server warns when a category budget is burning too quickly', async t => {
   assert.match(insight.analysis, /月底预计/);
 });
 
+test('server detects multiple imported credit sources without duplicate account setup', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  for (let index = 0; index < 2; index++) {
+    rows.push(
+      tx(
+        `huabei-${index}`,
+        generatedAt - (index + 1) * 86400000,
+        60,
+        {
+          semanticHints: {
+            delivery: false,
+            family: false,
+            beauty: false,
+            creditSource: '花呗',
+          },
+        },
+      ),
+      tx(
+        `meituan-${index}`,
+        generatedAt - (index + 4) * 86400000,
+        50,
+        {
+          semanticHints: {
+            delivery: false,
+            family: false,
+            beauty: false,
+            creditSource: '美团月付',
+          },
+        },
+      ),
+    );
+  }
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['optimizeFinances'],
+        focus: ['credit'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const insight = response.json().items.find(
+    (item: { id: string }) => item.id === 'accounts:multiple-credit',
+  );
+  assert.ok(insight);
+  assert.match(insight.summary, /花呗/);
+  assert.match(insight.summary, /美团月付/);
+});
+
 test('server insight analysis respects local timezone and excludes ambiguous transfer support', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());

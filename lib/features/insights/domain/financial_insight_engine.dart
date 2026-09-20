@@ -8,6 +8,7 @@ import '../../../core/models/goal.dart';
 import '../../../core/models/recurring_bill.dart';
 import 'budget_recommendation_service.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/utils/transaction_semantic_text.dart';
 import 'insight_models.dart';
 
 class FinancialInsightEngine {
@@ -201,6 +202,7 @@ class FinancialInsightEngine {
 
     final credit = _creditInsight(
       accounts,
+      eligible,
       preferences,
       quality,
       clock,
@@ -979,31 +981,62 @@ class FinancialInsightEngine {
 
   FinancialInsightItem? _creditInsight(
     List<Account> accounts,
+    List<TransactionRecord> records,
     InsightPreferences preferences,
     InsightConfidence quality,
     DateTime now,
   ) {
-    final credit = accounts
-        .where(
-          (account) =>
-              !account.isArchived &&
-              (account.type.isDebt || _looksLikeCredit(account.name)),
-        )
-        .toList();
-    if (credit.length < 2) return null;
-    final names = credit.take(3).map((e) => e.name).join('、');
+    final namesByKey = <String, String>{};
+    for (final account in accounts) {
+      if (account.isArchived ||
+          (!account.type.isDebt && !_looksLikeCredit(account.name))) {
+        continue;
+      }
+      namesByKey[_creditKey(account.name)] = account.name;
+    }
+
+    final cutoff = now.subtract(const Duration(days: 180));
+    final importedCounts = <String, int>{};
+    final importedLabels = <String, String>{};
+    for (final item in records) {
+      if (item.occurredAt.isBefore(cutoff)) continue;
+      final source = transactionImportedSourceAccount(item);
+      if (source == null || !_looksLikeCredit(source)) continue;
+      final key = _creditKey(source);
+      importedCounts[key] = (importedCounts[key] ?? 0) + 1;
+      importedLabels[key] = source;
+    }
+    for (final entry in importedCounts.entries) {
+      if (entry.value < 2) continue;
+      namesByKey.putIfAbsent(
+        entry.key,
+        () => importedLabels[entry.key]!,
+      );
+    }
+
+    if (namesByKey.length < 2) return null;
+    final names = namesByKey.values.take(3).join('、');
     return _item(
       id: 'accounts:multiple-credit',
       kind: FinancialInsightKind.financial,
       priority: InsightPriority.attention,
       title: '你在使用多个信用 / 后付账户',
-      summary: '已识别 ${credit.length} 个信用或负债账户${names.isEmpty ? '' : '：$names'}。',
+      summary:
+          '已识别 ${namesByKey.length} 个信用或后付来源'
+          '${names.isEmpty ? '' : '：$names'}。',
       analysis: '消费分散在多个待还账户后，只看银行卡余额容易高估真正可用的钱。',
       meaning: '把待还金额和还款日期集中看，会比单独看每张卡更接近真实财务状态。',
       response: InsightResponse.advice,
       suggestion: '建议确认这些账户的待还金额和还款日，避免消费与还款被重复理解成两次支出。',
       actionLabel: '管理账户',
       actionRoute: '/profile/accounts',
+      evidence: [
+        InsightEvidence(
+          label: '信用 / 后付来源',
+          value: namesByKey.length.toDouble(),
+          unit: '个',
+        ),
+      ],
       baseScore: 68,
       preferences: preferences,
       confidence: quality.copyWith(baseline: 1),
@@ -1024,9 +1057,8 @@ class FinancialInsightEngine {
           item.type != TransactionType.lend) {
         return false;
       }
-      final text =
-          '${item.note ?? ''} ${item.merchant ?? ''} ${item.categoryName ?? ''}';
-      return RegExp(r'爸爸|妈妈|父母|家人|家里|爸妈').hasMatch(text);
+      final text = transactionSemanticText(item);
+      return RegExp(r'爸爸|妈妈|父母|家人|家里|爸妈|亲友').hasMatch(text);
     }).toList();
     if (family.length < 2) return null;
     final amount = family.fold<double>(
@@ -1074,9 +1106,8 @@ class FinancialInsightEngine {
     final items = expenses.where((item) {
       if (item.occurredAt.isBefore(cutoff)) return false;
       if (item.personalExpenseAmount <= .005) return false;
-      final text =
-          '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
-      return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text);
+      final text = transactionSemanticText(item);
+      return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水|美容仪器').hasMatch(text);
     }).toList();
     if (items.length < 4) return null;
     final amount = items.fold<double>(
@@ -1400,6 +1431,12 @@ class FinancialInsightEngine {
       baseline: baseline,
     );
   }
+
+  String _creditKey(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_\-·/]+'), '')
+      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡'), '');
 
   bool _looksLikeCredit(String name) =>
       RegExp(r'花呗|月付|白条|信用|分期|先用后付').hasMatch(name);

@@ -1,5 +1,6 @@
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/utils/transaction_semantic_text.dart';
 
 class TransactionFeatureService {
   const TransactionFeatureService();
@@ -531,9 +532,7 @@ class StatisticalAnalysisService {
   bool _isLateNight(TransactionRecord item) => item.occurredAt.hour >= 22;
 
   bool _isDelivery(TransactionRecord item) {
-    final source =
-        '${item.categoryName ?? ''}${item.merchant ?? ''}${item.note ?? ''}'
-            .toLowerCase();
+    final source = transactionSemanticText(item).toLowerCase();
     return const ['外卖', '美团', '饿了么', 'eleme', 'delivery'].any(source.contains);
   }
 

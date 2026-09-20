@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/analysis.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
@@ -132,6 +134,38 @@ void main() {
     expect(trend.attribution, SpendingAttributionType.frequency);
     expect(trend.currentCount, 4);
     expect(trend.previousCount, 1);
+    expect(snapshot.insights.first.reasonCode, 'delivery_frequency_increase');
+  });
+
+  test('MuMu import metadata can identify delivery frequency growth', () {
+    final current = [
+      for (var index = 0; index < 4; index++)
+        _expense(
+          'mumu-delivery-$index',
+          50,
+          DateTime(2026, 8, 10 + index, 19),
+        ).copyWith(
+          metadataJson: jsonEncode({
+            'importProvider': 'mumu',
+            'sourceCategory': '餐饮',
+            'sourceSubcategory': '外卖',
+          }),
+        ),
+    ];
+    final previous = _expense(
+      'mumu-old-food',
+      60,
+      DateTime(2026, 7, 12, 19),
+    ).copyWith(
+      metadataJson: jsonEncode({
+        'importProvider': 'mumu',
+        'sourceCategory': '餐饮',
+        'sourceSubcategory': '三餐',
+      }),
+    );
+
+    final snapshot = service.analyze([...current, previous], now: now);
+
     expect(snapshot.insights.first.reasonCode, 'delivery_frequency_increase');
   });
 

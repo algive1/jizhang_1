@@ -229,6 +229,7 @@ class TransactionRecord {
     RefundStatus? refundStatus,
     Object? refundAmount = _copyWithUnset,
     bool clearRefundAmount = false,
+    Object? metadataJson = _copyWithUnset,
   }) {
     return TransactionRecord(
       id: id,
@@ -282,7 +283,9 @@ class TransactionRecord {
           : (identical(refundAmount, _copyWithUnset)
                 ? this.refundAmount
                 : (refundAmount as num?)?.toDouble()),
-      metadataJson: metadataJson,
+      metadataJson: identical(metadataJson, _copyWithUnset)
+          ? this.metadataJson
+          : metadataJson as String?,
       duplicateConfidence: duplicateConfidence ?? this.duplicateConfidence,
       visibility: visibility ?? this.visibility,
       createdBy: createdBy,
