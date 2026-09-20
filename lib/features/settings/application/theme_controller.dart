@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
+import '../../../core/config/testing_access.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../../core/models/membership.dart';
 import '../../sharing/data/session_repository.dart';
@@ -89,7 +90,7 @@ final effectiveThemeProvider = Provider<AppThemeDefinition>((ref) {
   final catalog = ref.watch(themeCatalogProvider).value ?? const ThemeCatalog(BuiltInThemes.all);
   final preferred = ref.watch(preferredThemeProvider).value;
   final selected = catalog.byId(preferred);
-  if (!selected.premium) return selected;
+  if (testingAllFeaturesFree || !selected.premium) return selected;
   final membership = ref.watch(membershipProvider).value;
   if (membership != null && membership.has(EntitlementKey.customTheme)) {
     return selected;
