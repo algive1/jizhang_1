@@ -3,5 +3,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:notificationTimeout="100"
     android:packageNames="com.tencent.mm,com.eg.android.AlipayGphone,com.unionpay,com.sankuai.meituan,com.sankuai.meituan.takeout,com.jingdong.app.mall,com.xunmeng.pinduoduo,com.ss.android.ugc.aweme,com.ss.android.ugc.aweme.mobile" />

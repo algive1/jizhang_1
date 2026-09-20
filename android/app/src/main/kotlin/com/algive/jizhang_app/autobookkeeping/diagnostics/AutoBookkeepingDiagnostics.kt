@@ -7,6 +7,20 @@ object AutoBookkeepingDiagnostics {
     var lastScene = "尚未识别"
     var lastResult = "暂无"
     var error = ""
+    var ruleSchemaVersion = 0
+    var ruleVersions = ""
+    var ruleSource = "unknown"
+
     // Never retain node trees, raw event text, account numbers or merchant names here.
-    fun snapshot(): Map<String, Any> = mapOf("connected" to accessibilityConnected, "running" to foregroundRunning, "lastEventAt" to lastEventAt, "lastScene" to lastScene, "lastResult" to lastResult, "error" to error)
+    fun snapshot(): Map<String, Any> = mapOf(
+        "connected" to accessibilityConnected,
+        "running" to foregroundRunning,
+        "lastEventAt" to lastEventAt,
+        "lastScene" to lastScene,
+        "lastResult" to lastResult,
+        "error" to error,
+        "ruleSchemaVersion" to ruleSchemaVersion,
+        "ruleVersions" to ruleVersions,
+        "ruleSource" to ruleSource,
+    )
 }

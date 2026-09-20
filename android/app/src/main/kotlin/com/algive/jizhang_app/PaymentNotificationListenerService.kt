@@ -16,18 +16,72 @@ import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentNotificationCandidateParser
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class PaymentNotificationListenerService : NotificationListenerService() {
-    private val realtimeParser = PaymentNotificationCandidateParser()
+    private val ruleRegistry by lazy {
+        AutoBookkeepingRuleRegistry.load(this)
+    }
+    private val realtimeParser by lazy {
+        PaymentNotificationCandidateParser(ruleRegistry)
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        instance = this
+        connected = true
+        AutoBookkeepingLogStore.record(
+            this,
+            "notification_listener_connected",
+            "notification listener connected",
+        )
+        mainHandler.post { retryStoredNotifications() }
+    }
+
+    override fun onListenerDisconnected() {
+        connected = false
+        instance = null
+        AutoBookkeepingLogStore.record(
+            this,
+            "notification_listener_disconnected",
+            "notification listener disconnected",
+        )
+        val enabled = getSharedPreferences(
+            PaymentNotificationStore.PREFS_NAME,
+            MODE_PRIVATE,
+        ).getBoolean(KEY_ENABLED, false)
+        if (enabled) {
+            mainHandler.postDelayed(
+                {
+                    runCatching {
+                        requestRebind(
+                            android.content.ComponentName(
+                                this,
+                                PaymentNotificationListenerService::class.java,
+                            ),
+                        )
+                    }.onFailure { error ->
+                        AutoBookkeepingLogStore.record(
+                            this,
+                            "notification_listener_rebind_failed",
+                            error.javaClass.simpleName,
+                        )
+                    }
+                },
+                LISTENER_REBIND_DELAY_MS,
+            )
+        }
+        super.onListenerDisconnected()
+    }
 
     override fun onNotificationPosted(statusBarNotification: StatusBarNotification) {
         val packageName = statusBarNotification.packageName
-        if (packageName !in SUPPORTED_PACKAGES) return
+        if (ruleRegistry.ruleFor(packageName) == null) return
 
         val enabled = getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_ENABLED, false)
@@ -60,7 +114,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 .put("packageName", packageName)
                 .put("title", title)
                 .put("text", text)
-                .put("postedAt", postedAt(statusBarNotification.postTime)),
+                .put("postedAt", postedAt(statusBarNotification.postTime))
+                .put("postedAtMillis", statusBarNotification.postTime),
         )
 
         when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
@@ -90,6 +145,62 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     "notification_candidate_busy",
                     "source=${candidate.sourceApp}",
                 )
+            }
+        }
+    }
+
+    fun retryStoredNotifications() {
+        if (!connected) return
+        val enabled = getSharedPreferences(
+            PaymentNotificationStore.PREFS_NAME,
+            MODE_PRIVATE,
+        ).getBoolean(KEY_ENABLED, false)
+        if (!enabled) return
+
+        for (raw in PaymentNotificationStore.read(this)) {
+            val packageName = raw["packageName"].orEmpty()
+            val title = raw["title"].orEmpty()
+            val text = raw["text"].orEmpty()
+            val timestamp = raw["postedAtMillis"]
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?: continue
+            val candidate = realtimeParser.parse(
+                packageName = packageName,
+                title = title,
+                text = text,
+                timestamp = timestamp,
+            )
+            if (candidate == null) {
+                val rejectedId = raw["id"].orEmpty()
+                if (rejectedId.isNotEmpty()) {
+                    PaymentNotificationStore.acknowledge(
+                        this,
+                        listOf(rejectedId),
+                    )
+                }
+                continue
+            }
+            val id = raw["id"].orEmpty()
+            when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
+                PendingEnqueueDecision.ACCEPTED -> {
+                    if (id.isNotEmpty()) {
+                        PaymentNotificationStore.acknowledge(this, listOf(id))
+                    }
+                    AutoBookkeepingLogStore.record(
+                        this,
+                        "notification_candidate_recovered",
+                        "source=${candidate.sourceApp}",
+                    )
+                    showRealtimeCandidate(candidate)
+                    return
+                }
+                PendingEnqueueDecision.DUPLICATE -> {
+                    if (id.isNotEmpty()) {
+                        PaymentNotificationStore.acknowledge(this, listOf(id))
+                    }
+                }
+                PendingEnqueueDecision.BUSY -> return
             }
         }
     }
@@ -129,7 +240,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val canStartOverlay =
             AutoBookkeepingSettings.enabled(this) &&
-                AutoBookkeepingOverlayPermission.isGranted(this)
+                AutoBookkeepingOverlayPermission.isGranted(this) &&
+                AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
         if (!canStartOverlay) {
             AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
             return
@@ -174,24 +286,24 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        connected = false
+        if (instance === this) instance = null
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
     companion object {
+        @Volatile
+        var connected: Boolean = false
+            private set
+
+        @Volatile
+        var instance: PaymentNotificationListenerService? = null
+            private set
+
         private const val KEY_ENABLED = "enabled"
         private const val OVERLAY_START_GRACE_MS = 350L
+        private const val LISTENER_REBIND_DELAY_MS = 1000L
 
-        private val SUPPORTED_PACKAGES = setOf(
-            "com.tencent.mm",
-            "com.eg.android.AlipayGphone",
-            "com.unionpay",
-            "com.sankuai.meituan",
-            "com.sankuai.meituan.takeout",
-            "com.jingdong.app.mall",
-            "com.xunmeng.pinduoduo",
-            "com.ss.android.ugc.aweme",
-            "com.ss.android.ugc.aweme.mobile",
-        )
     }
 }

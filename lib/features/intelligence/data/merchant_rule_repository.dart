@@ -63,8 +63,8 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
       type == BookType.personal ? key : '${type.name}-$key',
     );
     final defaultCategory = switch (transactionType) {
+      TransactionType.refund => seeded('income-refund'),
       TransactionType.income ||
-      TransactionType.refund ||
       TransactionType.reimbursement ||
       TransactionType.borrow => seeded('income-other'),
       TransactionType.transfer ||
@@ -76,10 +76,29 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
     final categoryExists = defaultCategory == null
         ? false
         : await _database.categoryDao.findById(defaultCategory) != null;
+    final expectedRuleCategoryType = switch (transactionType) {
+      TransactionType.income ||
+      TransactionType.refund ||
+      TransactionType.reimbursement ||
+      TransactionType.borrow => 'income',
+      TransactionType.expense ||
+      TransactionType.lend ||
+      TransactionType.assetPurchase => 'expense',
+      TransactionType.transfer ||
+      TransactionType.repayment ||
+      TransactionType.adjustment ||
+      TransactionType.assetSale => null,
+    };
     final activeRules = <MerchantRule>[];
-    for (final rule in await getRules(bookId: bookId)) {
-      final category = await _database.categoryDao.findById(rule.categoryId);
-      if (category != null && !category.isArchived) activeRules.add(rule);
+    if (expectedRuleCategoryType != null) {
+      for (final rule in await getRules(bookId: bookId)) {
+        final category = await _database.categoryDao.findById(rule.categoryId);
+        if (category != null &&
+            !category.isArchived &&
+            category.type == expectedRuleCategoryType) {
+          activeRules.add(rule);
+        }
+      }
     }
     return _classifier.classify(
       merchant: merchant,

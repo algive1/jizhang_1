@@ -4,7 +4,6 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.Gravity
@@ -12,9 +11,11 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.PaymentNotificationListenerService
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
@@ -39,12 +40,19 @@ class AutoBillOverlayService : Service() {
             remove()
         }
 
+        val transactionLabel = when (candidate.transactionType) {
+            "INCOME" -> "收入"
+            "REFUND" -> "退款"
+            "REIMBURSEMENT" -> "报销回款"
+            else -> "支出"
+        }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 20, 28, 20)
             setBackgroundColor(Color.rgb(38, 38, 42))
             addView(TextView(context).apply {
-                text = "好好记账\n¥%.2f  %s\n%s\n请打开应用确认账本、账户与分类".format(
+                text = "好好记账 · %s\n¥%.2f  %s\n%s\n请打开应用确认账本、账户与分类".format(
+                    transactionLabel,
                     candidate.amountInCents / 100.0,
                     candidate.merchantNormalized,
                     candidate.paymentMethod,
@@ -59,7 +67,7 @@ class AutoBillOverlayService : Service() {
                 setPadding(0, 12, 0, 12)
             })
             addView(TextView(context).apply {
-                text = "识别到支付，确认后记账"
+                text = "识别到$transactionLabel，确认后记账"
                 setTextColor(Color.WHITE)
                 textSize = 14f
                 gravity = Gravity.CENTER
@@ -72,6 +80,8 @@ class AutoBillOverlayService : Service() {
                     AutoBookkeepingLogStore.record(context, "overlay_ignored", "user ignored candidate")
                     AutoBookkeepingPendingStore.complete(context)
                     remove()
+                    PaymentNotificationListenerService.instance
+                        ?.retryStoredNotifications()
                 })
                 addView(action("去确认") { openConfirmation(candidate) })
             })
@@ -138,16 +148,32 @@ class AutoBillOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
-        runCatching {
-            AutoBookkeepingNotificationController.sync(this)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForeground(
-                    AutoBookkeepingNotificationController.NOTIFICATION_ID,
-                    AutoBookkeepingNotificationController.buildNotification(this),
-                )
+        val foregroundStarted = runCatching {
+            if (!AutoBookkeepingSettings.enabled(this)) {
+                error("auto bookkeeping is disabled")
             }
-        }.onFailure { error -> Log.e(TAG, "overlay foreground initialization failed", error) }
+            if (!AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
+                error("status notification is not available")
+            }
+            startForeground(
+                AutoBookkeepingNotificationController.NOTIFICATION_ID,
+                AutoBookkeepingNotificationController.buildNotification(this),
+            )
+        }
+        if (foregroundStarted.isFailure) {
+            val error = foregroundStarted.exceptionOrNull()
+            Log.e(TAG, "overlay foreground initialization failed", error)
+            AutoBookkeepingDiagnostics.foregroundRunning = false
+            AutoBookkeepingDiagnostics.error = "自动记账常驻通知不可用，请检查通知权限"
+            AutoBookkeepingLogStore.record(
+                this,
+                "overlay_foreground_failed",
+                error?.javaClass?.simpleName ?: "notification unavailable",
+            )
+            stopSelf()
+            return
+        }
+        instance = this
         AutoBookkeepingDiagnostics.foregroundRunning = true
         Log.i(TAG, "overlay service created")
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service created")
@@ -158,9 +184,28 @@ class AutoBillOverlayService : Service() {
         instance = null
         AutoBookkeepingDiagnostics.foregroundRunning = false
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service destroyed")
+        AutoBookkeepingNotificationController.cancelStatus(this)
         super.onDestroy()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+        if (
+            !AutoBookkeepingSettings.enabled(this) ||
+            !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+        ) {
+            AutoBookkeepingLogStore.record(
+                this,
+                "overlay_service_stop",
+                "service restarted without valid runtime conditions",
+            )
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
 }

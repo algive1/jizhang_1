@@ -18,11 +18,12 @@ class PaymentNotification {
 
 abstract interface class PaymentNotificationBridge {
   Future<bool> isAccessGranted();
+  Future<bool> isConnected();
   Future<void> openAccessSettings();
   Future<bool> isEnabled();
   Future<void> setEnabled(bool enabled);
   Future<bool> isNotificationGranted();
-  Future<void> requestNotificationPermission();
+  Future<bool> requestNotificationPermission();
   Future<List<PaymentNotification>> getPending();
   Future<void> acknowledge(Iterable<String> ids);
 }

@@ -4,7 +4,11 @@ import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
 import com.algive.jizhang_app.autobookkeeping.parser.MeituanPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
+import com.algive.jizhang_app.autobookkeeping.parser.TransactionStatusParser
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentParserKind
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentRule
 
 data class PaymentDetectionResult(
     val candidate: PaymentCandidate?,
@@ -12,10 +16,21 @@ data class PaymentDetectionResult(
 )
 
 class PaymentSceneDetector(
-    private val weChatParser: WeChatPaymentParser = WeChatPaymentParser(),
-    private val appParser: PaymentAppParser = PaymentAppParser(),
-    private val meituanParser: MeituanPaymentParser = MeituanPaymentParser(),
+    val registry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn(),
+    private val transactionStatusParser: TransactionStatusParser =
+        TransactionStatusParser(registry),
 ) {
+    private val weChatRule =
+        registry.ruleForKind(PaymentParserKind.WECHAT)
+            ?: error("Missing WeChat payment rule")
+    private val meituanRule =
+        registry.ruleForKind(PaymentParserKind.MEITUAN)
+            ?: error("Missing Meituan payment rule")
+    private val weChatParser = WeChatPaymentParser(PaymentRule.from(weChatRule))
+    private val appParser = PaymentAppParser(registry)
+    private val meituanParser = MeituanPaymentParser(meituanRule)
+
     fun detect(
         packageName: String,
         nodes: List<ScreenNode>,
@@ -27,18 +42,35 @@ class PaymentSceneDetector(
         nodes: List<ScreenNode>,
         timestamp: Long = System.currentTimeMillis(),
     ): PaymentDetectionResult {
-        val candidate = when {
-            packageName == weChatParser.rule.app ->
+        if (registry.ruleFor(packageName) == null) {
+            return PaymentDetectionResult(null, "UNSUPPORTED_PACKAGE")
+        }
+
+        val typedCandidate =
+            transactionStatusParser.parse(packageName, nodes, timestamp)
+        if (typedCandidate != null) {
+            return PaymentDetectionResult(typedCandidate, null)
+        }
+
+        val rule = registry.ruleFor(packageName)
+            ?: return PaymentDetectionResult(null, "UNSUPPORTED_PACKAGE")
+        val candidate = when (rule.parserKind) {
+            PaymentParserKind.WECHAT ->
                 weChatParser.parse(nodes, timestamp)
-            packageName in MEITUAN_PACKAGES ->
+            PaymentParserKind.MEITUAN ->
                 meituanParser.parse(packageName, nodes, timestamp)
-            else ->
+            PaymentParserKind.GENERIC ->
                 appParser.parse(packageName, nodes, timestamp)
         }
-        if (candidate != null) return PaymentDetectionResult(candidate, null)
+        if (candidate != null) {
+            return PaymentDetectionResult(candidate, null)
+        }
 
+        val typedReason =
+            transactionStatusParser.rejectionReason(packageName, nodes)
         val reason = when {
-            packageName in MEITUAN_PACKAGES ->
+            typedReason != null -> typedReason
+            rule.parserKind == PaymentParserKind.MEITUAN ->
                 meituanParser.rejectionReason(packageName, nodes)
             nodes.none { it.label.isNotBlank() } ->
                 "NO_VISIBLE_LABELS"
@@ -46,12 +78,5 @@ class PaymentSceneDetector(
                 "NO_MATCHING_PAYMENT_SCENE"
         }
         return PaymentDetectionResult(null, reason)
-    }
-
-    private companion object {
-        val MEITUAN_PACKAGES = setOf(
-            "com.sankuai.meituan",
-            "com.sankuai.meituan.takeout",
-        )
     }
 }

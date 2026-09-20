@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../auto_bookkeeping_settings.dart';
-import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AutoBookkeepingPage extends ConsumerStatefulWidget {
@@ -26,6 +25,14 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
   bool? _notificationGranted;
   bool? _paymentNotificationAccessGranted;
   bool _paymentNotificationEnabled = false;
+  bool _paymentNotificationConnected = false;
+  bool _accessibilityConnected = false;
+  bool _foregroundRunning = false;
+  bool _screenshotSupported = false;
+  bool _screenshotEnabled = false;
+  int _ruleSchemaVersion = 0;
+  String _ruleVersions = '';
+  String _ruleSource = 'unknown';
   bool _enabled = false;
   bool _shortcutAvailable = false;
   bool _loading = true;
@@ -68,21 +75,23 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       return;
     }
     final bridge = ref.read(autoBookkeepingSettingsProvider);
-    final paymentBridge = ref.read(paymentNotificationBridgeProvider);
-    final accessibility = await bridge.isAccessibilityGranted();
-    final overlay = await bridge.isOverlayGranted();
-    final notification = await bridge.isNotificationGranted();
-    final enabled = await bridge.isEnabled();
-    final paymentAccess = await paymentBridge.isAccessGranted();
-    final paymentEnabled = paymentAccess && await paymentBridge.isEnabled();
+    final status = await bridge.runtimeStatus();
     if (!mounted) return;
     setState(() {
-      _accessibilityGranted = accessibility;
-      _overlayGranted = overlay;
-      _notificationGranted = notification;
-      _paymentNotificationAccessGranted = paymentAccess;
-      _paymentNotificationEnabled = paymentEnabled;
-      _enabled = enabled;
+      _accessibilityGranted = status.accessibilityGranted;
+      _accessibilityConnected = status.accessibilityConnected;
+      _overlayGranted = status.overlayGranted;
+      _notificationGranted = status.notificationGranted;
+      _foregroundRunning = status.foregroundRunning;
+      _paymentNotificationAccessGranted = status.notificationListenerGranted;
+      _paymentNotificationEnabled = status.notificationListenerEnabled;
+      _paymentNotificationConnected = status.notificationListenerConnected;
+      _screenshotSupported = status.screenshotSupported;
+      _screenshotEnabled = status.screenshotEnabled;
+      _ruleSchemaVersion = status.ruleSchemaVersion;
+      _ruleVersions = status.ruleVersions;
+      _ruleSource = status.ruleSource;
+      _enabled = status.enabled;
       _loading = false;
     });
   }
@@ -106,9 +115,21 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
     }
     if (!(_notificationGranted ?? false)) {
       try {
-        await bridge.requestNotificationPermission();
+        final granted = await bridge.requestNotificationPermission();
+        if (!mounted) return;
+        await _load();
+        if (!granted) {
+          if (mounted) {
+            setState(
+              () => _message =
+                  '请允许通知，并确保系统中的「自动记账状态」通知渠道已开启，然后返回本页。',
+            );
+          }
+          return;
+        }
       } on Object catch (error) {
         if (mounted) setState(() => _message = '$error');
+        return;
       }
     }
     await _setEnabled(bridge, true);
@@ -135,9 +156,19 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       if (!mounted) return;
       setState(() {
         _enabled = enabled;
-        _message = enabled ? '已开启。支付成功页会显示识别结果，确认后才会保存流水。' : '已关闭自动记账。';
+        _message = enabled ? '已开启。识别到可信交易结果后会先确认，再保存流水。' : '已关闭自动记账。';
       });
-      if (enabled) await _load();
+      if (enabled) {
+        for (var attempt = 0; attempt < 4; attempt++) {
+          await _load();
+          if (!mounted || (_foregroundRunning && _accessibilityConnected)) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
+      } else {
+        await _load();
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
     }
@@ -173,12 +204,12 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '识别付款结果，少填一遍账',
+                  '识别交易结果，少填一遍账',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音付款页面；识别金额和商户后会先弹出本机确认卡片，未确认前不会写入流水。',
+                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度交易结果；支出、明确收款和明确退款会先弹出本机确认卡片，未确认前不会写入流水。',
                   style: TextStyle(height: 1.5),
                 ),
               ],
@@ -198,12 +229,43 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                           subtitle: Text(
                             !_enabled
                                 ? '已关闭'
-                                : _notificationGranted == true
-                                ? '已开启 · 系统通知栏会显示运行状态'
-                                : '已开启 · 通知权限未允许',
+                                : _foregroundRunning &&
+                                      _accessibilityConnected &&
+                                      _notificationGranted == true
+                                ? '已开启 · 后台服务运行中 · 常驻通知可见'
+                                : '已开启 · 运行条件不完整，请检查下方状态',
                           ),
                           value: _enabled,
                           onChanged: _toggle,
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _foregroundRunning && _accessibilityConnected
+                                ? Icons.check_circle_outline
+                                : Icons.error_outline,
+                            color:
+                                _foregroundRunning && _accessibilityConnected
+                                ? context.appPrimary
+                                : AppColors.warning,
+                          ),
+                          title: const Text('运行状态'),
+                          subtitle: Text(
+                            !_enabled
+                                ? '自动记账未开启'
+                                : _foregroundRunning &&
+                                      _accessibilityConnected
+                                ? '前台服务与无障碍服务均已运行'
+                                : !_accessibilityConnected
+                                ? '无障碍权限存在，但服务尚未连接或已被系统停止'
+                                : '前台常驻服务未运行，请检查通知权限和运行日志',
+                          ),
+                          trailing: TextButton(
+                            onPressed: () =>
+                                context.push('/profile/autobookkeeping/logs'),
+                            child: const Text('诊断'),
+                          ),
                         ),
                         const Divider(height: 1),
                         _PermissionRow(
@@ -232,21 +294,87 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                           icon: Icons.notifications_none_outlined,
                           title: '常驻通知权限',
                           enabled: _notificationGranted == true,
-                          onTap: () => _openSettings(
-                            ref
-                                .read(autoBookkeepingSettingsProvider)
-                                .requestNotificationPermission,
-                            '请在系统设置中允许通知，自动记账开启后才能显示常驻状态。',
+                          onTap: () async {
+                            final bridge = ref.read(
+                              autoBookkeepingSettingsProvider,
+                            );
+                            try {
+                              final granted =
+                                  await bridge.requestNotificationPermission();
+                              if (!mounted) return;
+                              await _load();
+                              setState(
+                                () => _message = granted
+                                    ? '通知权限已允许，自动记账开启后会显示常驻状态。'
+                                    : '请在系统通知设置中允许通知，并开启「自动记账状态」渠道。',
+                              );
+                            } on Object catch (error) {
+                              if (mounted) {
+                                setState(() => _message = '$error');
+                              }
+                            }
+                          },
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            _paymentNotificationConnected
+                                ? Icons.check_circle_outline
+                                : Icons.notifications_active_outlined,
+                            color: _paymentNotificationConnected
+                                ? context.appPrimary
+                                : AppColors.warning,
+                          ),
+                          title: const Text('支付通知兜底'),
+                          subtitle: Text(
+                            _paymentNotificationAccessGranted != true
+                                ? '未授权通知读取权限'
+                                : !_paymentNotificationEnabled
+                                ? '已授权 · 未开启'
+                                : _paymentNotificationConnected
+                                ? '已开启 · 监听服务已连接'
+                                : '已开启 · 等待系统连接监听服务',
+                          ),
+                          trailing: TextButton(
+                            onPressed: () => context.push(
+                              '/profile/payment-notifications',
+                            ),
+                            child: const Text('设置'),
                           ),
                         ),
-                        _PermissionRow(
-                          icon: Icons.notifications_active_outlined,
-                          title: '支付通知兜底',
-                          enabled:
-                              _paymentNotificationAccessGranted == true &&
-                              _paymentNotificationEnabled,
-                          onTap: () =>
-                              context.push('/profile/payment-notifications'),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          secondary: Icon(
+                            Icons.photo_camera_outlined,
+                            color: _screenshotEnabled
+                                ? context.appPrimary
+                                : context.appSecondaryText,
+                          ),
+                          title: const Text('保存支付结果截图'),
+                          subtitle: Text(
+                            !_screenshotSupported
+                                ? '需要 Android 11 或更高版本'
+                                : _screenshotEnabled
+                                ? '已开启 · 仅在无障碍识别成功页本机截图'
+                                : '可选 · 忽略交易时截图会自动删除',
+                          ),
+                          value: _screenshotEnabled,
+                          onChanged: !_screenshotSupported
+                              ? null
+                              : (value) async {
+                                  final bridge = ref.read(
+                                    autoBookkeepingSettingsProvider,
+                                  );
+                                  final actual =
+                                      await bridge.setScreenshotEnabled(value);
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _screenshotEnabled = actual;
+                                    _message = actual
+                                        ? '支付截图已开启。识别与临时截图只在本机处理；确认保留后会成为普通账单附件，若已开启云备份，会按现有附件规则备份。'
+                                        : '支付截图已关闭。';
+                                  });
+                                },
                         ),
                       ],
                     ),
@@ -268,7 +396,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.article_outlined),
                 title: Text('运行日志'),
-                subtitle: Text('查看最近一次支付识别和弹窗处理结果'),
+                subtitle: Text('查看最近一次交易识别和弹窗处理结果'),
                 trailing: Icon(Icons.chevron_right),
                 onTap: () => context.push('/profile/autobookkeeping/logs'),
               ),
@@ -276,8 +404,24 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           ),
           const SizedBox(height: 10),
           AppCard(
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.rule_folder_outlined),
+                title: const Text('页面识别规则'),
+                subtitle: Text(
+                  _ruleVersions.isEmpty
+                      ? '规则服务尚未连接；开启无障碍服务后会显示当前规则版本'
+                      : 'schema v$_ruleSchemaVersion · $_ruleVersions · ${_ruleSource == 'asset' ? '随 App 发布规则' : '内置回退规则'}',
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppCard(
             child: Text(
-              '双通道说明：无障碍负责实时读取支付成功页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度支付通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
+              '双通道说明：无障碍负责实时读取交易结果页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度交易通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),
@@ -291,7 +435,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           const SizedBox(height: 10),
           AppCard(
             child: Text(
-              '隐私说明：自动识别只处理支持的付款页面中的必要信息；识别结果会先显示在悬浮卡片中，需用户确认后才写入本地账本。',
+              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成。支付截图默认关闭，临时截图只在本机保存，忽略或过期会自动删除；用户确认保留后会成为普通账单附件，若已开启云备份，会随其他附件按现有规则备份。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
             ),
           ),

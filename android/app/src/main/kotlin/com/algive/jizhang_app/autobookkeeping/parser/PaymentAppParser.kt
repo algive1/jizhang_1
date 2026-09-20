@@ -4,84 +4,127 @@ import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
+import com.algive.jizhang_app.autobookkeeping.rules.AppPaymentRule
+import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentParserKind
+import com.algive.jizhang_app.autobookkeeping.rules.PaymentRule
 import java.math.BigDecimal
 
 /** Conservative parser for payment apps whose accessibility layouts vary. */
-class PaymentAppParser {
-    private val packages = mapOf(
-        "com.eg.android.AlipayGphone" to "ALIPAY",
-        "com.unionpay" to "UNIONPAY",
-        "com.sankuai.meituan" to "MEITUAN",
-        "com.sankuai.meituan.takeout" to "MEITUAN",
-        "com.jingdong.app.mall" to "JD",
-        "com.xunmeng.pinduoduo" to "PINDUODUO",
-        "com.ss.android.ugc.aweme" to "DOUYIN",
-        "com.ss.android.ugc.aweme.mobile" to "DOUYIN",
-    )
-    private val keywords = setOf("支付成功", "付款成功", "交易成功", "已支付", "支付完成", "付款完成", "订单支付成功")
-    private val merchantKeys = setOf("收款方", "商户", "商户名称", "商家", "店铺", "门店")
-    private val amountKeys = setOf("实付", "实付金额", "付款金额", "支付金额", "实际支付", "消费金额", "扣款金额")
-    private val excluded = setOf("优惠", "余额", "订单", "时间", "积分", "原价", "商品金额", "合计", "立减", "红包")
-    private val amountPatterns = listOf(
-        Regex("[¥￥]\\s*([0-9]+(?:\\.[0-9]{1,2})?)(?![0-9.])"),
-        Regex("(?<![0-9.])([0-9]+(?:\\.[0-9]{1,2})?)\\s*元"),
-    )
+class PaymentAppParser(
+    private val registry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn(),
+) {
+    private val amountPatterns = PaymentRule.DEFAULT_AMOUNT_PATTERNS
 
-    fun parse(packageName: String, nodes: List<ScreenNode>, timestamp: Long): PaymentCandidate? {
-        val sourceApp = packages[packageName] ?: return null
-        val labels = nodes.map { it.label }.filter { it.isNotBlank() }
-        if (labels.none { label -> keywords.any { key -> label == key || label.startsWith("$key ") } }) return null
-
-        fun field(keys: Set<String>): String? {
-            labels.forEachIndexed { index, text ->
-                keys.sortedByDescending { it.length }.forEach { key ->
-                    if (text == key) return labels.getOrNull(index + 1)?.takeIf { it.length <= 100 }
-                    if (text.startsWith("$key：") || text.startsWith("$key:")) return text.substring(key.length + 1).trim()
-                }
-            }
-            return null
-        }
-
-        val merchant = (field(merchantKeys) ?: fallbackMerchant(labels))
-            ?.takeIf { value -> value.isNotBlank() && value !in keywords && amountKeys.none { value.contains(it) } }
+    fun parse(
+        packageName: String,
+        nodes: List<ScreenNode>,
+        timestamp: Long,
+    ): PaymentCandidate? {
+        val rule = registry.ruleFor(packageName)
+            ?.takeIf { it.parserKind == PaymentParserKind.GENERIC }
             ?: return null
-        val method = field(setOf("支付方式", "付款方式"))?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+        val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
+        if (labels.none(rule::isSuccessLabel)) return null
+        if (rule.hasRejectedStatus(labels)) return null
+
+        val merchant =
+            (CandidateFieldExtractor.field(labels, rule.merchantKeys)
+                ?: fallbackMerchant(labels, rule))
+                ?.takeIf { value ->
+                    value.isNotBlank() &&
+                        value !in rule.successMarkers &&
+                        rule.amountKeys.none { value.contains(it) }
+                }
+                ?: return null
+        val method = CandidateFieldExtractor
+            .field(labels, rule.methodKeys)
+            ?.takeIf { it.isNotBlank() }
+            ?: "UNKNOWN"
         val amounts = mutableListOf<Pair<Long, Int>>()
         labels.forEachIndexed { index, label ->
-            if (excluded.any { label.contains(it) }) return@forEachIndexed
+            if (rule.excludedAmountLabels.any { label.contains(it) }) {
+                return@forEachIndexed
+            }
             val previous = labels.getOrNull(index - 1).orEmpty()
-            val explicit = amountKeys.any { label.startsWith(it) || previous == it }
-            if (!explicit && excluded.any { previous.contains(it) }) return@forEachIndexed
+            val explicit = rule.amountKeys.any {
+                label.startsWith(it) || previous == it
+            }
+            if (
+                !explicit &&
+                rule.excludedAmountLabels.any { previous.contains(it) }
+            ) {
+                return@forEachIndexed
+            }
             val matches = amountPatterns.flatMap { pattern ->
                 pattern.findAll(label).map { it.groupValues[1] }.toList()
             }.distinct()
-            val raw = if (matches.isEmpty() && explicit && label.matches(Regex("[0-9]+(?:\\.[0-9]{1,2})?"))) listOf(label) else matches
+            val raw =
+                if (
+                    matches.isEmpty() &&
+                    explicit &&
+                    label.matches(Regex("[0-9]+(?:\\.[0-9]{1,2})?"))
+                ) {
+                    listOf(label)
+                } else {
+                    matches
+                }
             raw.forEach { value ->
-                val cents = value.toBigDecimalOrNull()?.multiply(BigDecimal(100))
+                val cents = value.toBigDecimalOrNull()
+                    ?.multiply(BigDecimal(100))
                     ?.let { runCatching { it.longValueExact() }.getOrNull() }
-                if (cents != null && cents in 1..99_999_999_999L) amounts += cents to if (explicit) 3 else 1
+                if (cents != null && cents in 1..99_999_999_999L) {
+                    amounts += cents to if (explicit) 3 else 1
+                }
             }
         }
         val best = amounts.maxOfOrNull { it.second } ?: return null
-        val winners = amounts.filter { it.second == best }.map { it.first }.distinct()
+        val winners = amounts
+            .filter { it.second == best }
+            .map { it.first }
+            .distinct()
         if (winners.size != 1) return null
+
+        val paidAmount = winners.single()
+        val (originalAmount, discountAmount) =
+            CandidateFieldExtractor.amountBreakdown(labels, paidAmount)
         return PaymentCandidate(
-            winners.single(),
-            merchant.take(80),
-            MerchantNormalizer.normalize(merchant),
-            method.take(80),
-            timestamp,
-            PaymentScene(sourceApp = sourceApp, scene = "${sourceApp}_PAYMENT_SUCCESS", confidence = if (method != "UNKNOWN") .95 else .88),
-            if (best == 3) 1.0 else .9,
-            .9,
-            sourceApp,
+            amountInCents = paidAmount,
+            merchantRaw = merchant.take(80),
+            merchantNormalized = MerchantNormalizer.normalize(merchant),
+            paymentMethod = method.take(80),
+            timestamp = timestamp,
+            scene = PaymentScene(
+                sourceApp = rule.sourceApp,
+                scene = rule.scene,
+                confidence = if (method != "UNKNOWN") .95 else .88,
+            ),
+            amountConfidence = if (best == 3) 1.0 else .9,
+            merchantConfidence = .9,
+            sourceApp = rule.sourceApp,
+            orderId = CandidateFieldExtractor.orderId(labels),
+            note = CandidateFieldExtractor.note(labels),
+            originalAmountInCents = originalAmount,
+            discountAmountInCents = discountAmount,
+            identifierSuffix =
+                CandidateFieldExtractor.identifierSuffix(method, labels),
         )
     }
 
-    private fun fallbackMerchant(labels: List<String>): String? = labels.firstOrNull { label ->
-        label.length in 2..80 && label !in keywords &&
-            label !in amountKeys && label !in excluded &&
+    private fun fallbackMerchant(
+        labels: List<String>,
+        rule: AppPaymentRule,
+    ): String? = labels.firstOrNull { label ->
+        label.length in 2..80 &&
+            label !in rule.successMarkers &&
+            label !in rule.amountKeys &&
+            label !in rule.excludedAmountLabels &&
+            label !in rule.fallbackMerchantBlockedLabels &&
+            rule.fallbackMerchantBlockedFragments.none { label.contains(it) } &&
             amountPatterns.none { it.containsMatchIn(label) } &&
-            !label.contains("支付方式") && !label.contains("付款方式")
+            rule.methodKeys.none { key ->
+                label == key || label.contains(key)
+            }
     }
 }

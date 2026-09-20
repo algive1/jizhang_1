@@ -6,8 +6,22 @@ import kotlin.math.abs
 
 enum class DedupResult { NOT_DUPLICATE, POSSIBLE_DUPLICATE, DUPLICATE }
 object BillFingerprint {
-    fun of(c: PaymentCandidate): String = hash("${identity(c)}|${c.timestamp / 60000}")
-    fun identity(c: PaymentCandidate): String = listOf(c.sourceApp, c.amountInCents, c.merchantNormalized, c.paymentMethod, c.transactionType).joinToString("|")
+    fun of(c: PaymentCandidate): String {
+        val order = c.orderId?.trim().orEmpty()
+        if (order.isNotEmpty()) {
+            return hash(listOf(c.sourceApp, "order", order, c.transactionType).joinToString("|"))
+        }
+        return hash("${identity(c)}|${c.timestamp / 60000}")
+    }
+
+    fun identity(c: PaymentCandidate): String = listOf(
+        c.sourceApp,
+        c.amountInCents,
+        c.merchantNormalized,
+        c.paymentMethod,
+        c.transactionType,
+        c.orderId.orEmpty(),
+    ).joinToString("|")
     fun hash(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 }
 class BillDedupEngine {
@@ -16,7 +30,13 @@ class BillDedupEngine {
         recent.removeAll { abs(candidate.timestamp - it.timestamp) > 300000 }
         val exact = recent.any { BillFingerprint.identity(it) == BillFingerprint.identity(candidate) }
         if (samePage && exact) return DedupResult.DUPLICATE
-        if (recent.any { it.amountInCents == candidate.amountInCents && it.merchantNormalized == candidate.merchantNormalized }) return DedupResult.POSSIBLE_DUPLICATE
+        if (
+            recent.any {
+                it.transactionType == candidate.transactionType &&
+                    it.amountInCents == candidate.amountInCents &&
+                    it.merchantNormalized == candidate.merchantNormalized
+            }
+        ) return DedupResult.POSSIBLE_DUPLICATE
         return DedupResult.NOT_DUPLICATE
     }
     fun remember(candidate: PaymentCandidate) { recent.addLast(candidate); while (recent.size > 100) recent.removeFirst() }

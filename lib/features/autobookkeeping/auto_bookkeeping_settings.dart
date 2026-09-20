@@ -1,6 +1,61 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class AutoBookkeepingRuntimeStatus {
+  const AutoBookkeepingRuntimeStatus({
+    required this.enabled,
+    required this.accessibilityGranted,
+    required this.accessibilityConnected,
+    required this.overlayGranted,
+    required this.notificationGranted,
+    required this.foregroundRunning,
+    required this.notificationListenerGranted,
+    required this.notificationListenerEnabled,
+    required this.notificationListenerConnected,
+    required this.screenshotSupported,
+    required this.screenshotEnabled,
+    required this.ruleSchemaVersion,
+    required this.ruleVersions,
+    required this.ruleSource,
+  });
+
+  final bool enabled;
+  final bool accessibilityGranted;
+  final bool accessibilityConnected;
+  final bool overlayGranted;
+  final bool notificationGranted;
+  final bool foregroundRunning;
+  final bool notificationListenerGranted;
+  final bool notificationListenerEnabled;
+  final bool notificationListenerConnected;
+  final bool screenshotSupported;
+  final bool screenshotEnabled;
+  final int ruleSchemaVersion;
+  final String ruleVersions;
+  final String ruleSource;
+
+  factory AutoBookkeepingRuntimeStatus.fromMap(Map<Object?, Object?> map) {
+    bool flag(String key) => map[key] == true;
+    return AutoBookkeepingRuntimeStatus(
+      enabled: flag('enabled'),
+      accessibilityGranted: flag('accessibilityGranted'),
+      accessibilityConnected: flag('accessibilityConnected'),
+      overlayGranted: flag('overlayGranted'),
+      notificationGranted: flag('notificationGranted'),
+      foregroundRunning: flag('foregroundRunning'),
+      notificationListenerGranted: flag('notificationListenerGranted'),
+      notificationListenerEnabled: flag('notificationListenerEnabled'),
+      notificationListenerConnected: flag('notificationListenerConnected'),
+      screenshotSupported: flag('screenshotSupported'),
+      screenshotEnabled: flag('screenshotEnabled'),
+      ruleSchemaVersion:
+          (map['ruleSchemaVersion'] as num?)?.toInt() ?? 0,
+      ruleVersions: map['ruleVersions']?.toString() ?? '',
+      ruleSource: map['ruleSource']?.toString() ?? 'unknown',
+    );
+  }
+}
+
 abstract interface class AutoBookkeepingSettingsBridge {
   Future<bool> isAccessibilityGranted();
   Future<void> openAccessibilitySettings();
@@ -8,7 +63,9 @@ abstract interface class AutoBookkeepingSettingsBridge {
   Future<void> openOverlaySettings();
   Future<bool> isEnabled();
   Future<bool> isNotificationGranted();
-  Future<void> requestNotificationPermission();
+  Future<AutoBookkeepingRuntimeStatus> runtimeStatus();
+  Future<bool> requestNotificationPermission();
+  Future<bool> setScreenshotEnabled(bool enabled);
   Future<void> setEnabled(bool enabled);
 }
 
@@ -54,6 +111,51 @@ class MethodChannelAutoBookkeepingSettings
   }
 
   @override
+  Future<AutoBookkeepingRuntimeStatus> runtimeStatus() async {
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'runtimeStatus',
+      );
+      if (raw == null) {
+        return const AutoBookkeepingRuntimeStatus(
+          enabled: false,
+          accessibilityGranted: false,
+          accessibilityConnected: false,
+          overlayGranted: false,
+          notificationGranted: false,
+          foregroundRunning: false,
+          notificationListenerGranted: false,
+          notificationListenerEnabled: false,
+          notificationListenerConnected: false,
+          screenshotSupported: false,
+          screenshotEnabled: false,
+          ruleSchemaVersion: 0,
+          ruleVersions: '',
+          ruleSource: 'unknown',
+        );
+      }
+      return AutoBookkeepingRuntimeStatus.fromMap(raw);
+    } on MissingPluginException {
+      return const AutoBookkeepingRuntimeStatus(
+        enabled: false,
+        accessibilityGranted: false,
+        accessibilityConnected: false,
+        overlayGranted: false,
+        notificationGranted: false,
+        foregroundRunning: false,
+        notificationListenerGranted: false,
+        notificationListenerEnabled: false,
+        notificationListenerConnected: false,
+        screenshotSupported: false,
+        screenshotEnabled: false,
+        ruleSchemaVersion: 0,
+        ruleVersions: '',
+        ruleSource: 'unknown',
+      );
+    }
+  }
+
+  @override
   Future<bool> isNotificationGranted() async {
     try {
       return await _channel.invokeMethod<bool>('isNotificationGranted') ??
@@ -64,8 +166,27 @@ class MethodChannelAutoBookkeepingSettings
   }
 
   @override
-  Future<void> requestNotificationPermission() =>
-      _invokeSettings('requestNotificationPermission');
+  Future<bool> requestNotificationPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestNotificationPermission') ??
+          false;
+    } on MissingPluginException {
+      throw StateError('自动记账仅支持 Android');
+    }
+  }
+
+  @override
+  Future<bool> setScreenshotEnabled(bool enabled) async {
+    try {
+      return await _channel.invokeMethod<bool>(
+            'setScreenshotEnabled',
+            enabled,
+          ) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 
   @override
   Future<void> setEnabled(bool enabled) async {
