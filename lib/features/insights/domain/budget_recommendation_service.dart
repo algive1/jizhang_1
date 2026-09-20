@@ -66,7 +66,7 @@ class BudgetRecommendationService {
             !matches(item)) {
           continue;
         }
-        final personal = _personalExpense(item);
+        final personal = item.personalExpenseAmount;
         if (personal <= .005) continue;
         cents += (personal * 100).round();
         count++;
@@ -119,17 +119,6 @@ class BudgetRecommendationService {
       !item.occurredAt.isAfter(now) &&
       item.currency.toUpperCase() == 'CNY' &&
       item.isConsumptionExpense;
-
-  double _personalExpense(TransactionRecord item) {
-    final afterRefund = item.netExpenseAmount;
-    final reimbursable = switch (item.reimbursementStatus) {
-      ReimbursementStatus.none => 0.0,
-      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
-        item.reimbursementAmount ?? afterRefund,
-      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
-    };
-    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
-  }
 
   double _friendly(double value) {
     if (value <= 0) return 0;

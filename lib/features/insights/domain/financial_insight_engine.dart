@@ -21,7 +21,7 @@ class FinancialInsightEngine {
         result.add(item);
         continue;
       }
-      final personal = _personalExpense(item);
+      final personal = item.personalExpenseAmount;
       if (personal <= .005) continue;
       if ((personal - item.netExpenseAmount).abs() < .005) {
         result.add(item);
@@ -63,7 +63,7 @@ class FinancialInsightEngine {
         .where((item) => item.isConsumptionExpense)
         .toList(growable: false);
     final expenses = consumptionRows
-        .where((item) => _personalExpense(item) > .005)
+        .where((item) => item.personalExpenseAmount > .005)
         .toList(growable: false);
     final quality = _quality(expenses, clock);
     final candidates = <FinancialInsightItem>[];
@@ -284,7 +284,7 @@ class FinancialInsightEngine {
     TransactionRecord? largest;
     var largestAmount = 0.0;
     for (final item in currentRows) {
-      final amount = _personalExpense(item);
+      final amount = item.personalExpenseAmount;
       if (amount <= 0) continue;
       if (amount > largestAmount) {
         largest = item;
@@ -460,7 +460,7 @@ class FinancialInsightEngine {
               item.occurredAt.year == now.year &&
               item.occurredAt.month == now.month,
         )
-        .fold<double>(0, (sum, item) => sum + _personalExpense(item));
+        .fold<double>(0, (sum, item) => sum + item.personalExpenseAmount);
     final committed = used + progress.goalReservation;
     final usage = committed / progress.budget.amount;
     final forecast = used / timeProgress + progress.goalReservation;
@@ -539,7 +539,7 @@ class FinancialInsightEngine {
           continue;
         }
         if (item.type == TransactionType.income) income += item.amount;
-        if (item.isConsumptionExpense) expense += _personalExpense(item);
+        if (item.isConsumptionExpense) expense += item.personalExpenseAmount;
       }
       return (income: income, expense: expense);
     }
@@ -703,17 +703,6 @@ class FinancialInsightEngine {
     );
   }
 
-  double _personalExpense(TransactionRecord item) {
-    final afterRefund = item.netExpenseAmount;
-    final reimbursable = switch (item.reimbursementStatus) {
-      ReimbursementStatus.none => 0.0,
-      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
-        item.reimbursementAmount ?? afterRefund,
-      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
-    };
-    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
-  }
-
   FinancialInsightItem? _creditInsight(
     List<Account> accounts,
     InsightPreferences preferences,
@@ -768,7 +757,7 @@ class FinancialInsightEngine {
     if (family.length < 2) return null;
     final amount = family.fold<double>(
       0,
-      (sum, item) => sum + _personalExpense(item),
+      (sum, item) => sum + item.personalExpenseAmount,
     );
     if (amount < 100) return null;
     return _item(
@@ -810,7 +799,7 @@ class FinancialInsightEngine {
     final cutoff = now.subtract(const Duration(days: 90));
     final items = expenses.where((item) {
       if (item.occurredAt.isBefore(cutoff)) return false;
-      if (_personalExpense(item) <= .005) return false;
+      if (item.personalExpenseAmount <= .005) return false;
       final text =
           '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
       return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text);
@@ -818,7 +807,7 @@ class FinancialInsightEngine {
     if (items.length < 4) return null;
     final amount = items.fold<double>(
       0,
-      (sum, item) => sum + _personalExpense(item),
+      (sum, item) => sum + item.personalExpenseAmount,
     );
     return _item(
       id: 'life:beauty-care',

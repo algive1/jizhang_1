@@ -168,7 +168,8 @@ final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
           .where((item) => item.isConsumptionExpense)
           .fold<int>(
             0,
-            (total, item) => total + (item.netExpenseAmount * 100).round(),
+            (total, item) =>
+                total + (item.personalExpenseAmount * 100).round(),
           ) /
       100;
   final forecastBalance = income - spending;
@@ -232,7 +233,7 @@ MonthlyLedgerSummary monthlySummary(
       continue;
     if (item.isIncome) income += (item.amount * 100).round();
     if (item.isConsumptionExpense)
-      expense += (item.netExpenseAmount * 100).round();
+      expense += (item.personalExpenseAmount * 100).round();
   }
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),

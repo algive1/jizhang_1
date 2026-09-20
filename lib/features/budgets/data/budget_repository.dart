@@ -122,7 +122,7 @@ class DriftBudgetRepository implements BudgetRepository {
     final totalUsed =
         monthTransactions.fold<int>(
           0,
-          (total, item) => total + (_personalExpense(item) * 100).round(),
+          (total, item) => total + (item.personalExpenseAmount * 100).round(),
         ) /
         100;
     final totalBudget = budgets
@@ -147,17 +147,6 @@ class DriftBudgetRepository implements BudgetRepository {
         })
         .toList(growable: false);
     return BudgetOverview(total: total, categories: categoryProgress);
-  }
-
-  double _personalExpense(TransactionRecord item) {
-    final afterRefund = item.netExpenseAmount;
-    final reimbursable = switch (item.reimbursementStatus) {
-      ReimbursementStatus.none => 0.0,
-      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
-        item.reimbursementAmount ?? afterRefund,
-      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
-    };
-    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
   }
 
   bool _belongsToCategory(
