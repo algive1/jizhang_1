@@ -37,7 +37,7 @@ void main() {
     expect(meals.subcategory?.id, 'expense-food-meals');
   });
 
-  test('maps semantic child categories even when MuMu root is broad', () {
+  test('maps semantic child categories even when source root is broad', () {
     final categories = [
       _category('expense-other', '其他'),
       _category('expense-housing', '住房'),
@@ -69,7 +69,7 @@ void main() {
     expect(haircut.subcategory?.id, 'expense-shopping-personal-care');
   });
 
-  test('maps MuMu investment income and living support', () {
+  test('maps investment income and living support', () {
     final categories = [
       _category(
         'income-investment',
@@ -129,6 +129,37 @@ void main() {
 
     expect(result.category?.id, 'custom-daily');
   });
+
+  test('maps household and tobacco-tea high-frequency categories', () {
+    final categories = [
+      _category('expense-household', '家居日用'),
+      _category(
+        'expense-household-cleaning',
+        '清洁用品',
+        parentId: 'expense-household',
+      ),
+      _category('expense-tobacco-tea', '烟酒茶'),
+      _category(
+        'expense-tobacco-tea-tea',
+        '茶叶',
+        parentId: 'expense-tobacco-tea',
+      ),
+    ];
+
+    final household = mapper.resolve(
+      _row(category: '日常', subcategory: '清洁用品'),
+      categories,
+    );
+    final tea = mapper.resolve(
+      _row(category: '烟酒茶', subcategory: '茶叶'),
+      categories,
+    );
+
+    expect(household.category?.id, 'expense-household');
+    expect(household.subcategory?.id, 'expense-household-cleaning');
+    expect(tea.category?.id, 'expense-tobacco-tea');
+    expect(tea.subcategory?.id, 'expense-tobacco-tea-tea');
+  });
 }
 
 Category _category(
@@ -167,36 +198,4 @@ ImportedBillRow _row({
     sourceCategory: category,
     sourceSubcategory: subcategory,
   );
-
-  test('maps household and tobacco-tea high-frequency categories', () {
-    final categories = [
-      _category('expense-household', '家居日用'),
-      _category(
-        'expense-household-cleaning',
-        '清洁用品',
-        parentId: 'expense-household',
-      ),
-      _category('expense-tobacco-tea', '烟酒茶'),
-      _category(
-        'expense-tobacco-tea-tea',
-        '茶叶',
-        parentId: 'expense-tobacco-tea',
-      ),
-    ];
-
-    final household = mapper.resolve(
-      _row(category: '日常', subcategory: '清洁用品'),
-      categories,
-    );
-    final tea = mapper.resolve(
-      _row(category: '烟酒茶', subcategory: '茶叶'),
-      categories,
-    );
-
-    expect(household.category?.id, 'expense-household');
-    expect(household.subcategory?.id, 'expense-household-cleaning');
-    expect(tea.category?.id, 'expense-tobacco-tea');
-    expect(tea.subcategory?.id, 'expense-tobacco-tea-tea');
-  });
-
 }
