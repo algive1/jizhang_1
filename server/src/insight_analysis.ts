@@ -581,7 +581,7 @@ function categoryChanges(
     ) {
       results.push(
         item({
-          id: `server:category:${bucket.id ?? bucket.name}:one-time`,
+          id: `category:${bucket.id ?? bucket.name}:one-time`,
           kind: 'discovery',
           priority: 'attention',
           title: `${bucket.name}增加主要来自一次性支出`,
@@ -647,7 +647,7 @@ function categoryChanges(
             : '消费次数和单次金额都在推动本期增长。';
       results.push(
         item({
-          id: `server:category:${bucket.id ?? bucket.name}:increase`,
+          id: `analysis:category:${bucket.id ?? bucket.name}`,
           kind: 'behavior',
           priority: percent >= 0.7 ? 'important' : 'attention',
           title: `${bucket.name}支出明显增加`,
@@ -693,7 +693,7 @@ function categoryChanges(
       const drop = bucket.previousAmount - bucket.currentAmount;
       results.push(
         item({
-          id: `server:category:${bucket.id ?? bucket.name}:positive`,
+          id: `positive:category:${bucket.id ?? bucket.name}`,
           kind: 'positive',
           priority: 'info',
           title: `${bucket.name}支出有所下降`,
@@ -778,7 +778,7 @@ function behaviorPatternInsight(
   const previousAmount = previous.reduce((sum, tx) => sum + netExpense(tx), 0);
   const isDelivery = kind === 'delivery';
   return item({
-    id: `server:behavior:${kind}`,
+    id: `behavior:${kind}`,
     kind: 'behavior',
     priority: current.length >= previous.length + 6 ? 'important' : 'attention',
     title: isDelivery ? '最近外卖次数明显增加' : '最近深夜消费变多了',
@@ -853,7 +853,7 @@ function comparableBalanceInsight(
   if (Math.abs(delta) < 300 || Math.abs(delta) / denominator < 0.1) return null;
   const improved = delta > 0;
   return item({
-    id: 'server:financial:comparable-balance',
+    id: 'financial:comparable-balance',
     kind: improved ? 'positive' : 'financial',
     priority: improved ? 'info' : 'attention',
     title: improved ? '本月可比结余有所改善' : '本月可比结余有所收紧',
@@ -931,7 +931,7 @@ function dataAnomalyInsight(
   ).length;
   const lowConfidenceCount = rows.length - duplicateCount;
   return item({
-    id: 'server:data:review-needed',
+    id: 'data:review-needed',
     kind: 'discovery',
     priority: rows.length >= 6 ? 'important' : 'attention',
     title: '有几笔流水值得人工确认',
@@ -1059,7 +1059,7 @@ export function analyzeInsightContext(
         usage > 1 || overspend > totalBudget.amount * 0.25;
       results.push(
         item({
-          id: `server:budget:${currentMonthKey}:total`,
+          id: `budget:${currentMonthKey}:total`,
           kind: 'risk',
           priority: important ? 'important' : 'attention',
           title: usage > 1 ? '本月预算已经超出' : '本月预算消耗有点快',
@@ -1111,7 +1111,7 @@ export function analyzeInsightContext(
     if (recommendation) {
       results.push(
         item({
-          id: 'server:budget:recommendation',
+          id: 'budget:recommendation',
           kind: 'goal',
           priority: 'attention',
           title: '可以用你的真实消费来设预算了',
@@ -1159,7 +1159,7 @@ export function analyzeInsightContext(
   if (creditAccounts.length >= 2) {
     results.push(
       item({
-        id: 'server:accounts:multiple-credit',
+        id: 'accounts:multiple-credit',
         kind: 'financial',
         priority: 'attention',
         title: '你在使用多个信用 / 后付账户',
@@ -1207,7 +1207,7 @@ export function analyzeInsightContext(
   if (familyRows.length >= 2 && familyAmount >= 100) {
     results.push(
       item({
-        id: 'server:life:family-support',
+        id: 'life:family-support',
         kind: 'life',
         priority: 'info',
         title: '家人是你近期支出里很特别的一部分',
@@ -1249,7 +1249,7 @@ export function analyzeInsightContext(
     const amount = beautyRows.reduce((sum, tx) => sum + netExpense(tx), 0);
     results.push(
       item({
-        id: 'server:life:beauty-care',
+        id: 'life:beauty-care',
         kind: 'life',
         priority: 'info',
         title: '最近挺重视美妆护理',
@@ -1292,7 +1292,7 @@ export function analyzeInsightContext(
     );
     results.push(
       item({
-        id: 'server:money:pending-reimbursement',
+        id: 'money:pending-reimbursement',
         kind: 'discovery',
         priority: amount >= 500 ? 'attention' : 'info',
         title: '有待报销支出还没闭环',
@@ -1336,7 +1336,7 @@ export function analyzeInsightContext(
         const behind = gap > 0;
         results.push(
           item({
-            id: `server:goal:${goal.id}:progress`,
+            id: `goal:${goal.id}:progress`,
             kind: behind ? 'goal' : 'positive',
             priority: behind ? 'attention' : 'info',
             title: behind
@@ -1421,7 +1421,7 @@ export function analyzeInsightContext(
       netUpcoming > liquid * 0.7;
     results.push(
       item({
-        id: 'server:cashflow:upcoming-recurring',
+        id: 'cashflow:upcoming-recurring',
         kind: risk ? 'risk' : 'discovery',
         priority: risk ? 'important' : 'attention',
         title: risk ? '未来两周固定支出比较集中' : '未来两周有几项固定支出',
@@ -1460,7 +1460,7 @@ export function analyzeInsightContext(
   if (confidence.classification < 0.68 && expenses.length >= 12) {
     results.push(
       item({
-        id: 'server:data:classification',
+        id: 'data:classification',
         kind: 'discovery',
         priority: 'attention',
         title: '有些分类值得先校正',

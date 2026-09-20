@@ -223,12 +223,12 @@ test('server insight analysis respects local timezone and excludes ambiguous tra
   assert.equal(result.historyDays, 90);
   assert.equal(
     result.items.some((item: { id: string }) =>
-      item.id === 'server:life:family-support'),
+      item.id === 'life:family-support'),
     false,
   );
   assert.equal(
     result.items.some((item: { id: string }) =>
-      item.id.includes('category:food:increase')),
+      item.id === 'analysis:category:food'),
     true,
   );
 });
@@ -275,7 +275,7 @@ test('member AI interpretation is cached and grounded behind server policy', asy
   });
 
   const payload = {
-    insightId: 'server:category:food:increase',
+    insightId: 'analysis:category:food',
     kind: 'behavior',
     title: '餐饮支出明显增加',
     summary: '本期比上一可比周期多 ¥210。',
@@ -373,11 +373,11 @@ test('one-time expense is not mislabeled as a persistent spending habit', async 
   assert.equal(response.statusCode, 200);
   const items = response.json().items as Array<{ id: string; kind: string }>;
   assert.equal(
-    items.some(item => item.id === 'server:category:shopping:one-time'),
+    items.some(item => item.id === 'category:shopping:one-time'),
     true,
   );
   assert.equal(
-    items.some(item => item.id === 'server:category:shopping:increase'),
+    items.some(item => item.id === 'analysis:category:shopping'),
     false,
   );
 });
