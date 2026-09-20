@@ -67,6 +67,10 @@ jobs:
           test/analysis_multibook_and_annual_report_test.dart
           test/bookkeeping_template_repository_test.dart
           test/bill_import_service_test.dart
+          test/bill_import_category_mapper_test.dart
+          test/xlsx_bill_import_test.dart
+          test/category_template_upgrade_test.dart
+          test/account_balance_effect_test.dart
           test/investment_repository_test.dart
           test/voice_parser_test.dart
           test/payment_notification_test.dart

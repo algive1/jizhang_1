@@ -188,6 +188,49 @@ class DatabaseSeeder {
       }
     }
     await _seedCategories(bookId: bookId, type: type);
+    await _archiveSupersededCategoryChildren(bookId, type);
+  }
+
+  Future<void> _archiveSupersededCategoryChildren(
+    String bookId,
+    BookType type,
+  ) async {
+    final deprecated = switch (type) {
+      BookType.personal => const <String, String>{
+          'expense-shopping-daily': '日用百货',
+          'expense-shopping-furniture': '家居用品',
+          'expense-shopping-online': '网购',
+        },
+      BookType.family => const <String, String>{
+          'expense-shopping-daily': '家庭日用品',
+          'expense-shopping-furniture': '家具',
+          'expense-shopping-cleaning': '清洁用品',
+        },
+      BookType.enterprise => const <String, String>{},
+    };
+    for (final entry in deprecated.entries) {
+      final id = _categorySeedId(bookId, entry.key, type);
+      final row = await _database.categoryDao.findById(id);
+      if (row == null ||
+          !row.isDefault ||
+          row.isArchived ||
+          row.name != entry.value) {
+        continue;
+      }
+      await _database.categoryDao.upsert(
+        CategoryEntriesCompanion(
+          id: Value(row.id),
+          bookId: Value(row.bookId),
+          parentId: Value(row.parentId),
+          name: Value(row.name),
+          icon: Value(row.icon),
+          type: Value(row.type),
+          sortOrder: Value(row.sortOrder),
+          isDefault: Value(row.isDefault),
+          isArchived: const Value(true),
+        ),
+      );
+    }
   }
 
   Future<void> _archiveTypeDefaults(String bookId, BookType type) async {
