@@ -62,14 +62,26 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
     _checked = true;
     final settings = ref.read(appSettingsRepositoryProvider);
     final insight = widget.insight!;
-    final key =
+    final dailyKey = 'home.insight.lastShown.${widget.bookId}';
+    final insightKey =
         'home.insight.lastShown.${widget.bookId}.${insight.id}';
     try {
-      final raw = await settings.get(key);
-      final lastShown = raw == null ? null : DateTime.tryParse(raw);
+      final values = await Future.wait([
+        settings.get(dailyKey),
+        settings.get(insightKey),
+      ]);
+      final lastAny = values[0] == null
+          ? null
+          : DateTime.tryParse(values[0]!);
+      final lastInsight = values[1] == null
+          ? null
+          : DateTime.tryParse(values[1]!);
       final now = widget.day;
-      if (lastShown != null &&
-          now.difference(DateUtils.dateOnly(lastShown)).inDays <
+      if (lastAny != null && DateUtils.isSameDay(lastAny, now)) {
+        return;
+      }
+      if (lastInsight != null &&
+          now.difference(DateUtils.dateOnly(lastInsight)).inDays <
               widget.cooldownDays) {
         return;
       }
@@ -78,7 +90,11 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
         _checked = false;
         return;
       }
-      await settings.set(key, widget.day.toIso8601String());
+      final stamp = widget.day.toIso8601String();
+      await Future.wait([
+        settings.set(dailyKey, stamp),
+        settings.set(insightKey, stamp),
+      ]);
       if (mounted) setState(() => _expanded = true);
     } catch (error, stack) {
       debugPrint('Home insight display state failed: $error\n$stack');

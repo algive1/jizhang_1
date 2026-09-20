@@ -46,6 +46,45 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'home insight drawer auto-opens at most one candidate per day',
+    (tester) async {
+      final day = DateTime(2026, 9, 20);
+      final settings = _MemorySettings({});
+
+      Widget app(FinancialInsightItem insight) => ProviderScope(
+        overrides: [
+          appSettingsRepositoryProvider.overrideWithValue(settings),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: HomeInsightDrawer(
+              bookId: 'book-personal',
+              day: day,
+              insight: insight,
+              available: true,
+              cooldownDays: 7,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(app(_insight('first', '第一条')));
+      await tester.pumpAndSettle();
+      expect(find.text('第一条').hitTestable(), findsOneWidget);
+
+      await tester.pumpWidget(app(_insight('second', '第二条')));
+      await tester.pumpAndSettle();
+      expect(find.text('第二条').hitTestable(), findsNothing);
+      expect(
+        settings.values['home.insight.lastShown.book-personal.second'],
+        isNull,
+      );
+    },
+  );
+
 }
 
 FinancialInsightItem _insight(String id, String title) => FinancialInsightItem(
