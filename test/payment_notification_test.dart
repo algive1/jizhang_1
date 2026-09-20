@@ -380,6 +380,91 @@ void main() {
     expect(await transactions.getAll(), isEmpty);
   });
 
+  test('completed repayment notification queues confirmation with debt target', () async {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'repayment-notification',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '信用卡还款成功 ¥120.00，还款信用卡：招商银行信用卡 尾号4321，扣款账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 11),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.transactionType, 'REPAYMENT');
+    expect(parsed.amount, 120);
+    expect(parsed.paymentMethod, '支付宝余额');
+    expect(parsed.targetIdentifierSuffix, '4321');
+    expect(parsed.targetAccountHint, '招商银行信用卡 尾号4321');
+
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'repayment-queued',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '信用卡还款成功 ¥120.00，还款信用卡：招商银行信用卡 尾号4321，扣款账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 11),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(result.created, 0);
+    expect(pending.candidates, hasLength(1));
+    expect(pending.candidates.single.transactionType, 'REPAYMENT');
+    expect(
+      pending.candidates.single.scene,
+      'PAYMENT_NOTIFICATION_REPAYMENT',
+    );
+    expect(pending.candidates.single.targetIdentifierSuffix, '4321');
+    expect(await transactions.getAll(), isEmpty);
+  });
+
+  test('repayment never direct-saves when confirmation bridge is unavailable', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'repayment-no-pending',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '信用卡还款成功 ¥120.00，还款信用卡：招商银行信用卡 尾号4321，扣款账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 11),
+      ),
+    ]);
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+    ).processPending();
+
+    expect(result.waiting, 1);
+    expect(result.created, 0);
+    expect(await transactions.getAll(), isEmpty);
+    expect(bridge.acknowledged, isEmpty);
+  });
+
   test('wechat chat transfer text is not accepted without payment context', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
