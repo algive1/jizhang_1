@@ -1,6 +1,5 @@
 import type { Store } from './store.js';
 import { ApiError } from './contract.js';
-import { resolvedEntitlements } from './entitlements.js';
 import { membershipState } from './membership_state.js';
 
 export function ensureQuotaSchema(store:Store){
