@@ -84,6 +84,7 @@ class BillImportCategoryMapper {
       return 'expense-utilities';
     }
     if (subcategory == '数码') return 'expense-digital';
+    if (subcategory == '理发') return 'expense-shopping';
 
     return switch (category) {
       '餐饮' || '零食' || '水果' => 'expense-food',
