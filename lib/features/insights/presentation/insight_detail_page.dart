@@ -201,6 +201,11 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
                 label: const Text('判断不准'),
               ),
               OutlinedButton.icon(
+                onPressed: () => _feedback(context, ref, item, 'notRelevant'),
+                icon: const Icon(Icons.do_not_disturb_alt_outlined, size: 18),
+                label: const Text('和我无关'),
+              ),
+              OutlinedButton.icon(
                 onPressed: () => _dismiss(context, ref, item),
                 icon: const Icon(Icons.visibility_off_outlined, size: 18),
                 label: const Text('这条不用提醒'),

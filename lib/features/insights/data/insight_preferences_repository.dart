@@ -146,24 +146,37 @@ class InsightPreferencesRepository {
     FinancialInsightKind kind,
     String action,
   ) async {
-    await _settings.set('insights.feedback.$insightId', action);
+    final key = 'insights.feedback.$insightId';
+    final previousAction = await _settings.get(key);
+    if (previousAction == action) return;
+
     final current = await _loadLocal();
-    final previous = current.kindAdjustments[kind] ?? 0;
-    final delta = switch (action) {
-      'helpful' => 2.0,
-      'inaccurate' => -4.0,
-      _ => 0.0,
-    };
-    if (delta != 0) {
-      final next = (previous + delta).clamp(-12, 12).toDouble();
-      await _writeLocal(
+    final previousAdjustment = current.kindAdjustments[kind] ?? 0;
+    final nextAdjustment = (
+      previousAdjustment -
+      _feedbackDelta(previousAction) +
+      _feedbackDelta(action)
+    ).clamp(-12, 12).toDouble();
+    await Future.wait([
+      _settings.set(key, action),
+      _writeLocal(
         current.copyWith(
-          kindAdjustments: {...current.kindAdjustments, kind: next},
+          kindAdjustments: {
+            ...current.kindAdjustments,
+            kind: nextAdjustment,
+          },
         ),
-      );
-    }
+      ),
+    ]);
     unawaited(_sendFeedback(insightId, kind, action));
   }
+
+  double _feedbackDelta(String? action) => switch (action) {
+    'helpful' => 2.0,
+    'inaccurate' => -4.0,
+    'notRelevant' => -3.0,
+    _ => 0.0,
+  };
 
   Future<void> _sendFeedback(
     String insightId,

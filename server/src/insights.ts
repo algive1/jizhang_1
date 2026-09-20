@@ -203,7 +203,10 @@ function readFeedbackProfile(
   }>;
   const dismissedIds = new Set<string>();
   const kindAdjustments: Record<string, number> = {};
+  const seenInsights = new Set<string>();
   for (const row of rows) {
+    if (seenInsights.has(row.insightId)) continue;
+    seenInsights.add(row.insightId);
     if (row.action === 'dismissed') dismissedIds.add(row.insightId);
     if (!row.kind) continue;
     const delta =

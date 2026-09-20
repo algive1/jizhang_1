@@ -241,13 +241,15 @@ class _QualityCard extends StatelessWidget {
       feed.classificationConfidence * .2 +
       feed.baselineConfidence * .25
     ).clamp(0, 1);
-    final label = feed.isServerConfirmed
-        ? '已基于当前完整账务上下文确认'
+    final label = feed.completeness < .15
+        ? '先记几笔，我们再开始分析'
+        : feed.isServerConfirmed
+        ? '已基于当前账务上下文确认'
         : confidence >= .75
         ? '洞察基础较稳定'
         : confidence >= .5
         ? '洞察还在学习'
-        : '先把账记准';
+        : '有些数据还需要确认';
     return AppCard(
       child: Row(
         children: [
@@ -266,7 +268,9 @@ class _QualityCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  feed.isServerConfirmed
+                  feed.completeness < .15
+                      ? '目前样本还少，不会急着给你下结论。'
+                      : feed.isServerConfirmed
                       ? '已用当前账本的流水、账户、预算、目标和周期账单统一复核；数据不足时仍会减少判断。'
                       : confidence >= .75
                       ? '已有足够数据建立个人基线，会优先和过去的你比较。'
