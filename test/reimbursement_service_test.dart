@@ -78,6 +78,109 @@ void main() {
     );
   });
 
+  test('detected reimbursement links source and applies exact receipt amount', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final now = DateTime(2026, 9, 12);
+    final original = TransactionRecord(
+      id: 'detected-reimbursement-source',
+      bookId: SeedIds.personalBook,
+      type: TransactionType.expense,
+      amount: 500,
+      accountId: SeedIds.bankAccount,
+      reimbursementStatus: ReimbursementStatus.pending,
+      reimbursementAmount: 500,
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await transactions.create(original);
+    final cashBefore =
+        (await database.accountDao.findById(SeedIds.cashAccount))!
+            .balanceInCents;
+    final account = Account(
+      id: SeedIds.cashAccount,
+      bookId: SeedIds.personalBook,
+      name: '现金',
+      type: AccountType.cash,
+      balance: cashBefore / 100,
+      currency: 'CNY',
+      assetForm: AssetForm.cash,
+      icon: 'payments_outlined',
+      color: 0,
+      sortOrder: 0,
+      isArchived: false,
+      createdAt: now,
+      updatedAt: now,
+    );
+    final category = Category(
+      id: 'income-other',
+      bookId: SeedIds.personalBook,
+      name: '其他收入',
+      icon: 'more_horiz',
+      type: CategoryType.income,
+      sortOrder: 0,
+      isDefault: true,
+      isArchived: false,
+    );
+    final service = ReimbursementService(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    final first = await service.registerDetectedPayment(
+      original: original,
+      account: account,
+      category: category,
+      amount: 200,
+      occurredAt: now.add(const Duration(days: 1)),
+      transactionId: 'auto-reimbursement-first',
+      source: TransactionSource.auto,
+    );
+    final afterFirst = await transactions.getById(original.id);
+    expect(first.type, TransactionType.reimbursement);
+    expect(first.relatedTransactionId, original.id);
+    expect(first.source, TransactionSource.auto);
+    expect(afterFirst?.reimbursementStatus, ReimbursementStatus.partial);
+    expect(afterFirst?.reimbursementAmount, 200);
+    expect(
+      (await database.accountDao.findById(SeedIds.cashAccount))!
+          .balanceInCents,
+      cashBefore + 20000,
+    );
+
+    final second = await service.registerDetectedPayment(
+      original: afterFirst!,
+      account: account,
+      category: category,
+      amount: 300,
+      occurredAt: now.add(const Duration(days: 2)),
+      transactionId: 'auto-reimbursement-second',
+      source: TransactionSource.auto,
+    );
+    final completed = await transactions.getById(original.id);
+    expect(second.relatedTransactionId, original.id);
+    expect(completed?.reimbursementStatus, ReimbursementStatus.reimbursed);
+    expect(completed?.reimbursementAmount, 500);
+    expect(
+      (await database.accountDao.findById(SeedIds.cashAccount))!
+          .balanceInCents,
+      cashBefore + 50000,
+    );
+
+    await expectLater(
+      service.registerDetectedPayment(
+        original: completed!,
+        account: account,
+        category: category,
+        amount: 1,
+      ),
+      throwsStateError,
+    );
+  });
+
   test(
     'editing and voiding reimbursement payment restores source and balance',
     () async {
