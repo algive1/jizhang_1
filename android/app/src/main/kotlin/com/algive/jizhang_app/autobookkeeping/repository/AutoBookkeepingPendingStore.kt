@@ -360,9 +360,17 @@ object AutoBookkeepingPendingStore {
     ): Boolean {
         val sameSource =
             first.optString("sourceApp") == second.optString("sourceApp")
+        val firstNotification =
+            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
+        val secondNotification =
+            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
+        val crossCaptureSource = firstNotification != secondNotification
         if (
-            first.optString("transactionType", "EXPENSE") !=
-            second.optString("transactionType", "EXPENSE")
+            !transactionTypesCompatible(
+                first.optString("transactionType", "EXPENSE"),
+                second.optString("transactionType", "EXPENSE"),
+                crossCaptureSource,
+            )
         ) {
             return false
         }
@@ -397,11 +405,7 @@ object AutoBookkeepingPendingStore {
                 secondMerchant.isNotBlank() &&
                 firstMerchant == secondMerchant
 
-        val firstNotification =
-            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        val secondNotification =
-            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        if (firstNotification != secondNotification) {
+        if (crossCaptureSource) {
             // The same marketplace payment may be observed from the merchant
             // app page and from the underlying Alipay/WeChat/UnionPay
             // notification. Merchant labels often differ, so also correlate
@@ -419,6 +423,16 @@ object AutoBookkeepingPendingStore {
         }
 
         return sameSource && sameMerchant
+    }
+
+    internal fun transactionTypesCompatible(
+        first: String,
+        second: String,
+        crossCaptureSource: Boolean,
+    ): Boolean {
+        if (first == second) return true
+        if (!crossCaptureSource) return false
+        return setOf(first, second) == setOf("EXPENSE", "TRANSFER")
     }
 
     private fun paymentMethodMatchesSource(
