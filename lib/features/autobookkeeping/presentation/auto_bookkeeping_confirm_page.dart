@@ -762,10 +762,28 @@ class _AutoBookkeepingConfirmPageState
                   final category = selectableCategories
                       .where((item) => item.id == selectedCategoryId)
                       .firstOrNull;
-                  if (account == null || category == null) {
+                  final destinationAccount = accounts
+                      .where(
+                        (item) => item.id == selectedDestinationAccountId,
+                      )
+                      .firstOrNull;
+                  if (account == null) {
                     setState(
                       () => _message =
-                          '请选择支付账户和${categoryType == CategoryType.income ? '收入' : '支出'}分类',
+                          isTransferScene ? '请选择转出账户' : '请选择支付账户',
+                    );
+                    return;
+                  }
+                  if (isTransferScene && _internalTransfer) {
+                    if (destinationAccount == null ||
+                        destinationAccount.id == account.id) {
+                      setState(() => _message = '请选择不同的转入账户');
+                      return;
+                    }
+                  } else if (category == null) {
+                    setState(
+                      () => _message =
+                          '请选择${categoryType == CategoryType.income ? '收入' : '支出'}分类',
                     );
                     return;
                   }
@@ -773,7 +791,14 @@ class _AutoBookkeepingConfirmPageState
                     _save(
                       bookId: selectedBookId,
                       account: account,
-                      category: category,
+                      category:
+                          isTransferScene && _internalTransfer
+                          ? null
+                          : category,
+                      destinationAccount:
+                          isTransferScene && _internalTransfer
+                          ? destinationAccount
+                          : null,
                     ),
                   );
                 },
@@ -794,8 +819,19 @@ class _AutoBookkeepingConfirmPageState
     );
   }
 
-  String? _validAccountId(List<Account> accounts) {
-    final suffix = _candidate?.identifierSuffix;
+  String? _validAccountId(List<Account> accounts) =>
+      _bestAccountId(
+        accounts,
+        candidate: _candidate,
+        preferredId: _accountId,
+      );
+
+  String? _bestAccountId(
+    List<Account> accounts, {
+    required PendingAutoBookkeepingCandidate? candidate,
+    String? preferredId,
+  }) {
+    final suffix = candidate?.identifierSuffix;
     if (suffix != null && suffix.isNotEmpty) {
       final suffixMatches = accounts
           .where((item) => item.identifierSuffix == suffix)
@@ -803,9 +839,12 @@ class _AutoBookkeepingConfirmPageState
       if (suffixMatches.length == 1) return suffixMatches.single.id;
     }
 
-    if (accounts.any((item) => item.id == _accountId)) return _accountId;
+    if (preferredId != null &&
+        accounts.any((item) => item.id == preferredId)) {
+      return preferredId;
+    }
 
-    final method = _candidate?.paymentMethod ?? '';
+    final method = candidate?.paymentMethod ?? '';
     final preferredByMethod = accounts.where((item) {
       if (method.contains('支付宝')) return item.type == AccountType.alipay;
       if (method.contains('微信')) return item.type == AccountType.wechat;
@@ -821,7 +860,7 @@ class _AutoBookkeepingConfirmPageState
     if (preferredByMethod != null) return preferredByMethod.id;
 
     final preferred = accounts.where((item) {
-      final source = _candidate?.sourceApp;
+      final source = candidate?.sourceApp;
       return switch (source) {
         'WECHAT' => item.type == AccountType.wechat,
         'ALIPAY' => item.type == AccountType.alipay,
@@ -831,6 +870,53 @@ class _AutoBookkeepingConfirmPageState
       };
     }).firstOrNull;
     return (preferred ?? accounts.firstOrNull)?.id;
+  }
+
+  String? _validDestinationAccountId(
+    List<Account> accounts, {
+    required String? sourceAccountId,
+  }) {
+    if (_destinationAccountId != null &&
+        _destinationAccountId != sourceAccountId &&
+        accounts.any((item) => item.id == _destinationAccountId)) {
+      return _destinationAccountId;
+    }
+
+    final recommended = _transferRecommendation?.destinationAccountId;
+    if (recommended != null &&
+        recommended != sourceAccountId &&
+        accounts.any((item) => item.id == recommended)) {
+      return recommended;
+    }
+
+    final suffix = _candidate?.targetIdentifierSuffix;
+    if (suffix != null && suffix.isNotEmpty) {
+      final matches = accounts
+          .where(
+            (item) =>
+                item.id != sourceAccountId &&
+                item.identifierSuffix == suffix,
+          )
+          .toList(growable: false);
+      if (matches.length == 1) return matches.single.id;
+    }
+    return null;
+  }
+
+  String _transferGuidance(PendingAutoBookkeepingCandidate candidate) {
+    final recommendation = _transferRecommendation;
+    if (recommendation?.evidence ==
+        AutoBookkeepingTransferEvidence.targetIdentifierSuffix) {
+      return '检测到目标账户尾号 ${candidate.targetIdentifierSuffix} 与你的账户唯一匹配，建议按自己账户间转账。';
+    }
+    if (recommendation?.evidence ==
+        AutoBookkeepingTransferEvidence.learnedDestination) {
+      return '根据你之前的确认，建议按自己账户间转账。';
+    }
+    if (_internalTransfer) {
+      return '系统没有足够证据确认这是自己的账户，请核对转入账户后再保存。';
+    }
+    return '无法确认收款方是不是你自己的账户，默认按支出；只有确认转给自己时再切换为账户间转账。';
   }
 
   String? _validCategoryId(List<Category> categories) {
@@ -857,6 +943,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.income => '收入',
     TransactionType.refund => '退款',
     TransactionType.reimbursement => '报销回款',
+    TransactionType.transfer => '转账',
     _ => '支出',
   };
 
@@ -865,6 +952,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.refund ||
     TransactionType.reimbursement ||
     TransactionType.borrow => AppColors.income,
+    TransactionType.transfer => AppColors.primary,
     _ => AppColors.expense,
   };
 
