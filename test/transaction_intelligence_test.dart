@@ -189,6 +189,47 @@ void main() {
   );
 
   test(
+    'repayment without category does not create uncertain-category inbox noise',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final transactions = DriftTransactionRepository(database);
+      final inbox = DriftBillInboxRepository(database);
+      const fingerprints = TransactionFingerprintService();
+      final service = TransactionIntelligenceService(
+        transactions: transactions,
+        merchantRules: DriftMerchantRuleRepository(
+          database,
+          transactions,
+          const MerchantClassificationService(),
+        ),
+        inbox: inbox,
+        economicEvents: EconomicEventRepository(database, fingerprints),
+        fingerprints: fingerprints,
+      );
+      final now = DateTime.now();
+      final repayment = TransactionRecord(
+        id: 'repayment-no-category',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.repayment,
+        amount: 500,
+        accountId: SeedIds.bankAccount,
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await transactions.create(repayment);
+
+      final result = await service.classifyAndApply(repayment.id);
+
+      expect(result.source, ClassificationSource.defaultCategory);
+      expect(result.confidence, 1);
+      expect(await inbox.getPending(), isEmpty);
+    },
+  );
+
+  test(
     'economic event links source rows without deleting either transaction',
     () async {
       final database = createMemoryDatabase();

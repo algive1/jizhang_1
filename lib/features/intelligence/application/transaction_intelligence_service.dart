@@ -70,7 +70,12 @@ class TransactionIntelligenceService {
     TransactionRecord transaction,
   ) async {
     if (transaction.type == TransactionType.transfer ||
-        transaction.type == TransactionType.adjustment) {
+        transaction.type == TransactionType.repayment ||
+        transaction.type == TransactionType.adjustment ||
+        transaction.type == TransactionType.assetSale) {
+      // These are movement/settlement rows rather than category-driven
+      // consumption or earned income. Do not create "uncertain category"
+      // inbox noise for records that are valid without a category.
       return (
         transaction,
         const ClassificationResult(
