@@ -600,6 +600,13 @@ test('server treats family lending as support but not consumer spending', async 
   };
   const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
   const rows = [
+    ...Array.from({ length: 12 }, (_, index) =>
+      tx(
+        `background-${index}`,
+        generatedAt - (index + 1) * 86400000,
+        30,
+      ),
+    ),
     tx('family-lend-1', Date.parse('2026-09-10T12:00:00+08:00'), 500, {
       type: 'lend',
       categoryId: null,

@@ -515,34 +515,51 @@ class BillImportService {
   TransactionType? _semanticType(String value, String? sourceCategory) {
     final primary = value.replaceAll(' ', '').toLowerCase();
     final category = (sourceCategory ?? '').replaceAll(' ', '').toLowerCase();
-    final combined = '$primary$category';
+
     if (primary.contains('转账') || primary == 'transfer') {
       return TransactionType.transfer;
     }
-    if (combined.contains('退款') ||
-        combined.contains('退回') ||
+    if (primary.contains('退款') ||
+        primary.contains('退回') ||
         primary == 'refund') {
       return TransactionType.refund;
     }
-    if (combined.contains('报销') || primary == 'reimbursement') {
+    if (primary.contains('报销') || primary == 'reimbursement') {
       return TransactionType.reimbursement;
     }
-    if (combined.contains('借出') || primary == 'lend') {
+    if (primary.contains('借出') || primary == 'lend') {
       return TransactionType.lend;
     }
-    if (combined.contains('借入') ||
-        combined.contains('借款') ||
+    if (primary.contains('借入') ||
+        primary.contains('借款') ||
         primary == 'borrow') {
       return TransactionType.borrow;
     }
-    if (combined.contains('还款') || primary == 'repayment') {
+    if (primary.contains('还款') || primary == 'repayment') {
       return TransactionType.repayment;
     }
-    if (primary.contains('支出') || primary == '支' || primary == 'expense') {
-      return TransactionType.expense;
-    }
-    if (primary.contains('收入') || primary == '收' || primary == 'income') {
+
+    final isExpense =
+        primary.contains('支出') || primary == '支' || primary == 'expense';
+    final isIncome =
+        primary.contains('收入') || primary == '收' || primary == 'income';
+
+    if (isIncome) {
+      if (category.contains('退款') || category.contains('退回')) {
+        return TransactionType.refund;
+      }
+      if (category.contains('报销')) {
+        return TransactionType.reimbursement;
+      }
+      if (category.contains('借入') || category.contains('借款')) {
+        return TransactionType.borrow;
+      }
       return TransactionType.income;
+    }
+    if (isExpense) {
+      if (category.contains('借出')) return TransactionType.lend;
+      if (category.contains('还款')) return TransactionType.repayment;
+      return TransactionType.expense;
     }
     return null;
   }

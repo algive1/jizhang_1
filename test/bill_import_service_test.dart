@@ -293,6 +293,15 @@ ali-r2,m-r2,2026-09-17 11:00:00,信用卡还款,银行,信用卡还款,500.00,�
     );
   });
 
+  test('pending reimbursement category remains an expense', () {
+    const csv = '''
+时间,类型,金额,分类,账户,备注
+2026-09-05 08:00,支出,-48.00,待报销,招行信用卡,打车
+''';
+    final row = service.parseCsv(csv).rows.single;
+    expect(row.type, TransactionType.expense);
+  });
+
   test('parses generic third-party CSV with semantic headers', () {
     const csv = '''
 时间,类型,金额,分类,二级分类,账户,备注
