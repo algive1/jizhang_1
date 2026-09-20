@@ -11,15 +11,18 @@ test('theme catalog is public, versioned and admin protected', async t => {
 
   const initial = await app.inject({method:'GET',url:'/api/v1/themes/catalog'});
   assert.equal(initial.statusCode,200);
-  assert.equal(initial.json().version,1);
+  assert.equal(initial.json().version,2);
   assert.equal(initial.json().themes[0].id,'fresh_green');
   assert.equal(initial.json().themes[0].premium,false);
+  const glass = initial.json().themes.find((item: {id:string}) => item.id === 'liquid_glass');
+  assert.equal(glass?.style,'liquidGlass');
+  assert.equal(glass?.premium,true);
 
   const denied = await app.inject({method:'PUT',url:'/api/v1/admin/themes/catalog',payload:initial.json()});
   assert.equal(denied.statusCode,403);
 
   const next = initial.json();
-  next.version = 2;
+  next.version = 3;
   next.themes[1].name = '云雾蓝 2';
   const updated = await app.inject({
     method:'PUT',url:'/api/v1/admin/themes/catalog',
@@ -27,7 +30,7 @@ test('theme catalog is public, versioned and admin protected', async t => {
     payload:next,
   });
   assert.equal(updated.statusCode,200);
-  assert.equal(updated.json().version,2);
+  assert.equal(updated.json().version,3);
 
   const stale = await app.inject({
     method:'PUT',url:'/api/v1/admin/themes/catalog',
