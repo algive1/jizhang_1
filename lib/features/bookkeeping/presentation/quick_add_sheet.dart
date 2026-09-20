@@ -359,20 +359,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final input = _amount;
 
-    return SafeArea(
-      bottom: false,
-      minimum: const EdgeInsets.only(top: 8),
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: FractionallySizedBox(
-          heightFactor: 1,
-          child: Material(
-            key: ValueKey('quick-sheet-surface'),
-            color: context.appBackground,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
+        bottom: false,
+        minimum: const EdgeInsets.only(top: 8),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: FractionallySizedBox(
+            heightFactor: 1,
+            child: Material(
+              key: ValueKey('quick-sheet-surface'),
+              color: context.appBackground,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
@@ -506,6 +509,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     ),
                   ),
               ],
+            ),
             ),
           ),
         ),
