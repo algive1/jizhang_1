@@ -14,22 +14,26 @@ abstract interface class MembershipRepository {
 
 class SnapshotMembershipFeatureAccessService
     implements MembershipFeatureAccessService {
-  const SnapshotMembershipFeatureAccessService(this._membership);
+  const SnapshotMembershipFeatureAccessService(
+    this._membership, {
+    this.allFeaturesFree = testingAllFeaturesFree,
+  });
 
   final MembershipRepository _membership;
+  final bool allFeaturesFree;
 
   @override
   Future<MembershipFeatureAccess> accessFor(MembershipFeature feature) async {
     final snapshot = await _membership.getCurrent();
     final policy = snapshot.policyFor(feature);
     final allowed =
-        policy.enabled && (testingAllFeaturesFree || policy.canUse(snapshot));
+        policy.enabled && (allFeaturesFree || policy.canUse(snapshot));
     return MembershipFeatureAccess(
       feature: feature,
       enabled: policy.enabled,
       allowed: allowed,
       requiresUpgrade:
-          !testingAllFeaturesFree &&
+          !allFeaturesFree &&
           policy.enabled &&
           policy.requiresMembership &&
           !allowed,
