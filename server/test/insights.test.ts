@@ -180,6 +180,66 @@ function tx(
   };
 }
 
+test('server analysis honors local feedback state before background sync catches up', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  for (let month = 8; month <= 9; month++) {
+    for (let index = 0; index < 12; index++) {
+      rows.push(
+        tx(
+          `feedback-${month}-${index}`,
+          Date.parse(
+            `2026-${String(month).padStart(2, '0')}-${String(
+              index + 2,
+            ).padStart(2, '0')}T12:00:00+08:00`,
+          ),
+          month === 9 ? 52 : 30,
+        ),
+      );
+    }
+  }
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['understandSpending'],
+        focus: ['dining'],
+        tone: 'balanced',
+      },
+      feedbackState: {
+        dismissedIds: ['analysis:category:food'],
+        kindAdjustments: { behavior: -12 },
+      },
+      transactions: rows,
+      accounts: [],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(
+    response.json().items.some(
+      (item: { id: string }) => item.id === 'analysis:category:food',
+    ),
+    false,
+  );
+});
+
 test('server insight analysis respects local timezone and excludes ambiguous transfer support', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());

@@ -96,6 +96,13 @@ class RemoteInsightRepository {
             'focus': preferences.focus.map((item) => item.name).toList(),
             'tone': preferences.tone.name,
           },
+          'feedbackState': {
+            'dismissedIds': preferences.dismissedIds.toList(),
+            'kindAdjustments': {
+              for (final entry in preferences.kindAdjustments.entries)
+                entry.key.name: entry.value,
+            },
+          },
           'transactions': [
             for (final item in scopedTransactions)
               if (item.deletedAt == null)

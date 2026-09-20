@@ -411,7 +411,19 @@ export function registerInsightRoutes(
       const context = insightContextSchema.parse(request.body);
       const policy = readInsightPolicy(store);
       const profile = context.preferences ?? readProfile(store, user.id);
-      const feedback = readFeedbackProfile(store, user.id);
+      const persistedFeedback = readFeedbackProfile(store, user.id);
+      const feedback = context.feedbackState == null
+        ? persistedFeedback
+        : {
+            dismissedIds: new Set([
+              ...persistedFeedback.dismissedIds,
+              ...context.feedbackState.dismissedIds,
+            ]),
+            kindAdjustments: {
+              ...persistedFeedback.kindAdjustments,
+              ...context.feedbackState.kindAdjustments,
+            },
+          };
       const paidMember = hasActivePaidInsightMembership(store, user.id);
       const historyDays = paidMember
         ? policy.proHistoryDays

@@ -145,6 +145,18 @@ export const insightContextSchema = z.strictObject({
     ])).max(8),
     tone: z.enum(['strict', 'balanced', 'quiet']),
   }).optional(),
+  feedbackState: z.strictObject({
+    dismissedIds: z.array(z.string().trim().min(1).max(180)).max(500),
+    kindAdjustments: z.strictObject({
+      financial: z.number().min(-12).max(12).optional(),
+      behavior: z.number().min(-12).max(12).optional(),
+      risk: z.number().min(-12).max(12).optional(),
+      goal: z.number().min(-12).max(12).optional(),
+      discovery: z.number().min(-12).max(12).optional(),
+      positive: z.number().min(-12).max(12).optional(),
+      life: z.number().min(-12).max(12).optional(),
+    }),
+  }).optional(),
   transactions: z.array(transactionSchema).max(12000),
   accounts: z.array(accountSchema).max(500),
   budgets: z.array(budgetSchema).max(1000),
