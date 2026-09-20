@@ -48,6 +48,44 @@ void main() {
     expect(result.transactions.last.type, TransactionType.expense);
   });
 
+  test('parses the supplied Alipay transaction-list screenshot structure', () {
+    final result = parser.parse(LocalOcrResult(
+      text: '搜索交易记录\n全部 支出 转账 退款 订单\n筛选\n9月\n支出 ¥74.62 收入 ¥200.00\n本月已省 0.00元\n收支分析',
+      blocks: const [],
+      elements: [
+        e('9月', 58, 300, 120, 350),
+        e('支出 ¥74.62 收入 ¥200.00', 60, 410, 430, 455),
+        e('本月已省 0.00元', 60, 520, 270, 560),
+        e('外卖红包', 145, 655, 290, 695), e('-0.10', 690, 655, 780, 695),
+        e('其他', 145, 720, 230, 755), e('09-16 11:17', 145, 780, 310, 815),
+        e('【用自己号】百度网盘极速下载...', 145, 890, 520, 930), e('-6.50', 690, 890, 780, 930),
+        e('日用百货', 145, 950, 270, 985), e('自动扣款成功', 620, 950, 780, 985),
+        e('09-07 15:18', 145, 1010, 310, 1045),
+        e('&quot;【新店特惠】百度网盘超...', 145, 1120, 520, 1160), e('-0.02', 690, 1120, 780, 1160),
+        e('日用百货', 145, 1180, 270, 1215), e('自动扣款成功', 620, 1180, 780, 1215),
+        e('09-07 15:14', 145, 1240, 310, 1275),
+        e('水费-*建', 145, 1350, 300, 1390), e('-8.00', 690, 1350, 780, 1390),
+        e('充值缴费', 145, 1410, 270, 1445), e('09-05 13:43', 145, 1470, 310, 1505),
+        e('电费', 145, 1580, 240, 1620), e('-50.00', 680, 1580, 780, 1620),
+        e('充值缴费', 145, 1640, 270, 1675), e('09-01 11:21', 145, 1700, 310, 1735),
+      ],
+    ), now: DateTime(2026, 9, 20))!;
+
+    expect(result.transactions, hasLength(5));
+    expect(
+      result.transactions.map((item) => item.amount),
+      orderedEquals([.10, 6.50, .02, 8.00, 50.00]),
+    );
+    expect(result.transactions.first.merchant, '外卖红包');
+    expect(result.transactions[1].merchant, contains('百度网盘极速下载'));
+    expect(result.transactions[3].merchant, '水费-*建');
+    expect(result.transactions.last.merchant, '电费');
+    expect(
+      result.transactions.every((item) => item.type == TransactionType.expense),
+      isTrue,
+    );
+  });
+
   test('repairs OCR confusions only in money candidates', () {
     final result = parser.parse(LocalOcrResult(
       text: '账单\n全部账单\n查找交易',
