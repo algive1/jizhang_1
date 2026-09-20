@@ -994,6 +994,7 @@ class FinancialInsightEngine {
       }
       namesByKey[_creditKey(account.name)] = account.name;
     }
+
     final cutoff = now.subtract(const Duration(days: 180));
     final importedCounts = <String, int>{};
     final importedLabels = <String, String>{};
@@ -1012,6 +1013,7 @@ class FinancialInsightEngine {
         () => importedLabels[entry.key]!,
       );
     }
+
     if (namesByKey.length < 2) return null;
     final names = namesByKey.values.take(3).join('、');
     return _item(
@@ -1019,13 +1021,22 @@ class FinancialInsightEngine {
       kind: FinancialInsightKind.financial,
       priority: InsightPriority.attention,
       title: '你在使用多个信用 / 后付账户',
-      summary: '已识别 ${namesByKey.length} 个信用或后付来源${names.isEmpty ? '' : '：$names'}。',
+      summary:
+          '已识别 ${namesByKey.length} 个信用或后付来源'
+          '${names.isEmpty ? '' : '：$names'}。',
       analysis: '消费分散在多个待还账户后，只看银行卡余额容易高估真正可用的钱。',
       meaning: '把待还金额和还款日期集中看，会比单独看每张卡更接近真实财务状态。',
       response: InsightResponse.advice,
       suggestion: '建议确认这些账户的待还金额和还款日，避免消费与还款被重复理解成两次支出。',
       actionLabel: '管理账户',
       actionRoute: '/profile/accounts',
+      evidence: [
+        InsightEvidence(
+          label: '信用 / 后付来源',
+          value: namesByKey.length.toDouble(),
+          unit: '个',
+        ),
+      ],
       baseScore: 68,
       preferences: preferences,
       confidence: quality.copyWith(baseline: 1),
@@ -1425,7 +1436,7 @@ class FinancialInsightEngine {
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[\s_\-·/]+'), '')
-      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡$'), '');
+      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡
 
   FinancialInsightItem _item({
     required String id,
