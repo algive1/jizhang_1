@@ -163,7 +163,7 @@ void main() {
     expect(insight.title, contains('餐饮'));
     expect(insight.amount, inInclusiveRange(350, 420));
     expect(insight.summary, contains('中位数'));
-    expect(insight.actionRoute, '/profile/budgets');
+    expect(insight.actionRoute, '/profile/budgets?recommend=1&categoryId=food');
   });
 
   test('category budget pace warns before month-end overspend', () {
