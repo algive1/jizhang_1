@@ -615,6 +615,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
 
     final importedIds = <String>{};
     final importedFingerprints = <String>{};
+    final importedNaturalFingerprints = <String>{};
     // Read persisted rows directly. A StreamProvider may not have emitted yet
     // when the user re-imports immediately, which previously made duplicate
     // detection race with provider startup.
@@ -625,6 +626,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           transaction.metadataJson == null) {
         continue;
       }
+      importedNaturalFingerprints.add(_naturalFingerprint(transaction));
       try {
         final metadata = jsonDecode(transaction.metadataJson!);
         if (metadata is! Map) continue;
@@ -647,7 +649,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
       if ((row.externalId != null && importedIds.contains(row.externalId)) ||
-          importedFingerprints.contains(row.importFingerprint)) {
+          importedFingerprints.contains(row.importFingerprint) ||
+          importedNaturalFingerprints.contains(row.naturalFingerprint)) {
         duplicates++;
         continue;
       }
@@ -709,6 +712,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
+            'importNaturalFingerprint': row.naturalFingerprint,
             if (_preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
@@ -1006,3 +1010,15 @@ String _providerLabel(BillImportProvider provider) => switch (provider) {
   BillImportProvider.mumu => '木木记账',
   BillImportProvider.generic => '第三方账单',
 };
+
+String _naturalFingerprint(TransactionRecord transaction) => [
+  transaction.occurredAt.toIso8601String(),
+  transaction.type.name,
+  transaction.amount.toStringAsFixed(2),
+  ((transaction.merchant?.trim().isNotEmpty == true
+              ? transaction.merchant
+              : transaction.note) ??
+          '')
+      .trim()
+      .toLowerCase(),
+].join('|');
