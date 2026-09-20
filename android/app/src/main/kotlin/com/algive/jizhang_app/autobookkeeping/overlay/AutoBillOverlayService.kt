@@ -44,6 +44,7 @@ class AutoBillOverlayService : Service() {
             "INCOME" -> "收入"
             "REFUND" -> "退款"
             "REIMBURSEMENT" -> "报销回款"
+            "REPAYMENT" -> "还款"
             "TRANSFER" -> "转账"
             else -> "支出"
         }
