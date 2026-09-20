@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { Store } from './store.js';
+import { ensureReleaseSchema } from './release_control.js';
 
 const platformSchema = z.enum(['android', 'ios']);
 const versionSchema = z.string().regex(/^\d+\.\d+\.\d+$/);
@@ -38,13 +40,14 @@ function config(platform: PlatformName) {
   return { latestVersion, minimumVersion, storeUrl, message };
 }
 
-export function registerAppUpdateRoutes(app: FastifyInstance) {
+export function registerAppUpdateRoutes(app: FastifyInstance, store?:Store) {
   app.get('/api/v1/app/update', async (request) => {
     const input = z.strictObject({
       platform: platformSchema,
       version: versionSchema,
     }).parse(request.query);
-    const value = config(input.platform);
+    let value = config(input.platform);
+    if(store){ensureReleaseSchema(store);const row=store.db.prepare('SELECT latest_version,minimum_version,store_url,message,enabled FROM app_release_config WHERE platform=?').get(input.platform) as any;if(row?.enabled)value={latestVersion:row.latest_version,minimumVersion:row.minimum_version,storeUrl:row.store_url,message:row.message};}
 
     if (!value.storeUrl) {
       return {
