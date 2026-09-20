@@ -186,14 +186,20 @@ class TransactionRecord {
 
   /// The primary text for a transaction row.
   ///
-  /// A user-entered note is the most specific label. Merchant is retained as
-  /// the next fallback for records created through the expanded bookkeeping
-  /// options; when both are empty, the selected category is the useful label.
+  /// Manual bookkeeping keeps a user-entered note as the most specific label.
+  /// Imported bills intentionally keep the merchant first so the persisted
+  /// ledger matches the import preview even when provider exports also contain
+  /// a generic product/remark field.
   String get displayTitle {
     final noteValue = _displayValue(note);
-    if (noteValue != null) return noteValue;
     final merchantValue = _displayValue(merchant);
-    if (merchantValue != null) return merchantValue;
+    if (source == TransactionSource.import) {
+      if (merchantValue != null) return merchantValue;
+      if (noteValue != null) return noteValue;
+    } else {
+      if (noteValue != null) return noteValue;
+      if (merchantValue != null) return merchantValue;
+    }
     return displayCategoryLabel;
   }
 
