@@ -325,6 +325,7 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
   app.post('/api/v1/membership/orders', async (req) => {
     const user = authenticate(req.headers.authorization);
     const input = createOrderSchema.parse(req.body);
+    check(input.platform !== 'ios', 'iOS 会员请使用 App Store 应用内购买', 409);
     const existing = store.db.prepare('SELECT * FROM membership_orders WHERE user_id=? AND idempotency_key=?').get(user.id, input.idempotencyKey) as OrderRow | undefined;
     if (existing) {
       check(existing.product_id === input.productId && existing.channel === input.channel, '幂等键已用于其他会员订单', 409);
