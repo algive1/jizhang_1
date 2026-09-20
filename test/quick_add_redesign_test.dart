@@ -14,6 +14,7 @@ import 'package:jizhang_app/core/models/category.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
 import 'package:jizhang_app/features/categories/data/category_repository.dart';
+import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 
 /// 在真实内存数据库上打开「记一笔」，用于校验新布局的真实写入结果。
 Future<void> _pumpSheet(WidgetTester tester, AppDatabase database) async {
@@ -402,6 +403,12 @@ void main() {
     expect(saved, hasLength(1));
     expect(saved.single.subcategoryId, 'sub-breakfast');
     expect(saved.single.categoryId, food.id);
+    final mapped = await DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    ).getAll();
+    expect(mapped.single.subcategoryName, '早餐');
+    expect(mapped.single.displayCategoryPath, '餐饮 · 早餐');
     expect(tester.takeException(), isNull);
   });
 
