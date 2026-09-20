@@ -410,7 +410,7 @@ class PaymentNotificationParser {
 
   String? _targetAccountHintFor(String content) {
     final match = RegExp(
-      r'(?:转入账户|收款账户|到账账户|收款银行卡|转入银行卡|还款至|还款信用卡|信用卡|债务账户|账单账户|还款对象)[：:\s]*([^，。；;\n]{2,120})',
+      r'(?:转入账户|收款账户|到账账户|收款银行卡|转入银行卡|还款至|还款信用卡|债务账户|账单账户|还款对象)[：:\s]*([^，。；;\n]{2,120})',
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     return value == null || value.isEmpty ? null : value;
