@@ -114,7 +114,7 @@ class BillImportService {
   }
 
   BillImportResult parseCsv(String input) {
-    final rows = _parseCsv(input)
+    final rows = _parseDelimited(input)
         .where((row) => row.any((cell) => cell.trim().isNotEmpty))
         .toList(growable: false);
     if (rows.isEmpty) throw const FormatException('账单文件为空');
@@ -535,7 +535,8 @@ class BillImportService {
     return cleaned.isEmpty ? null : cleaned;
   }
 
-  List<List<String>> _parseCsv(String input) {
+  List<List<String>> _parseDelimited(String input) {
+    final delimiter = _detectDelimiter(input);
     final rows = <List<String>>[];
     var row = <String>[];
     final field = StringBuffer();
@@ -551,7 +552,7 @@ class BillImportService {
         }
         continue;
       }
-      if (!quoted && char == ',') {
+      if (!quoted && char == delimiter) {
         row.add(field.toString());
         field.clear();
         continue;
@@ -571,5 +572,47 @@ class BillImportService {
       rows.add(row);
     }
     return rows;
+  }
+
+  String _detectDelimiter(String input) {
+    final lines = input
+        .split(RegExp(r'\r?\n'))
+        .where((line) => line.trim().isNotEmpty)
+        .take(8)
+        .toList(growable: false);
+    if (lines.isEmpty) return ',';
+
+    const candidates = [',', '\t', ';'];
+    var best = ',';
+    var bestScore = -1;
+    for (final candidate in candidates) {
+      final score = lines.fold<int>(
+        0,
+        (sum, line) => sum + _delimiterCountOutsideQuotes(line, candidate),
+      );
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  int _delimiterCountOutsideQuotes(String line, String delimiter) {
+    var quoted = false;
+    var count = 0;
+    for (var i = 0; i < line.length; i++) {
+      final char = line[i];
+      if (char == '"') {
+        if (quoted && i + 1 < line.length && line[i + 1] == '"') {
+          i++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (!quoted && char == delimiter) {
+        count++;
+      }
+    }
+    return count;
   }
 }
