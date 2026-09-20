@@ -17,12 +17,12 @@ export async function transcribeAudio(store:Store,input:{userId:string;bytes:Buf
   const feature=input.feature??'voice.asr';let last='ASR unavailable';
   for(const row of rows(store,feature,'asr')){const started=Date.now();try{
     const key=row.secret_env?process.env[row.secret_env]:undefined;if(!key)throw new Error('secret not configured');
-    const form=new FormData();form.set('model',row.model);form.set('file',new Blob([input.bytes],{type:input.mime}),input.filename);
+    const form=new FormData();form.set('model',row.model);form.set('file',new Blob([new Uint8Array(input.bytes)],{type:input.mime}),input.filename);
     const response=await fetch(`${(row.base_url??'https://api.openai.com/v1').replace(/\/$/,'')}/audio/transcriptions`,{method:'POST',headers:{Authorization:`Bearer ${key}`},body:form,signal:AbortSignal.timeout(row.timeout_ms)});
     const data=await response.json() as {text?:string};if(!response.ok||!data.text)throw new Error(`HTTP ${response.status}`);
     recordAiUsage(store,{userId:input.userId,feature,providerId:row.id,model:row.model,success:true,latencyMs:Date.now()-started,inputUnits:input.bytes.length});return {text:data.text,providerId:row.id,model:row.model};
   }catch(e){last=String(e);recordAiUsage(store,{userId:input.userId,feature,providerId:row.id,model:row.model,success:false,latencyMs:Date.now()-started,inputUnits:input.bytes.length,errorCode:last.slice(0,120)})}}
-  throw new ApiError(503,last);
+  throw new ApiError(503,'语音识别服务暂时不可用');
 }
 export async function recognizeImage(store:Store,input:{userId:string;bytes:Buffer;mime:string;feature?:string}):Promise<BinaryAiResult>{
   const feature=input.feature??'bill.ocr';let last='OCR unavailable';
@@ -33,5 +33,5 @@ export async function recognizeImage(store:Store,input:{userId:string;bytes:Buff
     const data=await response.json() as {text?:string};if(!response.ok||!data.text)throw new Error(`HTTP ${response.status}`);
     recordAiUsage(store,{userId:input.userId,feature,providerId:row.id,model:row.model,success:true,latencyMs:Date.now()-started,inputUnits:input.bytes.length});return {text:data.text,providerId:row.id,model:row.model};
   }catch(e){last=String(e);recordAiUsage(store,{userId:input.userId,feature,providerId:row.id,model:row.model,success:false,latencyMs:Date.now()-started,inputUnits:input.bytes.length,errorCode:last.slice(0,120)})}}
-  throw new ApiError(503,last);
+  throw new ApiError(503,'图片识别服务暂时不可用');
 }
