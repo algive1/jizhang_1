@@ -420,6 +420,43 @@ class PaymentEngineTest {
         assertEquals("4321", candidate?.targetIdentifierSuffix)
     }
 
+    @Test fun accessibilityParserDetectsExplicitReimbursementReceipt() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.eg.android.AlipayGphone",
+            nodes(
+                "报销到账",
+                "报销金额",
+                "128.00",
+                "报销方",
+                "示例科技有限公司",
+                "到账账户",
+                "支付宝余额",
+            ),
+            100000,
+        )
+        assertEquals("REIMBURSEMENT", candidate?.transactionType)
+        assertEquals("ALIPAY_REIMBURSEMENT_SUCCESS", candidate?.scene?.scene)
+        assertEquals(12800L, candidate?.amountInCents)
+        assertEquals("示例科技有限公司", candidate?.merchantRaw)
+        assertEquals("支付宝余额", candidate?.paymentMethod)
+    }
+
+    @Test fun nativeNotificationParserDetectsExplicitReimbursementReceipt() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "报销到账 ￥128.00，报销方：示例科技有限公司，到账账户：支付宝余额",
+            100000,
+        )
+        assertEquals("REIMBURSEMENT", candidate?.transactionType)
+        assertEquals(
+            "PAYMENT_NOTIFICATION_REIMBURSEMENT",
+            candidate?.scene?.scene,
+        )
+        assertEquals(12800L, candidate?.amountInCents)
+        assertEquals("示例科技有限公司", candidate?.merchantRaw)
+    }
+
     @Test fun accessibilityTypedParserRejectsMissingCounterparty() {
         val result = PaymentSceneDetector().inspect(
             "com.eg.android.AlipayGphone",
