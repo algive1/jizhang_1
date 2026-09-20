@@ -5,6 +5,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/book.dart';
+import '../../../core/models/account.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/models/account_balance_effect.dart';
 import '../../books/data/book_repository.dart';
@@ -255,6 +256,15 @@ class DriftTransactionRepository implements TransactionRepository {
       if (account.currency.toUpperCase() !=
           transaction.currency.toUpperCase()) {
         throw ArgumentError('账户与流水币种必须一致；暂不支持跨币种转账');
+      }
+    }
+    if (transaction.type == TransactionType.repayment) {
+      final destinationId = transaction.destinationAccountId!;
+      final destination = await _database.accountDao.findById(destinationId);
+      final destinationType =
+          destination == null ? null : AccountType.values.byName(destination.type);
+      if (destinationType == null || !destinationType.isDebt) {
+        throw ArgumentError('还款目标必须是信用卡或负债账户');
       }
     }
   }
