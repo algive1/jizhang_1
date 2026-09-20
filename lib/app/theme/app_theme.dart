@@ -103,7 +103,7 @@ abstract final class AppTheme {
             : theme.surface,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         clipBehavior: Clip.antiAlias,
       ),
@@ -112,6 +112,36 @@ abstract final class AppTheme {
             ? theme.surface.withValues(alpha: .97)
             : theme.surface,
         surfaceTintColor: Colors.transparent,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: liquidGlass
+            ? theme.surface.withValues(alpha: .97)
+            : theme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: liquidGlass
+                ? theme.divider.withValues(alpha: .76)
+                : theme.divider,
+          ),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(
+            liquidGlass
+                ? theme.surface.withValues(alpha: .97)
+                : theme.surface,
+          ),
+          surfaceTintColor:
+              const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
       ),
       listTileTheme: const ListTileThemeData(minTileHeight: 56),
       inputDecorationTheme: InputDecorationTheme(
