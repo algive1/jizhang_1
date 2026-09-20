@@ -365,6 +365,61 @@ class PaymentEngineTest {
         assertEquals("7777", candidate?.targetIdentifierSuffix)
     }
 
+    @Test fun accessibilityParserDetectsRepaymentAndDebtTarget() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.eg.android.AlipayGphone",
+            nodes(
+                "信用卡还款成功",
+                "还款金额",
+                "120.00",
+                "扣款账户",
+                "支付宝余额",
+                "还款信用卡",
+                "招商银行信用卡 尾号4321",
+            ),
+            100000,
+        )
+        assertEquals("REPAYMENT", candidate?.transactionType)
+        assertEquals("ALIPAY_REPAYMENT_SUCCESS", candidate?.scene?.scene)
+        assertEquals(12000L, candidate?.amountInCents)
+        assertEquals("支付宝余额", candidate?.paymentMethod)
+        assertEquals("4321", candidate?.targetIdentifierSuffix)
+        assertEquals("招商银行信用卡 尾号4321", candidate?.targetAccountHint)
+    }
+
+    @Test fun nativeNotificationParserDetectsRepaymentAndDebtTarget() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "信用卡还款成功 ￥120.00，还款信用卡：招商银行信用卡 尾号4321，扣款账户：支付宝余额",
+            100000,
+        )
+        assertEquals("REPAYMENT", candidate?.transactionType)
+        assertEquals("PAYMENT_NOTIFICATION_REPAYMENT", candidate?.scene?.scene)
+        assertEquals(12000L, candidate?.amountInCents)
+        assertEquals("4321", candidate?.targetIdentifierSuffix)
+        assertEquals("招商银行信用卡 尾号4321", candidate?.targetAccountHint)
+    }
+
+    @Test fun pendingStoreCarriesRepaymentTypeAndTargetHints() {
+        val candidate = AutoBookkeepingPendingStore.candidateFromMap(
+            mapOf(
+                "amountInCents" to 12000L,
+                "merchant" to "招商银行信用卡 尾号4321",
+                "paymentMethod" to "支付宝余额",
+                "timestamp" to 100000L,
+                "sourceApp" to "ALIPAY",
+                "scene" to "PAYMENT_NOTIFICATION_REPAYMENT",
+                "transactionType" to "REPAYMENT",
+                "targetIdentifierSuffix" to "4321",
+                "targetAccountHint" to "招商银行信用卡 尾号4321",
+            ),
+        )
+        assertNotNull(candidate)
+        assertEquals("REPAYMENT", candidate?.transactionType)
+        assertEquals("4321", candidate?.targetIdentifierSuffix)
+    }
+
     @Test fun accessibilityTypedParserRejectsMissingCounterparty() {
         val result = PaymentSceneDetector().inspect(
             "com.eg.android.AlipayGphone",
@@ -530,6 +585,20 @@ class PaymentEngineTest {
             AutoBookkeepingPendingStore.transactionTypesCompatible(
                 "EXPENSE",
                 "TRANSFER",
+                false,
+            ),
+        )
+        assertTrue(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "EXPENSE",
+                "REPAYMENT",
+                true,
+            ),
+        )
+        assertFalse(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "EXPENSE",
+                "REPAYMENT",
                 false,
             ),
         )
