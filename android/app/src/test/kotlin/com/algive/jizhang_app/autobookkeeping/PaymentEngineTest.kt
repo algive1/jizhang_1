@@ -518,6 +518,37 @@ class PaymentEngineTest {
             ),
         )
     }
+    @Test fun pendingMatcherAllowsExpenseTransferMismatchOnlyAcrossCaptureSources() {
+        assertTrue(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "EXPENSE",
+                "TRANSFER",
+                true,
+            ),
+        )
+        assertFalse(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "EXPENSE",
+                "TRANSFER",
+                false,
+            ),
+        )
+        assertFalse(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "TRANSFER",
+                "INCOME",
+                true,
+            ),
+        )
+        assertTrue(
+            AutoBookkeepingPendingStore.transactionTypesCompatible(
+                "REFUND",
+                "REFUND",
+                false,
+            ),
+        )
+    }
+
     @Test fun repeatedPageVersusNewPayment() {
         val c = parse("支付成功", "收款方", "商店", "￥20")!!
         val engine = BillDedupEngine()
