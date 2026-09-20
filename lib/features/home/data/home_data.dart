@@ -189,9 +189,16 @@ final homeRecentTransactionsProvider = StreamProvider<List<TransactionRecord>>((
   ref,
 ) async* {
   await ref.watch(databaseBootstrapProvider.future);
+  final suppressed = ref.watch(financialTruthSuppressedTransactionIdsProvider);
   yield* ref
       .watch(transactionRepositoryProvider)
-      .watchRecent(limit: homeRecentTransactionLimit);
+      .watchRecent(limit: homeRecentTransactionLimit * 2)
+      .map(
+        (rows) => rows
+            .where((item) => !suppressed.contains(item.id))
+            .take(homeRecentTransactionLimit)
+            .toList(growable: false),
+      );
 });
 
 class HomeMonthController extends Notifier<DateTime?> {

@@ -175,7 +175,6 @@ class FinancialTruthService {
       consumptionCount: consumptionCount,
     );
   }
-}
 
   Set<String> confirmedDuplicateSuppressionIds({
     required Iterable<TransactionRecord> records,
@@ -222,6 +221,7 @@ class FinancialTruthService {
     };
     return score;
   }
+}
 
 class FinancialTruthSummary {
   const FinancialTruthSummary({
