@@ -25,6 +25,7 @@ test('commercial backend controls and quota enforcement', async () => {
   assert.equal(r.statusCode,200);
   r=await app.inject({method:'POST',url:'/api/v1/admin/sensitive-access',headers:admin,payload:{reason:'support investigation of explicit finance issue'}});assert.equal(r.statusCode,200);const sensitive=r.json().token;
   r=await app.inject({method:'GET',url:`/api/v1/admin/users/${userId}/sensitive-ledger`,headers:{'x-admin-token':process.env.ADMIN_TOKEN!,'x-sensitive-access-token':sensitive}});assert.equal(r.statusCode,200);
+  r=await app.inject({method:'POST',url:'/api/v1/membership/orders',headers:{...auth,'content-type':'application/json'},payload:{productId:'pro_yearly',channel:'wechat',idempotencyKey:'ios-storekit-only-123',platform:'ios'}});assert.equal(r.statusCode,409);
   r=await app.inject({method:'GET',url:'/api/v1/membership/entitlements',headers:auth});assert.equal(r.statusCode,200);
   assert.equal(r.json().entitlements.find((x:any)=>x.key==='ocr_import').remaining,1);
   await app.close();
