@@ -178,12 +178,11 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         existing?.categoryId != null || selectableCategories.isNotEmpty;
     final monthKey = budgetMonthKey(DateTime.now());
     final repository = ref.read(budgetRepositoryProvider);
-    final transactions = ref.read(transactionsProvider).value ?? const [];
+    final transactions = await ref.read(transactionsProvider.future);
     final preferences =
         ref.read(insightPreferencesProvider).value ??
         const InsightPreferences();
-    final allCategories =
-        ref.read(allCategoriesProvider).value ?? selectableCategories;
+    final allCategories = await ref.read(allCategoriesProvider.future);
     const recommendationService = BudgetRecommendationService();
     final totalRecommendation = isCategoryBudget
         ? null
