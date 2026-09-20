@@ -461,6 +461,7 @@ class _AutoBookkeepingConfirmPageState
       return const Center(child: CircularProgressIndicator());
     }
     final isTransferScene = candidate.transactionType == 'TRANSFER';
+    final isRepaymentScene = candidate.transactionType == 'REPAYMENT';
     final transactionType = isTransferScene && _internalTransfer
         ? TransactionType.transfer
         : _transactionTypeFor(candidate.transactionType);
@@ -473,10 +474,15 @@ class _AutoBookkeepingConfirmPageState
         .where((item) => item.parentId == null)
         .toList(growable: false);
     final selectedAccountId = _validAccountId(accounts);
-    final selectedDestinationAccountId = _validDestinationAccountId(
-      accounts,
-      sourceAccountId: selectedAccountId,
-    );
+    final selectedDestinationAccountId = isRepaymentScene
+        ? _validRepaymentDestinationAccountId(
+            accounts,
+            sourceAccountId: selectedAccountId,
+          )
+        : _validDestinationAccountId(
+            accounts,
+            sourceAccountId: selectedAccountId,
+          );
     final selectedCategoryId = _validCategoryId(selectableCategories);
 
     return ListView(
@@ -655,6 +661,43 @@ class _AutoBookkeepingConfirmPageState
             ),
           ),
         ],
+        if (isRepaymentScene) ...[
+          const SizedBox(height: 14),
+          AppCard(
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '已识别为债务还款',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _repaymentGuidance(candidate),
+                    style: TextStyle(
+                      color: _repaymentRecommendation?.hasDestination == true
+                          ? context.appPrimary
+                          : context.appSecondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (candidate.targetAccountHint != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '识别到的债务账户：${candidate.targetAccountHint}',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         AppCard(
           child: Material(
@@ -687,7 +730,11 @@ class _AutoBookkeepingConfirmPageState
                 AppSelect<String>(
                   initialValue: selectedAccountId,
                   decoration: appFieldDecoration(
-                    isTransferScene ? '转出账户' : '支付账户',
+                    isRepaymentScene
+                        ? '还款账户'
+                        : isTransferScene
+                        ? '转出账户'
+                        : '支付账户',
                   ),
                   items: [
                     for (final account in accounts)
@@ -722,14 +769,19 @@ class _AutoBookkeepingConfirmPageState
                       ),
                     ),
                   ),
-                if (isTransferScene && _internalTransfer) ...[
+                if ((isTransferScene && _internalTransfer) ||
+                    isRepaymentScene) ...[
                   const SizedBox(height: 12),
                   AppSelect<String>(
                     initialValue: selectedDestinationAccountId,
-                    decoration: appFieldDecoration('转入账户'),
+                    decoration: appFieldDecoration(
+                      isRepaymentScene ? '债务账户' : '转入账户',
+                    ),
                     items: [
                       for (final destination in accounts.where(
-                        (item) => item.id != selectedAccountId,
+                        (item) =>
+                            item.id != selectedAccountId &&
+                            (!isRepaymentScene || item.type.isDebt),
                       ))
                         DropdownMenuItem(
                           value: destination.id,
@@ -743,7 +795,8 @@ class _AutoBookkeepingConfirmPageState
                           ),
                   ),
                 ],
-                if (!(isTransferScene && _internalTransfer)) ...[
+                if (!((isTransferScene && _internalTransfer) ||
+                    isRepaymentScene)) ...[
                   const SizedBox(height: 12),
                   AppSelect<String>(
                   initialValue: selectedCategoryId,
@@ -766,14 +819,18 @@ class _AutoBookkeepingConfirmPageState
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    isTransferScene && _internalTransfer
+                    isRepaymentScene
+                        ? '记住这个债务账户'
+                        : isTransferScene && _internalTransfer
                         ? '记住这是自己的账户'
                         : isTransferScene
                         ? '记住这个收款方的选择'
                         : '记住这个商户的选择',
                   ),
                   subtitle: Text(
-                    isTransferScene && _internalTransfer
+                    isRepaymentScene
+                        ? '下次识别到同一还款对象时可自动预选债务账户'
+                        : isTransferScene && _internalTransfer
                         ? '下次遇到同一收款对象时可建议账户间转账'
                         : '下次自动带出账本、账户和分类',
                   ),
@@ -814,15 +871,27 @@ class _AutoBookkeepingConfirmPageState
                       .firstOrNull;
                   if (account == null) {
                     setState(
-                      () => _message =
-                          isTransferScene ? '请选择转出账户' : '请选择支付账户',
+                      () => _message = isRepaymentScene
+                          ? '请选择还款账户'
+                          : isTransferScene
+                          ? '请选择转出账户'
+                          : '请选择支付账户',
                     );
                     return;
                   }
-                  if (isTransferScene && _internalTransfer) {
+                  if ((isTransferScene && _internalTransfer) ||
+                      isRepaymentScene) {
                     if (destinationAccount == null ||
                         destinationAccount.id == account.id) {
-                      setState(() => _message = '请选择不同的转入账户');
+                      setState(
+                        () => _message = isRepaymentScene
+                            ? '请选择不同的债务账户'
+                            : '请选择不同的转入账户',
+                      );
+                      return;
+                    }
+                    if (isRepaymentScene && !destinationAccount.type.isDebt) {
+                      setState(() => _message = '还款目标必须是信用卡或负债账户');
                       return;
                     }
                   } else if (category == null) {
@@ -837,11 +906,13 @@ class _AutoBookkeepingConfirmPageState
                       bookId: selectedBookId,
                       account: account,
                       category:
-                          isTransferScene && _internalTransfer
+                          (isTransferScene && _internalTransfer) ||
+                              isRepaymentScene
                           ? null
                           : category,
                       destinationAccount:
-                          isTransferScene && _internalTransfer
+                          (isTransferScene && _internalTransfer) ||
+                              isRepaymentScene
                           ? destinationAccount
                           : null,
                     ),
