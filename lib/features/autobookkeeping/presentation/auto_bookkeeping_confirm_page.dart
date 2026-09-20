@@ -1019,6 +1019,54 @@ class _AutoBookkeepingConfirmPageState
     return null;
   }
 
+  String? _validRepaymentDestinationAccountId(
+    List<Account> accounts, {
+    required String? sourceAccountId,
+  }) {
+    final debts = accounts
+        .where(
+          (item) =>
+              item.id != sourceAccountId &&
+              (item.type == AccountType.creditCard ||
+                  item.type == AccountType.liability),
+        )
+        .toList(growable: false);
+
+    if (_destinationAccountId != null &&
+        debts.any((item) => item.id == _destinationAccountId)) {
+      return _destinationAccountId;
+    }
+
+    final recommended = _repaymentRecommendation?.destinationAccountId;
+    if (recommended != null &&
+        debts.any((item) => item.id == recommended)) {
+      return recommended;
+    }
+
+    final suffix = _candidate?.targetIdentifierSuffix;
+    if (suffix != null && suffix.isNotEmpty) {
+      final matches = debts
+          .where((item) => item.identifierSuffix == suffix)
+          .toList(growable: false);
+      if (matches.length == 1) return matches.single.id;
+    }
+
+    return debts.length == 1 ? debts.single.id : null;
+  }
+
+  String _repaymentGuidance(PendingAutoBookkeepingCandidate candidate) {
+    final recommendation = _repaymentRecommendation;
+    if (recommendation?.evidence ==
+        AutoBookkeepingRepaymentEvidence.targetIdentifierSuffix) {
+      return '目标尾号 ${candidate.targetIdentifierSuffix} 与你的债务账户唯一匹配，已预选该账户。还款不会计入消费。';
+    }
+    if (recommendation?.evidence ==
+        AutoBookkeepingRepaymentEvidence.learnedDestination) {
+      return '根据你之前的确认，已预选债务账户。还款只减少可用资金并偿还债务，不计入消费。';
+    }
+    return '请确认还款资金账户和债务账户。系统不会把信用卡还款当作新的消费。';
+  }
+
   String _transferGuidance(PendingAutoBookkeepingCandidate candidate) {
     final recommendation = _transferRecommendation;
     if (recommendation?.evidence ==
@@ -1044,6 +1092,7 @@ class _AutoBookkeepingConfirmPageState
     'INCOME' => TransactionType.income,
     'REFUND' => TransactionType.refund,
     'REIMBURSEMENT' => TransactionType.reimbursement,
+    'REPAYMENT' => TransactionType.repayment,
     _ => TransactionType.expense,
   };
 
@@ -1059,6 +1108,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.income => '收入',
     TransactionType.refund => '退款',
     TransactionType.reimbursement => '报销回款',
+    TransactionType.repayment => '还款',
     TransactionType.transfer => '转账',
     _ => '支出',
   };
@@ -1068,7 +1118,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.refund ||
     TransactionType.reimbursement ||
     TransactionType.borrow => AppColors.income,
-    TransactionType.transfer => AppColors.primary,
+    TransactionType.transfer || TransactionType.repayment => AppColors.primary,
     _ => AppColors.expense,
   };
 
