@@ -526,6 +526,7 @@ object AutoBookkeepingPendingStore {
         "INCOME",
         "REFUND",
         "REIMBURSEMENT",
+        "REPAYMENT",
         "TRANSFER",
     )
 
