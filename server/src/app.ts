@@ -100,7 +100,7 @@ export async function createApp(
   registerOperationalRoutes(app,store);
   registerMarketDataRoutes(app, marketProvider);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
-  registerInsightRoutes(app,store,authenticate);
+  registerInsightRoutes(app,store,authenticate,modelProvider);
   stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password,displayName,deviceName}=registration.parse(req.body);
@@ -213,6 +213,7 @@ export async function createApp(
       // Delete private cloud content and direct personal telemetry first.
       store.db.prepare('DELETE FROM cloud_datasets WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM insight_feedback WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM insight_ai_cache WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM insight_profiles WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM diagnostic_events WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_outbox WHERE user_id=?').run(user.id);

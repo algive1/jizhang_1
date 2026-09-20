@@ -117,6 +117,7 @@ export const insightContextSchema = z.strictObject({
   bookId: z.string().trim().min(1).max(600),
   currency: z.string().regex(/^[A-Z]{3}$/).default('CNY'),
   generatedAt: z.number().int().nonnegative(),
+  timezoneOffsetMinutes: z.number().int().min(-720).max(840).default(0),
   transactions: z.array(transactionSchema).max(12000),
   accounts: z.array(accountSchema).max(500),
   budgets: z.array(budgetSchema).max(1000),
@@ -216,28 +217,64 @@ function netExpense(tx: Tx) {
   return Math.max(0, afterRefund - reimbursable);
 }
 
-function comparisonRange(now: Date) {
-  const currentStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  const currentEnd = now.getTime() + 1;
-  const previousStart = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth() - 1,
+function localDateParts(timestamp: number, timezoneOffsetMinutes: number) {
+  const date = new Date(timestamp + timezoneOffsetMinutes * 60_000);
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth(),
+    day: date.getUTCDate(),
+    hour: date.getUTCHours(),
+  };
+}
+
+function localBoundary(
+  year: number,
+  month: number,
+  day: number,
+  timezoneOffsetMinutes: number,
+) {
+  return (
+    Date.UTC(year, month, day) - timezoneOffsetMinutes * 60_000
+  );
+}
+
+function comparisonRange(
+  nowTimestamp: number,
+  timezoneOffsetMinutes: number,
+) {
+  const now = localDateParts(nowTimestamp, timezoneOffsetMinutes);
+  const currentStart = localBoundary(
+    now.year,
+    now.month,
     1,
+    timezoneOffsetMinutes,
+  );
+  const currentEnd = nowTimestamp + 1;
+  const previousStart = localBoundary(
+    now.year,
+    now.month - 1,
+    1,
+    timezoneOffsetMinutes,
   );
   const previousMonthLast = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0),
+    Date.UTC(now.year, now.month, 0),
   ).getUTCDate();
-  const comparableDay = Math.min(now.getUTCDate(), previousMonthLast);
+  const comparableDay = Math.min(now.day, previousMonthLast);
   const previousEnd =
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth() - 1,
+    localBoundary(
+      now.year,
+      now.month - 1,
       comparableDay + 1,
+      timezoneOffsetMinutes,
     ) - 1;
   return { currentStart, currentEnd, previousStart, previousEnd };
 }
 
-function quality(transactions: Tx[], now: Date): Confidence {
+function quality(
+  transactions: Tx[],
+  now: Date,
+  timezoneOffsetMinutes: number,
+): Confidence {
   const recentStart = now.getTime() - 90 * 86400000;
   const recent = transactions.filter(
     tx => tx.occurredAt >= recentStart && netExpense(tx) > 0,
@@ -252,8 +289,8 @@ function quality(transactions: Tx[], now: Date): Confidence {
   }
   const monthCounts = new Map<string, number>();
   for (const tx of recent) {
-    const date = new Date(tx.occurredAt);
-    const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+    const date = localDateParts(tx.occurredAt, timezoneOffsetMinutes);
+    const key = `${date.year}-${date.month}`;
     monthCounts.set(key, (monthCounts.get(key) ?? 0) + 1);
   }
   const coveredMonths = [...monthCounts.values()].filter(count => count >= 4)
@@ -385,20 +422,22 @@ function friendlyBudget(value: number) {
 function budgetRecommendation(
   expenses: Tx[],
   now: Date,
+  timezoneOffsetMinutes: number,
   profile: InsightProfile,
 ) {
   const totals: number[] = [];
   for (let offset = 1; offset <= 3; offset++) {
+    const localNow = localDateParts(now.getTime(), timezoneOffsetMinutes);
     const target = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1),
+      Date.UTC(localNow.year, localNow.month - offset, 1),
     );
     const year = target.getUTCFullYear();
     const month = target.getUTCMonth();
     const rows = expenses.filter(tx => {
-      const date = new Date(tx.occurredAt);
+      const date = localDateParts(tx.occurredAt, timezoneOffsetMinutes);
       return (
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month &&
+        date.year === year &&
+        date.month === month &&
         netExpense(tx) > 0
       );
     });
@@ -431,11 +470,12 @@ function budgetRecommendation(
 function categoryChanges(
   expenses: Tx[],
   now: Date,
+  timezoneOffsetMinutes: number,
   confidence: Confidence,
   profile: InsightProfile,
   feedback: InsightFeedbackProfile,
 ) {
-  const range = comparisonRange(now);
+  const range = comparisonRange(now.getTime(), timezoneOffsetMinutes);
   type Bucket = {
     id?: string;
     name: string;
@@ -611,15 +651,16 @@ function categoryChanges(
 function behaviorPatternInsight(
   expenses: Tx[],
   now: Date,
+  timezoneOffsetMinutes: number,
   confidence: Confidence,
   profile: InsightProfile,
   feedback: InsightFeedbackProfile,
   kind: 'delivery' | 'lateNight',
 ) {
-  const range = comparisonRange(now);
+  const range = comparisonRange(now.getTime(), timezoneOffsetMinutes);
   const isMatch = (tx: Tx) => {
     if (kind === 'lateNight') {
-      const hour = new Date(tx.occurredAt).getUTCHours();
+      const hour = localDateParts(tx.occurredAt, timezoneOffsetMinutes).hour;
       return hour >= 22 || hour < 6;
     }
     return /美团|饿了么|外卖|delivery/i.test(
@@ -703,24 +744,38 @@ export function analyzeInsightContext(
   profile: InsightProfile,
   feedback: InsightFeedbackProfile,
   policy: InsightPolicy,
+  historyDays: number,
 ) {
   const now = new Date(input.generatedAt);
+  const timezoneOffsetMinutes = input.timezoneOffsetMinutes;
+  const historyStart = input.generatedAt - historyDays * 86400000;
   const currency = input.currency.toUpperCase();
   const transactions = input.transactions.filter(
-    tx => tx.currency.toUpperCase() === currency && tx.occurredAt <= now.getTime(),
+    tx =>
+      tx.currency.toUpperCase() === currency &&
+      tx.occurredAt <= now.getTime() &&
+      tx.occurredAt >= historyStart,
   );
   const expenses = transactions.filter(tx => netExpense(tx) > 0);
-  const confidence = quality(transactions, now);
+  const confidence = quality(transactions, now, timezoneOffsetMinutes);
   const results: InsightItem[] = [];
 
   if (confidence.baseline >= 0.35) {
     results.push(
-      ...categoryChanges(expenses, now, confidence, profile, feedback),
+      ...categoryChanges(
+        expenses,
+        now,
+        timezoneOffsetMinutes,
+        confidence,
+        profile,
+        feedback,
+      ),
     );
     for (const pattern of ['delivery', 'lateNight'] as const) {
       const insight = behaviorPatternInsight(
         expenses,
         now,
+        timezoneOffsetMinutes,
         confidence,
         profile,
         feedback,
@@ -730,24 +785,26 @@ export function analyzeInsightContext(
     }
   }
 
+  const localNow = localDateParts(input.generatedAt, timezoneOffsetMinutes);
   const currentMonthKey =
-    `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    `${localNow.year}-${String(localNow.month + 1).padStart(2, '0')}`;
   const totalBudget = input.budgets.find(
     budget => budget.monthKey === currentMonthKey && !budget.categoryId,
   );
-  const currentMonthStart = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
+  const currentMonthStart = localBoundary(
+    localNow.year,
+    localNow.month,
     1,
+    timezoneOffsetMinutes,
   );
   const currentSpend = expenses
     .filter(tx => tx.occurredAt >= currentMonthStart)
     .reduce((sum, tx) => sum + netExpense(tx), 0);
   if (totalBudget) {
     const days = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
+      Date.UTC(localNow.year, localNow.month + 1, 0),
     ).getUTCDate();
-    const timeProgress = clamp(now.getUTCDate() / days, 0.03, 1);
+    const timeProgress = clamp(localNow.day / days, 0.03, 1);
     const usage = currentSpend / totalBudget.amount;
     const forecast = currentSpend / timeProgress;
     const overspend = forecast - totalBudget.amount;
@@ -802,7 +859,12 @@ export function analyzeInsightContext(
     profile.intents.includes('controlSpending') ||
     profile.intents.includes('saveForGoal')
   ) {
-    const recommendation = budgetRecommendation(expenses, now, profile);
+    const recommendation = budgetRecommendation(
+      expenses,
+      now,
+      timezoneOffsetMinutes,
+      profile,
+    );
     if (recommendation) {
       results.push(
         item({
@@ -896,7 +958,7 @@ export function analyzeInsightContext(
       familyPattern.test(
         `${tx.note ?? ''} ${tx.merchant ?? ''} ${tx.categoryName ?? ''}`,
       ) &&
-      ['expense', 'lend', 'transfer'].includes(tx.type),
+      ['expense', 'lend'].includes(tx.type),
   );
   const familyAmount = familyRows.reduce((sum, tx) => sum + tx.amount, 0);
   if (familyRows.length >= 2 && familyAmount >= 100) {
@@ -1184,7 +1246,7 @@ export function analyzeInsightContext(
   }
   const items = [...byId.values()]
     .filter(result => !feedback.dismissedIds.has(result.id))
-    .filter(result => overallConfidence(result.confidence) >= policy.minConfidence * 0.7)
+    .filter(result => overallConfidence(result.confidence) >= policy.minConfidence)
     .sort((a, b) => b.score - a.score);
 
   return {
@@ -1194,6 +1256,9 @@ export function analyzeInsightContext(
     completeness: confidence.completeness,
     classificationConfidence: confidence.classification,
     baselineConfidence: confidence.baseline,
+    homeMinScore: policy.homeMinScore,
+    homeMinConfidence: policy.minConfidence,
+    historyDays,
     items,
   };
 }

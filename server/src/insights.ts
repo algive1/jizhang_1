@@ -1,8 +1,14 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import type { Store } from './store.js';
+import { ApiError, requireCondition as check } from './contract.js';
+import {
+  AssistantModelUnavailable,
+  DeepSeekCompatibleProvider,
+  type AssistantModelProvider,
+} from './assistant_ai.js';
 import {
   analyzeInsightContext,
   insightContextSchema,
@@ -105,6 +111,17 @@ export function ensureInsightSchema(store: Store) {
       ON insight_feedback(user_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_insight_feedback_user_insight
       ON insight_feedback(user_id,insight_id);
+    CREATE TABLE IF NOT EXISTS insight_ai_cache(
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      insight_id TEXT NOT NULL,
+      prompt_version TEXT NOT NULL,
+      body_hash TEXT NOT NULL,
+      result_text TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY(user_id,insight_id,prompt_version,body_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_insight_ai_cache_user_time
+      ON insight_ai_cache(user_id,created_at DESC);
     CREATE TABLE IF NOT EXISTS insight_policy(
       id INTEGER PRIMARY KEY CHECK(id=1),
       policy_json TEXT NOT NULL,
@@ -195,10 +212,57 @@ function readFeedbackProfile(
   return { dismissedIds, kindAdjustments };
 }
 
+function hasActiveInsightMembership(
+  store: Store,
+  userId: string,
+): boolean {
+  const now = store.now();
+  try {
+    if (store.db.prepare(
+      'SELECT 1 FROM membership_subscriptions WHERE user_id=? AND expires_at>?',
+    ).get(userId, now)) return true;
+    if (store.db.prepare(
+      'SELECT 1 FROM apple_transactions WHERE user_id=? '
+        + 'AND revoked_at IS NULL AND expires_at>?',
+    ).get(userId, now)) return true;
+    if (store.db.prepare(
+      'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
+    ).get(userId, now)) return true;
+  } catch {
+    // Isolated tests may not initialize every membership table.
+  }
+  return false;
+}
+
+const interpretationSchema = z.strictObject({
+  insightId: z.string().trim().min(1).max(180),
+  kind: z.enum([
+    'financial',
+    'behavior',
+    'risk',
+    'goal',
+    'discovery',
+    'positive',
+    'life',
+  ]),
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(1000),
+  analysis: z.string().trim().min(1).max(1600),
+  meaning: z.string().trim().min(1).max(1600),
+  suggestion: z.string().trim().max(1000).nullable().optional(),
+  evidence: z.array(z.strictObject({
+    label: z.string().trim().min(1).max(100),
+    value: z.number().finite(),
+    baselineValue: z.number().finite().nullable().optional(),
+    unit: z.string().trim().max(20).nullable().optional(),
+  })).max(12),
+});
+
 export function registerInsightRoutes(
   app: FastifyInstance,
   store: Store,
   authenticate: Authenticate,
+  modelProvider: AssistantModelProvider = new DeepSeekCompatibleProvider(),
 ) {
   ensureInsightSchema(store);
 
@@ -208,7 +272,17 @@ export function registerInsightRoutes(
     const policy = readInsightPolicy(store);
     const profile = readProfile(store, user.id);
     const feedback = readFeedbackProfile(store, user.id);
-    return analyzeInsightContext(context, profile, feedback, policy);
+    const member = hasActiveInsightMembership(store, user.id);
+    const historyDays = member
+      ? policy.proHistoryDays
+      : policy.freeHistoryDays;
+    return analyzeInsightContext(
+      context,
+      profile,
+      feedback,
+      policy,
+      historyDays,
+    );
   });
 
   app.get('/api/v1/insights/profile', async request => {
@@ -298,17 +372,103 @@ export function registerInsightRoutes(
   });
 
   app.get('/api/v1/insights/policy', async request => {
-    authenticate(request.headers.authorization);
+    const user = authenticate(request.headers.authorization);
     const policy = readInsightPolicy(store);
+    const member = hasActiveInsightMembership(store, user.id);
     return {
       homeMinScore: policy.homeMinScore,
       minConfidence: policy.minConfidence,
       cooldownDays: policy.cooldownDays,
       aiEnabled: policy.aiEnabled,
-      historyDays: policy.freeHistoryDays,
+      aiAvailable: policy.aiEnabled && member,
+      historyDays: member ? policy.proHistoryDays : policy.freeHistoryDays,
       promptVersion: policy.promptVersion,
     };
   });
+
+  app.post(
+    '/api/v1/insights/interpret',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async request => {
+      const user = authenticate(request.headers.authorization);
+      const policy = readInsightPolicy(store);
+      check(policy.aiEnabled, 'AI 深度解读暂未开启', 503);
+      check(
+        hasActiveInsightMembership(store, user.id),
+        'AI 深度解读需要有效会员',
+        403,
+      );
+      const body = interpretationSchema.parse(request.body);
+      const bodyHash = createHash('sha256')
+        .update(JSON.stringify(body))
+        .digest('hex');
+      const cached = store.db.prepare(
+        'SELECT result_text FROM insight_ai_cache '
+          + 'WHERE user_id=? AND insight_id=? AND prompt_version=? '
+          + 'AND body_hash=?',
+      ).get(
+        user.id,
+        body.insightId,
+        policy.promptVersion,
+        bodyHash,
+      ) as { result_text: string } | undefined;
+      if (cached) {
+        return {
+          message: cached.result_text,
+          source: 'cache',
+          promptVersion: policy.promptVersion,
+        };
+      }
+
+      const systemPrompt = [
+        '你是“好好记账”的财务洞察解释器。',
+        '只能解释服务端已经计算并提供的事实，不得新增金额、次数、日期或因果结论。',
+        '不得根据消费推断性别、外貌、疾病、职业、阶层或其他敏感身份。',
+        '不得制造焦虑、羞辱用户或把正常生活消费道德化。',
+        '如果证据不足，明确说证据有限；如果是积极变化，可以自然肯定，但不要夸张。',
+        '建议必须可选、可执行，并与用户现有目标一致；不要替用户做财务决定。',
+        '输出 2-4 段简短中文纯文本，不要 Markdown 标题，不要 JSON。',
+        `策略版本：${policy.promptVersion}`,
+      ].join('\n');
+      const userText = JSON.stringify({
+        kind: body.kind,
+        title: body.title,
+        summary: body.summary,
+        analysis: body.analysis,
+        meaning: body.meaning,
+        suggestion: body.suggestion ?? null,
+        evidence: body.evidence,
+      });
+      let message: string;
+      try {
+        message = await modelProvider.complete({ systemPrompt, userText });
+      } catch (error) {
+        if (error instanceof AssistantModelUnavailable) {
+          throw new ApiError(503, '模型服务暂时不可用，请稍后重试');
+        }
+        throw error;
+      }
+      message = message.trim().slice(0, 1600);
+      check(message.length > 0, '模型没有返回有效解读', 502);
+      store.db.prepare(
+        'INSERT INTO insight_ai_cache('
+          + 'user_id,insight_id,prompt_version,body_hash,result_text,created_at'
+          + ') VALUES(?,?,?,?,?,?)',
+      ).run(
+        user.id,
+        body.insightId,
+        policy.promptVersion,
+        bodyHash,
+        message,
+        store.now(),
+      );
+      return {
+        message,
+        source: 'model',
+        promptVersion: policy.promptVersion,
+      };
+    },
+  );
 
   app.get('/api/v1/insights/feedback/summary', async request => {
     const user = authenticate(request.headers.authorization);

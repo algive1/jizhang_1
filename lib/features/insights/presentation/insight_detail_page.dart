@@ -6,20 +6,32 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/insight_feed_provider.dart';
+import '../data/remote_insight_repository.dart';
+import '../../membership/data/membership_repository.dart';
+import '../../../core/models/membership.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
 
-class InsightDetailPage extends ConsumerWidget {
+class InsightDetailPage extends ConsumerStatefulWidget {
   const InsightDetailPage({required this.insightId, super.key});
 
   final String insightId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InsightDetailPage> createState() => _InsightDetailPageState();
+}
+
+class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
+  bool _loadingAi = false;
+  String? _aiText;
+  String? _aiError;
+
+  @override
+  Widget build(BuildContext context) {
     final feed = ref.watch(insightFeedProvider);
     FinancialInsightItem? insight;
     for (final item in feed.items) {
-      if (item.id == insightId) {
+      if (item.id == widget.insightId) {
         insight = item;
         break;
       }
@@ -120,6 +132,40 @@ class InsightDetailPage extends ConsumerWidget {
               child: Text(item.actionLabel ?? '查看'),
             ),
           ],
+          const SizedBox(height: 18),
+          if (feed.isServerConfirmed &&
+              (ref.watch(membershipProvider).value?.has(
+                    EntitlementKey.aiAnalysis,
+                  ) ??
+                  false)) ...[
+            if (_aiText != null)
+              _Section(
+                title: 'AI 深度解读',
+                child: Text(_aiText!, style: const TextStyle(height: 1.55)),
+              )
+            else
+              OutlinedButton.icon(
+                onPressed: _loadingAi ? null : () => _loadAi(item),
+                icon: _loadingAi
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_awesome_outlined, size: 18),
+                label: Text(_loadingAi ? '正在解读…' : 'AI 深度解读'),
+              ),
+            if (_aiError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _aiError!,
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 24),
           Text(
             '这条分析对你有帮助吗？',
@@ -164,6 +210,26 @@ class InsightDetailPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _loadAi(FinancialInsightItem item) async {
+    setState(() {
+      _loadingAi = true;
+      _aiError = null;
+    });
+    try {
+      final text = await ref.read(remoteInsightRepositoryProvider).interpret(item);
+      if (!mounted) return;
+      setState(() {
+        _aiText = text;
+        _aiError = text == null ? '当前无法提供 AI 深度解读' : null;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _aiError = error.toString());
+    } finally {
+      if (mounted) setState(() => _loadingAi = false);
+    }
   }
 
   Future<void> _feedback(

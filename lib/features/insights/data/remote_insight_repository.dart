@@ -9,11 +9,53 @@ import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import '../domain/insight_models.dart';
 
+class InsightRemotePolicy {
+  const InsightRemotePolicy({
+    required this.historyDays,
+    required this.aiEnabled,
+    required this.aiAvailable,
+  });
+
+  final int historyDays;
+  final bool aiEnabled;
+  final bool aiAvailable;
+}
+
 class RemoteInsightRepository {
-  const RemoteInsightRepository(this._api, this._session);
+  RemoteInsightRepository(this._api, this._session);
 
   final SharedApi _api;
   final SessionRepository _session;
+  InsightRemotePolicy? _cachedPolicy;
+  DateTime? _policyLoadedAt;
+
+  Future<InsightRemotePolicy?> policy({bool force = false}) async {
+    final now = DateTime.now();
+    if (!force &&
+        _cachedPolicy != null &&
+        _policyLoadedAt != null &&
+        now.difference(_policyLoadedAt!) < const Duration(minutes: 5)) {
+      return _cachedPolicy;
+    }
+    await _session.initialize();
+    if (_session.userId == null || _api.sessionToken == null) return null;
+    try {
+      final response = await _api.request('/insights/policy');
+      final value = InsightRemotePolicy(
+        historyDays: (response['historyDays'] as num?)?.toInt() ?? 90,
+        aiEnabled: response['aiEnabled'] == true,
+        aiAvailable: response['aiAvailable'] == true,
+      );
+      _cachedPolicy = value;
+      _policyLoadedAt = now;
+      return value;
+    } on SharedApiException catch (error) {
+      if (error.status == 401) await _session.markSessionExpired();
+      return null;
+    } on Object {
+      return null;
+    }
+  }
 
   Future<InsightFeed?> analyze({
     required String bookId,
@@ -27,6 +69,16 @@ class RemoteInsightRepository {
     await _session.initialize();
     if (_session.userId == null || _api.sessionToken == null) return null;
     try {
+      final remotePolicy = await policy();
+      final historyDays = remotePolicy?.historyDays ?? 90;
+      final cutoff = DateTime.now().subtract(Duration(days: historyDays));
+      final scopedTransactions = transactions
+          .where((item) => !item.occurredAt.isBefore(cutoff))
+          .toList()
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      if (scopedTransactions.length > 6000) {
+        scopedTransactions.removeRange(6000, scopedTransactions.length);
+      }
       final response = await _api.request(
         '/insights/analyze',
         method: 'POST',
@@ -34,8 +86,9 @@ class RemoteInsightRepository {
           'bookId': bookId,
           'currency': currency,
           'generatedAt': DateTime.now().millisecondsSinceEpoch,
+          'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
           'transactions': [
-            for (final item in transactions)
+            for (final item in scopedTransactions)
               if (item.deletedAt == null)
                 {
                   'id': item.id,
@@ -111,6 +164,41 @@ class RemoteInsightRepository {
       return null;
     } on Object {
       return null;
+    }
+  }
+
+  Future<String?> interpret(FinancialInsightItem item) async {
+    await _session.initialize();
+    if (_session.userId == null || _api.sessionToken == null) return null;
+    final remotePolicy = await policy();
+    if (remotePolicy?.aiAvailable != true) return null;
+    try {
+      final response = await _api.request(
+        '/insights/interpret',
+        method: 'POST',
+        body: {
+          'insightId': item.id,
+          'kind': item.kind.name,
+          'title': item.title,
+          'summary': item.summary,
+          'analysis': item.analysis,
+          'meaning': item.meaning,
+          'suggestion': item.suggestion,
+          'evidence': [
+            for (final evidence in item.evidence)
+              {
+                'label': evidence.label,
+                'value': evidence.value,
+                'baselineValue': evidence.baselineValue,
+                'unit': evidence.unit,
+              },
+          ],
+        },
+      );
+      return response['message'] as String?;
+    } on SharedApiException catch (error) {
+      if (error.status == 401) await _session.markSessionExpired();
+      rethrow;
     }
   }
 }

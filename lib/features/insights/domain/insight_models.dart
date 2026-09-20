@@ -262,6 +262,9 @@ class InsightFeed {
     required this.baselineConfidence,
     this.origin = InsightOrigin.local,
     this.confirmedAt,
+    this.homeMinScore = 70,
+    this.homeMinConfidence = .55,
+    this.historyDays,
   });
 
   final List<FinancialInsightItem> items;
@@ -271,12 +274,18 @@ class InsightFeed {
   final double baselineConfidence;
   final InsightOrigin origin;
   final DateTime? confirmedAt;
+  final double homeMinScore;
+  final double homeMinConfidence;
+  final int? historyDays;
 
   bool get isServerConfirmed => origin == InsightOrigin.serverConfirmed;
 
   FinancialInsightItem? get homeCandidate {
     for (final item in items) {
-      if (item.score >= 70 && item.confidence.overall >= .55) return item;
+      if (item.score >= homeMinScore &&
+          item.confidence.overall >= homeMinConfidence) {
+        return item;
+      }
     }
     return null;
   }
@@ -304,6 +313,10 @@ class InsightFeed {
               (json['confirmedAt'] as num).toInt(),
             )
           : null,
+      homeMinScore: (json['homeMinScore'] as num?)?.toDouble() ?? 70,
+      homeMinConfidence:
+          (json['homeMinConfidence'] as num?)?.toDouble() ?? .55,
+      historyDays: (json['historyDays'] as num?)?.toInt(),
     );
   }
 }
