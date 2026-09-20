@@ -227,7 +227,10 @@ class BillImportCategoryMapper {
   Category? _findBySeedKey(Iterable<Category> values, String key) {
     return values
         .where(
-          (item) => item.id == key || item.id.endsWith('::$key'),
+          (item) =>
+              item.id == key ||
+              item.id.endsWith('::$key') ||
+              item.id.endsWith('-$key'),
         )
         .firstOrNull;
   }
