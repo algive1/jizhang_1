@@ -155,11 +155,27 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
         '',
         '',
       ],
+      [
+        '2026-09-04 09:00',
+        '支出',
+        '待报销',
+        '',
+        '-88.00',
+        '日常生活',
+        '支付宝',
+        '',
+        '键盘',
+        '',
+        '已报销',
+        '',
+        '',
+        '',
+      ],
     ]);
 
     final result = service.parseMumuXlsx(bytes);
 
-    expect(result.rows, hasLength(3));
+    expect(result.rows, hasLength(4));
     expect(result.rows[0].type, TransactionType.transfer);
     expect(result.rows[0].sourceAccount, '微信小号');
     expect(result.rows[0].destinationAccount, '支付宝');
@@ -169,6 +185,10 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
       ReimbursementStatus.pending,
     );
     expect(result.rows[2].type, TransactionType.reimbursement);
+    expect(
+      result.rows[3].reimbursementStatus,
+      ReimbursementStatus.reimbursed,
+    );
   });
 
 }
