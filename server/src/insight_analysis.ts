@@ -123,6 +123,28 @@ export const insightContextSchema = z.strictObject({
   currency: z.string().regex(/^[A-Z]{3}$/).default('CNY'),
   generatedAt: z.number().int().nonnegative(),
   timezoneOffsetMinutes: z.number().int().min(-720).max(840).default(0),
+  preferences: z.strictObject({
+    intents: z.array(z.enum([
+      'controlSpending',
+      'understandSpending',
+      'saveForGoal',
+      'optimizeFinances',
+      'familyFinances',
+      'improveHabits',
+      'recordLife',
+    ])).max(7),
+    focus: z.array(z.enum([
+      'dining',
+      'shopping',
+      'travel',
+      'healthHabits',
+      'savings',
+      'credit',
+      'family',
+      'learning',
+    ])).max(8),
+    tone: z.enum(['strict', 'balanced', 'quiet']),
+  }).optional(),
   transactions: z.array(transactionSchema).max(12000),
   accounts: z.array(accountSchema).max(500),
   budgets: z.array(budgetSchema).max(1000),
@@ -1194,7 +1216,6 @@ export function analyzeInsightContext(
   }
 
   const ninetyDaysAgo = now.getTime() - 90 * 86400000;
-  const familyPattern = /爸爸|妈妈|父母|爸妈|家人|家里/;
   const familyRows = transactions.filter(
     tx =>
       tx.occurredAt >= ninetyDaysAgo &&
@@ -1483,10 +1504,26 @@ export function analyzeInsightContext(
     const previous = byId.get(result.id);
     if (!previous || result.score > previous.score) byId.set(result.id, result);
   }
-  const items = [...byId.values()]
+  const ranked = [...byId.values()]
     .filter(result => !feedback.dismissedIds.has(result.id))
     .filter(result => overallConfidence(result.confidence) >= policy.minConfidence)
     .sort((a, b) => b.score - a.score);
+  const items: InsightItem[] = [];
+  for (const candidate of ranked) {
+    const candidateIds = new Set(candidate.relatedTransactionIds);
+    const overlapsExisting = candidateIds.size > 0 && items.some(existing => {
+      if (existing.relatedTransactionIds.length === 0) return false;
+      const overlap = existing.relatedTransactionIds.filter(
+        id => candidateIds.has(id),
+      ).length;
+      const smaller = Math.min(
+        candidateIds.size,
+        existing.relatedTransactionIds.length,
+      );
+      return smaller > 0 && overlap / smaller >= 0.75;
+    });
+    if (!overlapsExisting) items.push(candidate);
+  }
 
   return {
     origin: 'serverConfirmed' as const,

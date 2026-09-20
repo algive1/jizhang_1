@@ -292,6 +292,26 @@ class InsightFeed {
     return null;
   }
 
+  InsightFeed copyWith({
+    List<FinancialInsightItem>? items,
+    InsightOrigin? origin,
+    DateTime? confirmedAt,
+  }) {
+    return InsightFeed(
+      items: items ?? this.items,
+      dataConfidence: dataConfidence,
+      completeness: completeness,
+      classificationConfidence: classificationConfidence,
+      baselineConfidence: baselineConfidence,
+      origin: origin ?? this.origin,
+      confirmedAt: confirmedAt ?? this.confirmedAt,
+      homeMinScore: homeMinScore,
+      homeMinConfidence: homeMinConfidence,
+      historyDays: historyDays,
+      cooldownDays: cooldownDays,
+    );
+  }
+
   factory InsightFeed.fromJson(Map<String, dynamic> json) {
     return InsightFeed(
       items: (json['items'] as List? ?? const [])

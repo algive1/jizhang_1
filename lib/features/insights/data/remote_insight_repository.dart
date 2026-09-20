@@ -64,6 +64,7 @@ class RemoteInsightRepository {
     required List<Budget> budgets,
     required List<Goal> goals,
     required List<RecurringBill> recurringBills,
+    required InsightPreferences preferences,
     String currency = 'CNY',
   }) async {
     await _session.initialize();
@@ -87,6 +88,11 @@ class RemoteInsightRepository {
           'currency': currency,
           'generatedAt': DateTime.now().millisecondsSinceEpoch,
           'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+          'preferences': {
+            'intents': preferences.intents.map((item) => item.name).toList(),
+            'focus': preferences.focus.map((item) => item.name).toList(),
+            'tone': preferences.tone.name,
+          },
           'transactions': [
             for (final item in scopedTransactions)
               if (item.deletedAt == null)

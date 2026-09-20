@@ -54,6 +54,9 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
   final goals = ref.watch(goalsProvider).value ?? const [];
   final recurringBills =
       ref.watch(recurringBillsProvider).value ?? const [];
+  final preferences =
+      ref.watch(insightPreferencesProvider).value ??
+      const InsightPreferences();
   final bookId = ref.watch(activeBookIdProvider);
   // Debounce bursts from automatic/import bookkeeping. Riverpod discards stale
   // results when dependencies change while this request is waiting.
@@ -65,11 +68,21 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
         budgets: budgets,
         goals: goals,
         recurringBills: recurringBills,
+        preferences: preferences,
       );
 });
 
 final insightFeedProvider = Provider<InsightFeed>((ref) {
   final local = ref.watch(localInsightFeedProvider);
-  final remote = ref.watch(confirmedInsightFeedProvider);
-  return remote.value ?? local;
+  final remote = ref.watch(confirmedInsightFeedProvider).value;
+  final preferences =
+      ref.watch(insightPreferencesProvider).value ??
+      const InsightPreferences();
+  final selected = remote ?? local;
+  if (preferences.dismissedIds.isEmpty) return selected;
+  return selected.copyWith(
+    items: selected.items
+        .where((item) => !preferences.dismissedIds.contains(item.id))
+        .toList(growable: false),
+  );
 });

@@ -317,7 +317,7 @@ export function registerInsightRoutes(
       const user = authenticate(request.headers.authorization);
       const context = insightContextSchema.parse(request.body);
       const policy = readInsightPolicy(store);
-      const profile = readProfile(store, user.id);
+      const profile = context.preferences ?? readProfile(store, user.id);
       const feedback = readFeedbackProfile(store, user.id);
       const member = hasActiveInsightMembership(store, user.id);
       const historyDays = member
