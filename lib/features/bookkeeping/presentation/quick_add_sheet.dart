@@ -2227,6 +2227,11 @@ class _SubcategoryPickerSheet extends StatelessWidget {
                     selected: selected,
                     label: useParent ? '不细分，使用${parent.name}' : category.name,
                     child: InkWell(
+                      key: ValueKey(
+                        useParent
+                            ? 'quick-subcategory-parent'
+                            : 'quick-subcategory-${category.id}',
+                      ),
                       onTap: () => Navigator.pop(
                         context,
                         _CategorySelection(useParent ? null : category.id),
