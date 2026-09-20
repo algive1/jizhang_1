@@ -36,9 +36,13 @@ export function dispatchDueCampaigns(store:Store,limit=20){
   const rows=store.db.prepare("SELECT * FROM message_campaigns WHERE status='scheduled' AND scheduled_at<=? ORDER BY scheduled_at LIMIT ?").all(now,limit) as any[];
   let sent=0;
   for(const row of rows){
-    const users=targetUsers(store,JSON.parse(row.audience_json));
-    let queued=0;for(const user of users)queued+=queuePushForUser(store,user.id,{title:row.title,body:row.body,route:row.route});
-    store.db.prepare("UPDATE message_campaigns SET status='sent',sent_at=?,targeted_users=?,queued_devices=? WHERE id=? AND status='scheduled'").run(now,users.length,queued,row.id);sent++;
+    const claimed=store.db.prepare("UPDATE message_campaigns SET status='dispatching' WHERE id=? AND status='scheduled'").run(row.id).changes;
+    if(!claimed)continue;
+    try{
+      const users=targetUsers(store,JSON.parse(row.audience_json));
+      let queued=0;for(const user of users)queued+=queuePushForUser(store,user.id,{title:row.title,body:row.body,route:row.route});
+      store.db.prepare("UPDATE message_campaigns SET status='sent',sent_at=?,targeted_users=?,queued_devices=? WHERE id=? AND status='dispatching'").run(now,users.length,queued,row.id);sent++;
+    }catch(error){store.db.prepare("UPDATE message_campaigns SET status='scheduled' WHERE id=? AND status='dispatching'").run(row.id);throw error}
   }return {campaigns:sent};
 }
 export function registerCampaignRoutes(app:FastifyInstance,store:Store){
