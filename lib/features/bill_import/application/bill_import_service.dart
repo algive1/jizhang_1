@@ -98,11 +98,21 @@ class BillImportService {
   }
 
   BillImportResult parseXlsx(List<int> bytes) {
-    final rows = const XlsxTableReader()
-        .readFirstSheet(bytes)
-        .where((row) => row.any((cell) => cell.trim().isNotEmpty))
-        .toList(growable: false);
-    return _parseSpreadsheetRows(rows);
+    final sheets = const XlsxTableReader().readSheets(bytes);
+    FormatException? lastError;
+    for (final sheet in sheets) {
+      final rows = sheet
+          .where((row) => row.any((cell) => cell.trim().isNotEmpty))
+          .toList(growable: false);
+      if (rows.isEmpty) continue;
+      try {
+        return _parseSpreadsheetRows(rows);
+      } on FormatException catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ??
+        const FormatException('Excel 文件中没有识别到可导入的账单工作表');
   }
 
   BillImportResult parseMumuXlsx(List<int> bytes) {
