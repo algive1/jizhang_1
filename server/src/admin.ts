@@ -16,7 +16,7 @@ import {
 } from './push_delivery.js';
 import { ensureSupportSchema } from './support.js';
 import type { Store } from './store.js';
-import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
+import { requireAdminPrincipal } from './admin_auth.js';
 
 function ensureAdminSchema(store: Store) {
   ensureMessageCenterSchema(store);
