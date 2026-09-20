@@ -312,6 +312,59 @@ class PaymentEngineTest {
         assertEquals("张三", income?.merchantRaw)
     }
 
+    @Test fun accessibilityParserDetectsOutgoingTransferWithoutCallingItInternal() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.tencent.mm",
+            nodes(
+                "转账成功",
+                "收款人",
+                "张三",
+                "转账金额",
+                "66.00",
+                "转出方式",
+                "微信支付",
+                "转入账户",
+                "招商银行储蓄卡 尾号7777",
+            ),
+            100000,
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("WECHAT_TRANSFER_SUCCESS", candidate?.scene?.scene)
+        assertEquals(6600L, candidate?.amountInCents)
+        assertEquals("张三", candidate?.merchantRaw)
+        assertEquals("7777", candidate?.targetIdentifierSuffix)
+        assertEquals("招商银行储蓄卡 尾号7777", candidate?.targetAccountHint)
+    }
+
+    @Test fun wechatConfirmationLayoutIsTypedAsTransferBySceneDetector() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.tencent.mm",
+            nodes(
+                "支付成功",
+                "待陆勤老师-专注职工社保确认收款",
+                "￥1.00",
+            ),
+            100000,
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals(100L, candidate?.amountInCents)
+        assertEquals("待陆勤老师-专注职工社保", candidate?.merchantRaw)
+    }
+
+    @Test fun nativeNotificationParserDetectsCompletedTransferAndTargetSuffix() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.tencent.mm",
+            "微信支付",
+            "转账成功 ￥66.00，收款人：张三，转入账户：招商银行储蓄卡 尾号7777，转出方式：微信支付",
+            100000,
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("PAYMENT_NOTIFICATION_TRANSFER", candidate?.scene?.scene)
+        assertEquals(6600L, candidate?.amountInCents)
+        assertEquals("张三", candidate?.merchantRaw)
+        assertEquals("7777", candidate?.targetIdentifierSuffix)
+    }
+
     @Test fun accessibilityTypedParserRejectsMissingCounterparty() {
         val result = PaymentSceneDetector().inspect(
             "com.eg.android.AlipayGphone",
@@ -373,6 +426,25 @@ class PaymentEngineTest {
             assertEquals("ORDER_123456", candidate?.orderId)
             assertEquals("3316", candidate?.identifierSuffix)
         }
+    }
+
+    @Test fun pendingStoreCarriesTransferTargetHints() {
+        val candidate = AutoBookkeepingPendingStore.candidateFromMap(
+            mapOf(
+                "amountInCents" to 6600L,
+                "merchant" to "张三",
+                "paymentMethod" to "微信支付",
+                "timestamp" to 100000L,
+                "sourceApp" to "WECHAT",
+                "scene" to "WECHAT_TRANSFER_SUCCESS",
+                "transactionType" to "TRANSFER",
+                "targetIdentifierSuffix" to "7777",
+                "targetAccountHint" to "招商银行储蓄卡 尾号7777",
+            ),
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("7777", candidate?.targetIdentifierSuffix)
+        assertEquals("招商银行储蓄卡 尾号7777", candidate?.targetAccountHint)
     }
 
     @Test fun normalization() { assertEquals("麦当劳", parse("支付成功", "商户", "McDonald's 成都", "￥38.50")?.merchantNormalized) }
