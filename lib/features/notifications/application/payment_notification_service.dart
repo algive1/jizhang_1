@@ -170,6 +170,9 @@ class PaymentNotificationParser {
         r'退款成功|退款到账|退款已到账|已退款|退款完成',
       ).hasMatch(value) => 'REFUND',
       final value when RegExp(
+        r'报销到账|报销款到账|费用报销到账|报销成功|费用报销成功',
+      ).hasMatch(value) => 'REIMBURSEMENT',
+      final value when RegExp(
         r'收款到账|收款成功|收款已到账|收入到账',
       ).hasMatch(value) => 'INCOME',
       final value when RegExp(
@@ -218,9 +221,11 @@ class PaymentNotificationParser {
     final merchant =
         _merchantFor(content) ??
         _counterpartyFor(content) ??
-        (transactionType == 'REPAYMENT'
-            ? _targetAccountHintFor(content) ?? '信用卡还款'
-            : null);
+        switch (transactionType) {
+          'REPAYMENT' => _targetAccountHintFor(content) ?? '信用卡还款',
+          'REIMBURSEMENT' => '报销回款',
+          _ => null,
+        };
     if (merchant == null) return null;
     final breakdown = _amountBreakdownFor(content, amount);
     return ParsedPaymentNotification(
@@ -282,13 +287,13 @@ class PaymentNotificationParser {
 
   double? _amountFor(String content) {
     final explicit = RegExp(
-      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|退款金额|收款金额|到账金额|收入金额|转账金额|转出金额|还款金额|本次还款)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|退款金额|收款金额|到账金额|收入金额|报销金额|报销款|转账金额|转出金额|还款金额|本次还款)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (explicit.length == 1) return explicit.single;
     if (explicit.length > 1) return null;
 
     final status = RegExp(
-      r'(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成|转账成功|转出成功|转账完成|转出完成|已转账|信用卡还款成功|还款成功|还款完成|已还款|消费|扣款|支出)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成|转账成功|转出成功|转账完成|转出完成|已转账|报销到账|报销款到账|报销成功|信用卡还款成功|还款成功|还款完成|已还款|消费|扣款|支出)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (status.length == 1) return status.single;
     if (status.length > 1) return null;
@@ -360,7 +365,7 @@ class PaymentNotificationParser {
 
   String? _counterpartyFor(String content) {
     final match = RegExp(
-      r'(?:来自|付款方|付款人|退款方|收款人|收款方|对方|还款对象)[：:\s]*([^，。；;\n]{2,32})',
+      r'(?:来自|付款方|付款人|退款方|报销方|收款人|收款方|对方|还款对象)[：:\s]*([^，。；;\n]{2,32})',
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     if (value == null || value.isEmpty) return null;
@@ -524,6 +529,7 @@ class PaymentNotificationAutoBookkeepingService {
             scene: switch (parsed.transactionType) {
               'REFUND' => 'PAYMENT_NOTIFICATION_REFUND',
               'INCOME' => 'PAYMENT_NOTIFICATION_INCOME',
+              'REIMBURSEMENT' => 'PAYMENT_NOTIFICATION_REIMBURSEMENT',
               'TRANSFER' => 'PAYMENT_NOTIFICATION_TRANSFER',
               'REPAYMENT' => 'PAYMENT_NOTIFICATION_REPAYMENT',
               _ => 'PAYMENT_NOTIFICATION',
