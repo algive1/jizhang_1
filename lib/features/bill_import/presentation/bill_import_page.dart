@@ -33,6 +33,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   String? _expenseCategoryId;
   String? _incomeCategoryId;
   final Map<String, String?> _accountMappings = {};
+  final Map<int, String> _rowSourceAccountOverrides = {};
+  final Map<int, String> _rowDestinationAccountOverrides = {};
   bool _preserveCurrentBalances = true;
   String? _fileName;
   bool _loading = false;
@@ -108,7 +110,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   FilledButton.icon(
                     onPressed: _saving || _selected.isEmpty
                         ? null
-                        : () => _save(categories),
+                        : () => _save(accounts, categories),
                     icon: _saving
                         ? const SizedBox.square(
                             dimension: 16,
@@ -176,8 +178,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     final expense = _rootCategories(categories, CategoryType.expense);
     final income = _rootCategories(categories, CategoryType.income);
     final result = _result;
-    final isMumu = result?.provider == BillImportProvider.mumu;
-    final accountNames = isMumu && result != null
+    final needsAccountMapping = result?.provider.needsAccountMapping == true;
+    final accountNames = needsAccountMapping && result != null
         ? _mumuAccountNames(result)
         : const <String>[];
     final unmappedAccounts = accountNames
@@ -192,7 +194,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           const SizedBox(height: 6),
           Text(
             isMumu
-                ? '木木账户按名称逐项映射；分类会自动匹配到当前分类树，无法识别的记录使用下方兜底分类。'
+                ? '第三方账单会先按账户名称自动匹配；无法确定时可在这里预设，也可以在导入时逐笔选择“仅此笔”或“全部同来源”。分类会尽量自动匹配。'
                 : '微信/支付宝账单使用默认账户，并按收支类型落入下方默认分类。',
             style: TextStyle(
               color: context.appSecondaryText,
@@ -206,7 +208,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 ? _accountId
                 : null,
             decoration: InputDecoration(
-              labelText: isMumu ? '未标账户兜底' : '默认账户',
+              labelText: needsAccountMapping ? '未标账户默认（可不选）' : '默认账户',
             ),
             items: [
               for (final account in accounts.where((item) => !item.isArchived))
@@ -217,13 +219,13 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ],
             onChanged: (value) => setState(() => _accountId = value),
           ),
-          if (isMumu) ...[
+          if (needsAccountMapping) ...[
             const SizedBox(height: 4),
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               title: const Text('保持当前账户余额'),
               subtitle: Text(
-                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。',
+                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。适用于木木及其他记账 App 的历史账单。',
                 style: TextStyle(
                   color: context.appSecondaryText,
                   fontSize: 12,
@@ -238,7 +240,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
               initiallyExpanded: unmappedAccounts > 0,
-              title: Text('木木账户映射 · ${accountNames.length} 个'),
+              title: Text('来源账户映射 · ${accountNames.length} 个'),
               subtitle: Text(
                 unmappedAccounts == 0
                     ? '已全部映射'
@@ -290,7 +292,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                       ? _expenseCategoryId
                       : null,
                   decoration: InputDecoration(
-                    labelText: isMumu ? '未识别支出兜底' : '支出默认分类',
+                    labelText: needsAccountMapping ? '未识别支出兜底' : '支出默认分类',
                   ),
                   items: [
                     for (final category in expense)
@@ -310,7 +312,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                       ? _incomeCategoryId
                       : null,
                   decoration: InputDecoration(
-                    labelText: isMumu ? '未识别收入兜底' : '收入默认分类',
+                    labelText: needsAccountMapping ? '未识别收入兜底' : '收入默认分类',
                   ),
                   items: [
                     for (final category in income)
@@ -445,14 +447,16 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     List<Account> accounts,
     List<Category> categories,
   ) {
-    _accountId ??= accounts.where((item) => !item.isArchived).firstOrNull?.id;
+    if (_result?.provider.needsAccountMapping != true) {
+      _accountId ??= accounts.where((item) => !item.isArchived).firstOrNull?.id;
+    }
     _expenseCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.expense))?.id;
     _incomeCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.income))?.id;
 
     final result = _result;
-    if (result?.provider != BillImportProvider.mumu) return;
+    if (result?.provider.needsAccountMapping != true) return;
     for (final name in _mumuAccountNames(result!)) {
       _accountMappings.putIfAbsent(
         name,
@@ -538,7 +542,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         _fileName = file.name;
         _result = result;
         _accountMappings.clear();
+        _rowSourceAccountOverrides.clear();
+        _rowDestinationAccountOverrides.clear();
         _preserveCurrentBalances = true;
+        if (result.provider.needsAccountMapping) _accountId = null;
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
         );
@@ -551,13 +558,23 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     }
   }
 
-  Future<void> _save(List<Category> categories) async {
+  Future<void> _save(
+    List<Account> accounts,
+    List<Category> categories,
+  ) async {
     final result = _result;
-    final fallbackAccountId = _accountId;
-    if (result == null || fallbackAccountId == null) {
-      setState(() => _error = '请选择未标账户的兜底账户');
+    if (result == null) return;
+
+    if (!result.provider.needsAccountMapping && _accountId == null) {
+      setState(() => _error = '请选择默认账户');
       return;
     }
+
+    if (result.provider.needsAccountMapping) {
+      final resolved = await _resolveUncertainAccounts(result, accounts);
+      if (!resolved || !mounted) return;
+    }
+
     final expenseFallback = categories
         .where((item) => item.id == _expenseCategoryId)
         .firstOrNull;
@@ -595,7 +612,6 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
 
     final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
-    final mappingProblems = <String>{};
     var duplicates = 0;
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
@@ -605,38 +621,31 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         continue;
       }
 
-      String resolveAccount(String? sourceName) {
-        final name = sourceName?.trim();
-        if (name == null || name.isEmpty) return fallbackAccountId;
-        final mapped = _accountMappings[name];
-        if (mapped == null || mapped.isEmpty) {
-          mappingProblems.add('账户“$name”未映射');
-          return '';
-        }
-        return mapped;
+      final accountId = result.provider.needsAccountMapping
+          ? _resolvedAccountId(index, row.sourceAccount, destination: false)
+          : _accountId;
+      if (accountId == null) {
+        setState(() => _error = '仍有流水没有选择账户，请重新导入');
+        return;
       }
-
-      final accountId = row.provider == BillImportProvider.mumu
-          ? resolveAccount(row.sourceAccount)
-          : fallbackAccountId;
-      if (accountId.isEmpty) continue;
 
       String? destinationAccountId;
       if (row.type == TransactionType.transfer) {
-        destinationAccountId = resolveAccount(row.destinationAccount);
-        if (destinationAccountId.isEmpty) continue;
-        if (destinationAccountId == accountId) {
-          final source = row.sourceAccount ?? '来源账户';
-          final destination = row.destinationAccount ?? '目标账户';
-          mappingProblems.add('“$source → $destination”不能映射到同一账户');
-          continue;
+        destinationAccountId = _resolvedAccountId(
+          index,
+          row.destinationAccount,
+          destination: true,
+        );
+        if (destinationAccountId == null || destinationAccountId == accountId) {
+          setState(() => _error = '转账必须选择两个不同的账户');
+          return;
         }
       }
 
       Category? category;
       Category? subcategory;
       if (row.type != TransactionType.transfer) {
-        if (row.provider == BillImportProvider.mumu) {
+        if (row.provider.needsAccountMapping) {
           final mapped = mapper.resolve(row, categories);
           category = mapped.category;
           subcategory = mapped.subcategory;
@@ -669,8 +678,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
-            if (row.provider == BillImportProvider.mumu &&
-                _preserveCurrentBalances)
+            if (row.provider.needsAccountMapping && _preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
@@ -696,17 +704,6 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           },
         ),
       );
-    }
-
-    if (mappingProblems.isNotEmpty) {
-      final details = mappingProblems.take(4).join('；');
-      final more = mappingProblems.length > 4
-          ? '；另有 ${mappingProblems.length - 4} 项'
-          : '';
-      setState(() {
-        _error = '请先完成木木账户映射：$details$more';
-      });
-      return;
     }
 
     if (requests.isEmpty) {
@@ -743,6 +740,215 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     }
   }
 
+  String? _resolvedAccountId(
+    int rowIndex,
+    String? sourceName, {
+    required bool destination,
+  }) {
+    final rowOverrides = destination
+        ? _rowDestinationAccountOverrides
+        : _rowSourceAccountOverrides;
+    final rowOverride = rowOverrides[rowIndex];
+    if (rowOverride != null) return rowOverride;
+    final name = sourceName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return _accountMappings[name];
+    }
+    return _accountId;
+  }
+
+  Future<bool> _resolveUncertainAccounts(
+    BillImportResult result,
+    List<Account> accounts,
+  ) async {
+    final activeAccounts = accounts
+        .where((item) => !item.isArchived)
+        .toList(growable: false);
+    if (activeAccounts.isEmpty) {
+      setState(() => _error = '当前没有可用账户，请先创建账户后再导入');
+      return false;
+    }
+
+    for (final index in _selected.toList()..sort()) {
+      final row = result.rows[index];
+      var sourceId = _resolvedAccountId(
+        index,
+        row.sourceAccount,
+        destination: false,
+      );
+      if (sourceId == null) {
+        final decision = await _promptAccountAssignment(
+          accounts: activeAccounts,
+          sourceName: row.sourceAccount,
+          row: row,
+          destination: false,
+        );
+        if (decision == null || !mounted) return false;
+        _applyAccountDecision(
+          index: index,
+          sourceName: row.sourceAccount,
+          destination: false,
+          decision: decision,
+        );
+        sourceId = decision.accountId;
+      }
+
+      if (row.type != TransactionType.transfer) continue;
+
+      var destinationId = _resolvedAccountId(
+        index,
+        row.destinationAccount,
+        destination: true,
+      );
+      if (destinationId == null || destinationId == sourceId) {
+        final decision = await _promptAccountAssignment(
+          accounts: activeAccounts
+              .where((item) => item.id != sourceId)
+              .toList(growable: false),
+          sourceName: row.destinationAccount,
+          row: row,
+          destination: true,
+          sameAccountConflict: destinationId == sourceId,
+        );
+        if (decision == null || !mounted) return false;
+        _applyAccountDecision(
+          index: index,
+          sourceName: row.destinationAccount,
+          destination: true,
+          decision: decision,
+        );
+      }
+    }
+    return true;
+  }
+
+  void _applyAccountDecision({
+    required int index,
+    required String? sourceName,
+    required bool destination,
+    required _AccountAssignmentDecision decision,
+  }) {
+    if (decision.applyToAll) {
+      final name = sourceName?.trim();
+      if (name == null || name.isEmpty) {
+        _accountId = decision.accountId;
+      } else {
+        _accountMappings[name] = decision.accountId;
+      }
+      return;
+    }
+    final target = destination
+        ? _rowDestinationAccountOverrides
+        : _rowSourceAccountOverrides;
+    target[index] = decision.accountId;
+  }
+
+  Future<_AccountAssignmentDecision?> _promptAccountAssignment({
+    required List<Account> accounts,
+    required String? sourceName,
+    required ImportedBillRow row,
+    required bool destination,
+    bool sameAccountConflict = false,
+  }) {
+    String? selectedAccountId;
+    final sourceLabel = sourceName?.trim().isNotEmpty == true
+        ? sourceName!.trim()
+        : '未标账户';
+    return showDialog<_AccountAssignmentDecision>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(destination ? '选择转入账户' : '选择流水账户'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sameAccountConflict
+                      ? '“$sourceLabel”与转出账户被映射成了同一账户，请重新选择。'
+                      : '来源账户“$sourceLabel”无法自动确定归属。',
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${_dateTime(row.occurredAt)} · ¥${row.amount.toStringAsFixed(2)}'
+                  '${row.note.trim().isEmpty ? '' : ' · ${row.note.trim()}'}',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedAccountId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '归属账户'),
+                  items: [
+                    for (final account in accounts)
+                      DropdownMenuItem(
+                        value: account.id,
+                        child: Text(
+                          account.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) =>
+                      setDialogState(() => selectedAccountId = value),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('取消导入'),
+              ),
+              TextButton(
+                onPressed: selectedAccountId == null
+                    ? null
+                    : () => Navigator.pop(
+                        dialogContext,
+                        _AccountAssignmentDecision(
+                          accountId: selectedAccountId!,
+                          applyToAll: false,
+                        ),
+                      ),
+                child: const Text('仅此笔'),
+              ),
+              FilledButton(
+                onPressed: selectedAccountId == null
+                    ? null
+                    : () => Navigator.pop(
+                        dialogContext,
+                        _AccountAssignmentDecision(
+                          accountId: selectedAccountId!,
+                          applyToAll: true,
+                        ),
+                      ),
+                child: Text(
+                  sourceName?.trim().isNotEmpty == true
+                      ? '全部同来源'
+                      : '全部未标账户',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+}
+
+class _AccountAssignmentDecision {
+  const _AccountAssignmentDecision({
+    required this.accountId,
+    required this.applyToAll,
+  });
+
+  final String accountId;
+  final bool applyToAll;
 }
 
 String _dateTime(DateTime value) =>
@@ -764,4 +970,5 @@ String _providerLabel(BillImportProvider provider) => switch (provider) {
   BillImportProvider.wechat => '微信支付',
   BillImportProvider.alipay => '支付宝',
   BillImportProvider.mumu => '木木记账',
+  BillImportProvider.generic => '第三方账单',
 };
