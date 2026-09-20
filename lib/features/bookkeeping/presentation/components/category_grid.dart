@@ -27,8 +27,9 @@ class CategoryGrid extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.appDivider),
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
