@@ -20,6 +20,18 @@ const _personal = [
     'expense',
   ),
   SeedCategoryTemplate(
+    'expense-household',
+    '家居日用',
+    'home_work_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
+    'expense-tobacco-tea',
+    '烟酒茶',
+    'local_bar_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
     'expense-entertainment',
     '娱乐',
     'movie_outlined',
@@ -310,6 +322,18 @@ const foodSubcategoryTemplates = [
     'nightlife_outlined',
     'expense',
   ),
+  SeedCategoryTemplate(
+    'expense-food-dessert',
+    '甜品烘焙',
+    'bakery_dining_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
+    'expense-food-dining',
+    '聚餐',
+    'dinner_dining_outlined',
+    'expense',
+  ),
 ];
 
 /// Stable semantic keys survive reorder/rename; labels are editable after seeding.
@@ -322,6 +346,8 @@ const _commonChildren = <String, List<(String, String)>>{
     ('rail', '火车高铁'),
     ('flight', '机票'),
     ('bike', '共享单车'),
+    ('toll', '过路费'),
+    ('rental', '租车'),
   ],
   'expense-shopping': [
     ('daily', '日用百货'),
@@ -331,6 +357,24 @@ const _commonChildren = <String, List<(String, String)>>{
     ('online', '网购'),
     ('accessory', '饰品'),
     ('personal-care', '个人护理'),
+    ('mother-baby', '母婴用品'),
+    ('gift', '礼品'),
+  ],
+  'expense-household': [
+    ('daily', '日用品'),
+    ('cleaning', '清洁用品'),
+    ('kitchen', '厨房用品'),
+    ('storage', '收纳用品'),
+    ('bedding', '家纺寝具'),
+    ('furniture', '家具'),
+    ('small-appliance', '小家电'),
+    ('bathroom', '卫浴用品'),
+  ],
+  'expense-tobacco-tea': [
+    ('cigarette', '香烟'),
+    ('alcohol', '酒类'),
+    ('tea', '茶叶'),
+    ('teaware', '茶具'),
   ],
   'expense-entertainment': [
     ('movie', '电影'),
