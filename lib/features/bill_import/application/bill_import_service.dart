@@ -49,6 +49,24 @@ class ImportedBillRow {
   final List<String> tags;
 
   /// Stable fallback for providers that do not export a transaction ID.
+  String? get fingerprintPaymentChannel {
+    if (provider == BillImportProvider.wechat) return 'wechat';
+    if (provider == BillImportProvider.alipay) return 'alipay';
+    final text =
+        '${sourceAccount ?? ''} ${paymentMethod ?? ''}'.toLowerCase();
+    if (text.contains('支付宝') || text.contains('alipay')) return 'alipay';
+    if (text.contains('微信') || text.contains('wechat')) return 'wechat';
+    if (RegExp(r'银行|信用卡|储蓄卡|借记卡|bank|card').hasMatch(text)) {
+      return 'bank';
+    }
+    return null;
+  }
+
+  String? get fingerprintOrderId {
+    final id = externalId?.trim();
+    return id == null || id.isEmpty ? null : '${provider.name}:$id';
+  }
+
   String get importFingerprint => [
     provider.name,
     occurredAt.toIso8601String(),
@@ -269,9 +287,6 @@ class BillImportService {
     Map<String, String> map,
   ) {
     final direction = _first(map, const ['收/支', '收支', '类型']);
-    final type = _transactionType(direction);
-    if (type == null) return null;
-
     final status = _first(map, const ['当前状态', '交易状态', '资金状态']);
     if (_isIgnoredStatus(status)) return null;
 
@@ -289,12 +304,19 @@ class BillImportService {
     final occurredAt = _time(timeText);
     if (occurredAt == null) return null;
 
-    final merchant = _first(
-      map,
-      const ['交易对方', '商户', '对方', '收款方'],
+    final merchant = _displayValue(
+      _first(map, const ['交易对方', '商户', '对方', '收款方']),
     );
-    final goods = _first(map, const ['商品', '商品名称']);
-    final note = _first(map, const ['备注', '交易备注']);
+    final goods = _displayValue(_first(map, const ['商品', '商品名称']));
+    final note = _displayValue(_first(map, const ['备注', '交易备注']));
+    final transactionKind = _displayValue(
+      _first(map, const ['交易类型', '类型']),
+    );
+    final type = _officialTransactionType(
+      direction,
+      '$transactionKind $status $goods $note',
+    );
+    if (type == null) return null;
     final externalId = _emptyToNull(
       _first(map, const ['交易单号', '交易号', '商家订单号', '商户单号']),
     );
@@ -425,13 +447,11 @@ class BillImportService {
       return null;
     }
 
-    final merchant = _first(
-      map,
-      const ['交易对方', '商户', '商家', '对方', '收款方'],
+    final merchant = _displayValue(
+      _first(map, const ['交易对方', '商户', '商家', '对方', '收款方']),
     );
-    final note = _first(
-      map,
-      const ['备注', '交易备注', '说明', '描述', '商品', '商品名称'],
+    final note = _displayValue(
+      _first(map, const ['备注', '交易备注', '说明', '描述', '商品', '商品名称']),
     );
     final externalId = _emptyToNull(
       _first(
@@ -461,15 +481,27 @@ class BillImportService {
   }
 
   TransactionType? _semanticType(String value, String? sourceCategory) {
-    final text = value.replaceAll(' ', '').toLowerCase();
+    final text =
+        '$value ${sourceCategory ?? ''}'.replaceAll(' ', '').toLowerCase();
     if (text.contains('转账') || text == 'transfer') {
       return TransactionType.transfer;
     }
-    if (text.contains('退款') || text == 'refund') {
+    if (text.contains('退款') || text.contains('退回') || text == 'refund') {
       return TransactionType.refund;
     }
     if (text.contains('报销') || text == 'reimbursement') {
       return TransactionType.reimbursement;
+    }
+    if (text.contains('借入') ||
+        text.contains('借款') ||
+        text == 'borrow') {
+      return TransactionType.borrow;
+    }
+    if (text.contains('借出') || text == 'lend') {
+      return TransactionType.lend;
+    }
+    if (text.contains('还款') || text == 'repayment') {
+      return TransactionType.repayment;
     }
     if ((text.contains('收入') || text == '收' || text == 'income') &&
         sourceCategory == '退款') {
@@ -486,6 +518,28 @@ class BillImportService {
       return TransactionType.income;
     }
     return null;
+  }
+
+  TransactionType? _officialTransactionType(
+    String direction,
+    String semanticText,
+  ) {
+    final base = _transactionType(direction);
+    if (base == null) return null;
+    final text = semanticText.replaceAll(' ', '').toLowerCase();
+    if (base == TransactionType.income) {
+      if (text.contains('退款') || text.contains('退回')) {
+        return TransactionType.refund;
+      }
+      if (text.contains('报销')) return TransactionType.reimbursement;
+      if (text.contains('借入') || text.contains('借款')) {
+        return TransactionType.borrow;
+      }
+    }
+    if (base == TransactionType.expense && text.contains('还款')) {
+      return TransactionType.repayment;
+    }
+    return base;
   }
 
   TransactionType? _transactionType(String value) =>
@@ -539,6 +593,22 @@ class BillImportService {
       .replaceAll(RegExp(r'\s+'), '')
       .replaceAll(':', '')
       .replaceAll('：', '');
+
+  String _displayValue(String value) {
+    final cleaned = value.trim();
+    final normalized = cleaned.toLowerCase();
+    if (cleaned.isEmpty ||
+        cleaned == '/' ||
+        cleaned == '-' ||
+        cleaned == '--' ||
+        cleaned == '—' ||
+        cleaned == '无' ||
+        normalized == 'n/a' ||
+        normalized == 'null') {
+      return '';
+    }
+    return cleaned;
+  }
 
   String? _emptyToNull(String value) {
     final cleaned = value.trim();

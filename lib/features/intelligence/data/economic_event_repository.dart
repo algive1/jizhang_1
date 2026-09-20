@@ -55,6 +55,19 @@ class EconomicEventRepository {
     return event;
   }
 
+  Future<bool> areLinked(
+    String firstTransactionId,
+    String secondTransactionId,
+  ) async {
+    final event = await _database.intelligenceDao
+        .findEconomicEventByTransactionId(firstTransactionId);
+    if (event == null) return false;
+    final records = await _database.intelligenceDao.getEventRecords(event.id);
+    return records.any(
+      (record) => record.transactionId == secondTransactionId,
+    );
+  }
+
   Future<void> resolveCandidateForTransaction(
     String transactionId, {
     required EconomicEventStatus status,

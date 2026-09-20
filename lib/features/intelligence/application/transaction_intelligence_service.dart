@@ -27,22 +27,67 @@ class TransactionIntelligenceService {
   final TransactionFingerprintService fingerprints;
 
   Future<ClassificationResult> classifyAndApply(String transactionId) async {
+    final result = await _classifyRecord(await _find(transactionId));
+    return result.$2;
+  }
+
+  Future<DuplicateDecision> inspectExisting(String transactionId) async {
     final transaction = await _find(transactionId);
+    final bucket = _duplicateBucket(transaction);
+    final existing = (await transactions.getAll())
+        .where(
+          (item) =>
+              item.id != transactionId &&
+              _duplicateBucket(item) == bucket,
+        )
+        .toList(growable: false);
+    final result = await _inspectAgainst(transaction, existing);
+    return result.$2;
+  }
+
+  Future<void> processSavedBatch(List<TransactionRecord> saved) async {
+    if (saved.isEmpty) return;
+    final savedIds = saved.map((item) => item.id).toSet();
+    final buckets = <String, List<TransactionRecord>>{};
+    for (final item in await transactions.getAll()) {
+      if (savedIds.contains(item.id)) continue;
+      buckets.putIfAbsent(_duplicateBucket(item), () => []).add(item);
+    }
+
+    for (final raw in saved) {
+      final classified = await _classifyRecord(raw);
+      final transaction = classified.$1;
+      final bucket = _duplicateBucket(transaction);
+      final inspected = await _inspectAgainst(
+        transaction,
+        buckets[bucket] ?? const [],
+      );
+      buckets.putIfAbsent(bucket, () => []).add(inspected.$1);
+    }
+  }
+
+  Future<(TransactionRecord, ClassificationResult)> _classifyRecord(
+    TransactionRecord transaction,
+  ) async {
     if (transaction.type == TransactionType.transfer ||
         transaction.type == TransactionType.adjustment) {
-      // Account movements/corrections do not need a spending category or an
-      // uncertain-category inbox item.
-      return const ClassificationResult(
-        source: ClassificationSource.defaultCategory,
-        confidence: 1,
+      return (
+        transaction,
+        const ClassificationResult(
+          source: ClassificationSource.defaultCategory,
+          confidence: 1,
+        ),
       );
     }
     if (transaction.categoryId != null) {
-      return ClassificationResult(
-        categoryId: transaction.categoryId,
-        subcategoryId: transaction.subcategoryId,
-        source: ClassificationSource.defaultCategory,
-        confidence: 1,
+      return (
+        transaction,
+        ClassificationResult(
+          categoryId: transaction.categoryId,
+          subcategoryId: transaction.subcategoryId,
+          source: ClassificationSource.defaultCategory,
+          confidence: 1,
+        ),
       );
     }
     final classification = await merchantRules.classify(
@@ -52,30 +97,26 @@ class TransactionIntelligenceService {
       bookId: transaction.bookId,
     );
     if (classification.categoryId != null) {
-      await transactions.update(
+      final updated = await transactions.update(
         transaction.copyWith(
           categoryId: classification.categoryId,
           subcategoryId: classification.subcategoryId,
           updatedAt: DateTime.now(),
         ),
       );
-    } else {
-      await inbox.add(
-        reason: InboxReason.uncertainCategory,
-        transactionId: transaction.id,
-      );
+      return (updated, classification);
     }
-    return classification;
+    await inbox.add(
+      reason: InboxReason.uncertainCategory,
+      transactionId: transaction.id,
+    );
+    return (transaction, classification);
   }
 
-  Future<DuplicateDecision> inspectExisting(String transactionId) async {
-    var transaction = await _find(transactionId);
-    final existing = (await transactions.getAll())
-        .where(
-          (item) =>
-              item.id != transactionId && item.bookId == transaction.bookId,
-        )
-        .toList(growable: false);
+  Future<(TransactionRecord, DuplicateDecision)> _inspectAgainst(
+    TransactionRecord transaction,
+    Iterable<TransactionRecord> existing,
+  ) async {
     var best = const DuplicateDecision(
       type: DuplicateDecisionType.unrelated,
       confidence: 0,
@@ -89,25 +130,36 @@ class TransactionIntelligenceService {
         matched = other;
       }
     }
-    if (!best.needsReview || matched == null) return best;
+    if (!best.needsReview || matched == null) return (transaction, best);
 
-    transaction = transaction.copyWith(
-      duplicateConfidence: best.confidence,
-      updatedAt: DateTime.now(),
+    final updated = await transactions.update(
+      transaction.copyWith(
+        duplicateConfidence: best.confidence,
+        updatedAt: DateTime.now(),
+      ),
     );
-    await transactions.update(transaction);
     if (best.type == DuplicateDecisionType.sameEconomicEvent) {
-      await economicEvents.createCandidate(transaction, matched);
+      if (await economicEvents.areLinked(updated.id, matched.id)) {
+        return (updated, best);
+      }
+      await economicEvents.createCandidate(updated, matched);
     }
     await inbox.add(
       reason: InboxReason.suspectedDuplicate,
-      transactionId: transaction.id,
+      transactionId: updated.id,
       candidateTransactionId: matched.id,
       duplicateConfidence: best.confidence,
       payloadJson: jsonEncode({'reasonCode': best.reasonCode}),
     );
-    return best;
+    return (updated, best);
   }
+
+  String _duplicateBucket(TransactionRecord item) => [
+    item.bookId,
+    item.type.name,
+    item.currency.toUpperCase(),
+    (item.amount * 100).round(),
+  ].join('|');
 
   Future<void> queueMissingAccount({required String sourcePayloadJson}) {
     return inbox.add(
@@ -124,9 +176,7 @@ class TransactionIntelligenceService {
   }
 
   Future<TransactionRecord> _find(String id) async {
-    final item = (await transactions.getAll())
-        .where((transaction) => transaction.id == id)
-        .firstOrNull;
+    final item = await transactions.getById(id);
     if (item == null) throw StateError('Transaction $id does not exist');
     return item;
   }

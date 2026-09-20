@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/bill_import/application/bill_import_service.dart';
+import 'package:jizhang_app/features/bill_import/application/bill_import_duplicate_index.dart';
 
 void main() {
   const service = BillImportService();
@@ -37,6 +38,30 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
     expect(result.rows[0].type, TransactionType.expense);
     expect(result.rows[1].type, TransactionType.income);
     expect(result.rows[1].amount, 88);
+  });
+
+  test('official imports recognize repayment and refund semantics', () {
+    const csv = '''
+交易号,交易创建时间,类型,交易对方,商品名称,金额（元）,收/支,交易状态
+ali-r1,2026-09-17 10:00:00,退款,商家,退款到账,20.00,收入,交易成功
+ali-r2,2026-09-17 11:00:00,信用卡还款,银行,信用卡还款,500.00,支出,交易成功
+''';
+    final result = service.parseCsv(csv);
+    expect(result.rows, hasLength(2));
+    expect(result.rows[0].type, TransactionType.refund);
+    expect(result.rows[1].type, TransactionType.repayment);
+  });
+
+  test('official import ignores placeholder merchant and keeps useful goods title', () {
+    const csv = '''
+微信支付账单明细
+交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号
+2026-09-18 12:30:00,商户消费,/,午餐套餐,支出,28.50,零钱,支付成功,wx-title-1
+''';
+    final row = service.parseCsv(csv).rows.single;
+    expect(row.merchant, '午餐套餐');
+    expect(row.fingerprintPaymentChannel, 'wechat');
+    expect(row.fingerprintOrderId, 'wechat:wx-title-1');
   });
 
   test('parses MuMu legacy XLSX format and keeps blank shared strings blank', () {
@@ -221,6 +246,53 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
     expect(result.rows.single.sourceCategory, '家居日用');
     expect(result.rows.single.sourceAccount, '现金');
     expect(result.rows.single.amount, 35);
+  });
+
+  test('import dedup is provider-scoped and catches duplicates inside the same file', () {
+    final existing = TransactionRecord(
+      id: 'old',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: 12,
+      accountId: 'cash',
+      occurredAt: DateTime(2026, 9, 1),
+      createdAt: DateTime(2026, 9, 1),
+      updatedAt: DateTime(2026, 9, 1),
+      source: TransactionSource.import,
+      metadataJson: jsonEncode({
+        'importProvider': 'wechat',
+        'externalId': 'same-id',
+        'importFingerprint': 'old-fingerprint',
+      }),
+    );
+    final index = BillImportDuplicateIndex([existing]);
+    final wechat = ImportedBillRow(
+      provider: BillImportProvider.wechat,
+      occurredAt: DateTime(2026, 9, 2),
+      type: TransactionType.expense,
+      amount: 18,
+      merchant: 'A',
+      note: '',
+      externalId: 'same-id',
+      paymentMethod: null,
+      raw: const {},
+    );
+    final alipay = ImportedBillRow(
+      provider: BillImportProvider.alipay,
+      occurredAt: DateTime(2026, 9, 2),
+      type: TransactionType.expense,
+      amount: 18,
+      merchant: 'A',
+      note: '',
+      externalId: 'same-id',
+      paymentMethod: null,
+      raw: const {},
+    );
+
+    expect(index.contains(wechat), isTrue);
+    expect(index.contains(alipay), isFalse);
+    index.add(alipay);
+    expect(index.contains(alipay), isTrue);
   });
 
   test('parses generic XLSX instead of assuming every workbook is MuMu', () {

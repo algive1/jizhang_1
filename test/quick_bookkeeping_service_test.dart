@@ -407,6 +407,65 @@ void main() {
   });
 
   test(
+    'batch intelligence creates one economic-event candidate for a duplicate pair',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final transactions = DriftTransactionRepository(database);
+      final inbox = DriftBillInboxRepository(database);
+      const fingerprints = TransactionFingerprintService();
+      final rules = DriftMerchantRuleRepository(
+        database,
+        transactions,
+        const MerchantClassificationService(),
+      );
+      final intelligence = TransactionIntelligenceService(
+        transactions: transactions,
+        merchantRules: rules,
+        inbox: inbox,
+        economicEvents: EconomicEventRepository(database, fingerprints),
+        fingerprints: fingerprints,
+      );
+      final service = QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+        intelligence: intelligence,
+      );
+      final occurredAt = DateTime(2026, 9, 20, 12);
+
+      await service.saveAll([
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 128,
+          categoryId: 'expense-food',
+          accountId: SeedIds.alipayAccount,
+          occurredAt: occurredAt,
+          source: TransactionSource.import,
+          metadata: const {'paymentChannel': 'alipay'},
+        ),
+        QuickBookkeepingRequest(
+          type: TransactionType.expense,
+          amount: 128,
+          categoryId: 'expense-food',
+          accountId: SeedIds.bankAccount,
+          occurredAt: occurredAt.add(const Duration(minutes: 1)),
+          source: TransactionSource.import,
+          metadata: const {'paymentChannel': 'bank'},
+        ),
+      ]);
+
+      final events = await database.select(database.economicEventEntries).get();
+      expect(events, hasLength(1));
+      expect(
+        await database.intelligenceDao.getEventRecords(events.single.id),
+        hasLength(2),
+      );
+      expect(await inbox.getPending(), hasLength(1));
+    },
+  );
+
+  test(
     'saved transactions run classification and duplicate inspection',
     () async {
       final database = createMemoryDatabase();

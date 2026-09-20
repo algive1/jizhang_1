@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +14,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../application/bill_import_category_mapper.dart';
+import '../application/bill_import_duplicate_index.dart';
 import '../application/bill_import_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -583,40 +582,22 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       return;
     }
 
-    final importedIds = <String>{};
-    final importedFingerprints = <String>{};
-    final transactions = ref.read(allTransactionsProvider).value ?? const [];
-    for (final transaction in transactions) {
-      if (transaction.source != TransactionSource.import ||
-          transaction.metadataJson == null) {
-        continue;
-      }
-      try {
-        final metadata = jsonDecode(transaction.metadataJson!);
-        if (metadata is! Map) continue;
-        final externalId = metadata['externalId'];
-        if (externalId is String && externalId.trim().isNotEmpty) {
-          importedIds.add(externalId);
-        }
-        final fingerprint = metadata['importFingerprint'];
-        if (fingerprint is String && fingerprint.trim().isNotEmpty) {
-          importedFingerprints.add(fingerprint);
-        }
-      } on Object {
-        // Historical malformed metadata must not block a new import.
-      }
-    }
+    final activeBookId = ref.read(activeBookIdProvider);
+    final existingTransactions =
+        await ref.read(transactionRepositoryProvider).getAll();
+    if (!mounted) return;
+    final duplicateIndex = BillImportDuplicateIndex(existingTransactions);
 
     final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
     var duplicates = 0;
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
-      if ((row.externalId != null && importedIds.contains(row.externalId)) ||
-          importedFingerprints.contains(row.importFingerprint)) {
+      if (duplicateIndex.contains(row)) {
         duplicates++;
         continue;
       }
+      duplicateIndex.add(row);
 
       final accountId = result.provider.needsAccountMapping
           ? _resolvedAccountId(index, row.sourceAccount, destination: false)
@@ -658,7 +639,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           amount: row.amount,
           accountId: accountId,
           destinationAccountId: destinationAccountId,
-          bookId: ref.read(activeBookIdProvider),
+          bookId: activeBookId,
           occurredAt: row.occurredAt,
           categoryId: category?.id,
           subcategoryId: subcategory?.id,
@@ -678,6 +659,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             if (row.provider.needsAccountMapping && _preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
+            if (row.fingerprintOrderId != null)
+              'orderId': row.fingerprintOrderId!,
+            if (row.fingerprintPaymentChannel != null)
+              'paymentChannel': row.fingerprintPaymentChannel!,
             if (row.paymentMethod != null)
               'paymentMethod': row.paymentMethod!,
             if (row.sourceCategory != null)
@@ -718,7 +703,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     });
     try {
       await ref.read(quickBookkeepingServiceProvider).saveAll(requests);
-      ref.invalidate(allTransactionsProvider);
+      _refreshTransactionViews();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -729,12 +714,29 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         ),
       );
       context.pop();
+    } on BookkeepingCommittedException catch (error) {
+      _refreshTransactionViews();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已保存 ${error.records.length} 笔流水，但自动分类/重复检查未完全完成。'
+            '流水已经入账，请不要重复导入；可稍后到“账单收件箱”核对。',
+          ),
+        ),
+      );
+      context.pop();
     } on Object catch (error) {
       if (!mounted) return;
       setState(() => _error = '导入失败：$error');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  void _refreshTransactionViews() {
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(allTransactionsProvider);
   }
 
   String? _resolvedAccountId(

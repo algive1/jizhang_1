@@ -330,10 +330,7 @@ class QuickBookkeepingService {
   Future<void> _postProcess(List<TransactionRecord> saved) async {
     final intelligence = this.intelligence;
     if (intelligence == null) return;
-    for (final transaction in saved) {
-      await intelligence.classifyAndApply(transaction.id);
-      await intelligence.inspectExisting(transaction.id);
-    }
+    await intelligence.processSavedBatch(saved);
   }
 
   void _validate(QuickBookkeepingRequest request) {
