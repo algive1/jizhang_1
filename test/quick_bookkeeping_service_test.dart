@@ -96,6 +96,74 @@ void main() {
     );
   });
 
+  test('internal transfer requires two different accounts and is not consumption', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+
+    await expectLater(
+      service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.transfer,
+          amount: 10,
+          accountId: SeedIds.wechatAccount,
+          occurredAt: DateTime(2026, 9, 20, 10),
+        ),
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.transfer,
+          amount: 10,
+          accountId: SeedIds.wechatAccount,
+          destinationAccountId: SeedIds.wechatAccount,
+          occurredAt: DateTime(2026, 9, 20, 10),
+        ),
+      ),
+      throwsArgumentError,
+    );
+
+    final sourceBefore =
+        (await database.accountDao.findById(SeedIds.wechatAccount))!
+            .balanceInCents;
+    final destinationBefore =
+        (await database.accountDao.findById(SeedIds.bankAccount))!
+            .balanceInCents;
+
+    final saved = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.transfer,
+        amount: 66,
+        accountId: SeedIds.wechatAccount,
+        destinationAccountId: SeedIds.bankAccount,
+        merchant: '本人银行卡',
+        occurredAt: DateTime(2026, 9, 20, 10, 30),
+        source: TransactionSource.auto,
+      ),
+    );
+
+    expect(saved.type, TransactionType.transfer);
+    expect(saved.destinationAccountId, SeedIds.bankAccount);
+    expect(saved.categoryId, isNull);
+    expect(saved.isConsumptionExpense, isFalse);
+    expect(
+      (await database.accountDao.findById(SeedIds.wechatAccount))!
+          .balanceInCents,
+      sourceBefore - 6600,
+    );
+    expect(
+      (await database.accountDao.findById(SeedIds.bankAccount))!.balanceInCents,
+      destinationBefore + 6600,
+    );
+  });
+
   test('family payer attribution is explicit and stable across edits', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
