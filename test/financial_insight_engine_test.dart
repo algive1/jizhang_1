@@ -46,6 +46,11 @@ void main() {
     );
 
     expect(
+      engine.normalizeAnalysisTransactions(raw).length,
+      4,
+      reason: 'Fully expected reimbursed rows should not affect trend counts.',
+    );
+    expect(
       feed.items.any((item) => item.id == 'analysis:category:food'),
       isFalse,
     );

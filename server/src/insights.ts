@@ -141,6 +141,29 @@ export function ensureInsightSchema(store: Store) {
       updated_at INTEGER NOT NULL
     );
   `);
+  const confirmedColumns = store.db.prepare(
+    'PRAGMA table_info(insight_confirmed_items)',
+  ).all() as Array<{ name: string; pk: number }>;
+  const confirmedPrimaryKey = confirmedColumns
+    .filter(column => column.pk > 0)
+    .sort((a, b) => a.pk - b.pk)
+    .map(column => column.name)
+    .join(',');
+  if (confirmedPrimaryKey !== 'user_id,insight_id,body_hash') {
+    store.db.exec(`
+      DROP TABLE IF EXISTS insight_confirmed_items;
+      CREATE TABLE insight_confirmed_items(
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        insight_id TEXT NOT NULL,
+        body_hash TEXT NOT NULL,
+        confirmed_at INTEGER NOT NULL,
+        PRIMARY KEY(user_id,insight_id,body_hash)
+      );
+      CREATE INDEX idx_insight_confirmed_user_time
+        ON insight_confirmed_items(user_id,confirmed_at DESC);
+    `);
+  }
+
   const exists = store.db.prepare(
     'SELECT 1 FROM insight_policy WHERE id=1',
   ).get();
@@ -197,8 +220,12 @@ function readFeedbackProfile(
   userId: string,
 ): InsightFeedbackProfile {
   const rows = store.db.prepare(
-    'SELECT insight_id AS insightId,action,kind FROM insight_feedback '
-      + 'WHERE user_id=? ORDER BY created_at DESC LIMIT 1000',
+    'WITH ranked AS ('
+      + 'SELECT insight_id AS insightId,action,kind,'
+      + 'ROW_NUMBER() OVER (PARTITION BY insight_id '
+      + 'ORDER BY created_at DESC,rowid DESC) AS rn '
+      + 'FROM insight_feedback WHERE user_id=?'
+      + ') SELECT insightId,action,kind FROM ranked WHERE rn=1',
   ).all(userId) as Array<{
     insightId: string;
     action: string;
@@ -206,10 +233,7 @@ function readFeedbackProfile(
   }>;
   const dismissedIds = new Set<string>();
   const kindAdjustments: Record<string, number> = {};
-  const seenInsights = new Set<string>();
   for (const row of rows) {
-    if (seenInsights.has(row.insightId)) continue;
-    seenInsights.add(row.insightId);
     if (row.action === 'dismissed') dismissedIds.add(row.insightId);
     if (!row.kind) continue;
     const delta =
@@ -638,7 +662,10 @@ export function registerInsightRoutes(
       store.db.prepare(
         'INSERT INTO insight_ai_cache('
           + 'user_id,insight_id,prompt_version,body_hash,result_text,created_at'
-          + ') VALUES(?,?,?,?,?,?)',
+          + ') VALUES(?,?,?,?,?,?) '
+          + 'ON CONFLICT(user_id,insight_id,prompt_version,body_hash) '
+          + 'DO UPDATE SET result_text=excluded.result_text,'
+          + 'created_at=excluded.created_at',
       ).run(
         user.id,
         body.insightId,

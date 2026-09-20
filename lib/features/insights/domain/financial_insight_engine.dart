@@ -15,18 +15,29 @@ class FinancialInsightEngine {
   List<TransactionRecord> normalizeAnalysisTransactions(
     List<TransactionRecord> transactions,
   ) {
-    return transactions.map((item) {
-      if (!item.isConsumptionExpense) return item;
+    final result = <TransactionRecord>[];
+    for (final item in transactions) {
+      if (!item.isConsumptionExpense) {
+        result.add(item);
+        continue;
+      }
       final personal = _personalExpense(item);
-      if ((personal - item.netExpenseAmount).abs() < .005) return item;
-      return item.copyWith(
-        amount: personal,
-        reimbursementStatus: ReimbursementStatus.none,
-        reimbursementAmount: null,
-        refundStatus: RefundStatus.none,
-        clearRefundAmount: true,
+      if (personal <= .005) continue;
+      if ((personal - item.netExpenseAmount).abs() < .005) {
+        result.add(item);
+        continue;
+      }
+      result.add(
+        item.copyWith(
+          amount: personal,
+          reimbursementStatus: ReimbursementStatus.none,
+          reimbursementAmount: null,
+          refundStatus: RefundStatus.none,
+          clearRefundAmount: true,
+        ),
       );
-    }).toList(growable: false);
+    }
+    return List.unmodifiable(result);
   }
 
   InsightFeed build({
