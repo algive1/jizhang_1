@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { Store } from './store.js';
 import { requireCondition as check } from './contract.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
-import { quotaSnapshot } from './entitlement_usage.js';
 
 const entitlementType=z.enum(['boolean','count','quota','storage','rate_limit','enum']);
 const entitlement=z.strictObject({
@@ -96,13 +95,6 @@ export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
       .run(body.id,body.title,body.tierId,active.version,body.durationDays,Number(body.enabled),Number(body.recommended),body.displayPrice,body.priceInMinor,body.currency,body.appleProductId,body.googleProductId,body.sort,store.now());
     auditAdmin(store,principal,'membership_product_upsert',{permission:'membership.write',targetType:'membership_product',targetId:id});
     return {...body,tierVersion:active.version};
-  });
-
-  app.get('/api/v1/membership/entitlements',async request=>{
-    const authorization=request.headers.authorization;check(authorization?.startsWith('Bearer '),'请先登录',401);
-    const tokenHash=(await import('node:crypto')).createHash('sha256').update(authorization.slice(7)).digest('hex');
-    const user=store.db.prepare('SELECT user_id AS id FROM sessions WHERE token_hash=? AND expires_at>?').get(tokenHash,store.now()) as {id:string}|undefined;check(user,'登录已失效，请重新登录',401);
-    return {entitlements:quotaSnapshot(store,user.id)};
   });
 
   app.post('/api/v1/admin/users/:userId/entitlement-grants',async request=>{
