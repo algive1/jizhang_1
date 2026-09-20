@@ -138,13 +138,15 @@ class _CategoryManagementPageState
                         category: root,
                         childCount: children.length,
                         isExpanded: expanded,
-                        onToggle: () => setState(() {
-                          if (expanded) {
-                            _expandedRootIds.remove(root.id);
-                          } else {
-                            _expandedRootIds.add(root.id);
-                          }
-                        }),
+                        onToggle: query.isEmpty
+                            ? () => setState(() {
+                                if (expanded) {
+                                  _expandedRootIds.remove(root.id);
+                                } else {
+                                  _expandedRootIds.add(root.id);
+                                }
+                              })
+                            : null,
                         canMoveUp: query.isEmpty && rootIndex > 0,
                         canMoveDown:
                             query.isEmpty && rootIndex < allRoots.length - 1,
