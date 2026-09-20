@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/analysis/presentation/analysis_page.dart';
 import '../../features/analysis/presentation/annual_report_page.dart';
+import '../../features/insights/presentation/insights_page.dart';
+import '../../features/insights/presentation/insight_detail_page.dart';
 import '../../features/account/presentation/account_center_page.dart';
 import '../../features/account/presentation/account_login_page.dart';
 import '../../features/account/presentation/account_recovery_page.dart';
@@ -127,6 +129,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'annual-report',
                 builder: (context, state) => const AnnualReportPage(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/insights',
+            builder: (context, state) => const InsightsPage(),
+            routes: [
+              GoRoute(
+                path: ':insightId',
+                builder: (context, state) => InsightDetailPage(
+                  insightId: Uri.decodeComponent(state.pathParameters['insightId']!),
+                ),
               ),
             ],
           ),

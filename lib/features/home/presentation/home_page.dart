@@ -27,6 +27,7 @@ import '../../accounts/data/account_repository.dart';
 import '../../investments/data/investment_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../goals/data/goal_repository.dart';
+import '../../insights/application/insight_feed_provider.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/home_data.dart';
@@ -72,7 +73,7 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.invalidate(homeMonthlySummaryProvider);
       ref.invalidate(homeRecentTransactionsProvider);
       ref.invalidate(analysisRepositoryProvider);
-      ref.invalidate(homeInsightProvider);
+      ref.invalidate(insightFeedProvider);
       if (mounted) setState(() {});
     }
     _scheduleRefresh();
@@ -148,7 +149,11 @@ class _HomePageState extends ConsumerState<HomePage>
               day: _day,
               insight: insight,
               available: dataReady,
-              onTap: _analysis,
+              onTap: () {
+                final item = insight;
+                if (item == null) return;
+                context.push('/insights/${Uri.encodeComponent(item.id)}');
+              },
             ),
             if (book?.isShared == true)
               InkWell(

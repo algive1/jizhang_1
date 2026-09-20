@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/models/dashboard_snapshot.dart';
+import '../../insights/domain/insight_models.dart';
 import '../../settings/data/app_settings_repository.dart';
 import 'home_promotional_cards.dart';
 
@@ -19,7 +19,7 @@ class HomeInsightDrawer extends ConsumerStatefulWidget {
 
   final String bookId;
   final DateTime day;
-  final FinancialInsight insight;
+  final FinancialInsightItem? insight;
   final bool available;
   final bool amountHidden;
   final VoidCallback onTap;
@@ -49,7 +49,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
     if (!mounted ||
         _checked ||
         !widget.available ||
-        widget.insight.amount <= 0) {
+        widget.insight == null) {
       return;
     }
     _checked = true;
@@ -58,7 +58,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
     final day = widget.day.toIso8601String();
     try {
       if (await settings.get(key) == day || !mounted) return;
-      if (!widget.available || widget.insight.amount <= 0) {
+      if (!widget.available || widget.insight == null) {
         _checked = false;
         return;
       }
@@ -87,10 +87,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
   @override
   Widget build(BuildContext context) {
     final visible =
-        widget.available &&
-        !widget.amountHidden &&
-        widget.insight.amount > 0 &&
-        _expanded;
+        widget.available && widget.insight != null && _expanded;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: visible ? 1 : 0),
       duration: MediaQuery.disableAnimationsOf(context)
@@ -125,7 +122,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
               child: Column(
                 children: [
                   HomeInsightCard(
-                    insight: widget.insight,
+                    insight: widget.insight!,
                     amountHidden: widget.amountHidden,
                     onTap: widget.onTap,
                   ),

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_assets.dart';
-import '../../../core/formatters/money_formatter.dart';
-import '../../../core/models/dashboard_snapshot.dart';
+import '../../insights/domain/insight_models.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class HomeCrownIcon extends StatelessWidget {
@@ -20,7 +19,7 @@ class HomeInsightCard extends StatelessWidget {
     required this.onTap,
     super.key,
   });
-  final FinancialInsight insight;
+  final FinancialInsightItem insight;
   final bool amountHidden;
   final VoidCallback onTap;
   @override
@@ -78,17 +77,16 @@ class HomeInsightCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              amountHidden
-                                  ? '${insight.timeLabel}  金额已隐藏'
-                                  : '${insight.timeLabel}  ¥${MoneyFormatter.whole(insight.amount)}，较平时 ${insight.increasePercent == null ? '样本不足' : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent}%'}',
+                              insight.title,
                               style: TextStyle(
                                 fontSize: 15,
                                 color: context.appPrimaryText,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              insight.description,
+                              insight.summary,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

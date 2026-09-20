@@ -8,7 +8,7 @@ import 'package:jizhang_app/core/widgets/app_scaffold.dart';
 
 void main() {
   test('global navigation is limited to primary workspace routes', () {
-    const primaryRoutes = ['/', '/transactions', '/goals', '/profile'];
+    const primaryRoutes = ['/', '/transactions', '/insights', '/profile'];
     const secondaryRoutes = [
       '/assistant',
       '/analysis',
@@ -17,6 +17,8 @@ void main() {
       '/transactions/reimbursements',
       '/transactions/calendar',
       '/transactions/transaction-1',
+      '/insights/analysis%3Acategory%3Afood',
+      '/goals',
       '/goals/goal-1',
       '/profile/account',
       '/profile/account/data-binding',

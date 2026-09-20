@@ -10,7 +10,7 @@ import '../../features/voice/presentation/voice_bookkeeping_sheet.dart';
 import 'app_bottom_navigation.dart';
 import 'quick_add_button.dart';
 
-const _primaryAppRoutes = {'/', '/transactions', '/goals', '/profile'};
+const _primaryAppRoutes = {'/', '/transactions', '/insights', '/profile'};
 
 bool isPrimaryAppRoute(String location) => _primaryAppRoutes.contains(location);
 
