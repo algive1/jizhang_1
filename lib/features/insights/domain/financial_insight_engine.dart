@@ -77,16 +77,30 @@ class FinancialInsightEngine {
     if (balance != null) candidates.add(balance);
 
     if (quality.baseline >= .35) {
+      final oneTimeSpikes = _oneTimeCategoryInsights(
+        expenses,
+        preferences,
+        quality,
+        clock,
+      );
+      candidates.addAll(oneTimeSpikes);
+      final specialCategoryIds = oneTimeSpikes
+          .map((item) => item.categoryId)
+          .whereType<String>()
+          .toSet();
+
       for (final source in analysis.insights) {
-        final special = _oneTimeCategoryInsight(
-          source,
-          expenses,
-          preferences,
-          quality,
-          clock,
-        );
+        final stableCategoryId = _stableCategoryId(source, expenses);
+        final isCategoryTrend =
+            source.type == AnalysisInsightType.categoryIncrease ||
+            source.type == AnalysisInsightType.deliveryIncrease;
+        if (isCategoryTrend &&
+            stableCategoryId != null &&
+            specialCategoryIds.contains(stableCategoryId)) {
+          continue;
+        }
         candidates.add(
-          special ?? _fromAnalysis(source, expenses, preferences, quality),
+          _fromAnalysis(source, expenses, preferences, quality),
         );
       }
       final positive = _positiveChange(
@@ -257,116 +271,158 @@ class FinancialInsightEngine {
     );
   }
 
-  FinancialInsightItem? _oneTimeCategoryInsight(
-    AnalysisInsight source,
+  List<FinancialInsightItem> _oneTimeCategoryInsights(
     List<TransactionRecord> expenses,
     InsightPreferences preferences,
     InsightConfidence quality,
     DateTime now,
   ) {
-    if (source.categoryId == null ||
-        (source.type != AnalysisInsightType.categoryIncrease &&
-            source.type != AnalysisInsightType.deliveryIncrease)) {
-      return null;
-    }
-
-    final currentRows = expenses.where((item) {
-      if (item.occurredAt.year != now.year ||
-          item.occurredAt.month != now.month) {
-        return false;
-      }
-      return _analysisCategoryKey(item) == source.categoryId;
-    }).toList(growable: false);
-    if (currentRows.isEmpty) return null;
-
-    var explicitAmount = 0.0;
-    final explicitIds = <String>[];
-    TransactionRecord? largest;
-    var largestAmount = 0.0;
-    for (final item in currentRows) {
-      final amount = item.personalExpenseAmount;
-      if (amount <= 0) continue;
-      if (amount > largestAmount) {
-        largest = item;
-        largestAmount = amount;
-      }
-      if (item.isLargeTransaction) {
-        explicitAmount += amount;
-        explicitIds.add(item.id);
-      }
-    }
-
-    final delta = source.deltaAmount;
-    final inferred =
-        explicitAmount <= 0 &&
-        largest != null &&
-        largest.isOneTime &&
-        largestAmount >= 500 &&
-        largestAmount >= math.max(delta * .6, source.baselineAmount * .5);
-    final specialAmount = explicitAmount > 0
-        ? explicitAmount
-        : inferred
-        ? largestAmount
-        : 0.0;
-    final ids = explicitIds.isNotEmpty
-        ? explicitIds
-        : inferred
-        ? <String>[largest.id]
-        : const <String>[];
-    if (specialAmount <= 0 ||
-        (specialAmount < delta * .6 &&
-            specialAmount < source.amount * .5)) {
-      return null;
-    }
-
-    final categoryName =
-        currentRows
-            .map((item) => item.categoryName?.trim())
-            .whereType<String>()
-            .firstWhere((value) => value.isNotEmpty, orElse: () => '这类消费');
-    final stableCategoryId = _stableCategoryId(source, currentRows);
-    return _item(
-      id: 'category:${stableCategoryId ?? source.categoryId}:one-time',
-      kind: FinancialInsightKind.discovery,
-      priority: InsightPriority.attention,
-      title: '$categoryName增加主要来自一次性支出',
-      summary:
-          '本期 $categoryName 比上一可比周期多 '
-          '¥${delta.toStringAsFixed(0)}，其中一次性/大额记录约 '
-          '¥${specialAmount.toStringAsFixed(0)}。',
-      analysis: '这次变化不适合直接解释为消费习惯持续变差，系统会把一次性支出和常规消费分开看。',
-      meaning: '特殊支出会影响当月总额，但不应该自动被当作长期消费趋势。',
-      response: InsightResponse.notice,
-      suggestion:
-          preferences.intents.contains(BookkeepingIntent.controlSpending)
-          ? '可以先确认这笔支出是否确实是一次性的，再决定要不要调整日常预算。'
-          : null,
-      actionLabel: '查看相关流水',
-      actionRoute: '/transactions',
-      categoryId: stableCategoryId,
-      amount: source.amount,
-      changePercent: source.deltaPercent,
-      evidence: [
-        InsightEvidence(
-          label: categoryName,
-          value: source.amount,
-          baselineValue: source.baselineAmount,
-          unit: 'CNY',
-        ),
-        InsightEvidence(
-          label: '一次性/大额支出',
-          value: specialAmount,
-          unit: 'CNY',
-          transactionIds: ids,
-        ),
-      ],
-      relatedTransactionIds: ids,
-      baseScore: 59,
-      preferences: preferences,
-      confidence: quality,
-      generatedAt: now,
+    final currentStart = DateTime(now.year, now.month);
+    final currentEnd = DateTime(now.year, now.month, now.day + 1);
+    final previousStart = DateTime(now.year, now.month - 1);
+    final previousLastDay = DateTime(now.year, now.month, 0).day;
+    final comparableDay = now.day.clamp(1, previousLastDay);
+    final previousEnd = DateTime(
+      previousStart.year,
+      previousStart.month,
+      comparableDay + 1,
     );
+
+    final keys = <String>{
+      for (final item in expenses)
+        if (!item.occurredAt.isBefore(currentStart) &&
+            item.occurredAt.isBefore(currentEnd))
+          _stableRowCategoryId(item),
+    };
+    final results = <FinancialInsightItem>[];
+    for (final categoryId in keys) {
+      final currentRows = expenses.where(
+        (item) =>
+            _stableRowCategoryId(item) == categoryId &&
+            !item.occurredAt.isBefore(currentStart) &&
+            item.occurredAt.isBefore(currentEnd),
+      ).toList(growable: false);
+      final previousRows = expenses.where(
+        (item) =>
+            _stableRowCategoryId(item) == categoryId &&
+            !item.occurredAt.isBefore(previousStart) &&
+            item.occurredAt.isBefore(previousEnd),
+      ).toList(growable: false);
+      final currentAmount = currentRows.fold<double>(
+        0,
+        (sum, item) => sum + item.personalExpenseAmount,
+      );
+      final previousAmount = previousRows.fold<double>(
+        0,
+        (sum, item) => sum + item.personalExpenseAmount,
+      );
+      if (previousAmount < 100) continue;
+      final delta = currentAmount - previousAmount;
+      final change = delta / previousAmount;
+      if (delta < 100 || change < .30) continue;
+
+      var explicitAmount = 0.0;
+      final explicitIds = <String>[];
+      TransactionRecord? largest;
+      var largestAmount = 0.0;
+      for (final item in currentRows) {
+        final amount = item.personalExpenseAmount;
+        if (amount > largestAmount) {
+          largest = item;
+          largestAmount = amount;
+        }
+        if (item.isLargeTransaction) {
+          explicitAmount += amount;
+          explicitIds.add(item.id);
+        }
+      }
+      final inferred =
+          explicitAmount <= 0 &&
+          largest != null &&
+          largest.isOneTime &&
+          largestAmount >= 500 &&
+          largestAmount >= math.max(delta * .6, previousAmount * .5);
+      final specialAmount = explicitAmount > 0
+          ? explicitAmount
+          : inferred
+          ? largestAmount
+          : 0.0;
+      final ids = explicitIds.isNotEmpty
+          ? explicitIds
+          : inferred
+          ? <String>[largest.id]
+          : const <String>[];
+      if (specialAmount <= 0 ||
+          (specialAmount < delta * .6 &&
+              specialAmount < currentAmount * .5)) {
+        continue;
+      }
+
+      final categoryName =
+          currentRows
+              .map((item) => item.categoryName?.trim())
+              .whereType<String>()
+              .firstWhere(
+                (value) => value.isNotEmpty,
+                orElse: () => '这类消费',
+              );
+      results.add(
+        _item(
+          id: 'category:$categoryId:one-time',
+          kind: FinancialInsightKind.discovery,
+          priority: InsightPriority.attention,
+          title: '$categoryName增加主要来自一次性支出',
+          summary:
+              '本期 $categoryName 比上一可比周期多 '
+              '¥${delta.toStringAsFixed(0)}，其中一次性/大额记录约 '
+              '¥${specialAmount.toStringAsFixed(0)}。',
+          analysis: '这次变化不适合直接解释为消费习惯持续变差，系统会把一次性支出和常规消费分开看。',
+          meaning: '特殊支出会影响当月总额，但不应该自动被当作长期消费趋势。',
+          response: InsightResponse.notice,
+          suggestion:
+              preferences.intents.contains(
+                BookkeepingIntent.controlSpending,
+              )
+              ? '可以先确认这笔支出是否确实是一次性的，再决定要不要调整日常预算。'
+              : null,
+          actionLabel: '查看相关流水',
+          actionRoute: '/transactions',
+          categoryId: categoryId,
+          amount: currentAmount,
+          changePercent: change * 100,
+          evidence: [
+            InsightEvidence(
+              label: categoryName,
+              value: currentAmount,
+              baselineValue: previousAmount,
+              unit: 'CNY',
+            ),
+            InsightEvidence(
+              label: '一次性/大额支出',
+              value: specialAmount,
+              unit: 'CNY',
+              transactionIds: ids,
+            ),
+          ],
+          relatedTransactionIds: ids,
+          baseScore: 59,
+          preferences: preferences,
+          confidence: quality,
+          generatedAt: now,
+        ),
+      );
+    }
+    return results;
   }
+
+  String _stableRowCategoryId(TransactionRecord item) {
+    final id = item.categoryId?.trim();
+    if (id != null && id.isNotEmpty) return id;
+    final name = item.categoryName?.trim();
+    if (name != null && name.isNotEmpty) return 'name:$name';
+    return 'uncategorized';
+  }
+
 
   String _analysisCategoryKey(TransactionRecord item) {
     final name = item.categoryName?.trim();
