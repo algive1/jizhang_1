@@ -351,38 +351,35 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       selectedCategory,
       initial,
     );
-    final effectiveSubcategoryId =
-        subcategories.any((item) => item.id == _subcategoryId)
-        ? _subcategoryId
-        : null;
+    final effectiveSubcategory = subcategories
+        .where((item) => item.id == _subcategoryId)
+        .firstOrNull;
+    final effectiveSubcategoryId = effectiveSubcategory?.id;
     final sourceAccount = _selectedAccount(accounts, _accountId);
     final destinationAccount = _destinationAccount(accounts, sourceAccount);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final input = _amount;
 
-    return SafeArea(
-      // Keep the sheet background opaque through the system gesture area.
-      // The keypad gets its own inner SafeArea below, so controls stay clear
-      // without exposing the app shell/navigation underneath the modal.
-      bottom: false,
-      // Modal routes may remove MediaQuery's top padding. Read the actual
-      // window inset so every entry point stays below the status bar.
-      minimum: EdgeInsets.only(
-        top: MediaQueryData.fromView(View.of(context)).padding.top + 8,
-      ),
-      child: Padding(
+    return Scaffold(
+      key: const ValueKey('quick-add-page'),
+      resizeToAvoidBottomInset: false,
+      backgroundColor: context.appUsesLiquidGlass
+          ? Colors.transparent
+          : context.appBackground,
+      body: SafeArea(
+        bottom: false,
+        minimum: const EdgeInsets.only(top: 8),
+        child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: FractionallySizedBox(
           heightFactor: 1,
           child: Material(
-            key: ValueKey('quick-sheet-surface'),
-            color: context.appBackground,
-            clipBehavior: Clip.antiAlias,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
+            key: const ValueKey('quick-sheet-surface'),
+            color: context.appUsesLiquidGlass
+                ? Colors.transparent
+                : context.appBackground,
             child: Column(
               children: [
                 Padding(
@@ -464,15 +461,17 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               child: CategoryGrid(
                                 categories: activeCategories,
                                 selected: selectedCategory,
-                                subcategories: subcategories,
-                                selectedSubcategoryId: effectiveSubcategoryId,
-                                onSelected: (category) => setState(() {
-                                  _categoryId = category.id;
-                                  _subcategoryId = null;
-                                }),
-                                onSubcategorySelected: (category) => setState(
-                                  () => _subcategoryId = category.id,
-                                ),
+                                selectedSubcategoryName:
+                                    effectiveSubcategory?.name,
+                                onSelected: (category) {
+                                  unawaited(
+                                    _selectPrimaryCategory(
+                                      category,
+                                      categories,
+                                      initial,
+                                    ),
+                                  );
+                                },
                               ),
                             )
                           else
