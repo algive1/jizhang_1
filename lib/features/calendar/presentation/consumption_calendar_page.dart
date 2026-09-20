@@ -42,9 +42,10 @@ class _ConsumptionCalendarPageState
   @override
   void initState() {
     super.initState();
-    // Calendar scope starts from the app's active ledger, but remains local to
-    // this page. Changing it must never switch the global active ledger.
-    _bookFilterId = ref.read(activeBookIdProvider);
+    // The consumption calendar is a cross-ledger history view. Start with all
+    // accessible ledgers so imported history does not disappear merely because
+    // it belongs to a ledger other than the one currently open on Home.
+    _bookFilterId = null;
     final now = _today;
     _month = DateTime(now.year, now.month);
     _selectedDay = now.day;

@@ -25,6 +25,95 @@ void main() {
     expect(result.rows.single.externalId, 'wx-1');
   });
 
+  test('recognizes WeChat official XLSX and ignores slash placeholders', () {
+    final bytes = _xlsx([
+      ['微信支付账单明细'],
+      [
+        '交易时间',
+        '交易类型',
+        '交易对方',
+        '商品',
+        '收/支',
+        '金额(元)',
+        '支付方式',
+        '当前状态',
+        '交易单号',
+        '商户单号',
+        '备注',
+      ],
+      [
+        '2026-09-20 10:07:00',
+        '商户消费',
+        '周姐老面包子',
+        '/',
+        '支出',
+        '9.00',
+        '零钱',
+        '支付成功',
+        'wx-xlsx-1',
+        'merchant-xlsx-1',
+        '/',
+      ],
+    ]);
+
+    final result = service.parseXlsx(bytes);
+
+    expect(result.provider, BillImportProvider.wechat);
+    expect(result.provider.needsAccountMapping, isFalse);
+    expect(result.rows, hasLength(1));
+    expect(result.rows.single.merchant, '周姐老面包子');
+    expect(result.rows.single.note, isEmpty);
+    expect(result.rows.single.externalId, 'wx-xlsx-1');
+  });
+
+  test('natural fingerprint survives official XLSX provider reclassification', () {
+    final occurredAt = DateTime(2026, 9, 20, 10, 7);
+    final legacy = ImportedBillRow(
+      provider: BillImportProvider.generic,
+      occurredAt: occurredAt,
+      type: TransactionType.expense,
+      amount: 9,
+      merchant: '周姐老面包子',
+      note: '/',
+      externalId: null,
+      paymentMethod: null,
+      raw: const {},
+    );
+    final current = ImportedBillRow(
+      provider: BillImportProvider.wechat,
+      occurredAt: occurredAt,
+      type: TransactionType.expense,
+      amount: 9,
+      merchant: '周姐老面包子',
+      note: '',
+      externalId: null,
+      paymentMethod: '零钱',
+      raw: const {},
+    );
+
+    expect(current.importFingerprint, isNot(legacy.importFingerprint));
+    expect(current.naturalFingerprint, legacy.naturalFingerprint);
+  });
+
+  test('imported transaction title keeps merchant ahead of provider remarks', () {
+    final now = DateTime(2026, 9, 20, 10, 7);
+    final record = TransactionRecord(
+      id: 'imported-title',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: 9,
+      accountId: 'wechat',
+      merchant: '周姐老面包子',
+      note: '/',
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+      source: TransactionSource.import,
+    );
+
+    expect(record.displayTitle, '周姐老面包子');
+  });
+
   test('parses Alipay official CSV income and expense', () {
     const csv = '''
 交易号,商家订单号,交易创建时间,付款时间,交易来源地,类型,交易对方,商品名称,金额（元）,收/支,交易状态,资金状态

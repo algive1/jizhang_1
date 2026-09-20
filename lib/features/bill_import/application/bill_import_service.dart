@@ -64,6 +64,15 @@ class ImportedBillRow {
     merchant.trim(),
     note.trim(),
   ].join('|');
+
+  /// Provider-independent identity used to recognize the same historical row
+  /// even if an older app version classified an official XLSX as "generic".
+  String get naturalFingerprint => [
+    occurredAt.toIso8601String(),
+    type.name,
+    amount.toStringAsFixed(2),
+    (merchant.trim().isNotEmpty ? merchant : note).trim().toLowerCase(),
+  ].join('|');
 }
 
 class BillImportResult {
@@ -106,7 +115,7 @@ class BillImportService {
           .toList(growable: false);
       if (rows.isEmpty) continue;
       try {
-        return _parseSpreadsheetRows(rows);
+        return _parseRows(rows);
       } on FormatException catch (error) {
         lastError = error;
       }
@@ -127,6 +136,10 @@ class BillImportService {
     final rows = _parseDelimited(input)
         .where((row) => row.any((cell) => cell.trim().isNotEmpty))
         .toList(growable: false);
+    return _parseRows(rows);
+  }
+
+  BillImportResult _parseRows(List<List<String>> rows) {
     if (rows.isEmpty) throw const FormatException('账单文件为空');
 
     final officialHeaderIndex = rows.indexWhere((row) {
@@ -522,15 +535,21 @@ class BillImportService {
   String _first(Map<String, String> map, List<String> keys) {
     for (final key in keys) {
       final exact = map[key];
-      if (exact != null && exact.trim().isNotEmpty) return exact.trim();
+      if (_isMeaningfulCell(exact)) return exact!.trim();
       for (final entry in map.entries) {
         if (_normalizeHeader(entry.key) == _normalizeHeader(key) &&
-            entry.value.trim().isNotEmpty) {
+            _isMeaningfulCell(entry.value)) {
           return entry.value.trim();
         }
       }
     }
     return '';
+  }
+
+  bool _isMeaningfulCell(String? value) {
+    final cleaned = value?.trim() ?? '';
+    if (cleaned.isEmpty) return false;
+    return cleaned != '/' && cleaned != '／';
   }
 
   String _normalizeHeader(String value) => value

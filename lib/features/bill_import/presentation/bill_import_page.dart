@@ -48,13 +48,21 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         ref.watch(categoriesProvider).value ?? const <Category>[];
     _initializeSelections(accounts, categories);
 
+    final result = _result;
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
+      child: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  result == null ? 120 : 190,
+                ),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
                 Row(
                   children: [
                     IconButton(
@@ -99,32 +107,53 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   const SizedBox(height: 24),
                   const Center(child: CircularProgressIndicator()),
                 ],
-                if (_result != null) ...[
+                if (result != null) ...[
                   const SizedBox(height: 14),
-                  _summary(_result!),
+                  _summary(result),
                   const SizedBox(height: 12),
                   _mapping(accounts, categories),
                   const SizedBox(height: 12),
-                  _preview(_result!, categories),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: _saving || _selected.isEmpty
-                        ? null
-                        : () => _save(accounts, categories),
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(
-                      _saving ? '正在导入…' : '导入已选 ${_selected.length} 笔',
+                  _preview(result, categories),
+                ],
+                  ]),
+                ),
+              ),
+            ],
+          ),
+          if (result != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 12,
+              child: Material(
+                elevation: 10,
+                shadowColor: Colors.black.withValues(alpha: .16),
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(22),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: SizedBox(
+                    height: 52,
+                    child: FilledButton.icon(
+                      onPressed: _saving || _selected.isEmpty
+                          ? null
+                          : () => _save(accounts, categories),
+                      icon: _saving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
+                      label: Text(
+                        _saving
+                            ? '正在导入…'
+                            : '确认导入已选 ${_selected.length} 笔',
+                      ),
                     ),
                   ),
-                ],
-              ]),
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -219,23 +248,23 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ],
             onChanged: (value) => setState(() => _accountId = value),
           ),
-          if (needsAccountMapping) ...[
-            const SizedBox(height: 4),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('保持当前账户余额'),
-              subtitle: Text(
-                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。适用于木木及其他记账 App 的历史账单。',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
+          const SizedBox(height: 4),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('保持当前账户余额'),
+            subtitle: Text(
+              '推荐用于导入历史账单：流水会进入统计和消费日历，但不会把历史收支再次累计到当前账户余额。关闭后才会按导入流水调整余额。',
+              style: TextStyle(
+                color: context.appSecondaryText,
+                fontSize: 12,
+                height: 1.35,
               ),
-              value: _preserveCurrentBalances,
-              onChanged: (value) =>
-                  setState(() => _preserveCurrentBalances = value),
             ),
+            value: _preserveCurrentBalances,
+            onChanged: (value) =>
+                setState(() => _preserveCurrentBalances = value),
+          ),
+          if (needsAccountMapping) ...[
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
@@ -561,6 +590,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   ) async {
     final result = _result;
     if (result == null) return;
+    final targetBookId = ref.read(activeBookIdProvider);
 
     if (!result.provider.needsAccountMapping && _accountId == null) {
       setState(() => _error = '请选择默认账户');
@@ -585,12 +615,16 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
 
     final importedIds = <String>{};
     final importedFingerprints = <String>{};
-    final transactions = ref.read(allTransactionsProvider).value ?? const [];
+    final importedNaturalFingerprints = <String>{};
+    // Read persisted rows directly. A StreamProvider may not have emitted yet
+    // when the user re-imports immediately, which previously made duplicate
+    // detection race with provider startup.
+    final transactions = await ref.read(transactionRepositoryProvider).getAll();
+    if (!mounted) return;
     for (final transaction in transactions) {
-      if (transaction.source != TransactionSource.import ||
-          transaction.metadataJson == null) {
-        continue;
-      }
+      if (transaction.source != TransactionSource.import) continue;
+      importedNaturalFingerprints.add(_naturalFingerprint(transaction));
+      if (transaction.metadataJson == null) continue;
       try {
         final metadata = jsonDecode(transaction.metadataJson!);
         if (metadata is! Map) continue;
@@ -613,10 +647,14 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
       if ((row.externalId != null && importedIds.contains(row.externalId)) ||
-          importedFingerprints.contains(row.importFingerprint)) {
+          importedFingerprints.contains(row.importFingerprint) ||
+          importedNaturalFingerprints.contains(row.naturalFingerprint)) {
         duplicates++;
         continue;
       }
+      if (row.externalId != null) importedIds.add(row.externalId!);
+      importedFingerprints.add(row.importFingerprint);
+      importedNaturalFingerprints.add(row.naturalFingerprint);
 
       final accountId = result.provider.needsAccountMapping
           ? _resolvedAccountId(index, row.sourceAccount, destination: false)
@@ -658,7 +696,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           amount: row.amount,
           accountId: accountId,
           destinationAccountId: destinationAccountId,
-          bookId: ref.read(activeBookIdProvider),
+          bookId: targetBookId,
           occurredAt: row.occurredAt,
           categoryId: category?.id,
           subcategoryId: subcategory?.id,
@@ -675,7 +713,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
-            if (row.provider.needsAccountMapping && _preserveCurrentBalances)
+            'importNaturalFingerprint': row.naturalFingerprint,
+            if (_preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
@@ -718,6 +757,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     });
     try {
       await ref.read(quickBookkeepingServiceProvider).saveAll(requests);
+      // Force both scoped ledger views and cross-ledger calendar views to
+      // re-read after a large batch import.
+      ref.invalidate(transactionsProvider);
       ref.invalidate(allTransactionsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -969,3 +1011,15 @@ String _providerLabel(BillImportProvider provider) => switch (provider) {
   BillImportProvider.mumu => '木木记账',
   BillImportProvider.generic => '第三方账单',
 };
+
+String _naturalFingerprint(TransactionRecord transaction) => [
+  transaction.occurredAt.toIso8601String(),
+  transaction.type.name,
+  transaction.amount.toStringAsFixed(2),
+  ((transaction.merchant?.trim().isNotEmpty == true
+              ? transaction.merchant
+              : transaction.note) ??
+          '')
+      .trim()
+      .toLowerCase(),
+].join('|');
