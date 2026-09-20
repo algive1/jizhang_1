@@ -154,7 +154,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/support-tickets/:id/messages', async (request, reply) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { body } = z.strictObject({
       body: z.string().trim().min(1).max(4000),
