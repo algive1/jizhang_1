@@ -2408,7 +2408,6 @@ class _NoteRow extends StatelessWidget {
                 // so the note area stays borderless and compact like the
                 // reference bookkeeping card.
                 isDense: true,
-                isCollapsed: true,
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -2421,8 +2420,7 @@ class _NoteRow extends StatelessWidget {
                   fontSize: 14,
                   color: context.appSecondaryText,
                 ),
-                contentPadding: EdgeInsets.zero,
-                constraints: BoxConstraints.tightFor(height: 40),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),

@@ -137,7 +137,7 @@ class _RecurringBillEditorState extends ConsumerState<RecurringBillEditor> {
           if (!widget.scheduleOnly) ...[
             AppInput(
               controller: _name,
-              decoration: const InputDecoration(labelText: '名称'),
+              decoration: appFieldDecoration('名称'),
               validator: (v) => (v ?? '').trim().isEmpty ? '请输入名称' : null,
             ),
             const SizedBox(height: 12),
@@ -146,7 +146,7 @@ class _RecurringBillEditorState extends ConsumerState<RecurringBillEditor> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(labelText: '金额'),
+              decoration: appFieldDecoration('金额'),
               validator: (v) {
                 final amount = double.tryParse(v ?? '');
                 return amount == null || !amount.isFinite || amount <= 0
@@ -212,7 +212,7 @@ class _RecurringBillEditorState extends ConsumerState<RecurringBillEditor> {
             AppInput(
               controller: _customDays,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '每隔多少天'),
+              decoration: appFieldDecoration('每隔多少天'),
               validator: _positive,
             ),
           AppSheetOption(
@@ -237,7 +237,7 @@ class _RecurringBillEditorState extends ConsumerState<RecurringBillEditor> {
           if (_endType == 'count')
             AppInput(
               controller: _count,
-              decoration: const InputDecoration(labelText: '总次数'),
+              decoration: appFieldDecoration('总次数'),
               keyboardType: TextInputType.number,
               validator: _positive,
             ),
@@ -254,7 +254,7 @@ class _RecurringBillEditorState extends ConsumerState<RecurringBillEditor> {
               AppInput(
                 controller: _interval,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '每隔 N 个周期'),
+                decoration: appFieldDecoration('每隔 N 个周期'),
                 validator: _positive,
               ),
               SwitchListTile.adaptive(
