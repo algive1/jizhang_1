@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/transaction_record.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 
 enum FinancialHealthStatus { positive, watch, attention, insufficient }
 
@@ -87,21 +88,26 @@ class AnnualFinancialReport {
 }
 
 class AnnualFinancialReportService {
-  const AnnualFinancialReportService();
+  const AnnualFinancialReportService({
+    this.truth = const FinancialTruthService(),
+  });
+
+  final FinancialTruthService truth;
 
   AnnualFinancialReport build(
     List<TransactionRecord> transactions, {
     required int year,
     String currency = 'CNY',
     DateTime? now,
+    Set<String> excludedTransactionIds = const {},
   }) {
     final clock = now ?? DateTime.now();
     final normalizedCurrency = currency.toUpperCase();
-    final usable = transactions.where(
-      (item) =>
-          item.deletedAt == null &&
-          item.currency.toUpperCase() == normalizedCurrency &&
-          !item.occurredAt.isAfter(clock),
+    final usable = truth.eligibleRows(
+      transactions,
+      currency: normalizedCurrency,
+      now: clock,
+      excludedTransactionIds: excludedTransactionIds,
     );
 
     final current = usable.where((item) => item.occurredAt.year == year).toList();
@@ -129,7 +135,7 @@ class AnnualFinancialReportService {
     final positiveMonths = active.where((item) => item.net >= 0).length;
 
     final categoryGroups = <String, List<TransactionRecord>>{};
-    for (final item in current.where((item) => item.isExpense)) {
+    for (final item in current.where(truth.isPersonalConsumption)) {
       final name = item.categoryName?.trim();
       categoryGroups
           .putIfAbsent(
@@ -151,11 +157,11 @@ class AnnualFinancialReportService {
 
     final checks = <FinancialHealthCheck>[
       FinancialHealthCheck(
-        title: '年度现金流',
+        title: '年度收支结余',
         value: _signedMoney(netCashflow),
         description: netCashflow >= 0
-            ? '全年收入覆盖了支出，年度现金流为正。'
-            : '全年支出高于收入，需要关注持续性现金流缺口。',
+            ? '全年记账收入覆盖了个人消费，年度收支保持结余。'
+            : '全年个人消费高于记账收入，需要关注持续性的收支缺口。',
         status: netCashflow >= 0
             ? FinancialHealthStatus.positive
             : FinancialHealthStatus.attention,
@@ -219,9 +225,9 @@ class AnnualFinancialReportService {
   FinancialHealthCheck _positiveMonthCheck(int active, int positive) {
     if (active < 2) {
       return FinancialHealthCheck(
-        title: '月度现金流稳定性',
+        title: '月度收支稳定性',
         value: '$positive / $active 月',
-        description: '有效月份不足，暂不判断月度现金流稳定性。',
+        description: '有效月份不足，暂不判断月度收支稳定性。',
         status: FinancialHealthStatus.insufficient,
       );
     }
@@ -235,10 +241,10 @@ class AnnualFinancialReportService {
       title: '月度现金流稳定性',
       value: '$positive / $active 月为正',
       description: status == FinancialHealthStatus.positive
-          ? '多数有记录月份保持正现金流。'
+          ? '多数有记录月份保持正结余。'
           : status == FinancialHealthStatus.watch
-          ? '正负现金流月份接近，建议关注波动较大的月份。'
-          : '多数有记录月份为负现金流，需要检查长期支出压力。',
+          ? '正负结余月份接近，建议关注波动较大的月份。'
+          : '多数有记录月份为负结余，需要检查长期支出压力。',
       status: status,
     );
   }
@@ -277,16 +283,18 @@ class AnnualFinancialReportService {
   }
 
   double _income(Iterable<TransactionRecord> items) =>
-      items.where((item) => item.isIncome).fold<int>(
+      items.fold<int>(
             0,
-            (sum, item) => sum + (item.amount * 100).round(),
+            (sum, item) =>
+                sum + (truth.earnedIncomeAmount(item) * 100).round(),
           ) /
       100;
 
   double _expense(Iterable<TransactionRecord> items) =>
-      items.where((item) => item.isExpense).fold<int>(
+      items.fold<int>(
             0,
-            (sum, item) => sum + (item.netExpenseAmount * 100).round(),
+            (sum, item) =>
+                sum + (truth.personalConsumptionAmount(item) * 100).round(),
           ) /
       100;
 

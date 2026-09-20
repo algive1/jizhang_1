@@ -37,6 +37,59 @@ void main() {
     expect(snapshot.expenseCategories.single.amount, 300);
   });
 
+  test('annual report keeps non-earned inflows out of income and spending', () {
+    const service = AnnualFinancialReportService();
+    final report = service.build(
+      [
+        _record(
+          id: 'salary',
+          bookId: 'book-personal',
+          type: TransactionType.income,
+          amount: 10000,
+          categoryId: 'income-salary',
+          categoryName: '工资',
+          date: DateTime(2026, 1, 2),
+        ),
+        _record(
+          id: 'refund',
+          bookId: 'book-personal',
+          type: TransactionType.refund,
+          amount: 300,
+          categoryId: 'other',
+          categoryName: '退款',
+          date: DateTime(2026, 1, 3),
+        ),
+        _record(
+          id: 'borrow',
+          bookId: 'book-personal',
+          type: TransactionType.borrow,
+          amount: 2000,
+          categoryId: 'other',
+          categoryName: '借入',
+          date: DateTime(2026, 1, 4),
+        ),
+        _record(
+          id: 'work',
+          bookId: 'book-personal',
+          type: TransactionType.expense,
+          amount: 600,
+          categoryId: 'expense-travel',
+          categoryName: '出行',
+          date: DateTime(2026, 1, 5),
+        ).copyWith(
+          reimbursementStatus: ReimbursementStatus.pending,
+          reimbursementAmount: 500,
+        ),
+      ],
+      year: 2026,
+      now: DateTime(2026, 12, 31),
+    );
+
+    expect(report.totalIncome, 10000);
+    expect(report.totalExpense, 100);
+    expect(report.netCashflow, 9900);
+  });
+
   test('annual report uses net refunded expense and prior-year comparison', () {
     const service = AnnualFinancialReportService();
     final refunded = _record(

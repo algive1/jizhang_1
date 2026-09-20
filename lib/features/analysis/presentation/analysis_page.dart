@@ -369,7 +369,7 @@ class _ExportReportCard extends StatelessWidget {
                   value: '¥${MoneyFormatter.decimal(snapshot.totalExpense)}',
                 ),
                 _ReportMetric(
-                  label: '净现金流',
+                  label: '收支结余',
                   value:
                       '${snapshot.netCashflow < 0 ? '-' : '+'}¥${MoneyFormatter.decimal(snapshot.netCashflow.abs())}',
                 ),

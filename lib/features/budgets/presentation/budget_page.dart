@@ -19,6 +19,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../../insights/data/insight_preferences_repository.dart';
 import '../../insights/domain/budget_recommendation_service.dart';
 import '../../insights/domain/insight_models.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../application/budget_alert_notification_service.dart';
 import '../data/budget_repository.dart';
 
@@ -178,7 +179,12 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         existing?.categoryId != null || selectableCategories.isNotEmpty;
     final monthKey = budgetMonthKey(DateTime.now());
     final repository = ref.read(budgetRepositoryProvider);
-    final transactions = await ref.read(transactionsProvider.future);
+    final rawTransactions = await ref.read(transactionsProvider.future);
+    final suppressed =
+        ref.read(financialTruthSuppressedTransactionIdsProvider);
+    final transactions = rawTransactions
+        .where((item) => !suppressed.contains(item.id))
+        .toList(growable: false);
     final preferences =
         ref.read(insightPreferencesProvider).value ??
         const InsightPreferences();

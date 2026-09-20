@@ -8,6 +8,7 @@ import '../../../core/widgets/app_card.dart';
 import '../application/analysis_report_export_service.dart';
 import '../data/analysis_repository.dart';
 import '../domain/annual_financial_report_service.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class AnnualReportPage extends ConsumerStatefulWidget {
@@ -44,6 +45,8 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
           transactions,
           year: selectedYear,
           currency: currency,
+          excludedTransactionIds:
+              ref.watch(financialTruthSuppressedTransactionIdsProvider),
         );
 
     return SafeArea(
