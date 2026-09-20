@@ -12,7 +12,6 @@ class CategoryGrid extends StatelessWidget {
     required this.subcategories,
     required this.selectedSubcategoryId,
     required this.onSelected,
-    required this.onSubcategorySelected,
   });
 
   final List<Category> categories;
@@ -20,7 +19,6 @@ class CategoryGrid extends StatelessWidget {
   final List<Category> subcategories;
   final String? selectedSubcategoryId;
   final ValueChanged<Category> onSelected;
-  final ValueChanged<Category> onSubcategorySelected;
 
   @override
   Widget build(BuildContext context) {
