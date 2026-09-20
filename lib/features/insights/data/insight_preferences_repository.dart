@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/data/app_settings_repository.dart';
+import '../../sharing/data/session_repository.dart';
+import '../../sharing/data/shared_api.dart';
 import '../domain/insight_models.dart';
 
 const _intentsKey = 'insights.intents';
@@ -10,9 +12,15 @@ const _configuredKey = 'insights.configured';
 const _dismissedKey = 'insights.dismissed';
 
 class InsightPreferencesRepository {
-  const InsightPreferencesRepository(this._settings);
+  const InsightPreferencesRepository(
+    this._settings,
+    this._session,
+    this._api,
+  );
 
   final AppSettingsRepository _settings;
+  final SessionRepository _session;
+  final SharedApi _api;
 
   Future<InsightPreferences> load() async {
     final values = await Future.wait([
@@ -25,7 +33,7 @@ class InsightPreferencesRepository {
         _settings.get('insights.kindAdjustment.${kind.name}'),
     ]);
     final tones = InsightTone.values.where((item) => item.name == values[2]);
-    return InsightPreferences(
+    final local = InsightPreferences(
       intents: _decode<BookkeepingIntent>(
         values[0],
         BookkeepingIntent.values,
@@ -43,9 +51,63 @@ class InsightPreferencesRepository {
             FinancialInsightKind.values[index]: value,
       },
     );
+    try {
+      await _session.initialize();
+      if (_session.userId == null || _api.sessionToken == null) return local;
+      final remote = await _api.request('/insights/profile');
+      if (remote['configured'] != true) return local;
+      final remoteIntents = (remote['intents'] as List? ?? const [])
+          .whereType<String>()
+          .toSet();
+      final remoteFocus = (remote['focus'] as List? ?? const [])
+          .whereType<String>()
+          .toSet();
+      final toneName = remote['tone'] as String?;
+      final merged = local.copyWith(
+        intents: BookkeepingIntent.values
+            .where((item) => remoteIntents.contains(item.name))
+            .toSet(),
+        focus: InsightFocus.values
+            .where((item) => remoteFocus.contains(item.name))
+            .toSet(),
+        tone: InsightTone.values
+            .where((item) => item.name == toneName)
+            .firstOrNull ?? local.tone,
+        configured: true,
+      );
+      await _writeLocal(merged);
+      return merged;
+    } on SharedApiException catch (error) {
+      if (error.status == 401) await _session.markSessionExpired();
+      return local;
+    } on Object {
+      return local;
+    }
   }
 
   Future<void> save(InsightPreferences value) async {
+    await _writeLocal(value);
+    try {
+      await _session.initialize();
+      if (_session.userId == null || _api.sessionToken == null) return;
+      await _api.request(
+        '/insights/profile',
+        method: 'PUT',
+        body: {
+          'intents': value.intents.map((item) => item.name).toList(),
+          'focus': value.focus.map((item) => item.name).toList(),
+          'tone': value.tone.name,
+          'configured': value.configured,
+        },
+      );
+    } on SharedApiException catch (error) {
+      if (error.status == 401) await _session.markSessionExpired();
+    } on Object {
+      // Local settings remain authoritative while offline.
+    }
+  }
+
+  Future<void> _writeLocal(InsightPreferences value) async {
     await Future.wait([
       _settings.set(_intentsKey, value.intents.map((e) => e.name).join(',')),
       _settings.set(_focusKey, value.focus.map((e) => e.name).join(',')),
@@ -65,6 +127,7 @@ class InsightPreferencesRepository {
     await save(
       current.copyWith(dismissedIds: {...current.dismissedIds, insightId}),
     );
+    await _sendFeedback(insightId, null, 'dismissed');
   }
 
   Future<void> recordFeedback(
@@ -73,6 +136,7 @@ class InsightPreferencesRepository {
     String action,
   ) async {
     await _settings.set('insights.feedback.$insightId', action);
+    await _sendFeedback(insightId, kind, action);
     final current = await load();
     final previous = current.kindAdjustments[kind] ?? 0;
     final delta = switch (action) {
@@ -89,6 +153,29 @@ class InsightPreferencesRepository {
     );
   }
 
+  Future<void> _sendFeedback(
+    String insightId,
+    FinancialInsightKind? kind,
+    String action,
+  ) async {
+    try {
+      await _session.initialize();
+      if (_session.userId == null || _api.sessionToken == null) return;
+      await _api.request(
+        '/insights/${Uri.encodeComponent(insightId)}/feedback',
+        method: 'POST',
+        body: {
+          'action': action,
+          if (kind != null) 'kind': kind.name,
+        },
+      );
+    } on SharedApiException catch (error) {
+      if (error.status == 401) await _session.markSessionExpired();
+    } on Object {
+      // Feedback is still persisted locally and can influence this device.
+    }
+  }
+
   Set<T> _decode<T extends Enum>(String? value, List<T> all) {
     if (value == null || value.trim().isEmpty) return <T>{};
     final names = value.split(',').toSet();
@@ -98,7 +185,11 @@ class InsightPreferencesRepository {
 
 final insightPreferencesRepositoryProvider =
     Provider<InsightPreferencesRepository>((ref) {
-  return InsightPreferencesRepository(ref.watch(appSettingsRepositoryProvider));
+  return InsightPreferencesRepository(
+    ref.watch(appSettingsRepositoryProvider),
+    ref.watch(sessionRepositoryProvider),
+    ref.watch(sharedApiProvider),
+  );
 });
 
 final insightPreferencesProvider = FutureProvider<InsightPreferences>((ref) {

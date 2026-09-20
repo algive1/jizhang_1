@@ -80,6 +80,8 @@ enum InsightResponse { notice, advice, encouragement, record }
 
 enum InsightPriority { info, attention, important, critical }
 
+enum InsightOrigin { local, serverConfirmed }
+
 class InsightConfidence {
   const InsightConfidence({
     required this.data,
@@ -122,6 +124,18 @@ class InsightEvidence {
   final String? unit;
   final String? note;
   final List<String> transactionIds;
+
+  factory InsightEvidence.fromJson(Map<String, dynamic> json) =>
+      InsightEvidence(
+        label: json['label'] as String? ?? '',
+        value: (json['value'] as num?)?.toDouble() ?? 0,
+        baselineValue: (json['baselineValue'] as num?)?.toDouble(),
+        unit: json['unit'] as String?,
+        note: json['note'] as String?,
+        transactionIds: (json['transactionIds'] as List? ?? const [])
+            .whereType<String>()
+            .toList(growable: false),
+      );
 }
 
 class FinancialInsightItem {
@@ -145,6 +159,7 @@ class FinancialInsightItem {
     this.changePercent,
     this.evidence = const [],
     this.relatedTransactionIds = const [],
+    this.aiInterpretation,
   });
 
   final String id;
@@ -166,10 +181,76 @@ class FinancialInsightItem {
   final double? changePercent;
   final List<InsightEvidence> evidence;
   final List<String> relatedTransactionIds;
+  final String? aiInterpretation;
 
   bool get isImportant =>
       priority == InsightPriority.important ||
       priority == InsightPriority.critical;
+
+  factory FinancialInsightItem.fromJson(Map<String, dynamic> json) {
+    T enumValue<T extends Enum>(List<T> values, Object? raw, T fallback) {
+      for (final value in values) {
+        if (value.name == raw) return value;
+      }
+      return fallback;
+    }
+
+    final confidenceJson =
+        (json['confidence'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return FinancialInsightItem(
+      id: json['id'] as String? ?? '',
+      kind: enumValue(
+        FinancialInsightKind.values,
+        json['kind'],
+        FinancialInsightKind.discovery,
+      ),
+      priority: enumValue(
+        InsightPriority.values,
+        json['priority'],
+        InsightPriority.info,
+      ),
+      title: json['title'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+      analysis: json['analysis'] as String? ?? '',
+      meaning: json['meaning'] as String? ?? '',
+      response: enumValue(
+        InsightResponse.values,
+        json['response'],
+        InsightResponse.notice,
+      ),
+      score: (json['score'] as num?)?.toDouble() ?? 0,
+      confidence: InsightConfidence(
+        data: (confidenceJson['data'] as num?)?.toDouble() ?? 0,
+        completeness:
+            (confidenceJson['completeness'] as num?)?.toDouble() ?? 0,
+        classification:
+            (confidenceJson['classification'] as num?)?.toDouble() ?? 0,
+        baseline: (confidenceJson['baseline'] as num?)?.toDouble() ?? 0,
+      ),
+      generatedAt: DateTime.fromMillisecondsSinceEpoch(
+        (json['generatedAt'] as num?)?.toInt() ?? 0,
+      ),
+      suggestion: json['suggestion'] as String?,
+      actionLabel: json['actionLabel'] as String?,
+      actionRoute: json['actionRoute'] as String?,
+      categoryId: json['categoryId'] as String?,
+      amount: (json['amount'] as num?)?.toDouble(),
+      changePercent: (json['changePercent'] as num?)?.toDouble(),
+      evidence: (json['evidence'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (value) =>
+                InsightEvidence.fromJson(value.cast<String, dynamic>()),
+          )
+          .toList(growable: false),
+      relatedTransactionIds:
+          (json['relatedTransactionIds'] as List? ?? const [])
+              .whereType<String>()
+              .toList(growable: false),
+      aiInterpretation: json['aiInterpretation'] as String?,
+    );
+  }
 }
 
 class InsightFeed {
@@ -179,6 +260,8 @@ class InsightFeed {
     required this.completeness,
     required this.classificationConfidence,
     required this.baselineConfidence,
+    this.origin = InsightOrigin.local,
+    this.confirmedAt,
   });
 
   final List<FinancialInsightItem> items;
@@ -186,12 +269,42 @@ class InsightFeed {
   final double completeness;
   final double classificationConfidence;
   final double baselineConfidence;
+  final InsightOrigin origin;
+  final DateTime? confirmedAt;
+
+  bool get isServerConfirmed => origin == InsightOrigin.serverConfirmed;
 
   FinancialInsightItem? get homeCandidate {
     for (final item in items) {
       if (item.score >= 70 && item.confidence.overall >= .55) return item;
     }
     return null;
+  }
+
+  factory InsightFeed.fromJson(Map<String, dynamic> json) {
+    return InsightFeed(
+      items: (json['items'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (value) =>
+                FinancialInsightItem.fromJson(value.cast<String, dynamic>()),
+          )
+          .toList(growable: false),
+      dataConfidence: (json['dataConfidence'] as num?)?.toDouble() ?? 0,
+      completeness: (json['completeness'] as num?)?.toDouble() ?? 0,
+      classificationConfidence:
+          (json['classificationConfidence'] as num?)?.toDouble() ?? 0,
+      baselineConfidence:
+          (json['baselineConfidence'] as num?)?.toDouble() ?? 0,
+      origin: json['origin'] == 'serverConfirmed'
+          ? InsightOrigin.serverConfirmed
+          : InsightOrigin.local,
+      confirmedAt: json['confirmedAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (json['confirmedAt'] as num).toInt(),
+            )
+          : null,
+    );
   }
 }
 

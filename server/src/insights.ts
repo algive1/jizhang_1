@@ -3,6 +3,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import type { Store } from './store.js';
+import {
+  analyzeInsightContext,
+  insightContextSchema,
+  type InsightFeedbackProfile,
+  type InsightProfile,
+} from './insight_analysis.js';
 
 type AuthUser = { id: string; username: string; displayName: string | null };
 type Authenticate = (header: string | undefined) => AuthUser;
@@ -140,12 +146,70 @@ export function writeInsightPolicy(
   return policy;
 }
 
+function readProfile(store: Store, userId: string): InsightProfile {
+  const row = store.db.prepare(
+    'SELECT intents_json,focus_json,tone FROM insight_profiles WHERE user_id=?',
+  ).get(userId) as {
+    intents_json: string;
+    focus_json: string;
+    tone: 'strict' | 'balanced' | 'quiet';
+  } | undefined;
+  if (!row) return { intents: [], focus: [], tone: 'balanced' };
+  return {
+    intents: JSON.parse(row.intents_json) as string[],
+    focus: JSON.parse(row.focus_json) as string[],
+    tone: row.tone,
+  };
+}
+
+function readFeedbackProfile(
+  store: Store,
+  userId: string,
+): InsightFeedbackProfile {
+  const rows = store.db.prepare(
+    'SELECT insight_id AS insightId,action,kind FROM insight_feedback '
+      + 'WHERE user_id=? ORDER BY created_at DESC LIMIT 1000',
+  ).all(userId) as Array<{
+    insightId: string;
+    action: string;
+    kind: string | null;
+  }>;
+  const dismissedIds = new Set<string>();
+  const kindAdjustments: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.action === 'dismissed') dismissedIds.add(row.insightId);
+    if (!row.kind) continue;
+    const delta =
+      row.action === 'helpful'
+        ? 2
+        : row.action === 'inaccurate'
+          ? -4
+          : row.action === 'notRelevant'
+            ? -3
+            : 0;
+    kindAdjustments[row.kind] = Math.max(
+      -12,
+      Math.min(12, (kindAdjustments[row.kind] ?? 0) + delta),
+    );
+  }
+  return { dismissedIds, kindAdjustments };
+}
+
 export function registerInsightRoutes(
   app: FastifyInstance,
   store: Store,
   authenticate: Authenticate,
 ) {
   ensureInsightSchema(store);
+
+  app.post('/api/v1/insights/analyze', async request => {
+    const user = authenticate(request.headers.authorization);
+    const context = insightContextSchema.parse(request.body);
+    const policy = readInsightPolicy(store);
+    const profile = readProfile(store, user.id);
+    const feedback = readFeedbackProfile(store, user.id);
+    return analyzeInsightContext(context, profile, feedback, policy);
+  });
 
   app.get('/api/v1/insights/profile', async request => {
     const user = authenticate(request.headers.authorization);

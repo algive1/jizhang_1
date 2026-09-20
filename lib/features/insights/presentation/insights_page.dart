@@ -347,7 +347,9 @@ class _QualityCard extends StatelessWidget {
       feed.classificationConfidence * .2 +
       feed.baselineConfidence * .25
     ).clamp(0, 1);
-    final label = confidence >= .75
+    final label = feed.isServerConfirmed
+        ? '已基于当前完整账务上下文确认'
+        : confidence >= .75
         ? '洞察基础较稳定'
         : confidence >= .5
         ? '洞察还在学习'
@@ -370,7 +372,9 @@ class _QualityCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  confidence >= .75
+                  feed.isServerConfirmed
+                      ? '已用当前账本的流水、账户、预算、目标和周期账单统一复核；数据不足时仍会减少判断。'
+                      : confidence >= .75
                       ? '已有足够数据建立个人基线，会优先和过去的你比较。'
                       : '数据覆盖、分类准确度和历史样本会共同决定我们敢不敢下结论。',
                   style: TextStyle(
@@ -382,7 +386,7 @@ class _QualityCard extends StatelessWidget {
             ),
           ),
           Icon(
-            confidence >= .75
+            feed.isServerConfirmed || confidence >= .75
                 ? Icons.verified_outlined
                 : Icons.hourglass_bottom_rounded,
             color: context.appPrimary,

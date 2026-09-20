@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../goals/data/goal_repository.dart';
+import '../../books/data/book_repository.dart';
+import '../../recurring/data/recurring_bill_repository.dart';
+import '../data/remote_insight_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../analysis/data/analysis_repository.dart';
 import '../../budgets/data/budget_repository.dart';
@@ -15,7 +18,7 @@ final financialInsightEngineProvider = Provider<FinancialInsightEngine>(
   (ref) => const FinancialInsightEngine(),
 );
 
-final insightFeedProvider = Provider<InsightFeed>((ref) {
+final localInsightFeedProvider = Provider<InsightFeed>((ref) {
   final transactions =
       ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
   final analysis = ref
@@ -40,4 +43,33 @@ final insightFeedProvider = Provider<InsightFeed>((ref) {
         goals: goals,
         preferences: preferences,
       );
+});
+
+
+final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
+  final transactions =
+      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final accounts = ref.watch(allAccountsProvider).value ?? const [];
+  final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
+  final goals = ref.watch(goalsProvider).value ?? const [];
+  final recurringBills =
+      ref.watch(recurringBillsProvider).value ?? const [];
+  final bookId = ref.watch(activeBookIdProvider);
+  // Debounce bursts from automatic/import bookkeeping. Riverpod discards stale
+  // results when dependencies change while this request is waiting.
+  await Future<void>.delayed(const Duration(milliseconds: 650));
+  return ref.read(remoteInsightRepositoryProvider).analyze(
+        bookId: bookId,
+        transactions: transactions,
+        accounts: accounts,
+        budgets: budgets,
+        goals: goals,
+        recurringBills: recurringBills,
+      );
+});
+
+final insightFeedProvider = Provider<InsightFeed>((ref) {
+  final local = ref.watch(localInsightFeedProvider);
+  final remote = ref.watch(confirmedInsightFeedProvider);
+  return remote.value ?? local;
 });
