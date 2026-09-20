@@ -413,13 +413,23 @@ class _AutoBookkeepingConfirmPageState
     if (accounts == null || categories == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final transactionType = _transactionTypeFor(candidate.transactionType);
+    final isTransferScene = candidate.transactionType == 'TRANSFER';
+    final transactionType = isTransferScene && _internalTransfer
+        ? TransactionType.transfer
+        : _transactionTypeFor(candidate.transactionType);
+    final displayTransactionType = isTransferScene
+        ? TransactionType.transfer
+        : transactionType;
     final categoryType = _categoryTypeFor(transactionType);
     final selectableCategories = categories
         .where((item) => item.type == categoryType)
         .where((item) => item.parentId == null)
         .toList(growable: false);
     final selectedAccountId = _validAccountId(accounts);
+    final selectedDestinationAccountId = _validDestinationAccountId(
+      accounts,
+      sourceAccountId: selectedAccountId,
+    );
     final selectedCategoryId = _validCategoryId(selectableCategories);
 
     return ListView(
@@ -443,14 +453,14 @@ class _AutoBookkeepingConfirmPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '已识别${_transactionLabel(transactionType)}',
+                '已识别${_transactionLabel(displayTransactionType)}',
                 style: TextStyle(color: context.appSecondaryText),
               ),
               const SizedBox(height: 8),
               Text(
                 '¥${(candidate.amountInCents / 100).toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: _amountColor(transactionType),
+                  color: _amountColor(displayTransactionType),
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
                 ),
@@ -525,6 +535,79 @@ class _AutoBookkeepingConfirmPageState
             ],
           ),
         ),
+        if (isTransferScene) ...[
+          const SizedBox(height: 14),
+          AppCard(
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '这笔转账怎么记？',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: Icon(Icons.call_made_outlined),
+                        label: Text('转给别人 · 支出'),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: Icon(Icons.swap_horiz),
+                        label: Text('自己账户间转账'),
+                      ),
+                    ],
+                    selected: <bool>{_internalTransfer},
+                    onSelectionChanged: _saving
+                        ? null
+                        : (selection) {
+                            final internal = selection.single;
+                            setState(() {
+                              _internalTransfer = internal;
+                              _message = null;
+                              if (internal) {
+                                _destinationAccountId =
+                                    _validDestinationAccountId(
+                                      accounts,
+                                      sourceAccountId: selectedAccountId,
+                                    );
+                              } else {
+                                _destinationAccountId = null;
+                              }
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _transferGuidance(candidate),
+                    style: TextStyle(
+                      color: _transferRecommendation
+                                  ?.suggestsInternalTransfer ==
+                              true
+                          ? context.appPrimary
+                          : context.appSecondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (candidate.targetAccountHint != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '识别到的目标账户：${candidate.targetAccountHint}',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         AppCard(
           child: Material(
@@ -544,6 +627,10 @@ class _AutoBookkeepingConfirmPageState
                           _bookId = value;
                           _accountId = null;
                           _categoryId = null;
+                          _destinationAccountId = null;
+                          if (isTransferScene) {
+                            _internalTransfer = false;
+                          }
                           if (_matchedRefundOriginal?.bookId != value) {
                             _matchedRefundOriginal = null;
                           }
@@ -552,7 +639,9 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedAccountId,
-                  decoration: const InputDecoration(labelText: '支付账户'),
+                  decoration: InputDecoration(
+                    labelText: isTransferScene ? '转出账户' : '支付账户',
+                  ),
                   items: [
                     for (final account in accounts)
                       DropdownMenuItem(
@@ -565,7 +654,12 @@ class _AutoBookkeepingConfirmPageState
                           selectedBook == null ||
                           _matchedRefundOriginal?.bookId == selectedBookId
                       ? null
-                      : (value) => setState(() => _accountId = value),
+                      : (value) => setState(() {
+                          _accountId = value;
+                          if (_destinationAccountId == value) {
+                            _destinationAccountId = null;
+                          }
+                        }),
                 ),
                 if (_matchedRefundOriginal?.bookId == selectedBookId)
                   Padding(
@@ -581,8 +675,30 @@ class _AutoBookkeepingConfirmPageState
                       ),
                     ),
                   ),
-                const SizedBox(height: 12),
-                AppSelect<String>(
+                if (isTransferScene && _internalTransfer) ...[
+                  const SizedBox(height: 12),
+                  AppSelect<String>(
+                    initialValue: selectedDestinationAccountId,
+                    decoration: const InputDecoration(labelText: '转入账户'),
+                    items: [
+                      for (final destination in accounts.where(
+                        (item) => item.id != selectedAccountId,
+                      ))
+                        DropdownMenuItem(
+                          value: destination.id,
+                          child: Text(destination.displayName),
+                        ),
+                    ],
+                    onChanged: _saving || selectedBook == null
+                        ? null
+                        : (value) => setState(
+                            () => _destinationAccountId = value,
+                          ),
+                  ),
+                ],
+                if (!(isTransferScene && _internalTransfer)) ...[
+                  const SizedBox(height: 12),
+                  AppSelect<String>(
                   initialValue: selectedCategoryId,
                   decoration: InputDecoration(
                     labelText: categoryType == CategoryType.income
@@ -599,12 +715,23 @@ class _AutoBookkeepingConfirmPageState
                   onChanged: _saving || selectedBook == null
                       ? null
                       : (value) => setState(() => _categoryId = value),
-                ),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('记住这个商户的选择'),
-                  subtitle: const Text('下次自动带出账本、账户和分类'),
+                  title: Text(
+                    isTransferScene && _internalTransfer
+                        ? '记住这是自己的账户'
+                        : isTransferScene
+                        ? '记住这个收款方的选择'
+                        : '记住这个商户的选择',
+                  ),
+                  subtitle: Text(
+                    isTransferScene && _internalTransfer
+                        ? '下次遇到同一收款对象时可建议账户间转账'
+                        : '下次自动带出账本、账户和分类',
+                  ),
                   value: _rememberForMerchant,
                   onChanged: _saving
                       ? null
