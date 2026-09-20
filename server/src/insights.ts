@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import type { Store } from './store.js';
+import { allFeaturesFreeForTesting } from './testing_access.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { outOfScope } from './assistant_policy.js';
 import {
@@ -256,6 +257,7 @@ function hasActivePaidInsightMembership(
   store: Store,
   userId: string,
 ): boolean {
+  if (allFeaturesFreeForTesting()) return true;
   const now = store.now();
   try {
     if (store.db.prepare(
