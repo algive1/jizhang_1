@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_theme_tokens.dart';
+import '../../../../app/theme/app_theme_tokens.dart';
 
 class NumberKeyboard extends StatelessWidget {
   const NumberKeyboard({
@@ -127,7 +127,7 @@ class NumberKeyboard extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.all(3),
       child: Material(
-        color: const Color(0xFFEFEDEE),
+        color: context.appSurfaceSoft,
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: Row(
@@ -189,8 +189,10 @@ class _KeypadKey extends StatelessWidget {
           color: primary
               ? context.appPrimary
               : muted
-              ? const Color(0xFFEFEDEE)
-              : Colors.white,
+              ? context.appSurfaceSoft
+              : context.appUsesLiquidGlass
+              ? context.appSurface.withValues(alpha: .78)
+              : context.appSurface,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: onTap,
@@ -206,7 +208,6 @@ class _KeypadKey extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
                         ),
                       )
                     : icon != null
@@ -216,7 +217,9 @@ class _KeypadKey extends StatelessWidget {
                         style: TextStyle(
                           fontSize: fontSize,
                           fontWeight: FontWeight.w500,
-                          color: primary ? Colors.white : context.appPrimaryText,
+                          color: primary
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : context.appPrimaryText,
                         ),
                       ),
               ),
