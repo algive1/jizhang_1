@@ -652,6 +652,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         duplicates++;
         continue;
       }
+      if (row.externalId != null) importedIds.add(row.externalId!);
+      importedFingerprints.add(row.importFingerprint);
+      importedNaturalFingerprints.add(row.naturalFingerprint);
 
       final accountId = result.provider.needsAccountMapping
           ? _resolvedAccountId(index, row.sourceAccount, destination: false)
