@@ -614,14 +614,14 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             key: const ValueKey('investment-form-name'),
             controller: _name,
             enabled: !_isLocked,
-            decoration: const InputDecoration(labelText: '投资名称'),
+            decoration: appFieldDecoration('投资名称'),
             validator: (value) =>
                 (value ?? '').trim().isEmpty ? '请输入投资名称' : null,
           ),
           const SizedBox(height: 12),
           AppSelect<InvestmentAssetType>(
             initialValue: _type,
-            decoration: const InputDecoration(labelText: '投资类型'),
+            decoration: appFieldDecoration('投资类型'),
             items: [
               for (final type in InvestmentAssetType.values)
                 DropdownMenuItem(value: type, child: Text(type.label)),
@@ -651,7 +651,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: '买入价格'),
+                decoration: appFieldDecoration('买入价格'),
                 validator: (value) {
                   final parsed = InvestmentInput.parsePrice(value ?? '');
                   if (parsed == null) return '请输入有效价格';
@@ -665,7 +665,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: '买入数量'),
+                decoration: appFieldDecoration('买入数量'),
                 validator: (value) {
                   final parsed = InvestmentInput.parseQuantity(value ?? '');
                   if (parsed == null) return '请输入有效数量';
@@ -706,7 +706,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
           const SizedBox(height: 12),
           AppSelect<String>(
             initialValue: _accountId,
-            decoration: const InputDecoration(labelText: '持有账户'),
+            decoration: appFieldDecoration('持有账户'),
             hint: const Text('请选择'),
             items: [
               for (final account in active)
@@ -725,7 +725,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
           AppTextarea(
             key: const ValueKey('investment-form-note'),
             controller: _note,
-            decoration: const InputDecoration(labelText: '备注（可选）'),
+            decoration: appFieldDecoration('备注（可选）'),
           ),
           SizedBox(height: 20),
           FilledButton(
@@ -843,23 +843,27 @@ class _DateField extends StatelessWidget {
   final VoidCallback onPick;
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: '买入日期，点击选择',
+    child: InkWell(
     key: const ValueKey('investment-form-date'),
     onTap: onPick,
     borderRadius: BorderRadius.circular(16),
-    child: InputDecorator(
-      decoration: const InputDecoration(labelText: '买入日期'),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-              '${date.day.toString().padLeft(2, '0')}',
-              style: const TextStyle(fontSize: 15),
+      child: InputDecorator(
+        decoration: appFieldDecoration('买入日期'),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+                '${date.day.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontSize: 15),
+              ),
             ),
-          ),
-          const Icon(Icons.calendar_today_outlined, size: 16),
-        ],
+            const Icon(Icons.calendar_today_outlined, size: 16),
+          ],
+        ),
       ),
     ),
   );

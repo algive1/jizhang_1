@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_form.dart';
 import '../data/finance_center_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -470,7 +471,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
           children: [
             DropdownButtonFormField<InvoiceDirection>(
               initialValue: direction,
-              decoration: const InputDecoration(labelText: '方向'),
+              decoration: appFieldDecoration('方向'),
               items: const [
                 DropdownMenuItem(
                   value: InvoiceDirection.incoming,
@@ -494,7 +495,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
             ),
             DropdownButtonFormField<InvoiceStatus>(
               initialValue: status,
-              decoration: const InputDecoration(labelText: '状态'),
+              decoration: appFieldDecoration('状态'),
               items: InvoiceStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -602,7 +603,7 @@ class _TaxDialogState extends State<_TaxDialog> {
             ),
             DropdownButtonFormField<TaxFilingStatus>(
               initialValue: status,
-              decoration: const InputDecoration(labelText: '状态'),
+              decoration: appFieldDecoration('状态'),
               items: TaxFilingStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -727,7 +728,7 @@ class _StatementDialogState extends State<_StatementDialog> {
           children: [
             DropdownButtonFormField<CardStatementType>(
               initialValue: type,
-              decoration: const InputDecoration(labelText: '账单类型'),
+              decoration: appFieldDecoration('账单类型'),
               items: const [
                 DropdownMenuItem(
                   value: CardStatementType.credit,
@@ -755,7 +756,7 @@ class _StatementDialogState extends State<_StatementDialog> {
               ),
             DropdownButtonFormField<CardStatementStatus>(
               initialValue: status,
-              decoration: const InputDecoration(labelText: '状态'),
+              decoration: appFieldDecoration('状态'),
               items: CardStatementStatus.values
                   .map((v) => DropdownMenuItem(
                         value: v,
@@ -815,46 +816,78 @@ class _StatementDialogState extends State<_StatementDialog> {
   );
 }
 
+const _financeFieldHeight = 52.0;
+
+InputDecoration _financeDecoration({
+  String? hintText,
+  Widget? suffixIcon,
+}) => InputDecoration(
+  hintText: hintText,
+  floatingLabelBehavior: FloatingLabelBehavior.never,
+  isDense: true,
+  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  constraints: const BoxConstraints(minHeight: _financeFieldHeight),
+  suffixIcon: suffixIcon,
+);
+
 Widget _field(
   TextEditingController controller,
   String label, {
   bool number = false,
 }) => Padding(
   padding: const EdgeInsets.only(top: 10),
-  child: TextField(
-    controller: controller,
-    keyboardType: number
-        ? const TextInputType.numberWithOptions(decimal: true, signed: true)
-        : TextInputType.text,
-    decoration: InputDecoration(labelText: label),
+  child: SizedBox(
+    height: _financeFieldHeight,
+    child: TextField(
+      controller: controller,
+      textAlignVertical: TextAlignVertical.center,
+      keyboardType: number
+          ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+          : TextInputType.text,
+      decoration: _financeDecoration(hintText: label),
+    ),
   ),
 );
 
 class _DateField extends StatelessWidget {
-  const _DateField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
+  const _DateField({required this.label, required this.value, required this.onChanged});
   final String label;
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(label, style: const TextStyle(fontSize: 13)),
-    subtitle: Text(_date(value)),
-    trailing: const Icon(Icons.calendar_month_outlined),
-    onTap: () async {
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: value,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
-      if (picked != null) onChanged(picked);
-    },
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: Semantics(
+      button: true,
+      label: "$label，${_date(value)}，点击选择日期",
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: value,
+            firstDate: DateTime(2000),
+            lastDate: DateTime(2100),
+          );
+          if (picked != null) onChanged(picked);
+        },
+        child: InputDecorator(
+          decoration: _financeDecoration(
+            suffixIcon: const Icon(Icons.calendar_month_outlined),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
+              const SizedBox(height: 2),
+              Text(_date(value)),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
 

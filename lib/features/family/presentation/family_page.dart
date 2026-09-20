@@ -23,6 +23,7 @@ import '../../sharing/application/shared_book_sync_service.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../data/shared_family_service.dart';
 import 'unavailable_drafts_card.dart';
+import '../../../core/widgets/app_form.dart';
 
 class FamilyPage extends ConsumerStatefulWidget {
   const FamilyPage({super.key});
@@ -375,7 +376,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                   const SizedBox(height: 10),
                   TextField(
                     controller: _code,
-                    decoration: const InputDecoration(labelText: '邀请码'),
+                    decoration: appFieldDecoration('邀请码'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
@@ -768,7 +769,7 @@ class _FamilyPageState extends ConsumerState<FamilyPage> {
                   ),
                   TextField(
                     controller: _code,
-                    decoration: const InputDecoration(labelText: '邀请码'),
+                    decoration: appFieldDecoration('邀请码'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(

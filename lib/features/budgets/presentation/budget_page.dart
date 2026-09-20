@@ -234,7 +234,7 @@ class _BudgetDialogState extends State<_BudgetDialog> {
               ))
             AppSelect<String>(
               initialValue: _categoryId,
-              decoration: const InputDecoration(labelText: '分类'),
+              decoration: appFieldDecoration('分类'),
               items: widget.selectableCategories
                   .map(
                     (category) => DropdownMenuItem(

@@ -123,7 +123,7 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                     const SizedBox(height: 12),
                     AppSelect<GoalType>(
                       initialValue: _type,
-                      decoration: const InputDecoration(labelText: '目标类型'),
+                      decoration: appFieldDecoration('目标类型'),
                       items: GoalType.values
                           .map(
                             (type) => DropdownMenuItem(
@@ -168,8 +168,11 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    ListTile(
-                      tileColor: context.appSurfaceSoft,
+                    Semantics(
+                      button: true,
+                      label: '目标日期，点击选择',
+                      child: ListTile(
+                        tileColor: context.appSurfaceSoft,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -182,13 +185,14 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                         '${_targetDate.year}年${_targetDate.month}月',
                         style: TextStyle(color: context.appPrimary),
                       ),
-                      onTap: _pickTargetDate,
+                        onTap: _pickTargetDate,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _descriptionController,
                       maxLines: 2,
-                      decoration: const InputDecoration(labelText: '目标描述（可选）'),
+                      decoration: appFieldDecoration('目标描述（可选）'),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(

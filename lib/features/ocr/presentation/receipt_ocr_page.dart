@@ -17,6 +17,7 @@ import '../../voice/application/speech_recognition_service.dart';
 import '../application/local_ocr_service.dart';
 import '../application/bill_screenshot_parser.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/widgets/app_form.dart';
 
 class ReceiptOcrPage extends ConsumerStatefulWidget {
   const ReceiptOcrPage({super.key});
@@ -179,7 +180,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
             initialValue: accounts.any((a) => a.id == _fallbackAccountId)
                 ? _fallbackAccountId
                 : null,
-            decoration: const InputDecoration(labelText: '默认账户'),
+            decoration: appFieldDecoration('默认账户'),
             items: [
               for (final account in accounts.where((a) => !a.isArchived))
                 DropdownMenuItem(
@@ -197,7 +198,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                   initialValue: expenses.any((c) => c.id == _expenseCategoryId)
                       ? _expenseCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '支出分类'),
+                  decoration: appFieldDecoration('支出分类'),
                   items: [
                     for (final category in expenses)
                       DropdownMenuItem(
@@ -215,7 +216,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                   initialValue: incomes.any((c) => c.id == _incomeCategoryId)
                       ? _incomeCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '收入分类'),
+                  decoration: appFieldDecoration('收入分类'),
                   items: [
                     for (final category in incomes)
                       DropdownMenuItem(
