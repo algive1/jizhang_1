@@ -121,7 +121,8 @@ class TransactionRecord {
     TransactionType.income ||
     TransactionType.refund ||
     TransactionType.reimbursement ||
-    TransactionType.borrow => true,
+    TransactionType.borrow ||
+    TransactionType.assetSale => true,
     _ => false,
   };
 
@@ -141,10 +142,11 @@ class TransactionRecord {
       type == TransactionType.assetPurchase ||
       type == TransactionType.assetSale;
 
-  /// Consumption expense used by reports, budgets and the home totals.
+  /// Personal consumption used by reports, budgets and the home totals.
   ///
-  /// Asset conversions are excluded so an investment purchase never inflates
-  /// the monthly spending figure.
+  /// Only genuine purchase/spending rows count here. Lending, repayments and
+  /// asset conversions remain ledger cash movements but never inflate
+  /// consumption.
   bool get isConsumptionExpense => type == TransactionType.expense;
 
   /// Debt repayments reduce cash or a liability but do not represent a new
@@ -199,7 +201,18 @@ class TransactionRecord {
     }
     if (noteValue != null && noteValue.isNotEmpty) return noteValue;
     if (merchantValue != null && merchantValue.isNotEmpty) return merchantValue;
-    return displayCategoryLabel;
+    return switch (type) {
+      TransactionType.refund => '退款',
+      TransactionType.reimbursement => '报销',
+      TransactionType.borrow => '借入',
+      TransactionType.lend => '借出',
+      TransactionType.repayment => '还款',
+      TransactionType.assetPurchase => '资产购买',
+      TransactionType.assetSale => '资产卖出',
+      TransactionType.adjustment => '余额校准',
+      TransactionType.transfer => '转账',
+      _ => displayCategoryLabel,
+    };
   }
 
   TransactionRecord copyWith({

@@ -295,6 +295,41 @@ ali-r2,m-r2,2026-09-17 11:00:00,信用卡还款,银行,信用卡还款,500.00,�
     expect(index.contains(alipay), isTrue);
   });
 
+  test('generic imports do not trust unnamespaced external ids', () {
+    final existing = TransactionRecord(
+      id: 'generic-old',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: 10,
+      accountId: 'cash',
+      occurredAt: DateTime(2026, 9, 1),
+      createdAt: DateTime(2026, 9, 1),
+      updatedAt: DateTime(2026, 9, 1),
+      source: TransactionSource.import,
+      metadataJson: jsonEncode({
+        'importProvider': 'generic',
+        'externalId': '42',
+        'importFingerprint': 'different-fingerprint',
+      }),
+    );
+    final index = BillImportDuplicateIndex([existing]);
+    final row = ImportedBillRow(
+      provider: BillImportProvider.generic,
+      occurredAt: DateTime(2026, 9, 2),
+      type: TransactionType.expense,
+      amount: 20,
+      merchant: '另一来源',
+      note: '',
+      externalId: '42',
+      paymentMethod: '现金',
+      raw: const {},
+    );
+
+    expect(index.contains(row), isFalse);
+    index.add(row);
+    expect(index.contains(row), isTrue);
+  });
+
   test('parses generic XLSX instead of assuming every workbook is MuMu', () {
     final bytes = _xlsx([
       ['时间', '类型', '金额', '分类', '账户', '备注'],

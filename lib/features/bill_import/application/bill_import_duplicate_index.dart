@@ -17,6 +17,7 @@ class BillImportDuplicateIndex {
         final fingerprint = decoded['importFingerprint']?.toString().trim();
         if (provider != null &&
             provider.isNotEmpty &&
+            provider != BillImportProvider.generic.name &&
             externalId != null &&
             externalId.isNotEmpty) {
           _externalKeys.add('$provider|$externalId');
@@ -35,7 +36,8 @@ class BillImportDuplicateIndex {
 
   bool contains(ImportedBillRow row) {
     final externalId = row.externalId?.trim();
-    if (externalId != null &&
+    if (row.provider != BillImportProvider.generic &&
+        externalId != null &&
         externalId.isNotEmpty &&
         _externalKeys.contains('${row.provider.name}|$externalId')) {
       return true;
@@ -45,7 +47,9 @@ class BillImportDuplicateIndex {
 
   void add(ImportedBillRow row) {
     final externalId = row.externalId?.trim();
-    if (externalId != null && externalId.isNotEmpty) {
+    if (row.provider != BillImportProvider.generic &&
+        externalId != null &&
+        externalId.isNotEmpty) {
       _externalKeys.add('${row.provider.name}|$externalId');
     }
     _fingerprints.add(row.importFingerprint);

@@ -418,13 +418,12 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             mapped!.category!.name,
             if (mapped.subcategory != null) mapped.subcategory!.name,
           ].join(' / ');
-    final fallbackTitle = row.type == TransactionType.transfer
-        ? '转账'
-        : (row.sourceSubcategory?.trim().isNotEmpty == true
-              ? row.sourceSubcategory!.trim()
-              : row.sourceCategory?.trim().isNotEmpty == true
-              ? row.sourceCategory!.trim()
-              : '未命名交易');
+    final fallbackTitle =
+        row.sourceSubcategory?.trim().isNotEmpty == true
+        ? row.sourceSubcategory!.trim()
+        : row.sourceCategory?.trim().isNotEmpty == true
+        ? row.sourceCategory!.trim()
+        : _transactionTypeTitle(row.type);
     final subtitleParts = <String>[
       _dateTime(row.occurredAt),
       if (row.paymentMethod?.trim().isNotEmpty == true) row.paymentMethod!.trim(),
@@ -1002,6 +1001,20 @@ bool _isOutflowType(TransactionType type) => switch (type) {
   TransactionType.repayment ||
   TransactionType.assetPurchase => true,
   _ => false,
+};
+
+String _transactionTypeTitle(TransactionType type) => switch (type) {
+  TransactionType.expense => '支出',
+  TransactionType.income => '收入',
+  TransactionType.transfer => '转账',
+  TransactionType.refund => '退款',
+  TransactionType.reimbursement => '报销',
+  TransactionType.borrow => '借入',
+  TransactionType.lend => '借出',
+  TransactionType.repayment => '还款',
+  TransactionType.assetPurchase => '资产购买',
+  TransactionType.assetSale => '资产卖出',
+  TransactionType.adjustment => '余额校准',
 };
 
 String _amountPrefix(TransactionType type) => switch (type) {

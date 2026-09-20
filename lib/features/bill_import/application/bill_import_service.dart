@@ -184,7 +184,16 @@ class BillImportService {
       final normalized = row.map(_normalizeHeader).toSet();
       final hasTime = _hasAny(
         normalized,
-        const ['日期', '时间', '交易时间', '记账时间', '发生时间', '创建时间'],
+        const [
+          '日期',
+          '时间',
+          '交易时间',
+          '付款时间',
+          '交易创建时间',
+          '记账时间',
+          '发生时间',
+          '创建时间',
+        ],
       );
       final hasAmount = normalized.any((value) => value.contains('金额'));
       final hasType = _hasAny(
@@ -420,7 +429,16 @@ class BillImportService {
     final occurredAt = _time(
       _first(
         map,
-        const ['日期', '时间', '交易时间', '记账时间', '发生时间', '创建时间'],
+        const [
+          '日期',
+          '时间',
+          '交易时间',
+          '付款时间',
+          '交易创建时间',
+          '记账时间',
+          '发生时间',
+          '创建时间',
+        ],
       ),
     );
     if (occurredAt == null) return null;
