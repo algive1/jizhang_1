@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/membership.dart';
+import 'package:jizhang_app/core/config/testing_access.dart';
 import 'package:jizhang_app/features/membership/data/membership_repository.dart';
 import 'package:jizhang_app/features/membership/domain/commercial_service_contracts.dart';
 
@@ -48,6 +49,20 @@ void main() {
 
     expect(snapshot.entitlements, contains(grant));
     expect(snapshot.has(EntitlementKey.multiDevice, now: now), isFalse);
+  });
+
+  test('current test phase grants every local entitlement', () async {
+    expect(kAllFeaturesFreeForTesting, isTrue);
+    final snapshot = await LocalOnlyMembershipRepository(clock: () => now)
+        .getCurrent();
+
+    for (final key in EntitlementKey.values) {
+      expect(
+        snapshot.has(key, now: now),
+        isTrue,
+        reason: '${key.name} should be free during product testing',
+      );
+    }
   });
 
   test('usage quota never reports a negative remaining count', () {
