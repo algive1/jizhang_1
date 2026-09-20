@@ -26,6 +26,8 @@ class HomeSurface extends StatelessWidget {
     padding: padding,
     borderRadius: 20,
     tint: context.appSurface,
+    blurSigma: 12,
+    chromaticEdge: false,
     child: child,
   );
 }
