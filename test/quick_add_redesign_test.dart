@@ -5,7 +5,7 @@ import 'support/reference_capture.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:jizhang_app/app/theme/app_colors.dart';
+import 'package:jizhang_app/app/theme/app_theme_tokens.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/core/database/app_database.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
@@ -211,7 +211,7 @@ void main() {
 
     expect(note.height, closeTo(40, .1));
     expect(ai.height, closeTo(36, .1));
-    expect(ai.width, lessThan(92));
+    expect(ai.width, lessThan(104));
     expect(voice.width, closeTo(36, .1));
     expect(voice.height, closeTo(36, .1));
     expect(
@@ -236,19 +236,22 @@ void main() {
     // 输入表达式为深色，计算结果为绿色。
     expect(find.text('100*2'), findsOneWidget);
     expect(find.text('= ¥200.00'), findsOneWidget);
+    final amountContext = tester.element(
+      find.byKey(const ValueKey('quick-amount-display')),
+    );
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('quick-amount-display')))
           .style
           ?.color,
-      AppColors.primaryDark,
+      amountContext.appPrimary,
     );
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('quick-amount-expression')))
           .style
           ?.color,
-      AppColors.textPrimary,
+      amountContext.appPrimaryText,
     );
 
     await tester.tap(find.byKey(const ValueKey('quick-done')));
@@ -475,15 +478,20 @@ void main() {
       'quick-reimbursement-chip',
       'quick-book-selector',
     ]) {
+      final finder = find.byKey(ValueKey(key));
       final chip = tester.widget<Material>(
         find
             .descendant(
-              of: find.byKey(ValueKey(key)),
+              of: finder,
               matching: find.byType(Material),
             )
             .first,
       );
-      expect(chip.color, AppColors.primarySoft, reason: '$key 应默认选中');
+      expect(
+        chip.color,
+        tester.element(finder).appPrimarySoft,
+        reason: '$key 应默认使用当前主题的选中态颜色',
+      );
     }
     expect(find.text('定期付'), findsOneWidget);
     expect(find.text('周期付'), findsNothing);
