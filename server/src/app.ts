@@ -97,7 +97,9 @@ export async function createApp(
     ).run(tokenHash,user.id,expiresAt,sessionId,deviceName??'当前设备',now,now);
     return {user,token,expiresAt};
   };
-  registerAppUpdateRoutes(app);
+  app.get('/live',async()=>({ok:true}));
+  app.get('/ready',async()=>{store.db.prepare('SELECT 1').get();return {ok:true,now:store.now()}});
+  registerAppUpdateRoutes(app,store);
   registerAdConfigRoutes(app);
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
