@@ -99,7 +99,8 @@ void main() {
       find.byKey(const ValueKey('quick-subcategory-picker')),
       findsOneWidget,
     );
-    expect(find.text('选择二级分类'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('按住滑动选择，松手确认'), findsOneWidget);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(
