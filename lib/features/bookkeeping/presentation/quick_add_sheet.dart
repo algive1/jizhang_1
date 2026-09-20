@@ -2240,7 +2240,7 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
     final safeTop = media.padding.top + 8;
     final safeBottom = screen.height - media.padding.bottom - 8;
     final textScale = media.textScaler.scale(14);
-    final width = (screen.width - 24).clamp(280.0, 500.0).toDouble();
+    final width = (screen.width - 24).clamp(1.0, 500.0).toDouble();
     final columns = textScale > 19 ? 4 : (width >= 430 ? 6 : 5);
     final rows = ((categories.length + 1 + columns - 1) / columns).floor();
     final rowHeight = textScale > 19 ? 92.0 : 80.0;
