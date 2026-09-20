@@ -213,7 +213,8 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
       );
     }
 
-    final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
+    final accounts =
+        ref.watch(assetDashboardAccountsProvider).value ?? const <Account>[];
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
@@ -224,6 +225,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
         ? _attachments
         : legacyMetadata.attachments;
     final category = transaction.displayCategoryLabel;
+    final categoryPath = transaction.displayCategoryPath;
 
     return Scaffold(
       appBar: AppBar(
@@ -301,7 +303,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                       transaction.destinationAccountId!,
                     ),
                   ),
-                _DetailRow(label: '分类', value: category),
+                _DetailRow(label: '分类', value: categoryPath),
                 if (transaction.reimbursementStatus != ReimbursementStatus.none)
                   _DetailRow(
                     label: '报销状态',
