@@ -1,6 +1,8 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class QuickAddButton extends StatelessWidget {
   const QuickAddButton({
@@ -14,14 +16,19 @@ class QuickAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final glass = context.appUsesLiquidGlass;
+    final material = context.appMaterial;
+    final highContrast = MediaQuery.of(context).highContrast;
+    final blur = highContrast ? material.blurSigma * .55 : material.blurSigma;
+
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Color(0x38638332),
-            blurRadius: 13,
-            offset: Offset(0, 5),
+            color: context.appPrimary.withValues(alpha: glass ? .18 : .28),
+            blurRadius: glass ? 18 : 13,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -33,19 +40,62 @@ class QuickAddButton extends StatelessWidget {
           focusElevation: 0,
           hoverElevation: 0,
           highlightElevation: 0,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: glass ? Colors.transparent : context.appPrimary,
+          foregroundColor: glass ? context.appPrimary : Colors.white,
           shape: const CircleBorder(),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary,
-              border: Border.all(color: Colors.white.withValues(alpha: .65)),
-            ),
-            child: const Icon(Icons.add, size: 38, weight: 400),
-          ),
+          child: glass
+              ? ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: blur,
+                      sigmaY: blur,
+                      tileMode: TileMode.decal,
+                    ),
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            material.glassHighlight.withValues(
+                              alpha: highContrast ? .98 : .82,
+                            ),
+                            material.glassTint.withValues(
+                              alpha: highContrast ? .98 : .80,
+                            ),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: highContrast
+                              ? context.appPrimary.withValues(alpha: .48)
+                              : material.glassBorder,
+                          width: highContrast ? 1.4 : 1,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.add,
+                        size: 36,
+                        weight: 400,
+                        color: context.appPrimary,
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: context.appPrimary,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .65),
+                    ),
+                  ),
+                  child: const Icon(Icons.add, size: 38, weight: 400),
+                ),
         ),
       ),
     );
