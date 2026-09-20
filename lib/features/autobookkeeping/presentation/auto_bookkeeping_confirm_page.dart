@@ -23,6 +23,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
+import '../auto_bookkeeping_transfer_resolver.dart';
 import '../../transactions/data/refund_service.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../notifications/application/payment_notification_service.dart';
@@ -42,9 +43,12 @@ class _AutoBookkeepingConfirmPageState
   String? _bookId;
   String? _accountId;
   String? _categoryId;
+  String? _destinationAccountId;
   String? _message;
   AutoBookkeepingRecommendation? _recommendation;
   TransactionRecord? _matchedRefundOriginal;
+  AutoBookkeepingTransferRecommendation? _transferRecommendation;
+  bool _internalTransfer = false;
   bool _rememberForMerchant = true;
   bool _keepScreenshot = true;
   bool _loading = true;
@@ -64,6 +68,8 @@ class _AutoBookkeepingConfirmPageState
           .getPending();
       AutoBookkeepingRecommendation? recommendation;
       TransactionRecord? matchedRefundOriginal;
+      AutoBookkeepingTransferRecommendation? transferRecommendation;
+      String? sourceAccountId;
       if (candidate != null) {
         final fallbackBookId = ref.read(activeBookIdProvider);
         recommendation = await ref
@@ -77,16 +83,40 @@ class _AutoBookkeepingConfirmPageState
         matchedRefundOriginal = await ref
             .read(autoBookkeepingRefundMatcherProvider)
             .findOriginal(candidate: candidate, bookId: targetBookId);
+
+        final accounts = await ref.read(
+          accountsByBookProvider(targetBookId).future,
+        );
+        sourceAccountId =
+            matchedRefundOriginal?.accountId ??
+            _bestAccountId(
+              accounts,
+              candidate: candidate,
+              preferredId: recommendation.accountId,
+            );
+        if (candidate.transactionType == 'TRANSFER') {
+          transferRecommendation = await ref
+              .read(autoBookkeepingTransferResolverProvider)
+              .recommend(
+                candidate: candidate,
+                bookId: targetBookId,
+                accounts: accounts,
+                sourceAccountId: sourceAccountId,
+              );
+        }
       }
       if (!mounted) return;
       setState(() {
         _candidate = candidate;
         _recommendation = recommendation;
         _matchedRefundOriginal = matchedRefundOriginal;
+        _transferRecommendation = transferRecommendation;
         _bookId = recommendation?.bookId;
-        _accountId =
-            matchedRefundOriginal?.accountId ?? recommendation?.accountId;
+        _accountId = sourceAccountId;
         _categoryId = recommendation?.categoryId;
+        _internalTransfer =
+            transferRecommendation?.suggestsInternalTransfer == true;
+        _destinationAccountId = transferRecommendation?.destinationAccountId;
         _loading = false;
       });
       if (candidate != null && candidate.screenshotPath == null) {
