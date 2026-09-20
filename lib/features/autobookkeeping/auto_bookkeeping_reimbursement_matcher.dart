@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database_provider.dart';
+import '../../core/models/book.dart';
 import '../../core/models/transaction_record.dart';
 import '../books/data/book_repository.dart';
 import '../transactions/data/transactions_repository.dart';
@@ -54,7 +55,7 @@ final autoBookkeepingReimbursementMatcherProvider = Provider.family<
   AutoBookkeepingReimbursementMatcher,
   String
 >((ref, bookId) {
-  final book = (ref.watch(booksProvider).value ?? const [])
+  final book = (ref.watch(booksProvider).value ?? const <LedgerBook>[])
       .where((item) => item.id == bookId)
       .firstOrNull;
   return AutoBookkeepingReimbursementMatcher(
