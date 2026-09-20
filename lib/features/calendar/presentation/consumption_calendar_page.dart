@@ -382,7 +382,7 @@ class _ConsumptionCalendarPageState
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.appBackground,
+      backgroundColor: context.appSheetSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
