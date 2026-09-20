@@ -64,6 +64,15 @@ class ImportedBillRow {
     merchant.trim(),
     note.trim(),
   ].join('|');
+
+  /// Provider-independent identity used to recognize the same historical row
+  /// even if an older app version classified an official XLSX as "generic".
+  String get naturalFingerprint => [
+    occurredAt.toIso8601String(),
+    type.name,
+    amount.toStringAsFixed(2),
+    (merchant.trim().isNotEmpty ? merchant : note).trim().toLowerCase(),
+  ].join('|');
 }
 
 class BillImportResult {
