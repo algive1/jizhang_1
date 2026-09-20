@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jizhang_app/app/theme/app_theme.dart';
+import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/widgets/app_bottom_navigation.dart';
 import 'package:jizhang_app/core/widgets/app_bottom_sheet.dart';
 import 'package:jizhang_app/core/widgets/app_scaffold.dart';
@@ -172,6 +174,51 @@ void main() {
       );
     },
   );
+
+  test('legacy theme payloads default to the solid material style', () {
+    final theme = AppThemeDefinition.fromJson({
+      'id': 'legacy',
+      'name': '旧主题',
+      'description': '',
+      'premium': true,
+      'background': '#FFFFFF',
+      'surface': '#FFFFFF',
+      'surfaceSoft': '#F5F5F5',
+      'primary': '#527C98',
+      'primaryDark': '#365D77',
+      'primarySoft': '#E4EFF5',
+      'textPrimary': '#1D252A',
+      'textSecondary': '#707A80',
+      'divider': '#E4EAEE',
+    });
+
+    expect(theme.style, AppThemeStyle.solid);
+    expect(BuiltInThemes.liquidGlass.premium, isTrue);
+    expect(BuiltInThemes.liquidGlass.style, AppThemeStyle.liquidGlass);
+  });
+
+  testWidgets('liquid glass theme enables transparent scaffold and glass nav', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(BuiltInThemes.liquidGlass),
+        home: const Scaffold(
+          bottomNavigationBar: AppBottomNavigation(location: '/'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final context = tester.element(find.byType(AppBottomNavigation));
+    final theme = Theme.of(context);
+    final material = theme.extension<AppThemeMaterial>();
+
+    expect(theme.scaffoldBackgroundColor, Colors.transparent);
+    expect(material?.usesLiquidGlass, isTrue);
+    expect(material?.blurSigma, greaterThan(0));
+    expect(find.byType(BackdropFilter), findsOneWidget);
+  });
 }
 
 class _RecordingNavigatorObserver extends NavigatorObserver {

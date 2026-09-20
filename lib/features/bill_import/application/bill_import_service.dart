@@ -82,6 +82,15 @@ class ImportedBillRow {
     merchant.trim(),
     note.trim(),
   ].join('|');
+
+  /// Provider-independent identity used to recognize the same historical row
+  /// even if an older app version classified an official XLSX as "generic".
+  String get naturalFingerprint => [
+    occurredAt.toIso8601String(),
+    type.name,
+    amount.toStringAsFixed(2),
+    (merchant.trim().isNotEmpty ? merchant : note).trim().toLowerCase(),
+  ].join('|');
 }
 
 class BillImportResult {
@@ -124,7 +133,7 @@ class BillImportService {
           .toList(growable: false);
       if (rows.isEmpty) continue;
       try {
-        return _parseSpreadsheetRows(rows);
+        return _parseRows(rows);
       } on FormatException catch (error) {
         lastError = error;
       }
@@ -145,6 +154,10 @@ class BillImportService {
     final rows = _parseDelimited(input)
         .where((row) => row.any((cell) => cell.trim().isNotEmpty))
         .toList(growable: false);
+    return _parseRows(rows);
+  }
+
+  BillImportResult _parseRows(List<List<String>> rows) {
     if (rows.isEmpty) throw const FormatException('账单文件为空');
 
     final officialHeaderIndex = rows.indexWhere((row) {
@@ -313,14 +326,13 @@ class BillImportService {
     final occurredAt = _time(timeText);
     if (occurredAt == null) return null;
 
-    final merchant = _displayValue(
-      _first(map, const ['交易对方', '商户', '对方', '收款方']),
+    final merchant = _first(
+      map,
+      const ['交易对方', '商户', '对方', '收款方'],
     );
-    final goods = _displayValue(_first(map, const ['商品', '商品名称']));
-    final note = _displayValue(_first(map, const ['备注', '交易备注']));
-    final transactionKind = _displayValue(
-      _first(map, const ['交易类型', '类型']),
-    );
+    final goods = _first(map, const ['商品', '商品名称']);
+    final note = _first(map, const ['备注', '交易备注']);
+    final transactionKind = _first(map, const ['交易类型', '类型']);
     final type = _officialTransactionType(
       direction,
       '$transactionKind $status $goods $note',
@@ -465,11 +477,13 @@ class BillImportService {
       return null;
     }
 
-    final merchant = _displayValue(
-      _first(map, const ['交易对方', '商户', '商家', '对方', '收款方']),
+    final merchant = _first(
+      map,
+      const ['交易对方', '商户', '商家', '对方', '收款方'],
     );
-    final note = _displayValue(
-      _first(map, const ['备注', '交易备注', '说明', '描述', '商品', '商品名称']),
+    final note = _first(
+      map,
+      const ['备注', '交易备注', '说明', '描述', '商品', '商品名称'],
     );
     final externalId = _emptyToNull(
       _first(
@@ -502,7 +516,6 @@ class BillImportService {
     final primary = value.replaceAll(' ', '').toLowerCase();
     final category = (sourceCategory ?? '').replaceAll(' ', '').toLowerCase();
     final combined = '$primary$category';
-
     if (primary.contains('转账') || primary == 'transfer') {
       return TransactionType.transfer;
     }
@@ -514,13 +527,13 @@ class BillImportService {
     if (combined.contains('报销') || primary == 'reimbursement') {
       return TransactionType.reimbursement;
     }
+    if (combined.contains('借出') || primary == 'lend') {
+      return TransactionType.lend;
+    }
     if (combined.contains('借入') ||
         combined.contains('借款') ||
         primary == 'borrow') {
       return TransactionType.borrow;
-    }
-    if (combined.contains('借出') || primary == 'lend') {
-      return TransactionType.lend;
     }
     if (combined.contains('还款') || primary == 'repayment') {
       return TransactionType.repayment;
@@ -550,8 +563,9 @@ class BillImportService {
         return TransactionType.borrow;
       }
     }
-    if (base == TransactionType.expense && text.contains('还款')) {
-      return TransactionType.repayment;
+    if (base == TransactionType.expense) {
+      if (text.contains('还款')) return TransactionType.repayment;
+      if (text.contains('借出')) return TransactionType.lend;
     }
     return base;
   }
@@ -590,15 +604,21 @@ class BillImportService {
   String _first(Map<String, String> map, List<String> keys) {
     for (final key in keys) {
       final exact = map[key];
-      if (exact != null && exact.trim().isNotEmpty) return exact.trim();
+      if (_isMeaningfulCell(exact)) return exact!.trim();
       for (final entry in map.entries) {
         if (_normalizeHeader(entry.key) == _normalizeHeader(key) &&
-            entry.value.trim().isNotEmpty) {
+            _isMeaningfulCell(entry.value)) {
           return entry.value.trim();
         }
       }
     }
     return '';
+  }
+
+  bool _isMeaningfulCell(String? value) {
+    final cleaned = value?.trim() ?? '';
+    if (cleaned.isEmpty) return false;
+    return cleaned != '/' && cleaned != '／';
   }
 
   String _normalizeHeader(String value) => value
@@ -607,22 +627,6 @@ class BillImportService {
       .replaceAll(RegExp(r'\s+'), '')
       .replaceAll(':', '')
       .replaceAll('：', '');
-
-  String _displayValue(String value) {
-    final cleaned = value.trim();
-    final normalized = cleaned.toLowerCase();
-    if (cleaned.isEmpty ||
-        cleaned == '/' ||
-        cleaned == '-' ||
-        cleaned == '--' ||
-        cleaned == '—' ||
-        cleaned == '无' ||
-        normalized == 'n/a' ||
-        normalized == 'null') {
-      return '';
-    }
-    return cleaned;
-  }
 
   String? _emptyToNull(String value) {
     final cleaned = value.trim();

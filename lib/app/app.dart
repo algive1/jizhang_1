@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_theme_definition.dart';
 import '../core/database/database_provider.dart';
 import '../core/widgets/startup_poster.dart';
 import '../features/sharing/application/shared_book_sync_service.dart';
@@ -421,9 +422,27 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('zh', 'CN')],
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => AppLockGate(
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final content = AppLockGate(
+          child: child ?? const SizedBox.shrink(),
+        );
+        if (appearance.style != AppThemeStyle.liquidGlass) return content;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                appearance.background,
+                appearance.primarySoft,
+                appearance.surface,
+              ],
+              stops: const [0, .52, 1],
+            ),
+          ),
+          child: content,
+        );
+      },
     );
   }
 }

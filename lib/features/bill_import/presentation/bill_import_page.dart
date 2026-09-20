@@ -47,108 +47,106 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         ref.watch(categoriesProvider).value ?? const <Category>[];
     _initializeSelections(accounts, categories);
 
+    final result = _result;
     return SafeArea(
       child: Stack(
         children: [
           CustomScrollView(
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  result == null ? 120 : 190,
+                ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: context.pop,
-                          icon: const Icon(Icons.arrow_back),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            '账单导入',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _loading ? null : _pick,
-                          icon: const Icon(Icons.upload_file, size: 18),
-                          label: const Text('选择文件'),
-                        ),
-                      ],
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: context.pop,
+                      icon: const Icon(Icons.arrow_back),
                     ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    const SizedBox(width: 4),
+                    Expanded(
                       child: Text(
-                        '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，'
-                        '其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
-                        style: TextStyle(
-                          color: context.appSecondaryText,
-                          height: 1.45,
-                        ),
+                        '账单导入',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      AppCard(
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: AppColors.warning),
-                        ),
-                      ),
-                    ],
-                    if (_loading) ...[
-                      const SizedBox(height: 24),
-                      const Center(child: CircularProgressIndicator()),
-                    ],
-                    if (_result != null) ...[
-                      const SizedBox(height: 14),
-                      _summary(_result!),
-                      const SizedBox(height: 12),
-                      _mapping(accounts, categories),
-                      const SizedBox(height: 12),
-                      _preview(_result!, categories),
-                    ],
+                    FilledButton.icon(
+                      onPressed: _loading ? null : _pick,
+                      icon: Icon(Icons.upload_file, size: 18),
+                      label: Text('选择文件'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
+                    style: TextStyle(
+                      color: context.appSecondaryText,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  AppCard(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: AppColors.warning),
+                    ),
+                  ),
+                ],
+                if (_loading) ...[
+                  const SizedBox(height: 24),
+                  const Center(child: CircularProgressIndicator()),
+                ],
+                if (result != null) ...[
+                  const SizedBox(height: 14),
+                  _summary(result),
+                  const SizedBox(height: 12),
+                  _mapping(accounts, categories),
+                  const SizedBox(height: 12),
+                  _preview(result, categories),
+                ],
                   ]),
                 ),
               ),
             ],
           ),
-          if (_result != null)
+          if (result != null)
             Positioned(
               left: 16,
               right: 16,
               bottom: 12,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: context.appBackground.withValues(alpha: .96),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
+              child: Material(
+                elevation: 10,
+                shadowColor: Colors.black.withValues(alpha: .16),
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(22),
                 child: Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   child: SizedBox(
-                    height: 48,
+                    height: 52,
                     child: FilledButton.icon(
                       onPressed: _saving || _selected.isEmpty
                           ? null
                           : () => _save(accounts, categories),
                       icon: _saving
                           ? const SizedBox.square(
-                              dimension: 16,
+                              dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check),
                       label: Text(
                         _saving
                             ? '正在导入…'
-                            : '导入已选 ${_selected.length} 笔',
+                            : '确认导入已选 ${_selected.length} 笔',
                       ),
                     ),
                   ),
@@ -249,23 +247,23 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ],
             onChanged: (value) => setState(() => _accountId = value),
           ),
-          if (needsAccountMapping) ...[
-            const SizedBox(height: 4),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('保持当前账户余额'),
-              subtitle: Text(
-                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。适用于木木及其他记账 App 的历史账单。',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
+          const SizedBox(height: 4),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('保持当前账户余额'),
+            subtitle: Text(
+              '推荐用于导入历史账单：流水会进入统计和消费日历，但不会把历史收支再次累计到当前账户余额。关闭后才会按导入流水调整余额。',
+              style: TextStyle(
+                color: context.appSecondaryText,
+                fontSize: 12,
+                height: 1.35,
               ),
-              value: _preserveCurrentBalances,
-              onChanged: (value) =>
-                  setState(() => _preserveCurrentBalances = value),
             ),
+            value: _preserveCurrentBalances,
+            onChanged: (value) =>
+                setState(() => _preserveCurrentBalances = value),
+          ),
+          if (needsAccountMapping) ...[
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
@@ -590,6 +588,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   ) async {
     final result = _result;
     if (result == null) return;
+    final targetBookId = ref.read(activeBookIdProvider);
 
     if (!result.provider.needsAccountMapping && _accountId == null) {
       setState(() => _error = '请选择默认账户');
@@ -612,7 +611,6 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       return;
     }
 
-    final activeBookId = ref.read(activeBookIdProvider);
     final existingTransactions =
         await ref.read(transactionRepositoryProvider).getAll();
     if (!mounted) return;
@@ -678,7 +676,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           amount: row.amount,
           accountId: accountId,
           destinationAccountId: destinationAccountId,
-          bookId: activeBookId,
+          bookId: targetBookId,
           occurredAt: row.occurredAt,
           categoryId: category?.id,
           subcategoryId: subcategory?.id,
@@ -695,7 +693,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
-            if (row.provider.needsAccountMapping && _preserveCurrentBalances)
+            'importNaturalFingerprint': row.naturalFingerprint,
+            if (_preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.fingerprintOrderId != null)

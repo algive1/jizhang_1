@@ -144,9 +144,8 @@ class TransactionRecord {
 
   /// Personal consumption used by reports, budgets and the home totals.
   ///
-  /// Only genuine purchase/spending rows count here. Lending, repayments and
-  /// asset conversions remain ledger cash movements but never inflate
-  /// consumption.
+  /// Lending, debt repayment and asset conversion are cash movements, not
+  /// new personal consumption.
   bool get isConsumptionExpense => type == TransactionType.expense;
 
   /// Debt repayments reduce cash or a liability but do not represent a new
@@ -188,19 +187,20 @@ class TransactionRecord {
 
   /// The primary text for a transaction row.
   ///
-  /// A user-entered note is the most specific label. Merchant is retained as
-  /// the next fallback for records created through the expanded bookkeeping
-  /// options; when both are empty, the selected category is the useful label.
+  /// Manual bookkeeping keeps a user-entered note as the most specific label.
+  /// Imported bills intentionally keep the merchant first so the persisted
+  /// ledger matches the import preview even when provider exports also contain
+  /// a generic product/remark field.
   String get displayTitle {
-    final noteValue = note?.trim();
-    final merchantValue = merchant?.trim();
-    if (source == TransactionSource.import &&
-        merchantValue != null &&
-        merchantValue.isNotEmpty) {
-      return merchantValue;
+    final noteValue = _displayValue(note);
+    final merchantValue = _displayValue(merchant);
+    if (source == TransactionSource.import) {
+      if (merchantValue != null) return merchantValue;
+      if (noteValue != null) return noteValue;
+    } else {
+      if (noteValue != null) return noteValue;
+      if (merchantValue != null) return merchantValue;
     }
-    if (noteValue != null && noteValue.isNotEmpty) return noteValue;
-    if (merchantValue != null && merchantValue.isNotEmpty) return merchantValue;
     return switch (type) {
       TransactionType.refund => '退款',
       TransactionType.reimbursement => '报销',
@@ -213,6 +213,14 @@ class TransactionRecord {
       TransactionType.transfer => '转账',
       _ => displayCategoryLabel,
     };
+  }
+
+  String? _displayValue(String? value) {
+    final cleaned = value?.trim();
+    if (cleaned == null || cleaned.isEmpty || cleaned == '/' || cleaned == '／') {
+      return null;
+    }
+    return cleaned;
   }
 
   TransactionRecord copyWith({

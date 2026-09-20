@@ -32,8 +32,8 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1));
       });
       final now = DateTime.now();
-      final firstDay = DateTime(now.year, now.month, 1, 12);
-      final secondDay = DateTime(now.year, now.month, 2, 12);
+      final firstDay = DateTime(now.year, now.month, 1);
+      final secondDay = DateTime(now.year, now.month, now.day == 1 ? 1 : 2);
 
       await repository.create(
         _record(
@@ -74,19 +74,65 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('本月支出'), findsOneWidget);
-      expect(find.text('日均支出'), findsOneWidget);
-      expect(find.text('消费天数'), findsOneWidget);
-      expect(find.text('最高消费日'), findsOneWidget);
-      expect(find.text('¥80'), findsOneWidget);
-      expect(find.text('1日'), findsOneWidget);
-      expect(find.text('999'), findsNothing);
+      expect(find.text('本月概览'), findsOneWidget);
+      expect(find.text('月支出'), findsOneWidget);
+      expect(find.text('月收入'), findsOneWidget);
+      expect(find.text('有消费'), findsOneWidget);
+      expect(find.text('¥80.00'), findsOneWidget);
+      expect(find.text(now.day == 1 ? '1天' : '2天'), findsOneWidget);
+      expect(find.textContaining('999'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
 
+  testWidgets('calendar includes imported expenses in the current month', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(database);
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      container.dispose();
+      await tester.pump();
+    });
+    final now = DateTime.now();
+
+    await repository.create(
+      _record(
+        id: 'calendar-imported-expense',
+        type: TransactionType.expense,
+        amount: 27.30,
+        occurredAt: DateTime(now.year, now.month, now.day),
+        source: TransactionSource.import,
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: ConsumptionCalendarPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('¥27.30'), findsWidgets);
+    expect(find.text('全部账本'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'imported transactions appear in calendar totals and selected-day list',
+    'calendar canonical totals exclude reimbursement, refund and lending',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -106,36 +152,36 @@ void main() {
       final now = DateTime.now();
       final occurredAt = DateTime(now.year, now.month, now.day, 10);
 
-      await repository.create(
-        _record(
-          id: 'calendar-imported',
-          type: TransactionType.expense,
-          amount: 36,
-          occurredAt: occurredAt,
-          source: TransactionSource.import,
-          merchant: '导入午餐店',
-        ),
-      );
-      await repository.create(
-        _record(
-          id: 'calendar-reimbursable',
-          type: TransactionType.expense,
-          amount: 100,
-          occurredAt: occurredAt.add(const Duration(minutes: 10)),
-          reimbursementStatus: ReimbursementStatus.pending,
-          reimbursementAmount: 80,
-          source: TransactionSource.import,
-        ),
-      );
-      await repository.create(
-        _record(
-          id: 'calendar-import-refund',
-          type: TransactionType.refund,
-          amount: 50,
-          occurredAt: occurredAt.add(const Duration(minutes: 20)),
-          source: TransactionSource.import,
-        ),
-      );
+      await repository.create(_record(
+        id: 'canonical-expense',
+        type: TransactionType.expense,
+        amount: 36,
+        occurredAt: occurredAt,
+        source: TransactionSource.import,
+      ));
+      await repository.create(_record(
+        id: 'canonical-reimbursable',
+        type: TransactionType.expense,
+        amount: 100,
+        occurredAt: occurredAt.add(const Duration(minutes: 1)),
+        reimbursementStatus: ReimbursementStatus.pending,
+        reimbursementAmount: 80,
+        source: TransactionSource.import,
+      ));
+      await repository.create(_record(
+        id: 'canonical-refund',
+        type: TransactionType.refund,
+        amount: 50,
+        occurredAt: occurredAt.add(const Duration(minutes: 2)),
+        source: TransactionSource.import,
+      ));
+      await repository.create(_record(
+        id: 'canonical-lend',
+        type: TransactionType.lend,
+        amount: 70,
+        occurredAt: occurredAt.add(const Duration(minutes: 3)),
+        source: TransactionSource.import,
+      ));
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -148,8 +194,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('导入午餐店'), findsOneWidget);
-      expect(find.text('¥56'), findsWidgets);
+      expect(find.text('¥56.00'), findsWidgets);
+      expect(find.textContaining('¥156.00'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -175,6 +221,7 @@ void main() {
     final family = await container
         .read(bookRepositoryProvider)
         .create(name: '测试家庭账本', type: BookType.family);
+    final familyDay = now.day == 1 ? 1 : 2;
     final repository = DriftTransactionRepository(database);
     await repository.create(
       _record(
@@ -191,7 +238,7 @@ void main() {
         accountId: scopedSeedId(family.id, SeedIds.cashAccount),
         type: TransactionType.expense,
         amount: 35,
-        occurredAt: DateTime(now.year, now.month, 3, 12),
+        occurredAt: DateTime(now.year, now.month, familyDay),
       ),
     );
 
@@ -206,15 +253,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('全部账本'), findsOneWidget);
-    expect(find.text('¥115'), findsOneWidget);
-    expect(find.text('2天'), findsOneWidget);
+    expect(find.text('¥115.00'), findsOneWidget);
+    expect(find.text(now.day == 1 ? '1天' : '2天'), findsOneWidget);
 
     await tester.tap(find.text('全部账本'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('测试家庭账本'));
     await tester.pumpAndSettle();
     expect(find.text('测试家庭账本'), findsOneWidget);
-    expect(find.text('¥35'), findsNWidgets(2));
+    expect(find.text('¥35.00'), findsNWidgets(2));
   });
 }
 
@@ -231,7 +278,6 @@ TransactionRecord _record({
   ReimbursementStatus reimbursementStatus = ReimbursementStatus.none,
   double? reimbursementAmount,
   TransactionSource source = TransactionSource.manual,
-  String? merchant,
 }) {
   return TransactionRecord(
     id: id,
@@ -248,6 +294,5 @@ TransactionRecord _record({
     reimbursementStatus: reimbursementStatus,
     reimbursementAmount: reimbursementAmount,
     source: source,
-    merchant: merchant,
   );
 }
