@@ -800,7 +800,7 @@ function behaviorPatternInsight(
   const previousAmount = previous.reduce((sum, tx) => sum + netExpense(tx), 0);
   const isDelivery = kind === 'delivery';
   return item({
-    id: `behavior:${kind}`,
+    id: kind === 'lateNight' ? 'analysis:time:late-night' : `behavior:${kind}`,
     kind: 'behavior',
     priority: current.length >= previous.length + 6 ? 'important' : 'attention',
     title: isDelivery ? '最近外卖次数明显增加' : '最近深夜消费变多了',
