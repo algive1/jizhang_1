@@ -33,7 +33,7 @@ class TransactionTile extends StatelessWidget {
     final time = showDate
         ? TransactionDateFormatter.monthDayTime(transaction.occurredAt)
         : TransactionDateFormatter.time(transaction.occurredAt);
-    final category = transaction.displayCategoryLabel;
+    final category = transaction.displayCategoryPath;
     final merchant = transaction.displayTitle;
     return Semantics(
       button: true,
@@ -82,9 +82,10 @@ class _TransactionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isTransfer = transaction.type == TransactionType.transfer;
     final category = transaction.displayCategoryLabel;
+    final categoryPath = transaction.displayCategoryPath;
     final title = transaction.displayTitle;
     final subtitle = [
-      if (title != category) category,
+      if (title != categoryPath) categoryPath,
       time,
       if (accountName?.isNotEmpty == true) accountName!,
     ].join(' · ');
