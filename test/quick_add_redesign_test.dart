@@ -70,7 +70,7 @@ Future<List<TransactionEntity>> _saved(AppDatabase database) =>
     database.transactionDao.getActive(bookId: SeedIds.personalBook);
 
 void main() {
-  testWidgets('safe area, inline children and compact keyboard visual check', (
+  testWidgets('safe area, deferred children and compact keyboard visual check', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -87,14 +87,24 @@ void main() {
     final food = (await DriftCategoryRepository(
       database,
     ).getActive()).firstWhere((item) => item.name == '餐饮');
-    final parent = tester.getRect(
-      find.byKey(ValueKey('quick-category-${food.id}')),
-    );
-    final children = tester.getRect(
+    expect(
       find.byKey(const ValueKey('quick-subcategory-strip')),
+      findsNothing,
     );
-    expect(children.top, greaterThanOrEqualTo(parent.bottom));
-    expect(children.top - parent.bottom, lessThan(10));
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-picker')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-picker')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('quick-subcategory-parent-only')),
+    );
+    await tester.pumpAndSettle();
     expect(
       tester.getBottomRight(find.byKey(const ValueKey('quick-done'))).dy,
       lessThanOrEqualTo(810),
@@ -161,11 +171,16 @@ void main() {
     expect(find.byKey(const ValueKey('quick-repeat')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-done')), findsOneWidget);
 
-    // 默认餐饮分类从数据库载入可管理的二级分类。
+    // 二级分类默认不铺在主页面，只有点击一级分类后才打开选择窗。
     expect(
       find.byKey(const ValueKey('quick-subcategory-strip')),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-picker')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('quick-add-page')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -336,7 +351,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('子分类条渲染真实子分类并写入 subcategoryId', (tester) async {
+  testWidgets('点击一级分类弹出真实二级分类并写入 subcategoryId', (tester) async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -370,7 +385,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('quick-subcategory-strip')),
+      find.byKey(const ValueKey('quick-subcategory-picker')),
       findsOneWidget,
     );
     expect(
@@ -404,7 +419,7 @@ void main() {
       final database = createMemoryDatabase();
       addTearDown(database.close);
       await DatabaseSeeder(database).seedIfNeeded();
-      // 子分类条固定在高度里，大字号最容易在它底部溢出。
+      // 二级分类选择窗是窄屏和大字号下最容易溢出的区域。
       final repository = DriftCategoryRepository(database);
       final food = (await repository.getActive()).firstWhere(
         (item) => item.name == '餐饮',
@@ -425,9 +440,23 @@ void main() {
       await _pumpSheet(tester, database);
       expect(
         find.byKey(const ValueKey('quick-subcategory-strip')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-picker')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-sub-narrow')),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+      await tester.tap(
+        find.byKey(const ValueKey('quick-subcategory-parent-only')),
+      );
+      await tester.pumpAndSettle();
 
       // 长表达式 + 大结果是最容易横向溢出的组合。
       await _tapKeys(tester, ['9', '9', '9', '9', '9', '9', '9', '×', '9']);
