@@ -13,6 +13,12 @@ class PendingAutoBookkeepingCandidate {
     required this.sourceApp,
     required this.scene,
     required this.transactionType,
+    this.orderId,
+    this.note,
+    this.originalAmountInCents,
+    this.discountAmountInCents,
+    this.identifierSuffix,
+    this.screenshotPath,
   });
 
   factory PendingAutoBookkeepingCandidate.fromMap(Map<Object?, Object?> map) {
@@ -30,6 +36,12 @@ class PendingAutoBookkeepingCandidate {
       sourceApp: map['sourceApp']?.toString() ?? 'UNKNOWN',
       scene: map['scene']?.toString() ?? 'PAYMENT_SUCCESS',
       transactionType: map['transactionType']?.toString() ?? 'EXPENSE',
+      orderId: _nullableText(map['orderId']),
+      note: _nullableText(map['note']),
+      originalAmountInCents: _nullableInt(map['originalAmountInCents']),
+      discountAmountInCents: _nullableInt(map['discountAmountInCents']),
+      identifierSuffix: _nullableText(map['identifierSuffix']),
+      screenshotPath: _nullableText(map['screenshotPath']),
     );
   }
 
@@ -41,6 +53,20 @@ class PendingAutoBookkeepingCandidate {
   final String sourceApp;
   final String scene;
   final String transactionType;
+  final String? orderId;
+  final String? note;
+  final int? originalAmountInCents;
+  final int? discountAmountInCents;
+  final String? identifierSuffix;
+  final String? screenshotPath;
+
+  static String? _nullableText(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  static int? _nullableInt(Object? value) =>
+      value is num && value.toInt() > 0 ? value.toInt() : null;
 }
 
 abstract interface class AutoBookkeepingPendingBridge {
@@ -48,7 +74,8 @@ abstract interface class AutoBookkeepingPendingBridge {
   Future<AutoBookkeepingEnqueueResult> enqueue(
     PendingAutoBookkeepingCandidate candidate,
   );
-  Future<void> complete();
+  Future<String?> promoteScreenshot(String path);
+  Future<void> complete({bool keepScreenshot = false});
 }
 
 class MethodChannelAutoBookkeepingPendingBridge
@@ -83,13 +110,15 @@ class MethodChannelAutoBookkeepingPendingBridge
         'sourceApp': candidate.sourceApp,
         'scene': candidate.scene,
         'transactionType': candidate.transactionType,
+        if (candidate.orderId != null) 'orderId': candidate.orderId,
+        if (candidate.note != null) 'note': candidate.note,
+        if (candidate.originalAmountInCents != null)
+          'originalAmountInCents': candidate.originalAmountInCents,
+        if (candidate.discountAmountInCents != null)
+          'discountAmountInCents': candidate.discountAmountInCents,
+        if (candidate.identifierSuffix != null)
+          'identifierSuffix': candidate.identifierSuffix,
       });
-      if (raw is bool) {
-        // Backward compatibility with older native builds during hot reload.
-        return raw
-            ? AutoBookkeepingEnqueueResult.accepted
-            : AutoBookkeepingEnqueueResult.busy;
-      }
       if (raw is Map) {
         return switch (raw['status']?.toString()) {
           'accepted' => AutoBookkeepingEnqueueResult.accepted,
@@ -104,9 +133,24 @@ class MethodChannelAutoBookkeepingPendingBridge
   }
 
   @override
-  Future<void> complete() async {
+  Future<String?> promoteScreenshot(String path) async {
     try {
-      await _channel.invokeMethod<void>('complete');
+      return await _channel.invokeMethod<String>(
+        'promoteScreenshot',
+        {'path': path},
+      );
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> complete({bool keepScreenshot = false}) async {
+    try {
+      await _channel.invokeMethod<void>(
+        'complete',
+        {'keepScreenshot': keepScreenshot},
+      );
     } on MissingPluginException {
       throw StateError('自动记账确认页仅支持 Android');
     }

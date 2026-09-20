@@ -15,25 +15,26 @@ import 'package:jizhang_app/features/transactions/data/transactions_repository.d
 
 void main() {
   test(
-    'incoming receipt, refund, or ambiguous actual amounts are rejected',
+    'high-confidence income/refund are typed while ambiguous amounts are rejected',
     () {
       final parser = const PaymentNotificationParser();
-      expect(
-        parser.parse(
-          PaymentNotification(
-            id: 'incoming',
-            packageName: 'com.tencent.mm',
-            title: '微信支付',
-            text: '收款到账 ¥28.50，来自便利店',
-            postedAt: DateTime(2026, 9, 8, 9),
-          ),
+      final income = parser.parse(
+        PaymentNotification(
+          id: 'incoming',
+          packageName: 'com.tencent.mm',
+          title: '微信支付',
+          text: '收款到账 ¥28.50，来自便利店',
+          postedAt: DateTime(2026, 9, 8, 9),
         ),
-        isNull,
       );
+      expect(income, isNotNull);
+      expect(income!.transactionType, 'INCOME');
+      expect(income.merchant, '便利店');
+
       expect(
         parser.parse(
           PaymentNotification(
-            id: 'refund',
+            id: 'refund-without-counterparty',
             packageName: 'com.eg.android.AlipayGphone',
             title: '支付宝',
             text: '退款成功 ¥28.50',
@@ -42,6 +43,20 @@ void main() {
         ),
         isNull,
       );
+
+      final refund = parser.parse(
+        PaymentNotification(
+          id: 'refund',
+          packageName: 'com.eg.android.AlipayGphone',
+          title: '支付宝',
+          text: '退款成功 ¥28.50，退款方：测试餐厅',
+          postedAt: DateTime(2026, 9, 8, 9),
+        ),
+      );
+      expect(refund, isNotNull);
+      expect(refund!.transactionType, 'REFUND');
+      expect(refund.merchant, '测试餐厅');
+
       expect(
         parser.parse(
           PaymentNotification(
@@ -70,6 +85,28 @@ void main() {
     expect(parsed, isNull);
   });
 
+  test('微信普通聊天里的收款和退款文案不会触发自动记账', () {
+    final parser = const PaymentNotificationParser();
+    for (final entry in <(String, String)>[
+      ('收款成功 ¥88.00，来自张三', 'chat-income'),
+      ('退款成功 ¥28.50，退款方：测试餐厅', 'chat-refund'),
+    ]) {
+      expect(
+        parser.parse(
+          PaymentNotification(
+            id: entry.$2,
+            packageName: 'com.tencent.mm',
+            title: '小王',
+            text: entry.$1,
+            postedAt: DateTime(2026, 9, 20, 9),
+          ),
+        ),
+        isNull,
+        reason: entry.$2,
+      );
+    }
+  });
+
   test('完成态通知包含优惠信息仍可识别', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
@@ -83,6 +120,9 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.amount, 36.00);
     expect(parsed.merchant, '测试餐厅');
+    expect(parsed.transactionType, 'EXPENSE');
+    expect(parsed.originalAmount, 40.00);
+    expect(parsed.discountAmount, 4.00);
   });
 
   test('商城待支付和支付提醒不会被解析成已发生流水', () {
@@ -107,6 +147,20 @@ void main() {
         reason: text,
       );
     }
+  });
+
+  test('商城通知保留明确的底层支付方式', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'meituan-alipay',
+        packageName: 'com.sankuai.meituan',
+        title: '美团',
+        text: '支付成功 ¥36.00，商户：测试餐厅，支付方式：支付宝',
+        postedAt: DateTime(2026, 9, 20, 9),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.paymentMethod, '支付宝');
   });
 
   test('美团完成态付款通知可以进入待确认解析', () {
@@ -243,6 +297,37 @@ void main() {
     expect(bridge.acknowledged, ['duplicate-notification']);
   });
 
+  test('income notification keeps transaction type in pending candidate', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'income-pending',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text: '收款到账 ¥88.00，来自张三',
+        postedAt: DateTime(2026, 9, 19, 9),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(pending.candidates.single.transactionType, 'INCOME');
+    expect(pending.candidates.single.scene, 'PAYMENT_NOTIFICATION_INCOME');
+    expect(pending.candidates.single.merchant, '张三');
+  });
+
   test('Android notification path queues for confirmation instead of saving silently', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
@@ -291,6 +376,32 @@ void main() {
     expect(parsed!.amount, 28.50);
     expect(parsed.accountId, SeedIds.alipayAccount);
     expect(parsed.orderId, '202609080001');
+    expect(parsed.transactionType, 'EXPENSE');
+  });
+
+  test('parser aligns native order id and bank suffix labels', () {
+    final paymentOrder = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'n-payment-order',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text: '支付成功 ¥28.50，商户：瑞幸咖啡，支付单号：PAY202609200001',
+        postedAt: DateTime(2026, 9, 20, 9),
+      ),
+    );
+    expect(paymentOrder?.orderId, 'PAY202609200001');
+
+    final transactionOrder = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'n-transaction-order',
+        packageName: 'com.unionpay',
+        title: '云闪付',
+        text: '支付成功 ¥66.00，商户：测试商户，交易号：TX202609200001，储蓄卡尾号 5566',
+        postedAt: DateTime(2026, 9, 20, 10),
+      ),
+    );
+    expect(transactionOrder?.orderId, 'TX202609200001');
+    expect(transactionOrder?.identifierSuffix, '5566');
   });
 
   test(
@@ -438,6 +549,9 @@ class _FakeBridge implements PaymentNotificationBridge {
   Future<bool> isAccessGranted() async => true;
 
   @override
+  Future<bool> isConnected() async => true;
+
+  @override
   Future<void> openAccessSettings() async {}
 
   @override
@@ -450,7 +564,7 @@ class _FakeBridge implements PaymentNotificationBridge {
   Future<bool> isNotificationGranted() async => true;
 
   @override
-  Future<void> requestNotificationPermission() async {}
+  Future<bool> requestNotificationPermission() async => true;
 
   @override
   Future<List<PaymentNotification>> getPending() async => _pending;
@@ -479,7 +593,10 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
   }
 
   @override
-  Future<void> complete() async {}
+  Future<String?> promoteScreenshot(String path) async => path;
+
+  @override
+  Future<void> complete({bool keepScreenshot = false}) async {}
 
   @override
   Future<PendingAutoBookkeepingCandidate?> getPending() async => null;

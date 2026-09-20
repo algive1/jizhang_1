@@ -14,32 +14,54 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 
 object AutoBookkeepingNotificationController {
     const val ACTION_DISABLE = "com.algive.jizhang_app.AUTOB_BOOKKEEPING_DISABLE"
 
-    private const val CHANNEL_ID = "autobookkeeping_status"
+    const val STATUS_CHANNEL_ID = "autobookkeeping_status"
     const val NOTIFICATION_ID = 2401
     private const val RESULT_CHANNEL_ID = "autobookkeeping_result"
     private const val RESULT_NOTIFICATION_ID = 2402
     private const val CONFIRM_NOTIFICATION_ID = 2403
 
-    fun sync(context: Context) {
+    fun statusNotificationsAvailable(context: Context): Boolean {
+        createChannel(context)
         val manager = NotificationManagerCompat.from(context)
-        if (!AutoBookkeepingSettings.enabled(context)) {
-            manager.cancel(NOTIFICATION_ID)
-            return
-        }
-        if (!manager.areNotificationsEnabled()) return
+        if (!manager.areNotificationsEnabled()) return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS,
             ) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            return false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(STATUS_CHANNEL_ID)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                return false
+            }
+        }
+        return true
+    }
 
-        createChannel(context)
-        manager.notify(NOTIFICATION_ID, buildNotification(context))
+    fun sync(context: Context) {
+        if (
+            !AutoBookkeepingSettings.enabled(context) ||
+            !AutoBookkeepingDiagnostics.foregroundRunning ||
+            !statusNotificationsAvailable(context)
+        ) {
+            cancelStatus(context)
+            return
+        }
+        NotificationManagerCompat.from(context)
+            .notify(NOTIFICATION_ID, buildNotification(context))
+    }
+
+    fun cancelStatus(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
     }
 
     fun buildNotification(context: Context): Notification {
@@ -61,10 +83,10 @@ object AutoBookkeepingNotificationController {
             },
             pendingFlags(),
         )
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, STATUS_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setContentTitle("好好记账 · 自动记账已开启")
-            .setContentText("正在监听支持的付款页面，点击查看设置")
+            .setContentText("正在监听支持的交易结果页面，点击查看设置")
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -115,7 +137,7 @@ object AutoBookkeepingNotificationController {
 
     /** Fallback when a confirmation overlay cannot be attached. */
     fun notifyConfirmationAvailable(context: Context) {
-        val text = "识别到支付通知，请打开好好记账确认"
+        val text = "识别到待确认交易，请打开好好记账确认"
         Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
@@ -140,7 +162,7 @@ object AutoBookkeepingNotificationController {
                 CONFIRM_NOTIFICATION_ID,
                 NotificationCompat.Builder(context, RESULT_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_popup_sync)
-                    .setContentTitle("好好记账 · 待确认流水")
+                    .setContentTitle("好好记账 · 待确认交易")
                     .setContentText(text)
                     .setContentIntent(openIntent)
                     .setAutoCancel(true)
@@ -153,7 +175,7 @@ object AutoBookkeepingNotificationController {
     private fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
-            CHANNEL_ID,
+            STATUS_CHANNEL_ID,
             "自动记账状态",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
