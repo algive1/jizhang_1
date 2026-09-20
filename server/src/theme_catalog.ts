@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { requireCondition as check } from './contract.js';
+import { testingAllFeaturesFree } from './testing_access.js';
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const theme = z.strictObject({
@@ -82,5 +83,11 @@ function migrateLiquidGlassTheme(store:Store) {
 
 function read(store:Store):z.infer<typeof catalog>{
   const row=store.db.prepare('SELECT data_json FROM theme_catalog WHERE id=1').get() as {data_json:string}|undefined;
-  check(row,'主题配置不存在',500); return catalog.parse(JSON.parse(row!.data_json));
+  check(row,'主题配置不存在',500);
+  const value = catalog.parse(JSON.parse(row!.data_json));
+  if (!testingAllFeaturesFree()) return value;
+  return catalog.parse({
+    ...value,
+    themes: value.themes.map((theme) => ({ ...theme, premium: false })),
+  });
 }
