@@ -27,6 +27,8 @@ class CategoryManagementPage extends ConsumerStatefulWidget {
 class _CategoryManagementPageState
     extends ConsumerState<CategoryManagementPage> {
   CategoryType _type = CategoryType.expense;
+  String _query = '';
+  final Set<String> _expandedRootIds = <String>{};
 
   CategoryRepository get _repository => widget.bookId == null
       ? ref.read(categoryRepositoryProvider)
@@ -43,7 +45,18 @@ class _CategoryManagementPageState
     final all = categoriesAsync.value ?? const <Category>[];
     final categories = all.where((item) => item.type == _type).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    final roots = categories.where((item) => item.parentId == null).toList();
+    final allRoots = categories.where((item) => item.parentId == null).toList();
+    final query = _query.trim().toLowerCase();
+    final roots = query.isEmpty
+        ? allRoots
+        : allRoots.where((root) {
+            if (_matchesQuery(root.name, query)) return true;
+            return categories.any(
+              (item) =>
+                  item.parentId == root.id &&
+                  _matchesQuery(item.name, query),
+            );
+          }).toList(growable: false);
 
     return SafeArea(
       child: ListView(
@@ -78,17 +91,39 @@ class _CategoryManagementPageState
             onSelectionChanged: (selection) =>
                 setState(() => _type = selection.single),
           ),
+          const SizedBox(height: 12),
+          TextField(
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: '搜索一级或二级分类',
+            ),
+            onChanged: (value) => setState(() => _query = value),
+          ),
           const SizedBox(height: 14),
           if (categoriesAsync.isLoading && categories.isEmpty)
             const Center(child: CircularProgressIndicator())
-          else if (roots.isEmpty)
+          else if (allRoots.isEmpty)
             const Center(child: Text('还没有分类'))
+          else if (roots.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: Text('没有找到匹配的分类')),
+            )
           else
-            ...roots.asMap().entries.map((entry) {
-              final root = entry.value;
+            ...roots.map((root) {
+              final rootIndex = allRoots.indexWhere((item) => item.id == root.id);
               final children = categories
                   .where((item) => item.parentId == root.id)
                   .toList();
+              final rootMatches = query.isNotEmpty &&
+                  _matchesQuery(root.name, query);
+              final visibleChildren = query.isEmpty || rootMatches
+                  ? children
+                  : children
+                      .where((item) => _matchesQuery(item.name, query))
+                      .toList(growable: false);
+              final expanded =
+                  query.isNotEmpty || _expandedRootIds.contains(root.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: AppCard(
@@ -101,24 +136,39 @@ class _CategoryManagementPageState
                     children: [
                       _CategoryRow(
                         category: root,
-                        canMoveUp: entry.key > 0,
-                        canMoveDown: entry.key < roots.length - 1,
-                        onMoveUp: () => _moveRoot(roots, entry.key, -1),
-                        onMoveDown: () => _moveRoot(roots, entry.key, 1),
+                        childCount: children.length,
+                        isExpanded: expanded,
+                        onToggle: () => setState(() {
+                          if (expanded) {
+                            _expandedRootIds.remove(root.id);
+                          } else {
+                            _expandedRootIds.add(root.id);
+                          }
+                        }),
+                        canMoveUp: query.isEmpty && rootIndex > 0,
+                        canMoveDown:
+                            query.isEmpty && rootIndex < allRoots.length - 1,
+                        onMoveUp: query.isEmpty
+                            ? () => _moveRoot(allRoots, rootIndex, -1)
+                            : null,
+                        onMoveDown: query.isEmpty
+                            ? () => _moveRoot(allRoots, rootIndex, 1)
+                            : null,
                         onEdit: () => _editCategory(all: all, category: root),
                         onArchive: () => _archive(root),
                       ),
-                      ...children.map(
-                        (child) => Padding(
-                          padding: const EdgeInsets.only(left: 28),
-                          child: _CategoryRow(
-                            category: child,
-                            onEdit: () =>
-                                _editCategory(all: all, category: child),
-                            onArchive: () => _archive(child),
+                      if (expanded)
+                        ...visibleChildren.map(
+                          (child) => Padding(
+                            padding: const EdgeInsets.only(left: 28),
+                            child: _CategoryRow(
+                              category: child,
+                              onEdit: () =>
+                                  _editCategory(all: all, category: child),
+                              onArchive: () => _archive(child),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -160,6 +210,9 @@ class _CategoryManagementPageState
       await repository.update(result);
     }
   }
+
+  bool _matchesQuery(String value, String query) =>
+      value.toLowerCase().contains(query);
 
   Future<void> _archive(Category category) async {
     final confirmed = await showDialog<bool>(
@@ -299,6 +352,9 @@ class _CategoryRow extends StatelessWidget {
     this.canMoveDown = false,
     this.onMoveUp,
     this.onMoveDown,
+    this.childCount,
+    this.isExpanded = false,
+    this.onToggle,
   });
 
   final Category category;
@@ -308,6 +364,9 @@ class _CategoryRow extends StatelessWidget {
   final bool canMoveDown;
   final VoidCallback? onMoveUp;
   final VoidCallback? onMoveDown;
+  final int? childCount;
+  final bool isExpanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -330,6 +389,7 @@ class _CategoryRow extends StatelessWidget {
           ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
+            onTap: onToggle,
             leading: CategoryIcon(
               category: category.name,
               iconKey: category.icon,
@@ -347,6 +407,24 @@ class _CategoryRow extends StatelessWidget {
                       color: context.appSecondaryText,
                       fontSize: 10,
                     ),
+                  ),
+                ],
+                if (childCount != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '· $childCount',
+                    style: TextStyle(
+                      color: context.appSecondaryText,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: context.appSecondaryText,
                   ),
                 ],
               ],
