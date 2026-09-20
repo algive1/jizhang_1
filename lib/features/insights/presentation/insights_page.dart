@@ -311,6 +311,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                       tone: tone,
                       configured: true,
                       dismissedIds: current.dismissedIds,
+                      kindAdjustments: current.kindAdjustments,
                     ),
                   ),
                   child: const Text('保存'),
@@ -380,12 +381,12 @@ class _QualityCard extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            '${(confidence * 100).round()}%',
-            style: TextStyle(
-              color: context.appPrimary,
-              fontWeight: FontWeight.w700,
-            ),
+          Icon(
+            confidence >= .75
+                ? Icons.verified_outlined
+                : Icons.hourglass_bottom_rounded,
+            color: context.appPrimary,
+            size: 20,
           ),
         ],
       ),

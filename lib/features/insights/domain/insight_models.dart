@@ -202,6 +202,7 @@ class InsightPreferences {
     this.tone = InsightTone.balanced,
     this.configured = false,
     this.dismissedIds = const {},
+    this.kindAdjustments = const {},
   });
 
   final Set<BookkeepingIntent> intents;
@@ -209,6 +210,7 @@ class InsightPreferences {
   final InsightTone tone;
   final bool configured;
   final Set<String> dismissedIds;
+  final Map<FinancialInsightKind, double> kindAdjustments;
 
   InsightPreferences copyWith({
     Set<BookkeepingIntent>? intents,
@@ -216,6 +218,7 @@ class InsightPreferences {
     InsightTone? tone,
     bool? configured,
     Set<String>? dismissedIds,
+    Map<FinancialInsightKind, double>? kindAdjustments,
   }) {
     return InsightPreferences(
       intents: intents ?? this.intents,
@@ -223,6 +226,7 @@ class InsightPreferences {
       tone: tone ?? this.tone,
       configured: configured ?? this.configured,
       dismissedIds: dismissedIds ?? this.dismissedIds,
+      kindAdjustments: kindAdjustments ?? this.kindAdjustments,
     );
   }
 }

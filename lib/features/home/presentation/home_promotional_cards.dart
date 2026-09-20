@@ -86,7 +86,9 @@ class HomeInsightCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              insight.summary,
+                              amountHidden
+                                  ? '金额已隐藏，点开后查看这条洞察的依据。'
+                                  : insight.summary,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

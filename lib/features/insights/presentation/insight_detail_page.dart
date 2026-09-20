@@ -155,8 +155,7 @@ class InsightDetailPage extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '可信度 ${(item.confidence.overall * 100).round()}% · '
-            '结论只基于当前可用账务数据；数据不足时系统会减少判断。',
+            '结论只基于当前可用账务数据。数据覆盖、分类准确度或历史样本不足时，系统会减少判断。',
             style: TextStyle(
               color: context.appSecondaryText,
               fontSize: 11,
@@ -175,7 +174,8 @@ class InsightDetailPage extends ConsumerWidget {
   ) async {
     await ref
         .read(insightPreferencesRepositoryProvider)
-        .recordFeedback(item.id, action);
+        .recordFeedback(item.id, item.kind, action);
+    ref.invalidate(insightPreferencesProvider);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已收到反馈，会用于后续洞察优化')),

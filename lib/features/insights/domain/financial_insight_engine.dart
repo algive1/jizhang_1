@@ -693,6 +693,7 @@ class FinancialInsightEngine {
     var score = baseScore;
     score += _intentBoost(kind, preferences);
     score += _focusBoost('$title $summary', preferences);
+    score += preferences.kindAdjustments[kind] ?? 0;
     score += (confidence.overall - .5) * 16;
     if (preferences.tone == InsightTone.quiet) score -= 7;
     if (preferences.tone == InsightTone.strict &&

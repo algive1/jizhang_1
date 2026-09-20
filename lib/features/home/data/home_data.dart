@@ -1,11 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
-import '../../../core/models/analysis.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../budgets/data/budget_repository.dart';
-import '../../analysis/domain/statistical_analysis_service.dart';
 import '../../insights/application/insight_feed_provider.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../settings/data/app_settings_repository.dart';
