@@ -52,66 +52,66 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         children: [
           CustomScrollView(
             slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: context.pop,
-                      icon: const Icon(Icons.arrow_back),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: context.pop,
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '账单导入',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _loading ? null : _pick,
+                          icon: const Icon(Icons.upload_file, size: 18),
+                          label: const Text('选择文件'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        '账单导入',
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，'
+                        '其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          height: 1.45,
+                        ),
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: _loading ? null : _pick,
-                      icon: Icon(Icons.upload_file, size: 18),
-                      label: Text('选择文件'),
-                    ),
-                  ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      AppCard(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: AppColors.warning),
+                        ),
+                      ),
+                    ],
+                    if (_loading) ...[
+                      const SizedBox(height: 24),
+                      const Center(child: CircularProgressIndicator()),
+                    ],
+                    if (_result != null) ...[
+                      const SizedBox(height: 14),
+                      _summary(_result!),
+                      const SizedBox(height: 12),
+                      _mapping(accounts, categories),
+                      const SizedBox(height: 12),
+                      _preview(_result!, categories),
+                    ],
+                  ]),
                 ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      height: 1.45,
-                    ),
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  AppCard(
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: AppColors.warning),
-                    ),
-                  ),
-                ],
-                if (_loading) ...[
-                  const SizedBox(height: 24),
-                  const Center(child: CircularProgressIndicator()),
-                ],
-                if (_result != null) ...[
-                  const SizedBox(height: 14),
-                  _summary(_result!),
-                  const SizedBox(height: 12),
-                  _mapping(accounts, categories),
-                  const SizedBox(height: 12),
-                  _preview(_result!, categories),
-
-                ],
-              ]),
-            ),
-          ),
+              ),
             ],
           ),
           if (_result != null)

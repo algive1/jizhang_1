@@ -13,6 +13,8 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../categories/data/category_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../intelligence/data/bill_inbox_repository.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
 
@@ -40,6 +42,19 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                       !t.occurredAt.isAfter(DateTime.now())),
             )
             .toList();
+    const truth = FinancialTruthService();
+    final suppressed =
+        ref.watch(financialTruthSuppressedTransactionIdsProvider);
+    final now = DateTime.now();
+    final summaryMonth = widget.month ?? now;
+    final monthTruth = truth.summarize(
+      all,
+      start: DateTime(summaryMonth.year, summaryMonth.month),
+      endExclusive: DateTime(summaryMonth.year, summaryMonth.month + 1),
+      currency: 'CNY',
+      now: now,
+      excludedTransactionIds: suppressed,
+    );
     final categories = ref.watch(categoriesProvider).value ?? const [];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final accountNames = {
@@ -47,8 +62,8 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     };
     final inboxCount = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final typedTransactions = switch (_typeFilter) {
-      1 => all.where((item) => item.isExpense),
-      2 => all.where((item) => item.isIncome),
+      1 => all.where(truth.isPersonalConsumption),
+      2 => all.where(truth.isEarnedIncome),
       _ => all,
     };
     final transactions = typedTransactions
@@ -97,8 +112,8 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   periodLabel: widget.month == null
                       ? '本月'
                       : '${widget.month!.month}月',
-                  spending: _monthlyTotal(all, expense: true),
-                  income: _monthlyTotal(all, expense: false),
+                  spending: monthTruth.personalConsumption,
+                  income: monthTruth.earnedIncome,
                 ),
                 Padding(
                   padding: EdgeInsets.only(top: 6),
@@ -250,30 +265,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     setState(() => _categoryFilter = selected == '全部' ? null : selected);
   }
 
-  double _monthlyTotal(
-    List<TransactionRecord> transactions, {
-    required bool expense,
-  }) {
-    final now = DateTime.now();
-    return transactions
-            .where(
-              (item) =>
-                  item.currency.toUpperCase() == 'CNY' &&
-                  item.deletedAt == null &&
-                  !item.occurredAt.isAfter(now) &&
-                  item.occurredAt.year == (widget.month ?? now).year &&
-                  item.occurredAt.month == (widget.month ?? now).month &&
-                  (expense ? item.isExpense : item.isIncome),
-            )
-            .fold<int>(
-              0,
-              (total, item) =>
-                  total +
-                  ((expense ? item.netExpenseAmount : item.amount) * 100)
-                      .round(),
-            ) /
-        100;
-  }
+
 }
 
 class _TransactionsHeader extends StatelessWidget {
