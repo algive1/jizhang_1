@@ -1,3 +1,5 @@
+import '../config/testing_access.dart';
+
 enum MembershipPlan { free, pro, family }
 
 extension MembershipPlanLabel on MembershipPlan {
@@ -112,6 +114,7 @@ class MembershipFeaturePolicy {
 
   bool canUse(MembershipSnapshot snapshot, {DateTime? now}) {
     if (!enabled) return false;
+    if (kAllFeaturesFreeForTesting) return true;
     if (!requiresMembership) return true;
     if (!snapshot.membership.canUseGrantedEntitlements) return false;
     if (entitlement != null) {
@@ -229,6 +232,7 @@ class MembershipSnapshot {
   }
 
   bool has(EntitlementKey key, {DateTime? now}) {
+    if (kAllFeaturesFreeForTesting) return true;
     final clock = now ?? DateTime.now();
     return membership.canUseGrantedEntitlements &&
         entitlements.any(
