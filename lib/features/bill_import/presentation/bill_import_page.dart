@@ -33,6 +33,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   String? _expenseCategoryId;
   String? _incomeCategoryId;
   final Map<String, String?> _accountMappings = {};
+  bool _preserveCurrentBalances = true;
   String? _fileName;
   bool _loading = false;
   bool _saving = false;
@@ -218,6 +219,21 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           ),
           if (isMumu) ...[
             const SizedBox(height: 4),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('保持当前账户余额'),
+              subtitle: Text(
+                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              value: _preserveCurrentBalances,
+              onChanged: (value) =>
+                  setState(() => _preserveCurrentBalances = value),
+            ),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
@@ -652,6 +668,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
+            if (row.provider == BillImportProvider.mumu &&
+                _preserveCurrentBalances)
+              'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
               'paymentMethod': row.paymentMethod!,
