@@ -91,11 +91,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: HomePage()),
+                NoTransitionPage(key: state.pageKey, child: const HomePage()),
           ),
           GoRoute(
             path: '/transactions',
             pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
               child: TransactionsPage(month: _queryMonth(state.uri)),
             ),
             routes: [
@@ -145,7 +146,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/insights',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: InsightsPage()),
+                NoTransitionPage(key: state.pageKey, child: const InsightsPage()),
             routes: [
               GoRoute(
                 path: ':insightId',
@@ -174,7 +175,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ProfilePage()),
+                NoTransitionPage(key: state.pageKey, child: const ProfilePage()),
             routes: [
               GoRoute(
                 path: 'account',
