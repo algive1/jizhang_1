@@ -48,8 +48,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     _initializeSelections(accounts, categories);
 
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
+      child: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
             sliver: SliverList(
@@ -105,25 +107,54 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   _mapping(accounts, categories),
                   const SizedBox(height: 12),
                   _preview(_result!, categories),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: _saving || _selected.isEmpty
-                        ? null
-                        : () => _save(accounts, categories),
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(
-                      _saving ? '正在导入…' : '导入已选 ${_selected.length} 笔',
-                    ),
-                  ),
+
                 ],
               ]),
             ),
           ),
+            ],
+          ),
+          if (_result != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 12,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.appBackground.withValues(alpha: .96),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: _saving || _selected.isEmpty
+                          ? null
+                          : () => _save(accounts, categories),
+                      icon: _saving
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
+                      label: Text(
+                        _saving
+                            ? '正在导入…'
+                            : '导入已选 ${_selected.length} 笔',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -424,7 +455,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             '${_amountPrefix(row.type)}¥${row.amount.toStringAsFixed(2)}',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: row.type == TransactionType.expense
+              color: _isOutflowType(row.type)
                   ? context.appPrimaryText
                   : row.type == TransactionType.transfer
                   ? context.appSecondaryText
@@ -965,9 +996,18 @@ String _dateTime(DateTime value) =>
     '${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}';
 
+bool _isOutflowType(TransactionType type) => switch (type) {
+  TransactionType.expense ||
+  TransactionType.lend ||
+  TransactionType.repayment ||
+  TransactionType.assetPurchase => true,
+  _ => false,
+};
+
 String _amountPrefix(TransactionType type) => switch (type) {
   TransactionType.expense ||
   TransactionType.lend ||
+  TransactionType.repayment ||
   TransactionType.assetPurchase => '-',
   TransactionType.transfer => '↔',
   _ => '+',

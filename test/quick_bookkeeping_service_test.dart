@@ -385,6 +385,7 @@ void main() {
         accountId: SeedIds.wechatAccount,
         categoryId: 'expense-food',
         merchant: '午餐店',
+        note: '午餐套餐',
         occurredAt: occurredAt,
         source: TransactionSource.import,
         metadata: const {
@@ -399,6 +400,7 @@ void main() {
     expect(reloaded, isNotNull);
     expect(reloaded!.source, TransactionSource.import);
     expect(reloaded.merchant, '午餐店');
+    expect(reloaded.note, '午餐套餐');
     expect(reloaded.displayTitle, '午餐店');
     expect(reloaded.metadataJson, contains('wx-reload-1'));
   });

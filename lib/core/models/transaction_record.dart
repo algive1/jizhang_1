@@ -191,8 +191,13 @@ class TransactionRecord {
   /// options; when both are empty, the selected category is the useful label.
   String get displayTitle {
     final noteValue = note?.trim();
-    if (noteValue != null && noteValue.isNotEmpty) return noteValue;
     final merchantValue = merchant?.trim();
+    if (source == TransactionSource.import &&
+        merchantValue != null &&
+        merchantValue.isNotEmpty) {
+      return merchantValue;
+    }
+    if (noteValue != null && noteValue.isNotEmpty) return noteValue;
     if (merchantValue != null && merchantValue.isNotEmpty) return merchantValue;
     return displayCategoryLabel;
   }
