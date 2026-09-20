@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/category.dart';
+import '../../../../core/widgets/app_glass_surface.dart';
 import '../../../../core/widgets/category_icon.dart';
 import '../../../../../app/theme/app_theme_tokens.dart';
+
+typedef CategoryGridSelection = void Function(
+  Category category,
+  Rect anchorRect,
+);
 
 class CategoryGrid extends StatelessWidget {
   const CategoryGrid({
@@ -18,7 +24,7 @@ class CategoryGrid extends StatelessWidget {
   final Category? selected;
   final List<Category> subcategories;
   final String? selectedSubcategoryId;
-  final ValueChanged<Category> onSelected;
+  final CategoryGridSelection onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -29,14 +35,10 @@ class CategoryGrid extends StatelessWidget {
         break;
       }
     }
-    return Container(
+    return AppGlassSurface(
       padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: context.appDivider),
-      ),
-      clipBehavior: Clip.antiAlias,
+      borderRadius: 24,
+      tint: context.appSurface,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = MediaQuery.textScalerOf(context).scale(14) > 19
@@ -65,7 +67,8 @@ class CategoryGrid extends StatelessWidget {
                           subtitle: selected?.id == category.id
                               ? selectedSubcategory?.name
                               : null,
-                          onTap: () => onSelected(category),
+                          onTap: (anchorRect) =>
+                              onSelected(category, anchorRect),
                         ),
                     ],
                   ),
@@ -100,7 +103,7 @@ class _CategoryTile extends StatelessWidget {
   final String iconKey;
   final bool selected;
   final String? subtitle;
-  final VoidCallback onTap;
+  final ValueChanged<Rect> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -113,12 +116,23 @@ class _CategoryTile extends StatelessWidget {
       child: Semantics(
         selected: selected,
         button: true,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            final renderObject = context.findRenderObject();
+            if (renderObject is! RenderBox || !renderObject.hasSize) return;
+            final topLeft = renderObject.localToGlobal(Offset.zero);
+            onTap(topLeft & renderObject.size);
+          },
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
-              color: selected ? context.appPrimarySoft : Colors.transparent,
+              color: selected
+                  ? context.appPrimarySoft.withValues(
+                      alpha: context.appUsesLiquidGlass ? .58 : 1,
+                    )
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -128,18 +142,11 @@ class _CategoryTile extends StatelessWidget {
                   scale: selected ? 1.06 : 1,
                   duration: duration,
                   curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: duration,
-                    padding: EdgeInsets.zero,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: CategoryIcon(
-                      category: name,
-                      iconKey: iconKey,
-                      size: 42,
-                      monochrome: true,
-                    ),
+                  child: CategoryIcon(
+                    category: name,
+                    iconKey: iconKey,
+                    size: 42,
+                    monochrome: true,
                   ),
                 ),
                 const SizedBox(height: 4),
