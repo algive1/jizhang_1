@@ -21,6 +21,7 @@ export class RoutedAssistantProvider implements AssistantModelProvider{
   }
   async complete(input:{systemPrompt:string;userText:string}):Promise<string>{
     const rows=this.providers();
+    if(!rows.length && process.env.DEEPSEEK_API_KEY)rows.push({id:'env.deepseek',base_url:process.env.DEEPSEEK_BASE_URL??'https://api.deepseek.com',model:process.env.DEEPSEEK_MODEL??'deepseek-chat',secret_env:'DEEPSEEK_API_KEY',timeout_ms:30000,config_json:'{}'});
     if(!rows.length)throw new AssistantModelUnavailable('No enabled LLM provider route');
     let last='provider unavailable';
     for(const row of rows){
