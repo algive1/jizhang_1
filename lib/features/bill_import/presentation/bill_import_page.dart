@@ -622,11 +622,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     final transactions = await ref.read(transactionRepositoryProvider).getAll();
     if (!mounted) return;
     for (final transaction in transactions) {
-      if (transaction.source != TransactionSource.import ||
-          transaction.metadataJson == null) {
-        continue;
-      }
+      if (transaction.source != TransactionSource.import) continue;
       importedNaturalFingerprints.add(_naturalFingerprint(transaction));
+      if (transaction.metadataJson == null) continue;
       try {
         final metadata = jsonDecode(transaction.metadataJson!);
         if (metadata is! Map) continue;
