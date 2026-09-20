@@ -70,7 +70,7 @@ Future<List<TransactionEntity>> _saved(AppDatabase database) =>
     database.transactionDao.getActive(bookId: SeedIds.personalBook);
 
 void main() {
-  testWidgets('safe area, inline children and compact keyboard visual check', (
+  testWidgets('safe area, full page and dedicated child picker visual check', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -87,14 +87,20 @@ void main() {
     final food = (await DriftCategoryRepository(
       database,
     ).getActive()).firstWhere((item) => item.name == '餐饮');
-    final parent = tester.getRect(
-      find.byKey(ValueKey('quick-category-${food.id}')),
-    );
-    final children = tester.getRect(
+    expect(
       find.byKey(const ValueKey('quick-subcategory-strip')),
+      findsNothing,
+      reason: '二级分类不应默认内联展示',
     );
-    expect(children.top, greaterThanOrEqualTo(parent.bottom));
-    expect(children.top - parent.bottom, lessThan(10));
+    await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-picker')),
+      findsOneWidget,
+    );
+    expect(find.text('选择二级分类'), findsOneWidget);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
     expect(
       tester.getBottomRight(find.byKey(const ValueKey('quick-done'))).dy,
       lessThanOrEqualTo(810),
@@ -161,10 +167,10 @@ void main() {
     expect(find.byKey(const ValueKey('quick-repeat')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-done')), findsOneWidget);
 
-    // 默认餐饮分类从数据库载入可管理的二级分类。
+    // 二级分类只在点击一级分类后出现，不占用默认记账页面空间。
     expect(
       find.byKey(const ValueKey('quick-subcategory-strip')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
@@ -336,7 +342,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('子分类条渲染真实子分类并写入 subcategoryId', (tester) async {
+  testWidgets('点击一级分类后弹出二级分类窗并写入 subcategoryId', (tester) async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -370,7 +376,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('quick-subcategory-strip')),
+      find.byKey(const ValueKey('quick-subcategory-picker')),
       findsOneWidget,
     );
     expect(
@@ -404,7 +410,7 @@ void main() {
       final database = createMemoryDatabase();
       addTearDown(database.close);
       await DatabaseSeeder(database).seedIfNeeded();
-      // 子分类条固定在高度里，大字号最容易在它底部溢出。
+      // 二级分类弹窗需要在窄屏和大字号下保持可用。
       final repository = DriftCategoryRepository(database);
       final food = (await repository.getActive()).firstWhere(
         (item) => item.name == '餐饮',
@@ -425,9 +431,17 @@ void main() {
       await _pumpSheet(tester, database);
       expect(
         find.byKey(const ValueKey('quick-subcategory-strip')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-picker')),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('关闭'));
+      await tester.pumpAndSettle();
 
       // 长表达式 + 大结果是最容易横向溢出的组合。
       await _tapKeys(tester, ['9', '9', '9', '9', '9', '9', '9', '×', '9']);
