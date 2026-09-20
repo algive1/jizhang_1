@@ -79,7 +79,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    '支持微信支付、支付宝官方 CSV，以及木木记账导出的 XLSX。导入前会预览；木木分类、账户、转账和报销语义会尽量保留。',
+                    '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
                     style: TextStyle(
                       color: context.appSecondaryText,
                       height: 1.45,
@@ -193,7 +193,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           const Text('导入映射', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text(
-            isMumu
+            needsAccountMapping
                 ? '第三方账单会先按账户名称自动匹配；无法确定时可在这里预设，也可以在导入时逐笔选择“仅此笔”或“全部同来源”。分类会尽量自动匹配。'
                 : '微信/支付宝账单使用默认账户，并按收支类型落入下方默认分类。',
             style: TextStyle(
@@ -379,7 +379,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       row.sourceCategory,
       row.sourceSubcategory,
     ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' / ');
-    final mapped = row.provider == BillImportProvider.mumu
+    final mapped = row.provider.needsAccountMapping
         ? const BillImportCategoryMapper().resolve(row, categories)
         : null;
     final mappedCategory = mapped?.category == null
@@ -533,7 +533,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     try {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
-        allowedExtensions: const ['csv', 'txt', 'xlsx'],
+        allowedExtensions: const ['csv', 'txt', 'tsv', 'xlsx'],
       );
       if (file == null || file.path == null) return;
       final result = await const BillImportService().parseFile(file.path!);
