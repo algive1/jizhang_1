@@ -26,6 +26,8 @@ class AppCard extends StatelessWidget {
       borderRadius: borderRadius,
       tint: color ?? context.appSurface,
       border: border,
+      blurSigma: 12,
+      chromaticEdge: false,
       child: child,
     );
   }
