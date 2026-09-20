@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
-import { requireCondition as check } from './contract.js';
 import type { Store } from './store.js';
+import { requireAdminPrincipal } from './admin_auth.js';
 
 const eventName = z.enum([
   'app_open',
@@ -50,19 +49,6 @@ const analyticsBody = z.strictObject({
   events: z.array(analyticsEvent).min(1).max(50),
 });
 
-function requireAnalyticsAdmin(header: string | string[] | undefined) {
-  const configured = (process.env.ANALYTICS_ADMIN_KEY ?? '').trim();
-  check(configured.length >= 24, '统计后台未启用', 404);
-  const provided = Array.isArray(header) ? header[0] ?? '' : header ?? '';
-  const left = Buffer.from(configured);
-  const right = Buffer.from(provided);
-  check(
-    left.length === right.length && timingSafeEqual(left, right),
-    '统计管理密钥无效',
-    401,
-  );
-}
-
 export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
   app.post(
     '/api/v1/analytics/events',
@@ -99,7 +85,7 @@ export function registerAnalyticsRoutes(app: FastifyInstance, store: Store) {
   );
 
   app.get('/api/v1/analytics/summary', async (request) => {
-    requireAnalyticsAdmin(request.headers['x-analytics-admin-key']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'dashboard.read');
     const { days } = z
       .strictObject({
         days: z.coerce.number().int().min(1).max(90).default(7),

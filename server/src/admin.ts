@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -16,17 +16,7 @@ import {
 } from './push_delivery.js';
 import { ensureSupportSchema } from './support.js';
 import type { Store } from './store.js';
-
-function digest(value: string) {
-  return createHash('sha256').update(value).digest();
-}
-
-function requireAdmin(header: string | string[] | undefined) {
-  const configured = (process.env.ADMIN_TOKEN ?? '').trim();
-  check(configured.length >= 24, '管理后台未启用', 404);
-  const provided = (Array.isArray(header) ? header[0] : header) ?? '';
-  check(timingSafeEqual(digest(configured), digest(provided)), '管理令牌无效', 401);
-}
+import { requireAdminPrincipal } from './admin_auth.js';
 
 function ensureAdminSchema(store: Store) {
   ensureMessageCenterSchema(store);
@@ -100,7 +90,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.get('/api/v1/admin/summary', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token']);
     const scalar = (sql: string, ...args: unknown[]) =>
       (store.db.prepare(sql).get(...args) as { n: number }).n;
     return {
@@ -123,7 +113,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.get('/api/v1/admin/support-tickets', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const tickets = store.db.prepare(
       'SELECT id,user_id AS userId,installation_id AS installationId,subject,message,'
         + 'contact,app_version AS appVersion,status,created_at AS createdAt,'
@@ -134,7 +124,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.patch('/api/v1/admin/support-tickets/:id', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { status } = z.strictObject({
       status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
@@ -164,7 +154,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/support-tickets/:id/messages', async (request, reply) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { body } = z.strictObject({
       body: z.string().trim().min(1).max(4000),
@@ -203,7 +193,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/announcements', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'messages.write');
     const input = z.strictObject({
       title: z.string().trim().min(2).max(80),
       body: z.string().trim().min(2).max(2000),
@@ -224,14 +214,14 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/push/dispatch', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'messages.write');
     const result = await dispatchPushOutbox(store, 200);
     audit(store, 'push_dispatch', result);
     return result;
   });
 
   app.post('/api/v1/admin/maintenance/run', async (request) => {
-    requireAdmin(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'maintenance.write');
     const result = runRetention(store);
     audit(store, 'maintenance_run', {
       deleted: result.deleted,

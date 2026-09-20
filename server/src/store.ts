@@ -9,6 +9,9 @@ export class Store {
     this.db = new Database(path);
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma(`busy_timeout = ${Math.max(1000,Math.min(30000,Number(process.env.SQLITE_BUSY_TIMEOUT_MS??5000)||5000))}`);
+    this.db.pragma(`synchronous = ${process.env.SQLITE_SYNCHRONOUS==='FULL'?'FULL':'NORMAL'}`);
+    this.db.pragma(`wal_autocheckpoint = ${Math.max(100,Math.min(10000,Number(process.env.SQLITE_WAL_AUTOCHECKPOINT??1000)||1000))}`);
     let version = this.db.pragma('user_version', { simple: true }) as number;
     check(version <= 9, '服务端数据库版本过新', 500);
     if (version < 1) this.db.transaction(() => {

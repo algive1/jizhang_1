@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { requireCondition as check } from './contract.js';
+import { productByAppleId } from './entitlements.js';
 
 type User={id:string;username:string};
 type Authenticate=(header:string|undefined)=>User;
@@ -96,7 +97,7 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
   const transactionId=String(payload.transactionId??'');
   const original=String(payload.originalTransactionId??transactionId);
   const productId=String(payload.productId??'');
-  check(transactionId&&original&&products[productId],'Apple 交易商品无效',400);
+  check(transactionId&&original&&(productByAppleId(store,productId)||products[productId]),'Apple 交易商品无效',400);
   const expectedBundle=process.env.APPLE_BUNDLE_ID?.trim();
   check(expectedBundle&&String(payload.bundleId??'')===expectedBundle,'Apple Bundle ID 未配置或不匹配',503);
   const expectedEnvironment=process.env.APPLE_ENVIRONMENT?.trim();
@@ -122,6 +123,7 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
 }
 
 export function applePlanForProductId(productId:string){return products[productId]?.plan??null;}
+export function applePlanForProduct(store:Store,productId:string){return productByAppleId(store,productId)?.id??applePlanForProductId(productId);}
 
 export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authenticate:Authenticate){
   ensureSchema(store);
@@ -164,6 +166,7 @@ export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authentic
       }
       const owner=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
       if(owner) bindTransaction(store,owner.user_id,payload,signed);
+      if(owner && ['REFUND','REVOKE'].includes(type)) store.db.prepare('UPDATE apple_transactions SET revoked_at=?,updated_at=? WHERE original_transaction_id=?').run(signedAt,store.now(),original);
       if(uuid) store.db.prepare('INSERT INTO apple_notifications(notification_uuid,notification_type,subtype,signed_at,original_transaction_id,received_at) VALUES(?,?,?,?,?,?)').run(uuid,type,String(envelope.subtype??''),signedAt,original,store.now());
       return {ok:true};
     }

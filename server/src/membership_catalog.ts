@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { timingSafeEqual } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { requireCondition as check } from './contract.js';
+import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
 
 const text = z.string().trim().min(1).max(300);
 const plan = z.strictObject({id:z.enum(['monthly','quarterly','yearly']),title:text,months:z.union([z.literal(1),z.literal(3),z.literal(12)]),priceInCents:z.number().int().positive().max(10000000),description:text,recommended:z.boolean()});
@@ -26,13 +26,10 @@ export function registerMembershipCatalog(app:FastifyInstance,store:Store) {
   store.db.prepare('INSERT OR IGNORE INTO membership_catalog VALUES(1,?)').run(JSON.stringify(initial));
   app.get('/api/v1/membership/catalog',async()=>getMembershipCatalog(store));
   app.put('/api/v1/admin/membership/catalog',async(req)=>{
-    const secret=process.env.MEMBERSHIP_ADMIN_TOKEN;
-    check(secret && secret.length>=32,'会员配置管理尚未启用',503);
-    const supplied=req.headers.authorization??'';
-    const expected=`Bearer ${secret}`;
-    check(supplied.length===expected.length && timingSafeEqual(Buffer.from(supplied),Buffer.from(expected)),'无会员配置管理权限',403);
+    const principal=requireAdminPrincipal(req.headers['x-admin-token'],'membership.write');
     const value=catalogSchema.parse(req.body);
     store.db.prepare('UPDATE membership_catalog SET data_json=? WHERE id=1').run(JSON.stringify(value));
+    auditAdmin(store,principal,'membership_catalog_update',{permission:'membership.write'});
     return value;
   });
 }

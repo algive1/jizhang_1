@@ -5,7 +5,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
-import { applePlanForProductId } from './apple_iap.js';
+import { activeMembershipProduct } from './entitlements.js';
+import { membershipState } from './membership_state.js';
 import type { Store } from './store.js';
 
 export type PaymentChannel = 'wechat' | 'alipay';
@@ -153,13 +154,21 @@ function addMonths(timestamp: number, months: number): number {
 
 function grantMembership(store: Store, row: OrderRow) {
   const now = store.now();
-  const catalog = getMembershipCatalog(store);
-  const product = catalog.plans.find((item) => item.id === row.product_id);
-  if (!product) return;
+  const canonical = activeMembershipProduct(store,row.product_id);
+  const legacy = getMembershipCatalog(store).plans.find((item) => item.id === row.product_id);
+  const months = canonical ? Math.max(1,Math.round(canonical.durationDays/30)) : legacy?.months;
+  if (!months) return;
   const current = store.db.prepare('SELECT expires_at FROM membership_subscriptions WHERE user_id=?').get(row.user_id) as { expires_at: number } | undefined;
   const startedAt = current && current.expires_at > now ? current.expires_at : now;
-  const expiresAt = addMonths(startedAt, product.months);
+  const expiresAt = canonical ? startedAt + canonical.durationDays*86400 : addMonths(startedAt, months);
   store.db.prepare('INSERT INTO membership_subscriptions(user_id,product_id,provider,order_id,started_at,expires_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET product_id=excluded.product_id,provider=excluded.provider,order_id=excluded.order_id,started_at=excluded.started_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at').run(row.user_id, row.product_id, row.channel, row.id, startedAt, expiresAt, now);
+}
+
+function markRefunded(store:Store,row:OrderRow){
+  if(row.status==='refunded')return;
+  updateOrder(store,row.id,{status:'refunded'});
+  const current=store.db.prepare('SELECT order_id FROM membership_subscriptions WHERE user_id=?').get(row.user_id) as {order_id:string}|undefined;
+  if(current?.order_id===row.id)store.db.prepare('UPDATE membership_subscriptions SET expires_at=?,updated_at=? WHERE user_id=?').run(store.now(),store.now(),row.user_id);
 }
 
 function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
@@ -171,77 +180,7 @@ function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
   }
 }
 
-const memberEntitlementKeys = [
-  'automaticBookkeeping',
-  'cloudSync',
-  'multiDevice',
-  'aiAnalysis',
-  'voiceAi',
-  'ocr',
-  'advancedReport',
-  'familyBook',
-  'dataExport',
-  'basicBackup',
-  'adFree',
-  'customTheme',
-] as const;
-
-function assistantQuotas(store: Store, userId: string) {
-  try {
-    const policyRow = store.db.prepare(
-      'SELECT data_json FROM assistant_policy WHERE id=1',
-    ).get() as { data_json: string } | undefined;
-    if (!policyRow) return [];
-    const policy = JSON.parse(policyRow.data_json) as {
-      memberDailyLimit?: number;
-    };
-    const limit = Number(policy.memberDailyLimit ?? 0);
-    if (!Number.isInteger(limit) || limit <= 0) return [];
-    const now = store.now();
-    const day = new Date((now + 8 * 3600) * 1000).toISOString().slice(0, 10);
-    const used =
-      (store.db.prepare(
-        'SELECT used FROM assistant_usage WHERE user_id=? AND day=?',
-      ).get(userId, day) as { used: number } | undefined)?.used ?? 0;
-    const periodStart = Math.floor(
-      new Date(`${day}T00:00:00+08:00`).getTime() / 1000,
-    );
-    const periodEnd = periodStart + 86400;
-    return ['voiceAi', 'ocr', 'aiAnalysis'].map(key => ({
-      key,
-      limit,
-      used: Math.min(limit, Math.max(0, used)),
-      periodStart,
-      periodEnd,
-    }));
-  } catch {
-    // Membership remains usable if the assistant tables are temporarily
-    // unavailable during a migration. Model endpoints still enforce limits.
-    return [];
-  }
-}
-
-function membershipCurrent(store: Store, userId: string) {
-  const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
-  if (apple) {
-    return {
-      membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
-      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
-      entitlements: memberEntitlementKeys.map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
-      quotas: assistantQuotas(store, userId),
-    };
-  }
-  const subscription = store.db.prepare('SELECT * FROM membership_subscriptions WHERE user_id=?').get(userId) as { user_id: string; product_id: string; provider: PaymentChannel; order_id: string; started_at: number; expires_at: number; updated_at: number } | undefined;
-  if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], quotas: [] };
-  const now = store.now();
-  const status = subscription.expires_at > now ? 'active' : 'expired';
-  return {
-    membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
-    subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? memberEntitlementKeys.map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
-    quotas: status === 'active' ? assistantQuotas(store, userId) : [],
-  };
-}
+function membershipCurrent(store:Store,userId:string){return membershipState(store,userId);}
 
 async function wechatAppOrder(row: OrderRow): Promise<Record<string, unknown>> {
   const appId = env('WECHAT_APP_ID');
@@ -386,14 +325,16 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
   app.post('/api/v1/membership/orders', async (req) => {
     const user = authenticate(req.headers.authorization);
     const input = createOrderSchema.parse(req.body);
+    check(input.platform !== 'ios', 'iOS 会员请使用 App Store 应用内购买', 409);
     const existing = store.db.prepare('SELECT * FROM membership_orders WHERE user_id=? AND idempotency_key=?').get(user.id, input.idempotencyKey) as OrderRow | undefined;
     if (existing) {
       check(existing.product_id === input.productId && existing.channel === input.channel, '幂等键已用于其他会员订单', 409);
       return publicOrder(existing);
     }
-    const catalog = getMembershipCatalog(store);
-    const product = catalog.plans.find((item) => item.id === input.productId);
-    check(product, '会员套餐不存在或已下架', 404);
+    const canonical = activeMembershipProduct(store,input.productId);
+    const legacy = getMembershipCatalog(store).plans.find((item) => item.id === input.productId);
+    const product = canonical ? {id:canonical.id,priceInCents:canonical.currency==='CNY'?canonical.priceInMinor:null} : legacy;
+    check(product && Number.isInteger(product.priceInCents) && product.priceInCents>0, '会员套餐不存在、未上架或价格配置无效', 404);
     // The amount is always loaded from the server catalog; clients cannot alter it.
     const id = randomUUID().replaceAll('-', '');
     const now = store.now();
@@ -434,6 +375,8 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
     check(String(transaction.amount && (transaction.amount as Record<string, unknown>).total) === String(row.amount_in_cents), '微信支付回调金额不匹配', 400);
     if (transaction.trade_state === 'SUCCESS') {
       markPaid(store, row, String(transaction.transaction_id ?? '') || null);
+    } else if (transaction.trade_state === 'REFUND') {
+      markRefunded(store,row);
     } else if (transaction.trade_state === 'CLOSED') {
       updateOrder(store, row.id, { status: 'failed' });
     }
@@ -446,9 +389,8 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
     check(row, '会员订单不存在', 404);
     check(body.app_id === env('ALIPAY_APP_ID'), '支付宝回调应用不匹配', 400);
     check(cnyToCents(body.total_amount ?? '') === row.amount_in_cents, '支付宝回调金额不匹配', 400);
-    if (body.trade_status === 'TRADE_SUCCESS' || body.trade_status === 'TRADE_FINISHED') {
-      markPaid(store, row, body.trade_no || null);
-    }
+    if (body.trade_status === 'TRADE_SUCCESS' || body.trade_status === 'TRADE_FINISHED') markPaid(store,row,body.trade_no||null);
+    if (body.refund_fee && cnyToCents(body.refund_fee)!==null) markRefunded(store,row);
     return reply.type('text/plain').send('success');
   });
 }
