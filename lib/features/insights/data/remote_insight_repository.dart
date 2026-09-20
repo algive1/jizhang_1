@@ -97,8 +97,7 @@ class RemoteInsightRepository {
                   'currency': item.currency.toUpperCase(),
                   'categoryId': item.categoryId,
                   'categoryName': item.categoryName,
-                  'merchant': item.merchant,
-                  'note': item.note,
+                  'semanticHints': _semanticHints(item),
                   'occurredAt': item.occurredAt.millisecondsSinceEpoch,
                   'source': item.source.name,
                   'aiConfidence': item.aiConfidence,
@@ -167,6 +166,17 @@ class RemoteInsightRepository {
     } on Object {
       return null;
     }
+  }
+
+  Map<String, bool> _semanticHints(TransactionRecord item) {
+    final text =
+        '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
+    return {
+      'delivery': RegExp(r'美团|饿了么|外卖|delivery', caseSensitive: false)
+          .hasMatch(text),
+      'family': RegExp(r'爸爸|妈妈|父母|爸妈|家人|家里').hasMatch(text),
+      'beauty': RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text),
+    };
   }
 
   Future<String?> interpret(FinancialInsightItem item) async {

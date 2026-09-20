@@ -45,16 +45,14 @@ class InsightPreferencesRepository {
           .split('|')
           .where((item) => item.trim().isNotEmpty)
           .toSet(),
-      kindAdjustments: {
-        for (var index = 0; index < FinancialInsightKind.values.length; index++)
-          if (double.tryParse(values[5 + index] ?? '') case final value?)
-            FinancialInsightKind.values[index]: value,
-      },
+      kindAdjustments: _kindAdjustments(values),
     );
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return local;
-      final remote = await _api.request('/insights/profile');
+      final remote = await _api
+          .request('/insights/profile')
+          .timeout(const Duration(seconds: 3));
       if (remote['configured'] != true) return local;
       final remoteIntents = (remote['intents'] as List? ?? const [])
           .whereType<String>()
@@ -99,7 +97,7 @@ class InsightPreferencesRepository {
           'tone': value.tone.name,
           'configured': value.configured,
         },
-      );
+      ).timeout(const Duration(seconds: 4));
     } on SharedApiException catch (error) {
       if (error.status == 401) await _session.markSessionExpired();
     } on Object {
@@ -161,19 +159,32 @@ class InsightPreferencesRepository {
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return;
-      await _api.request(
-        '/insights/${Uri.encodeComponent(insightId)}/feedback',
-        method: 'POST',
-        body: {
-          'action': action,
-          if (kind != null) 'kind': kind.name,
-        },
-      );
+      await _api
+          .request(
+            '/insights/${Uri.encodeComponent(insightId)}/feedback',
+            method: 'POST',
+            body: {
+              'action': action,
+              if (kind != null) 'kind': kind.name,
+            },
+          )
+          .timeout(const Duration(seconds: 3));
     } on SharedApiException catch (error) {
       if (error.status == 401) await _session.markSessionExpired();
     } on Object {
       // Feedback is still persisted locally and can influence this device.
     }
+  }
+
+  Map<FinancialInsightKind, double> _kindAdjustments(
+    List<String?> values,
+  ) {
+    final result = <FinancialInsightKind, double>{};
+    for (var index = 0; index < FinancialInsightKind.values.length; index++) {
+      final value = double.tryParse(values[5 + index] ?? '');
+      if (value != null) result[FinancialInsightKind.values[index]] = value;
+    }
+    return result;
   }
 
   Set<T> _decode<T extends Enum>(String? value, List<T> all) {

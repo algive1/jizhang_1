@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { Store } from './store.js';
 import { ApiError, requireCondition as check } from './contract.js';
+import { outOfScope } from './assistant_policy.js';
 import {
   AssistantModelUnavailable,
   DeepSeekCompatibleProvider,
@@ -122,6 +123,15 @@ export function ensureInsightSchema(store: Store) {
     );
     CREATE INDEX IF NOT EXISTS idx_insight_ai_cache_user_time
       ON insight_ai_cache(user_id,created_at DESC);
+    CREATE TABLE IF NOT EXISTS insight_confirmed_items(
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      insight_id TEXT NOT NULL,
+      body_hash TEXT NOT NULL,
+      confirmed_at INTEGER NOT NULL,
+      PRIMARY KEY(user_id,insight_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_insight_confirmed_user_time
+      ON insight_confirmed_items(user_id,confirmed_at DESC);
     CREATE TABLE IF NOT EXISTS insight_policy(
       id INTEGER PRIMARY KEY CHECK(id=1),
       policy_json TEXT NOT NULL,
@@ -234,6 +244,40 @@ function hasActiveInsightMembership(
   return false;
 }
 
+function interpretationBodyHash(input: {
+  insightId: string;
+  kind: string;
+  title: string;
+  summary: string;
+  analysis: string;
+  meaning: string;
+  suggestion?: string | null;
+  evidence: Array<{
+    label: string;
+    value: number;
+    baselineValue?: number | null;
+    unit?: string | null;
+  }>;
+}) {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      insightId: input.insightId,
+      kind: input.kind,
+      title: input.title,
+      summary: input.summary,
+      analysis: input.analysis,
+      meaning: input.meaning,
+      suggestion: input.suggestion ?? null,
+      evidence: input.evidence.map(value => ({
+        label: value.label,
+        value: value.value,
+        baselineValue: value.baselineValue ?? null,
+        unit: value.unit ?? null,
+      })),
+    }))
+    .digest('hex');
+}
+
 const interpretationSchema = z.strictObject({
   insightId: z.string().trim().min(1).max(180),
   kind: z.enum([
@@ -266,24 +310,70 @@ export function registerInsightRoutes(
 ) {
   ensureInsightSchema(store);
 
-  app.post('/api/v1/insights/analyze', async request => {
-    const user = authenticate(request.headers.authorization);
-    const context = insightContextSchema.parse(request.body);
-    const policy = readInsightPolicy(store);
-    const profile = readProfile(store, user.id);
-    const feedback = readFeedbackProfile(store, user.id);
-    const member = hasActiveInsightMembership(store, user.id);
-    const historyDays = member
-      ? policy.proHistoryDays
-      : policy.freeHistoryDays;
-    return analyzeInsightContext(
-      context,
-      profile,
-      feedback,
-      policy,
-      historyDays,
-    );
-  });
+  app.post(
+    '/api/v1/insights/analyze',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async request => {
+      const user = authenticate(request.headers.authorization);
+      const context = insightContextSchema.parse(request.body);
+      const policy = readInsightPolicy(store);
+      const profile = readProfile(store, user.id);
+      const feedback = readFeedbackProfile(store, user.id);
+      const member = hasActiveInsightMembership(store, user.id);
+      const historyDays = member
+        ? policy.proHistoryDays
+        : policy.freeHistoryDays;
+      const result = analyzeInsightContext(
+        context,
+        profile,
+        feedback,
+        policy,
+        historyDays,
+      );
+
+      const now = store.now();
+      const upsert = store.db.prepare(
+        'INSERT INTO insight_confirmed_items('
+          + 'user_id,insight_id,body_hash,confirmed_at'
+          + ') VALUES(?,?,?,?) '
+          + 'ON CONFLICT(user_id,insight_id) DO UPDATE SET '
+          + 'body_hash=excluded.body_hash,confirmed_at=excluded.confirmed_at',
+      );
+      store.db.transaction(() => {
+        for (const item of result.items) {
+          upsert.run(
+            user.id,
+            item.id,
+            interpretationBodyHash({
+              insightId: item.id,
+              kind: item.kind,
+              title: item.title,
+              summary: item.summary,
+              analysis: item.analysis,
+              meaning: item.meaning,
+              suggestion: item.suggestion ?? null,
+              evidence: item.evidence.map(value => ({
+                label: value.label,
+                value: value.value,
+                baselineValue: value.baselineValue ?? null,
+                unit: value.unit ?? null,
+              })),
+            }),
+            now,
+          );
+        }
+        store.db.prepare(
+          'DELETE FROM insight_confirmed_items '
+            + 'WHERE user_id=? AND confirmed_at<?',
+        ).run(user.id, now - 2 * 86400);
+        store.db.prepare(
+          'DELETE FROM insight_ai_cache '
+            + 'WHERE user_id=? AND created_at<?',
+        ).run(user.id, now - 30 * 86400);
+      })();
+      return result;
+    },
+  );
 
   app.get('/api/v1/insights/profile', async request => {
     const user = authenticate(request.headers.authorization);
@@ -399,9 +489,30 @@ export function registerInsightRoutes(
         403,
       );
       const body = interpretationSchema.parse(request.body);
-      const bodyHash = createHash('sha256')
-        .update(JSON.stringify(body))
-        .digest('hex');
+      const bodyHash = interpretationBodyHash(body);
+      const confirmed = store.db.prepare(
+        'SELECT confirmed_at AS confirmedAt FROM insight_confirmed_items '
+          + 'WHERE user_id=? AND insight_id=? AND body_hash=?',
+      ).get(user.id, body.insightId, bodyHash) as
+        | { confirmedAt: number }
+        | undefined;
+      check(
+        confirmed && confirmed.confirmedAt >= store.now() - 2 * 86400,
+        '请先刷新这条洞察后再进行 AI 解读',
+        409,
+      );
+      const explainableText = [
+        body.title,
+        body.summary,
+        body.analysis,
+        body.meaning,
+        body.suggestion ?? '',
+      ].join('\n');
+      check(
+        !outOfScope(explainableText),
+        '这条内容不适合进行 AI 财务解读',
+        400,
+      );
       const cached = store.db.prepare(
         'SELECT result_text FROM insight_ai_cache '
           + 'WHERE user_id=? AND insight_id=? AND prompt_version=? '

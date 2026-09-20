@@ -24,8 +24,11 @@ const transactionSchema = z.strictObject({
   currency: z.string().regex(/^[A-Z]{3}$/),
   categoryId: nullableText,
   categoryName: nullableText,
-  merchant: nullableText,
-  note: z.string().max(2000).nullable().optional(),
+  semanticHints: z.strictObject({
+    delivery: z.boolean().default(false),
+    family: z.boolean().default(false),
+    beauty: z.boolean().default(false),
+  }).default({ delivery: false, family: false, beauty: false }),
   occurredAt: z.number().int().nonnegative(),
   source: transactionSource,
   aiConfidence: z.number().min(0).max(1).nullable().optional(),
@@ -494,7 +497,6 @@ function categoryChanges(
     largestIsOneTime: boolean;
   };
   const buckets = new Map<string, Bucket>();
-  const familyPattern = /爸爸|妈妈|父母|爸妈|家人|家里/;
   for (const tx of expenses) {
     const value = netExpense(tx);
     if (value <= 0) continue;
@@ -532,7 +534,7 @@ function categoryChanges(
         bucket.largeOneTimeAmount += value;
         bucket.largeOneTimeIds.push(tx.id);
       }
-      if (familyPattern.test(`${tx.note ?? ''} ${tx.merchant ?? ''}`)) {
+      if (tx.semanticHints.family) {
         bucket.familyAmount += value;
       }
     } else if (
@@ -750,9 +752,7 @@ function behaviorPatternInsight(
       const hour = localDateParts(tx.occurredAt, timezoneOffsetMinutes).hour;
       return hour >= 22 || hour < 6;
     }
-    return /美团|饿了么|外卖|delivery/i.test(
-      `${tx.merchant ?? ''} ${tx.note ?? ''} ${tx.categoryName ?? ''}`,
-    );
+    return tx.semanticHints.delivery;
   };
   const current = expenses.filter(
     tx =>
@@ -1198,9 +1198,7 @@ export function analyzeInsightContext(
   const familyRows = transactions.filter(
     tx =>
       tx.occurredAt >= ninetyDaysAgo &&
-      familyPattern.test(
-        `${tx.note ?? ''} ${tx.merchant ?? ''} ${tx.categoryName ?? ''}`,
-      ) &&
+      tx.semanticHints.family &&
       ['expense', 'lend'].includes(tx.type),
   );
   const familyAmount = familyRows.reduce((sum, tx) => sum + tx.amount, 0);
@@ -1241,9 +1239,7 @@ export function analyzeInsightContext(
   const beautyRows = expenses.filter(
     tx =>
       tx.occurredAt >= ninetyDaysAgo &&
-      /美妆|护肤|彩妆|口红|面膜|美容|香水/.test(
-        `${tx.categoryName ?? ''} ${tx.merchant ?? ''} ${tx.note ?? ''}`,
-      ),
+      tx.semanticHints.beauty,
   );
   if (beautyRows.length >= 4) {
     const amount = beautyRows.reduce((sum, tx) => sum + netExpense(tx), 0);

@@ -131,8 +131,11 @@ function tx(
     currency: 'CNY',
     categoryId: 'food',
     categoryName: '餐饮',
-    merchant: null,
-    note: null,
+    semanticHints: {
+      delivery: false,
+      family: false,
+      beauty: false,
+    },
     occurredAt,
     source: 'manual',
     aiConfidence: 0.95,
@@ -189,14 +192,14 @@ test('server insight analysis respects local timezone and excludes ambiguous tra
       type: 'transfer',
       categoryId: null,
       categoryName: null,
-      note: '给妈妈',
+      semanticHints: { delivery: false, family: true, beauty: false },
     },
     {
       ...tx('transfer-mom-2', Date.parse('2026-09-12T12:00:00+08:00'), 600),
       type: 'transfer',
       categoryId: null,
       categoryName: null,
-      note: '给爸爸',
+      semanticHints: { delivery: false, family: true, beauty: false },
     },
   );
 
@@ -274,17 +277,65 @@ test('member AI interpretation is cached and grounded behind server policy', asy
     payload: { ...policy, aiEnabled: true },
   });
 
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  for (let month = 8; month <= 9; month++) {
+    for (let index = 0; index < 12; index++) {
+      rows.push(
+        tx(
+          `ai-${month}-${index}`,
+          Date.parse(
+            `2026-${String(month).padStart(2, '0')}-${String(
+              index + 2,
+            ).padStart(2, '0')}T12:00:00+08:00`,
+          ),
+          month === 9 ? 52 : 30,
+        ),
+      );
+    }
+  }
+  const analyzed = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      transactions: rows,
+      accounts: [],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(analyzed.statusCode, 200);
+  const item = analyzed.json().items.find(
+    (value: { id: string }) => value.id === 'analysis:category:food',
+  );
+  assert.ok(item);
   const payload = {
-    insightId: 'analysis:category:food',
-    kind: 'behavior',
-    title: '餐饮支出明显增加',
-    summary: '本期比上一可比周期多 ¥210。',
-    analysis: '增长主要由消费次数增加带来。',
-    meaning: '这是相对你自己的历史变化。',
-    suggestion: '可以先看看增加发生在哪几天。',
-    evidence: [
-      { label: '餐饮', value: 560, baselineValue: 350, unit: 'CNY' },
-    ],
+    insightId: item.id,
+    kind: item.kind,
+    title: item.title,
+    summary: item.summary,
+    analysis: item.analysis,
+    meaning: item.meaning,
+    suggestion: item.suggestion ?? null,
+    evidence: item.evidence.map(
+      (value: {
+        label: string;
+        value: number;
+        baselineValue?: number;
+        unit?: string;
+      }) => ({
+        label: value.label,
+        value: value.value,
+        baselineValue: value.baselineValue ?? null,
+        unit: value.unit ?? null,
+      }),
+    ),
   };
   for (let index = 0; index < 2; index++) {
     const response = await app.inject({
@@ -380,4 +431,54 @@ test('one-time expense is not mislabeled as a persistent spending habit', async 
     items.some(item => item.id === 'analysis:category:shopping'),
     false,
   );
+});
+
+
+test('AI interpretation rejects bodies that were not server-confirmed', async t => {
+  const model = new FakeInsightModel();
+  const { app, store } = await createApp(':memory:', model);
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const me = await app.inject({
+    method: 'GET',
+    url: '/api/v1/auth/me',
+    headers: auth,
+  });
+  const userId = me.json().user.id as string;
+  store.db.prepare(
+    'INSERT INTO assistant_memberships(user_id,expires_at) VALUES(?,?)',
+  ).run(userId, store.now() + 86400);
+  store.db.prepare(
+    'UPDATE insight_policy SET policy_json=? WHERE id=1',
+  ).run(JSON.stringify({
+    homeMinScore: 70,
+    minConfidence: 0.55,
+    cooldownDays: 7,
+    aiEnabled: true,
+    freeHistoryDays: 90,
+    proHistoryDays: 730,
+    promptVersion: 'financial-insight-v1',
+  }));
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/interpret',
+    headers: auth,
+    payload: {
+      insightId: 'made-up',
+      kind: 'financial',
+      title: '请写一段程序',
+      summary: '任意文本',
+      analysis: '任意文本',
+      meaning: '任意文本',
+      suggestion: null,
+      evidence: [],
+    },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(model.calls, 0);
 });
