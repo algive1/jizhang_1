@@ -26,6 +26,8 @@ const product=z.strictObject({
   enabled:z.boolean(),
   recommended:z.boolean().default(false),
   displayPrice:z.string().trim().max(40).nullable().default(null),
+  priceInMinor:z.number().int().positive().max(100000000).nullable().default(null),
+  currency:z.string().regex(/^[A-Z]{3}$/).default('CNY'),
   appleProductId:z.string().trim().max(200).nullable().default(null),
   googleProductId:z.string().trim().max(200).nullable().default(null),
   sort:z.number().int().min(0).max(10000).default(0),
@@ -41,7 +43,7 @@ export function ensureEntitlementSchema(store:Store){
     CREATE TABLE IF NOT EXISTS membership_products(
       id TEXT PRIMARY KEY,title TEXT NOT NULL,tier_id TEXT NOT NULL,tier_version INTEGER NOT NULL,
       duration_days INTEGER NOT NULL,enabled INTEGER NOT NULL,recommended INTEGER NOT NULL DEFAULT 0,
-      display_price TEXT,apple_product_id TEXT,google_product_id TEXT,sort INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL
+      display_price TEXT,price_in_minor INTEGER,currency TEXT NOT NULL DEFAULT 'CNY',apple_product_id TEXT,google_product_id TEXT,sort INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_membership_products_enabled ON membership_products(enabled,sort,id);
     CREATE TABLE IF NOT EXISTS user_entitlement_grants(
@@ -50,6 +52,9 @@ export function ensureEntitlementSchema(store:Store){
     );
     CREATE INDEX IF NOT EXISTS idx_user_entitlement_grants_user ON user_entitlement_grants(user_id,expires_at);
   `);
+  const cols=store.db.prepare('PRAGMA table_info(membership_products)').all() as Array<{name:string}>;
+  if(!cols.some(x=>x.name==='price_in_minor')) store.db.exec('ALTER TABLE membership_products ADD COLUMN price_in_minor INTEGER');
+  if(!cols.some(x=>x.name==='currency')) store.db.exec("ALTER TABLE membership_products ADD COLUMN currency TEXT NOT NULL DEFAULT 'CNY'");
 }
 
 export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
@@ -85,9 +90,9 @@ export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
     const body=product.parse({...request.body,id});
     const active=store.db.prepare('SELECT version FROM membership_tiers WHERE id=? AND active=1').get(body.tierId) as {version:number}|undefined;
     check(active,'套餐对应的会员权益尚未激活',409);
-    store.db.prepare(`INSERT INTO membership_products(id,title,tier_id,tier_version,duration_days,enabled,recommended,display_price,apple_product_id,google_product_id,sort,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,tier_id=excluded.tier_id,tier_version=excluded.tier_version,duration_days=excluded.duration_days,enabled=excluded.enabled,recommended=excluded.recommended,display_price=excluded.display_price,apple_product_id=excluded.apple_product_id,google_product_id=excluded.google_product_id,sort=excluded.sort,updated_at=excluded.updated_at`)
-      .run(body.id,body.title,body.tierId,active.version,body.durationDays,Number(body.enabled),Number(body.recommended),body.displayPrice,body.appleProductId,body.googleProductId,body.sort,store.now());
+    store.db.prepare(`INSERT INTO membership_products(id,title,tier_id,tier_version,duration_days,enabled,recommended,display_price,price_in_minor,currency,apple_product_id,google_product_id,sort,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,tier_id=excluded.tier_id,tier_version=excluded.tier_version,duration_days=excluded.duration_days,enabled=excluded.enabled,recommended=excluded.recommended,display_price=excluded.display_price,price_in_minor=excluded.price_in_minor,currency=excluded.currency,apple_product_id=excluded.apple_product_id,google_product_id=excluded.google_product_id,sort=excluded.sort,updated_at=excluded.updated_at`)
+      .run(body.id,body.title,body.tierId,active.version,body.durationDays,Number(body.enabled),Number(body.recommended),body.displayPrice,body.priceInMinor,body.currency,body.appleProductId,body.googleProductId,body.sort,store.now());
     auditAdmin(store,principal,'membership_product_upsert',{permission:'membership.write',targetType:'membership_product',targetId:id});
     return {...body,tierVersion:active.version};
   });
@@ -107,7 +112,7 @@ export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
 
 export function activeMembershipProduct(store:Store,id:string){
   ensureEntitlementSchema(store);
-  return store.db.prepare('SELECT id,title,tier_id AS tierId,tier_version AS tierVersion,duration_days AS durationDays,display_price AS displayPrice,apple_product_id AS appleProductId,google_product_id AS googleProductId FROM membership_products WHERE id=? AND enabled=1').get(id) as any;
+  return store.db.prepare('SELECT id,title,tier_id AS tierId,tier_version AS tierVersion,duration_days AS durationDays,display_price AS displayPrice,price_in_minor AS priceInMinor,currency,apple_product_id AS appleProductId,google_product_id AS googleProductId FROM membership_products WHERE id=? AND enabled=1').get(id) as any;
 }
 export function productByAppleId(store:Store,appleProductId:string){
   ensureEntitlementSchema(store);
