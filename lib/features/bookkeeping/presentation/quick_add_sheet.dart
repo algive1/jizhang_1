@@ -3,6 +3,7 @@ import 'package:open_filex/open_filex.dart';
 
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_media_picker.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/utils/entity_id.dart';
@@ -77,12 +78,12 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
 }
 
-/// Opens the bookkeeping sheet above the app shell.
+/// Opens bookkeeping as an isolated full-screen route.
 ///
-/// Pages rendered by [ShellRoute] have their own navigator below the root
-/// navigator. Using that nested navigator leaves the shell's bottom bar above
-/// the modal route, so the bar can remain visible over the keypad. All entry
-/// points use this helper to keep the stacking order consistent.
+/// The global entry lives inside [ShellRoute], so pushing on the root navigator
+/// removes the app bottom navigation and gives bookkeeping the whole screen.
+/// The historical helper name is kept so edit/copy entry points do not need to
+/// duplicate route construction.
 Future<void> showQuickAddSheet(
   BuildContext context, {
   TransactionRecord? initialTransaction,
@@ -91,17 +92,16 @@ Future<void> showQuickAddSheet(
   DateTime? initialOccurredAt,
   String? initialBookId,
 }) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => QuickAddSheet(
-      initialTransaction: initialTransaction,
-      copyFrom: copyFrom,
-      initialType: initialType,
-      initialOccurredAt: initialOccurredAt,
-      initialBookId: initialBookId,
+  await Navigator.of(context, rootNavigator: true).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/quick-add'),
+      builder: (_) => QuickAddSheet(
+        initialTransaction: initialTransaction,
+        copyFrom: copyFrom,
+        initialType: initialType,
+        initialOccurredAt: initialOccurredAt,
+        initialBookId: initialBookId,
+      ),
     ),
   );
 }
