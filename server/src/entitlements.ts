@@ -103,3 +103,25 @@ export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
     return {ok:true,id:Number(result.lastInsertRowid)};
   });
 }
+
+
+export function activeMembershipProduct(store:Store,id:string){
+  ensureEntitlementSchema(store);
+  return store.db.prepare('SELECT id,title,tier_id AS tierId,tier_version AS tierVersion,duration_days AS durationDays,display_price AS displayPrice,apple_product_id AS appleProductId,google_product_id AS googleProductId FROM membership_products WHERE id=? AND enabled=1').get(id) as any;
+}
+export function productByAppleId(store:Store,appleProductId:string){
+  ensureEntitlementSchema(store);
+  return store.db.prepare('SELECT id,title,tier_id AS tierId,tier_version AS tierVersion,duration_days AS durationDays,apple_product_id AS appleProductId FROM membership_products WHERE apple_product_id=? AND enabled=1').get(appleProductId) as any;
+}
+export function resolvedEntitlements(store:Store,userId:string,productId:string|null){
+  ensureEntitlementSchema(store);const now=store.now();const result=new Map<string,unknown>();
+  if(productId){
+    const p=store.db.prepare('SELECT tier_id,tier_version FROM membership_products WHERE id=?').get(productId) as {tier_id:string;tier_version:number}|undefined;
+    if(p){const t=store.db.prepare('SELECT entitlements_json FROM membership_tiers WHERE id=? AND version=?').get(p.tier_id,p.tier_version) as {entitlements_json:string}|undefined;
+      if(t)for(const e of JSON.parse(t.entitlements_json) as Array<{key:string;value:unknown}>)result.set(e.key,e.value);
+    }
+  }
+  const grants=store.db.prepare('SELECT entitlement_key,value_json FROM user_entitlement_grants WHERE user_id=? AND (expires_at IS NULL OR expires_at>?) ORDER BY created_at').all(userId,now) as Array<{entitlement_key:string;value_json:string}>;
+  for(const g of grants)result.set(g.entitlement_key,JSON.parse(g.value_json));
+  return Array.from(result,([key,value])=>({key,value}));
+}
