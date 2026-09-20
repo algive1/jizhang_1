@@ -434,7 +434,8 @@ object AutoBookkeepingPendingStore {
         if (!crossCaptureSource) return false
         val pair = setOf(first, second)
         return pair == setOf("EXPENSE", "TRANSFER") ||
-            pair == setOf("EXPENSE", "REPAYMENT")
+            pair == setOf("EXPENSE", "REPAYMENT") ||
+            pair == setOf("INCOME", "REIMBURSEMENT")
     }
 
     private fun paymentMethodMatchesSource(
