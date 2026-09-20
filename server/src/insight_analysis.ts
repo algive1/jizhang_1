@@ -29,7 +29,13 @@ const transactionSchema = z.strictObject({
     delivery: z.boolean().default(false),
     family: z.boolean().default(false),
     beauty: z.boolean().default(false),
-  }).default({ delivery: false, family: false, beauty: false }),
+    creditSource: z.string().trim().min(1).max(120).nullable().optional(),
+  }).default({
+    delivery: false,
+    family: false,
+    beauty: false,
+    creditSource: null,
+  }),
   occurredAt: z.number().int().nonnegative(),
   source: transactionSource,
   aiConfidence: z.number().min(0).max(1).nullable().optional(),
@@ -1428,14 +1434,38 @@ export function analyzeInsightContext(
     }
   }
 
-  const creditAccounts = input.accounts.filter(
-    account =>
+  const creditNames = new Map<string, string>();
+  const creditKey = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_\-·/]+/g, '')
+      .replace(/银行|信用卡|银行卡|卡$/g, '');
+  for (const account of input.accounts) {
+    if (
       !account.isArchived &&
       (account.type === 'creditCard' ||
         account.type === 'liability' ||
-        /花呗|月付|白条|信用|分期|先用后付/.test(account.name)),
-  );
-  if (creditAccounts.length >= 2) {
+        /花呗|月付|白条|信用|分期|先用后付/.test(account.name))
+    ) {
+      creditNames.set(creditKey(account.name), account.name);
+    }
+  }
+  const creditSourceCounts = new Map<string, number>();
+  const creditSourceLabels = new Map<string, string>();
+  const creditCutoff = now.getTime() - 180 * 86400000;
+  for (const tx of transactions) {
+    const source = tx.semanticHints.creditSource;
+    if (!source || tx.occurredAt < creditCutoff) continue;
+    const key = creditKey(source);
+    creditSourceCounts.set(key, (creditSourceCounts.get(key) ?? 0) + 1);
+    creditSourceLabels.set(key, source);
+  }
+  for (const [key, count] of creditSourceCounts) {
+    if (count < 2 || creditNames.has(key)) continue;
+    creditNames.set(key, creditSourceLabels.get(key)!);
+  }
+  if (creditNames.size >= 2) {
     results.push(
       item({
         id: 'accounts:multiple-credit',
@@ -1443,11 +1473,8 @@ export function analyzeInsightContext(
         priority: 'attention',
         title: '你在使用多个信用 / 后付账户',
         summary:
-          `已识别 ${creditAccounts.length} 个信用或负债账户：` +
-          creditAccounts
-            .slice(0, 3)
-            .map(account => account.name)
-            .join('、') +
+          `已识别 ${creditNames.size} 个信用或后付来源：` +
+          [...creditNames.values()].slice(0, 3).join('、') +
           '。',
         analysis: '消费分散在多个待还账户后，只看银行卡余额容易高估真正可用的钱。',
         meaning: '把待还金额和还款日期集中看，比单独看每张卡更接近真实财务状态。',
@@ -1458,7 +1485,7 @@ export function analyzeInsightContext(
         evidence: [
           {
             label: '信用 / 负债账户',
-            value: creditAccounts.length,
+            value: creditNames.size,
             unit: '个',
           },
         ],

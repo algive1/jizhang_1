@@ -394,6 +394,58 @@ void main() {
     expect(insight.meaning, contains('待还金额'));
   });
 
+  test('MuMu import source accounts can reveal multiple credit channels', () {
+    final transactions = <TransactionRecord>[
+      ..._history(now),
+      for (var index = 0; index < 2; index++)
+        _tx(
+          'huabei-$index',
+          now.subtract(Duration(days: 3 + index)),
+          60,
+        ).copyWith(
+          metadataJson: jsonEncode({
+            'importProvider': 'mumu',
+            'sourceAccount': '花呗',
+          }),
+        ),
+      for (var index = 0; index < 2; index++)
+        _tx(
+          'meituan-credit-$index',
+          now.subtract(Duration(days: 7 + index)),
+          50,
+        ).copyWith(
+          metadataJson: jsonEncode({
+            'importProvider': 'mumu',
+            'sourceAccount': '美团月付',
+          }),
+        ),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.optimizeFinances},
+        focus: {InsightFocus.credit},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    final insight = feed.items.firstWhere(
+      (item) => item.id == 'accounts:multiple-credit',
+    );
+    expect(insight.summary, contains('2 个'));
+    expect(insight.summary, contains('花呗'));
+    expect(insight.summary, contains('美团月付'));
+  });
+
   test('family support is treated as life context rather than overspending', () {
     final transactions = [
       ..._history(now),

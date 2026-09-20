@@ -47,3 +47,18 @@ String transactionSemanticText(TransactionRecord item) {
 
   return values.toSet().join(' ');
 }
+
+String? transactionImportedSourceAccount(TransactionRecord item) {
+  final raw = item.metadataJson;
+  if (raw == null || raw.trim().isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map) {
+      final value = decoded['sourceAccount'];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+  } on Object {
+    // Ignore legacy/malformed metadata.
+  }
+  return null;
+}
