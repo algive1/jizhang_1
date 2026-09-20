@@ -522,6 +522,8 @@ function categoryChanges(
     previousAmount: number;
     currentCount: number;
     previousCount: number;
+    currentDeliveryCount: number;
+    previousDeliveryCount: number;
     currentIds: string[];
     familyAmount: number;
     largeOneTimeAmount: number;
@@ -545,6 +547,8 @@ function categoryChanges(
         previousAmount: 0,
         currentCount: 0,
         previousCount: 0,
+        currentDeliveryCount: 0,
+        previousDeliveryCount: 0,
         currentIds: [],
         familyAmount: 0,
         largeOneTimeAmount: 0,
@@ -558,6 +562,7 @@ function categoryChanges(
     ) {
       bucket.currentAmount += value;
       bucket.currentCount++;
+      if (tx.semanticHints.delivery) bucket.currentDeliveryCount++;
       bucket.currentIds.push(tx.id);
       if (value > bucket.largestAmount) {
         bucket.largestAmount = value;
@@ -577,6 +582,7 @@ function categoryChanges(
     ) {
       bucket.previousAmount += value;
       bucket.previousCount++;
+      if (tx.semanticHints.delivery) bucket.previousDeliveryCount++;
     }
     buckets.set(key, bucket);
   }
@@ -675,8 +681,13 @@ function categoryChanges(
           : bucket.currentCount / bucket.previousCount - 1;
       const ticketGrowth =
         previousTicket <= 0 ? 0 : currentTicket / previousTicket - 1;
-      const reason =
-        countGrowth > ticketGrowth + 0.15
+      const deliveryDominates =
+        bucket.currentDeliveryCount >= 2 &&
+        bucket.currentDeliveryCount > bucket.previousDeliveryCount &&
+        bucket.currentDeliveryCount * 2 >= bucket.currentCount;
+      const reason = deliveryDominates
+        ? '增长主要集中在外卖频率，而不是普通堂食。'
+        : countGrowth > ticketGrowth + 0.15
           ? '增长主要由消费次数增加带来，单次金额不是主要原因。'
           : ticketGrowth > countGrowth + 0.15
             ? '增长主要由单次消费金额变高带来。'
@@ -1048,18 +1059,16 @@ export function analyzeInsightContext(
         feedback,
       ),
     );
-    for (const pattern of ['delivery', 'lateNight'] as const) {
-      const insight = behaviorPatternInsight(
-        expenses,
-        now,
-        timezoneOffsetMinutes,
-        confidence,
-        profile,
-        feedback,
-        pattern,
-      );
-      if (insight) results.push(insight);
-    }
+    const lateNight = behaviorPatternInsight(
+      expenses,
+      now,
+      timezoneOffsetMinutes,
+      confidence,
+      profile,
+      feedback,
+      'lateNight',
+    );
+    if (lateNight) results.push(lateNight);
   }
 
   const localNow = localDateParts(input.generatedAt, timezoneOffsetMinutes);

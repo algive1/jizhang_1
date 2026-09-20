@@ -454,6 +454,80 @@ test('member AI interpretation is cached and grounded behind server policy', asy
 });
 
 
+test('delivery growth keeps the same category insight identity as local analysis', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const now = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  for (let index = 0; index < 8; index++) {
+    rows.push(
+      tx(
+        `aug-food-${index}`,
+        Date.parse(
+          `2026-08-${String(index + 2).padStart(2, '0')}T12:00:00+08:00`,
+        ),
+        30,
+        {
+          semanticHints: {
+            delivery: index < 2,
+            family: false,
+            beauty: false,
+          },
+        },
+      ),
+    );
+  }
+  for (let index = 0; index < 12; index++) {
+    rows.push(
+      tx(
+        `sep-food-${index}`,
+        Date.parse(
+          `2026-09-${String(index + 2).padStart(2, '0')}T12:00:00+08:00`,
+        ),
+        42,
+        {
+          semanticHints: {
+            delivery: index < 8,
+            family: false,
+            beauty: false,
+          },
+        },
+      ),
+    );
+  }
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt: now,
+      timezoneOffsetMinutes: 480,
+      transactions: rows,
+      accounts: [],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const items = response.json().items as Array<{
+    id: string;
+    analysis: string;
+  }>;
+  const category = items.find(item => item.id === 'analysis:category:food');
+  assert.ok(category);
+  assert.match(category.analysis, /外卖频率/);
+  assert.equal(items.some(item => item.id === 'behavior:delivery'), false);
+});
+
 test('one-time expense is not mislabeled as a persistent spending habit', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());

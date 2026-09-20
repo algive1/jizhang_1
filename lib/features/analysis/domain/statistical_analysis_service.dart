@@ -529,7 +529,9 @@ class StatisticalAnalysisService {
   bool _isLateNight(TransactionRecord item) => item.occurredAt.hour >= 22;
 
   bool _isDelivery(TransactionRecord item) {
-    final source = '${item.merchant ?? ''}${item.note ?? ''}'.toLowerCase();
+    final source =
+        '${item.categoryName ?? ''}${item.merchant ?? ''}${item.note ?? ''}'
+            .toLowerCase();
     return const ['外卖', '美团', '饿了么', 'eleme', 'delivery'].any(source.contains);
   }
 
