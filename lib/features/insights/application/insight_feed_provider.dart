@@ -9,6 +9,7 @@ import '../data/remote_insight_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../analysis/data/analysis_repository.dart';
 import '../../budgets/data/budget_repository.dart';
+import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/financial_insight_engine.dart';
@@ -29,6 +30,7 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
       );
   final budgets = ref.watch(budgetOverviewProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
+  final categories = ref.watch(allCategoriesProvider).value ?? const [];
   final goals = ref.watch(goalsProvider).value ?? const [];
   final recurringBills =
       ref.watch(recurringBillsProvider).value ?? const [];
@@ -40,6 +42,7 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
     analysis: analysis,
     budgets: budgets,
     accounts: accounts,
+    categories: categories,
     goals: goals,
     recurringBills: recurringBills,
     preferences: preferences,

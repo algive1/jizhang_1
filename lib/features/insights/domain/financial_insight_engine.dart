@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../../core/models/account.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/budget.dart';
+import '../../../core/models/category.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/recurring_bill.dart';
 import 'budget_recommendation_service.dart';
@@ -45,6 +46,7 @@ class FinancialInsightEngine {
     required AnalysisSnapshot analysis,
     required BudgetOverview budgets,
     required List<Account> accounts,
+    List<Category> categories = const [],
     List<Goal> goals = const [],
     List<RecurringBill> recurringBills = const [],
     required InsightPreferences preferences,
@@ -171,6 +173,27 @@ class FinancialInsightEngine {
           ),
         );
       }
+    }
+
+    candidates.addAll(
+      _categoryBudgetInsights(
+        budgets.categories,
+        preferences,
+        quality,
+        clock,
+      ),
+    );
+
+    final categoryRecommendation = _categoryBudgetRecommendationInsight(
+      transactions: eligible,
+      categories: categories,
+      existingBudgets: budgets.categories,
+      preferences: preferences,
+      quality: quality,
+      now: clock,
+    );
+    if (categoryRecommendation != null) {
+      candidates.add(categoryRecommendation);
     }
 
     final goal = _goalInsight(goals, preferences, quality, clock);
@@ -582,6 +605,181 @@ class FinancialInsightEngine {
       baseScore: critical ? 86 : 74,
       preferences: preferences,
       confidence: quality.copyWith(baseline: math.max(.65, quality.baseline)),
+      generatedAt: now,
+    );
+  }
+
+  List<FinancialInsightItem> _categoryBudgetInsights(
+    List<BudgetProgress> progresses,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    if (progresses.isEmpty) return const [];
+    final lastDay = DateTime(now.year, now.month + 1, 0).day;
+    final timeProgress = (now.day / lastDay).clamp(.03, 1.0).toDouble();
+    final results = <FinancialInsightItem>[];
+    for (final progress in progresses) {
+      final amount = progress.budget.amount;
+      if (amount <= 0) continue;
+      final usage = progress.used / amount;
+      final forecast = progress.used / timeProgress;
+      final overspend = forecast - amount;
+      if (usage < .8 &&
+          usage - timeProgress < .15 &&
+          overspend <= amount * .08) {
+        continue;
+      }
+      final critical = usage > 1 || forecast > amount * 1.3;
+      final name = progress.category?.name ?? '这个分类';
+      results.add(
+        _item(
+          id:
+              'budget:${progress.budget.monthKey}:category:${progress.budget.categoryId ?? 'unknown'}',
+          kind: FinancialInsightKind.risk,
+          priority: critical
+              ? InsightPriority.important
+              : InsightPriority.attention,
+          title: usage > 1 ? '$name预算已经超出' : '$name预算消耗有点快',
+          summary: usage > 1
+              ? '本月 $name 已支出 ¥${progress.used.toStringAsFixed(0)}，'
+                    '超过预算 ¥${amount.toStringAsFixed(0)}。'
+              : '本月过去 ${(timeProgress * 100).round()}%，'
+                    '$name 预算已使用 ${(usage * 100).round()}%。',
+          analysis:
+              '按目前速度，月底预计约 ¥${forecast.toStringAsFixed(0)}'
+              '${overspend > 0 ? '，比分类预算高约 ¥${overspend.toStringAsFixed(0)}' : ''}。',
+          meaning: '分类预算适合控制餐饮、购物等高频消费，比只看总预算更容易找到具体调整点。',
+          response: InsightResponse.advice,
+          suggestion: '可以查看这个分类剩余额度和相关流水，再决定是否降低接下来几天的消费频率。',
+          actionLabel: '查看预算',
+          actionRoute: '/profile/budgets',
+          categoryId: progress.budget.categoryId,
+          amount: progress.used,
+          changePercent: (usage - timeProgress) * 100,
+          evidence: [
+            InsightEvidence(
+              label: '$name已使用',
+              value: progress.used,
+              baselineValue: amount,
+              unit: 'CNY',
+            ),
+            InsightEvidence(
+              label: '月底预测',
+              value: forecast,
+              baselineValue: amount,
+              unit: 'CNY',
+            ),
+          ],
+          baseScore: critical ? 84 : 72,
+          preferences: preferences,
+          confidence: quality.copyWith(
+            baseline: math.max(.65, quality.baseline),
+          ),
+          generatedAt: now,
+        ),
+      );
+    }
+    results.sort((a, b) => b.score.compareTo(a.score));
+    return results.take(2).toList(growable: false);
+  }
+
+  FinancialInsightItem? _categoryBudgetRecommendationInsight({
+    required List<TransactionRecord> transactions,
+    required List<Category> categories,
+    required List<BudgetProgress> existingBudgets,
+    required InsightPreferences preferences,
+    required InsightConfidence quality,
+    required DateTime now,
+  }) {
+    if (categories.isEmpty ||
+        (!preferences.intents.contains(BookkeepingIntent.controlSpending) &&
+            !preferences.intents.contains(BookkeepingIntent.saveForGoal))) {
+      return null;
+    }
+    final budgeted = existingBudgets
+        .map((item) => item.budget.categoryId)
+        .whereType<String>()
+        .toSet();
+    const service = BudgetRecommendationService();
+    Category? bestCategory;
+    BudgetRecommendation? bestRecommendation;
+    var bestScore = -1.0;
+    for (final category in categories) {
+      if (category.type != CategoryType.expense ||
+          category.parentId != null ||
+          category.isArchived ||
+          budgeted.contains(category.id)) {
+        continue;
+      }
+      final recommendation = service.recommendCategory(
+        transactions: transactions,
+        categories: categories,
+        categoryId: category.id,
+        preferences: preferences,
+        now: now,
+      );
+      if (recommendation == null || recommendation.historicalMedian < 100) {
+        continue;
+      }
+      var score =
+          recommendation.historicalMedian * recommendation.confidence;
+      final name = category.name;
+      if (preferences.focus.contains(InsightFocus.dining) &&
+          RegExp(r'餐饮|外卖|咖啡|饮食').hasMatch(name)) {
+        score *= 1.35;
+      }
+      if (preferences.focus.contains(InsightFocus.shopping) &&
+          RegExp(r'购物|美妆|服饰').hasMatch(name)) {
+        score *= 1.25;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategory = category;
+        bestRecommendation = recommendation;
+      }
+    }
+    if (bestCategory == null || bestRecommendation == null) return null;
+    final category = bestCategory;
+    final recommendation = bestRecommendation;
+    return _item(
+      id: 'budget:recommendation:category:${category.id}',
+      kind: FinancialInsightKind.goal,
+      priority: InsightPriority.attention,
+      title: '${category.name}可以单独设预算',
+      summary:
+          '最近完整月份的 ${category.name} 支出中位数约 '
+          '¥${recommendation.historicalMedian.toStringAsFixed(0)}，'
+          '按你的记账目标建议先设 ¥${recommendation.recommended.toStringAsFixed(0)} 左右。',
+      analysis: '推荐值来自你自己的最近完整月份，并根据“保持、适度控制、积极节省”三个档位调整。',
+      meaning: '把高频分类单独设预算，之后系统可以按消费速度提前提醒，而不是月底才发现超支。',
+      response: InsightResponse.advice,
+      suggestion:
+          '可以先采用建议值，用一个月观察是否可持续；如果明显过紧或过松，再调整档位。',
+      actionLabel: '设置分类预算',
+      actionRoute: '/profile/budgets',
+      categoryId: category.id,
+      amount: recommendation.recommended,
+      evidence: [
+        InsightEvidence(
+          label: '历史月中位数',
+          value: recommendation.historicalMedian,
+          unit: 'CNY',
+        ),
+        InsightEvidence(
+          label: '建议分类预算',
+          value: recommendation.recommended,
+          unit: 'CNY',
+        ),
+      ],
+      baseScore: 69,
+      preferences: preferences,
+      confidence: quality.copyWith(
+        baseline: math.max(
+          recommendation.confidence,
+          quality.baseline,
+        ),
+      ),
       generatedAt: now,
     );
   }
