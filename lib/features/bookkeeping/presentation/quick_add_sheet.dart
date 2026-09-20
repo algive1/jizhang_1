@@ -1374,6 +1374,34 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return children;
   }
 
+  Future<void> _selectPrimaryCategory(
+    Category category,
+    List<Category> categories,
+    TransactionRecord? initial,
+  ) async {
+    final changedParent = _categoryId != category.id;
+    setState(() {
+      _categoryId = category.id;
+      if (changedParent) _subcategoryId = null;
+    });
+
+    final children = _subcategoriesFor(categories, category, initial);
+    if (children.isEmpty) return;
+
+    final selected = await AppBottomSheet.show<String>(
+      context: context,
+      builder: (sheetContext) => _SubcategoryPicker(
+        parent: category,
+        categories: children,
+        selectedId: _subcategoryId,
+        onParentOnly: () => Navigator.pop(sheetContext, ''),
+        onSelected: (child) => Navigator.pop(sheetContext, child.id),
+      ),
+    );
+    if (!mounted || selected == null || _categoryId != category.id) return;
+    setState(() => _subcategoryId = selected.isEmpty ? null : selected);
+  }
+
   List<Category> _sortedCategories(
     List<Category> categories,
     List<TransactionRecord> transactions,
@@ -2104,6 +2132,134 @@ String _transactionTypeLabel(TransactionType type) => switch (type) {
 };
 
 /// The prototype's four-item type switch: the active tab is a solid capsule.
+class _SubcategoryPicker extends StatelessWidget {
+  const _SubcategoryPicker({
+    required this.parent,
+    required this.categories,
+    required this.selectedId,
+    required this.onParentOnly,
+    required this.onSelected,
+  });
+
+  final Category parent;
+  final List<Category> categories;
+  final String? selectedId;
+  final VoidCallback onParentOnly;
+  final ValueChanged<Category> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final columns = MediaQuery.textScalerOf(context).scale(14) > 19 ? 3 : 4;
+    return Padding(
+      key: const ValueKey('quick-subcategory-picker'),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '选择二级分类',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: context.appPrimaryText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            parent.name,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: context.appSecondaryText,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Material(
+            color: selectedId == null
+                ? context.appPrimarySoft
+                : context.appSurfaceSoft,
+            borderRadius: BorderRadius.circular(16),
+            child: ListTile(
+              key: const ValueKey('quick-subcategory-parent-only'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              leading: Icon(
+                Icons.layers_clear_outlined,
+                color: context.appPrimary,
+              ),
+              title: Text('仅记入${parent.name}'),
+              subtitle: const Text('不选择二级分类'),
+              trailing: selectedId == null
+                  ? Icon(Icons.check_circle, color: context.appPrimary)
+                  : null,
+              onTap: onParentOnly,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: categories.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: .92,
+            ),
+            itemBuilder: (context, index) {
+              final category = categories[index];
+              final selected = category.id == selectedId;
+              return Material(
+                key: ValueKey('quick-subcategory-${category.id}'),
+                color: selected
+                    ? context.appPrimarySoft
+                    : context.appSurfaceSoft,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onSelected(category),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CategoryIcon(
+                          category: category.name,
+                          iconKey: category.icon,
+                          size: 36,
+                          monochrome: true,
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          category.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.15,
+                            color: selected
+                                ? context.appPrimary
+                                : context.appPrimaryText,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EntryTabs extends StatelessWidget {
   const _EntryTabs({required this.selected, required this.onChanged});
 
