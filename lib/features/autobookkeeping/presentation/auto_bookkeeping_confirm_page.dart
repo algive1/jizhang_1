@@ -995,21 +995,24 @@ class _AutoBookkeepingConfirmPageState
     required PendingAutoBookkeepingCandidate? candidate,
     String? preferredId,
   }) {
+    final sourceAccounts = candidate?.transactionType == 'REPAYMENT'
+        ? accounts.where((item) => !item.type.isDebt).toList(growable: false)
+        : accounts;
     final suffix = candidate?.identifierSuffix;
     if (suffix != null && suffix.isNotEmpty) {
-      final suffixMatches = accounts
+      final suffixMatches = sourceAccounts
           .where((item) => item.identifierSuffix == suffix)
           .toList(growable: false);
       if (suffixMatches.length == 1) return suffixMatches.single.id;
     }
 
     if (preferredId != null &&
-        accounts.any((item) => item.id == preferredId)) {
+        sourceAccounts.any((item) => item.id == preferredId)) {
       return preferredId;
     }
 
     final method = candidate?.paymentMethod ?? '';
-    final preferredByMethod = accounts.where((item) {
+    final preferredByMethod = sourceAccounts.where((item) {
       if (method.contains('支付宝')) return item.type == AccountType.alipay;
       if (method.contains('微信')) return item.type == AccountType.wechat;
       if (method.contains('银行卡') ||
@@ -1023,7 +1026,7 @@ class _AutoBookkeepingConfirmPageState
     }).firstOrNull;
     if (preferredByMethod != null) return preferredByMethod.id;
 
-    final preferred = accounts.where((item) {
+    final preferred = sourceAccounts.where((item) {
       final source = candidate?.sourceApp;
       return switch (source) {
         'WECHAT' => item.type == AccountType.wechat,
@@ -1033,7 +1036,7 @@ class _AutoBookkeepingConfirmPageState
         _ => false,
       };
     }).firstOrNull;
-    return (preferred ?? accounts.firstOrNull)?.id;
+    return (preferred ?? sourceAccounts.firstOrNull)?.id;
   }
 
   String? _validDestinationAccountId(
