@@ -217,8 +217,69 @@ void main() {
     expect(theme.scaffoldBackgroundColor, Colors.transparent);
     expect(material?.usesLiquidGlass, isTrue);
     expect(material?.blurSigma, greaterThan(0));
-    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsAtLeastNWidgets(2));
+    expect(
+      find.byKey(const ValueKey('app-nav-glass-indicator')),
+      findsOneWidget,
+    );
   });
+
+  testWidgets('liquid nav bubble moves continuously in 280ms', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    Widget app(String location) => MaterialApp(
+      theme: AppTheme.light(BuiltInThemes.liquidGlass),
+      home: Scaffold(
+        bottomNavigationBar: AppBottomNavigation(location: location),
+      ),
+    );
+
+    await tester.pumpWidget(app('/'));
+    await tester.pump();
+    final indicator = find.byKey(const ValueKey('app-nav-glass-indicator'));
+    final start = tester.getTopLeft(indicator).dx;
+
+    await tester.pumpWidget(app('/transactions'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 140));
+    final middle = tester.getTopLeft(indicator).dx;
+    await tester.pump(const Duration(milliseconds: 140));
+    final end = tester.getTopLeft(indicator).dx;
+
+    expect(middle, greaterThan(start));
+    expect(middle, lessThan(end));
+  });
+
+  testWidgets('liquid nav press scales to 92 then rebounds through 104', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(BuiltInThemes.liquidGlass),
+        home: const Scaffold(
+          bottomNavigationBar: AppBottomNavigation(location: '/'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final home = find.byKey(const ValueKey('app-nav-home'));
+    final scaleFinder = find.descendant(
+      of: home,
+      matching: find.byType(AnimatedScale),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(home));
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(.92, .001));
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 90));
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(1.04, .001));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(1, .001));
+  });
+
 }
 
 class _RecordingNavigatorObserver extends NavigatorObserver {
