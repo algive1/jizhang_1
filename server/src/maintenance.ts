@@ -63,6 +63,9 @@ export function runRetention(store: Store) {
       cutoff(now, policy.adminAuditDays),
     );
   }
+  if (policy.adminAuditDays > 0) {
+    safeRun('adminAuditV2','DELETE FROM admin_audit_v2 WHERE created_at<?',cutoff(now, policy.adminAuditDays));
+  }
   if (policy.pushOutboxDays > 0) {
     safeRun(
       'pushOutbox',
