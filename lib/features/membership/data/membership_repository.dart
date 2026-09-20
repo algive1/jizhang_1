@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_seeder.dart';
+import '../../../core/config/testing_access.dart';
 import '../../../core/models/membership.dart';
 import '../domain/commercial_service_contracts.dart';
 import '../../sharing/data/session_repository.dart';
@@ -21,12 +22,17 @@ class SnapshotMembershipFeatureAccessService
   Future<MembershipFeatureAccess> accessFor(MembershipFeature feature) async {
     final snapshot = await _membership.getCurrent();
     final policy = snapshot.policyFor(feature);
-    final allowed = policy.canUse(snapshot);
+    final allowed =
+        policy.enabled && (testingAllFeaturesFree || policy.canUse(snapshot));
     return MembershipFeatureAccess(
       feature: feature,
       enabled: policy.enabled,
       allowed: allowed,
-      requiresUpgrade: policy.enabled && policy.requiresMembership && !allowed,
+      requiresUpgrade:
+          !testingAllFeaturesFree &&
+          policy.enabled &&
+          policy.requiresMembership &&
+          !allowed,
       policy: policy,
     );
   }
@@ -40,25 +46,28 @@ class LocalOnlyMembershipRepository implements MembershipRepository {
 
   MembershipSnapshot _snapshot() {
     final now = _clock();
-    return MembershipSnapshot(
+    final baseline = <EntitlementGrant>[
+      EntitlementGrant(
+        key: EntitlementKey.localBookkeeping,
+        source: 'local_free_baseline',
+        grantedAt: DateTime(2020),
+      ),
+      EntitlementGrant(
+        key: EntitlementKey.dataExport,
+        source: 'local_free_baseline',
+        grantedAt: DateTime(2020),
+      ),
+    ];
+    final snapshot = MembershipSnapshot(
       membership: Membership(
         userId: SeedIds.localUser,
         plan: MembershipPlan.free,
         status: MembershipStatus.active,
         updatedAt: now,
       ),
-      entitlements: [
-        EntitlementGrant(
-          key: EntitlementKey.localBookkeeping,
-          source: 'local_free_baseline',
-          grantedAt: DateTime(2020),
-        ),
-        EntitlementGrant(
-          key: EntitlementKey.dataExport,
-          source: 'local_free_baseline',
-          grantedAt: DateTime(2020),
-        ),
-      ],
+      entitlements: testingAllFeaturesFree
+          ? _grantAllTestingEntitlements(baseline)
+          : baseline,
       quotas: const [],
     );
   }
@@ -152,6 +161,14 @@ class RemoteMembershipRepository implements MembershipRepository {
           .where((quota) => quota.limit > 0)
           .toList(),
     );
+    if (!testingAllFeaturesFree) return snapshot;
+    return MembershipSnapshot(
+      membership: snapshot.membership,
+      subscription: snapshot.subscription,
+      entitlements: _grantAllTestingEntitlements(snapshot.entitlements),
+      quotas: snapshot.quotas,
+      featurePolicies: snapshot.featurePolicies,
+    );
   }
 
   DateTime _date(Object? value) {
@@ -186,3 +203,22 @@ final membershipFeatureAccessServiceProvider =
         ref.watch(membershipRepositoryProvider),
       );
     });
+
+List<EntitlementGrant> _grantAllTestingEntitlements(
+  List<EntitlementGrant> current,
+) {
+  final grants = [...current];
+  final existing = grants.map((item) => item.key).toSet();
+  for (final key in EntitlementKey.values) {
+    if (existing.add(key)) {
+      grants.add(
+        EntitlementGrant(
+          key: key,
+          source: 'testing_all_free',
+          grantedAt: DateTime(2020),
+        ),
+      );
+    }
+  }
+  return grants;
+}
