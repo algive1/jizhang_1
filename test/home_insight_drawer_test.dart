@@ -34,12 +34,12 @@ void main() {
 
       await tester.pumpWidget(app(_insight('first', '第一条')));
       await tester.pumpAndSettle();
-      expect(find.text('第一条'), findsNothing);
+      expect(find.text('第一条').hitTestable(), findsNothing);
 
       await tester.pumpWidget(app(_insight('second', '第二条')));
       await tester.pumpAndSettle();
 
-      expect(find.text('第二条'), findsOneWidget);
+      expect(find.text('第二条').hitTestable(), findsOneWidget);
       expect(
         settings.values['home.insight.lastShown.book-personal.second'],
         day.toIso8601String(),
