@@ -538,6 +538,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         _fileName = file.name;
         _result = result;
         _accountMappings.clear();
+        _preserveCurrentBalances = true;
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
         );
