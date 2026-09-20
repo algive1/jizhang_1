@@ -85,11 +85,21 @@ class BillImportCategoryMapper {
     }
     if (subcategory == '数码') return 'expense-digital';
     if (subcategory == '理发') return 'expense-shopping';
+    if (const {'日用品', '清洁用品', '厨房用品', '收纳', '家纺', '家具', '小家电'}
+        .contains(subcategory)) {
+      return 'expense-household';
+    }
+    if (const {'香烟', '烟', '酒', '酒类', '茶叶', '茶具'}.contains(subcategory)) {
+      return 'expense-tobacco-tea';
+    }
 
     return switch (category) {
-      '餐饮' || '零食' || '水果' => 'expense-food',
-      '交通' => 'expense-transport',
-      '购物' || '美妆' => 'expense-shopping',
+      '餐饮' || '餐饮美食' || '美食' || '零食' || '水果' => 'expense-food',
+      '交通' || '出行' || '交通出行' => 'expense-transport',
+      '购物' || '网购' || '美妆' => 'expense-shopping',
+      '家居日用' || '日用' || '日用品' || '居家' || '生活用品' =>
+        'expense-household',
+      '烟酒茶' || '烟酒' || '酒水' || '茶叶' => 'expense-tobacco-tea',
       '娱乐' => 'expense-entertainment',
       '医疗' => 'expense-medical',
       '学习' => 'expense-education',
@@ -144,11 +154,25 @@ class BillImportCategoryMapper {
       '买菜' => 'expense-food-grocery',
       '饮料' => 'expense-food-drinks',
       '夜宵' => 'expense-food-late-night',
+      '甜品' || '烘焙' || '面包甜点' => 'expense-food-dessert',
+      '聚餐' || '聚会吃饭' => 'expense-food-dining',
       '地铁' => 'expense-transport-metro',
       '出租车' || '汽车' => 'expense-transport-taxi',
       '火车' => 'expense-transport-rail',
       '共享单车' => 'expense-transport-bike',
-      '日用品' => 'expense-shopping-daily',
+      '日用品' => 'expense-household-daily',
+      '清洁用品' => 'expense-household-cleaning',
+      '厨房用品' => 'expense-household-kitchen',
+      '收纳' || '收纳用品' => 'expense-household-storage',
+      '家纺' || '床品' => 'expense-household-bedding',
+      '家具' => 'expense-household-furniture',
+      '小家电' => 'expense-household-small-appliance',
+      '卫浴用品' => 'expense-household-bathroom',
+      '香烟' || '烟' => 'expense-tobacco-tea-cigarette',
+      '酒' || '酒类' || '啤酒' || '红酒' || '白酒' =>
+        'expense-tobacco-tea-alcohol',
+      '茶叶' => 'expense-tobacco-tea-tea',
+      '茶具' => 'expense-tobacco-tea-teaware',
       '理发' => 'expense-shopping-personal-care',
       '服饰' => 'expense-shopping-clothes',
       '淘宝' || '拼多多' || '红书' => 'expense-shopping-online',
