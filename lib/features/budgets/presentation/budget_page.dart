@@ -20,6 +20,7 @@ import '../../insights/data/insight_preferences_repository.dart';
 import '../../insights/domain/budget_recommendation_service.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../intelligence/application/financial_truth_provider.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import '../application/budget_alert_notification_service.dart';
 import '../data/budget_repository.dart';
 
@@ -180,8 +181,14 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
     final monthKey = budgetMonthKey(DateTime.now());
     final repository = ref.read(budgetRepositoryProvider);
     final rawTransactions = await ref.read(transactionsProvider.future);
+    final eventGroups = await ref.read(
+      confirmedEconomicEventTransactionIdsProvider.future,
+    );
     final suppressed =
-        ref.read(financialTruthSuppressedTransactionIdsProvider);
+        const FinancialTruthService().confirmedDuplicateSuppressionIds(
+          records: rawTransactions,
+          confirmedEventTransactionIds: eventGroups,
+        );
     final transactions = rawTransactions
         .where((item) => !suppressed.contains(item.id))
         .toList(growable: false);

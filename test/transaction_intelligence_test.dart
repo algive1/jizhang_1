@@ -239,6 +239,13 @@ void main() {
         await database.intelligenceDao.getEventRecords(events.single.id),
         hasLength(2),
       );
+      final confirmedRecords = await database.intelligenceDao
+          .watchConfirmedEconomicEventRecords()
+          .first;
+      expect(
+        confirmedRecords.map((item) => item.transactionId).toSet(),
+        {wallet.id, bank.id},
+      );
       expect(
         (await transactions.getAll()).map((item) => item.id),
         containsAll([wallet.id, bank.id]),

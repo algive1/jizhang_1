@@ -52,6 +52,80 @@ void main() {
     expect(summary.disposableDelta, 9500);
   });
 
+  test('golden imported multi-source ledger produces one stable financial truth', () {
+    final wallet = _row(
+      'wallet',
+      TransactionType.expense,
+      128,
+      now,
+    ).copyWith(
+      categoryId: 'expense-food',
+      merchant: '餐厅',
+    );
+    final bankDuplicate = _row(
+      'bank-duplicate',
+      TransactionType.expense,
+      128,
+      now.add(const Duration(minutes: 1)),
+    );
+    final workTaxi = _row(
+      'work-taxi',
+      TransactionType.expense,
+      80,
+      now,
+    ).copyWith(
+      reimbursementStatus: ReimbursementStatus.pending,
+      reimbursementAmount: 60,
+    );
+    final returnedShopping = _row(
+      'shopping',
+      TransactionType.expense,
+      300,
+      now,
+    ).copyWith(
+      refundStatus: RefundStatus.partial,
+      refundAmount: 100,
+    );
+    final rows = [
+      _row('salary', TransactionType.income, 6000, now),
+      wallet,
+      bankDuplicate,
+      workTaxi,
+      returnedShopping,
+      _row('refund-receipt', TransactionType.refund, 100, now),
+      _row(
+        'reimbursement-receipt',
+        TransactionType.reimbursement,
+        60,
+        now,
+      ),
+      _row('internal-transfer', TransactionType.transfer, 500, now),
+      _row('credit-repayment', TransactionType.repayment, 900, now),
+    ];
+    final suppressed = truth.confirmedDuplicateSuppressionIds(
+      records: rows,
+      confirmedEventTransactionIds: {
+        'event-wallet-bank': ['wallet', 'bank-duplicate'],
+      },
+    );
+    final summary = truth.summarize(
+      rows,
+      start: DateTime(2026, 9),
+      endExclusive: DateTime(2026, 10),
+      currency: 'CNY',
+      now: now.add(const Duration(hours: 1)),
+      excludedTransactionIds: suppressed,
+    );
+
+    expect(suppressed, {'bank-duplicate'});
+    expect(summary.earnedIncome, 6000);
+    expect(summary.personalConsumption, 348);
+    expect(summary.consumptionCount, 3);
+    expect(summary.disposableDelta, 5652);
+    expect(summary.externalCashIn, 6160);
+    expect(summary.externalCashOut, 1408);
+  });
+
   test('confirmed economic events count exactly once using the richer record', () {
     final imported = _row(
       'imported',
