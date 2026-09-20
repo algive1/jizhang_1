@@ -177,7 +177,11 @@ class TransactionStatusParser(
         labels: List<String>,
     ): Boolean =
         sourceApp == "WECHAT" &&
-            labels.any { it in PAYMENT_SUCCESS_STATUSES } &&
+            labels.any { label ->
+                PAYMENT_SUCCESS_STATUSES.any { status ->
+                    label == status || label.startsWith(status)
+                }
+            } &&
             labels.any {
                 it.contains("确认收款") ||
                     it.startsWith("转给") ||
@@ -194,6 +198,9 @@ class TransactionStatusParser(
         return labels.firstNotNullOfOrNull { label ->
             if (!label.contains("确认收款")) return@firstNotNullOfOrNull null
             label.substringBeforeLast("确认收款")
+                .trim()
+                .removePrefix("等待")
+                .removePrefix("待")
                 .trim()
                 .trimEnd('-', '—', ' ')
                 .takeIf(::validCounterparty)
