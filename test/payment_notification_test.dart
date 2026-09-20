@@ -465,6 +465,101 @@ void main() {
     expect(bridge.acknowledged, isEmpty);
   });
 
+  test('explicit reimbursement notification queues confirmation without silent save', () async {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'reimbursement-notification',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '报销到账 ¥128.00，报销方：示例科技有限公司，到账账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 12),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.transactionType, 'REIMBURSEMENT');
+    expect(parsed.amount, 128);
+    expect(parsed.merchant, '示例科技有限公司');
+
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'reimbursement-queued',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '报销到账 ¥128.00，报销方：示例科技有限公司，到账账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 12),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(result.created, 0);
+    expect(pending.candidates, hasLength(1));
+    expect(pending.candidates.single.transactionType, 'REIMBURSEMENT');
+    expect(
+      pending.candidates.single.scene,
+      'PAYMENT_NOTIFICATION_REIMBURSEMENT',
+    );
+    expect(await transactions.getAll(), isEmpty);
+  });
+
+  test('reimbursement never direct-saves when confirmation bridge is unavailable', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'reimbursement-no-pending',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text:
+            '报销到账 ¥128.00，报销方：示例科技有限公司，到账账户：支付宝余额',
+        postedAt: DateTime(2026, 9, 20, 12),
+      ),
+    ]);
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+    ).processPending();
+
+    expect(result.waiting, 1);
+    expect(result.created, 0);
+    expect(await transactions.getAll(), isEmpty);
+    expect(bridge.acknowledged, isEmpty);
+  });
+
+  test('generic collection remains income rather than reimbursement', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'generic-income-after-reimbursement',
+        packageName: 'com.eg.android.AlipayGphone',
+        title: '支付宝',
+        text: '收款到账 ¥128.00，付款方：示例科技有限公司',
+        postedAt: DateTime(2026, 9, 20, 12),
+      ),
+    );
+    expect(parsed?.transactionType, 'INCOME');
+  });
+
   test('wechat chat transfer text is not accepted without payment context', () {
     final parsed = const PaymentNotificationParser().parse(
       PaymentNotification(
