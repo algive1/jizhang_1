@@ -1,5 +1,3 @@
-import 'sub_category_bar.dart';
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/category.dart';
@@ -14,7 +12,6 @@ class CategoryGrid extends StatelessWidget {
     required this.subcategories,
     required this.selectedSubcategoryId,
     required this.onSelected,
-    required this.onSubcategorySelected,
   });
 
   final List<Category> categories;
@@ -22,15 +19,22 @@ class CategoryGrid extends StatelessWidget {
   final List<Category> subcategories;
   final String? selectedSubcategoryId;
   final ValueChanged<Category> onSelected;
-  final ValueChanged<Category> onSubcategorySelected;
 
   @override
   Widget build(BuildContext context) {
+    Category? selectedSubcategory;
+    for (final category in subcategories) {
+      if (category.id == selectedSubcategoryId) {
+        selectedSubcategory = category;
+        break;
+      }
+    }
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.appDivider),
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
@@ -58,27 +62,13 @@ class CategoryGrid extends StatelessWidget {
                           name: category.name,
                           iconKey: category.icon,
                           selected: selected?.id == category.id,
+                          subtitle: selected?.id == category.id
+                              ? selectedSubcategory?.name
+                              : null,
                           onTap: () => onSelected(category),
                         ),
                     ],
                   ),
-                  if (subcategories.isNotEmpty &&
-                      categories
-                          .skip(start)
-                          .take(columns)
-                          .any((item) => item.id == selected?.id))
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: context.appPrimarySoft.withValues(alpha: .5),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SubCategoryBar(
-                        categories: subcategories,
-                        selectedId: selectedSubcategoryId,
-                        onSelected: onSubcategorySelected,
-                      ),
-                    ),
                 ],
                 if (categories.isEmpty)
                   const Padding(
@@ -102,12 +92,14 @@ class _CategoryTile extends StatelessWidget {
     required this.iconKey,
     required this.selected,
     required this.onTap,
+    this.subtitle,
   });
 
   final double width;
   final String name;
   final String iconKey;
   final bool selected;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -164,6 +156,20 @@ class _CategoryTile extends StatelessWidget {
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: context.appSecondaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -38,6 +38,7 @@ import '../../family/data/shared_family_service.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
@@ -77,12 +78,11 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
 }
 
-/// Opens the bookkeeping sheet above the app shell.
+/// Opens bookkeeping as a full-screen route above the app shell.
 ///
-/// Pages rendered by [ShellRoute] have their own navigator below the root
-/// navigator. Using that nested navigator leaves the shell's bottom bar above
-/// the modal route, so the bar can remain visible over the keypad. All entry
-/// points use this helper to keep the stacking order consistent.
+/// The quick-add flow contains dense category, amount and account interactions.
+/// Presenting it as a page avoids cramped modal geometry and guarantees that
+/// the shell bottom navigation never remains visible underneath the keypad.
 Future<void> showQuickAddSheet(
   BuildContext context, {
   TransactionRecord? initialTransaction,
@@ -91,17 +91,16 @@ Future<void> showQuickAddSheet(
   DateTime? initialOccurredAt,
   String? initialBookId,
 }) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => QuickAddSheet(
-      initialTransaction: initialTransaction,
-      copyFrom: copyFrom,
-      initialType: initialType,
-      initialOccurredAt: initialOccurredAt,
-      initialBookId: initialBookId,
+  await Navigator.of(context, rootNavigator: true).push<void>(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => QuickAddSheet(
+        initialTransaction: initialTransaction,
+        copyFrom: copyFrom,
+        initialType: initialType,
+        initialOccurredAt: initialOccurredAt,
+        initialBookId: initialBookId,
+      ),
     ),
   );
 }
@@ -345,7 +344,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               const <TransactionRecord>[];
     final activeCategories = _sortedCategories(categories, transactions);
     final selectedCategory = _selectedCategory(activeCategories);
-    // 子分类条必须在未裁剪的分类全集里查找，否则永远查不到子级。
+    // 二级分类必须从未裁剪的分类全集查找，主网格只保留一级分类。
     final subcategories = _subcategoriesFor(
       categories,
       selectedCategory,
@@ -360,30 +359,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final input = _amount;
 
-    return SafeArea(
-      // Keep the sheet background opaque through the system gesture area.
-      // The keypad gets its own inner SafeArea below, so controls stay clear
-      // without exposing the app shell/navigation underneath the modal.
-      bottom: false,
-      // Modal routes may remove MediaQuery's top padding. Read the actual
-      // window inset so every entry point stays below the status bar.
-      minimum: EdgeInsets.only(
-        top: MediaQueryData.fromView(View.of(context)).padding.top + 8,
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: FractionallySizedBox(
-          heightFactor: 1,
-          child: Material(
-            key: ValueKey('quick-sheet-surface'),
-            color: context.appBackground,
-            clipBehavior: Clip.antiAlias,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: Column(
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
+        bottom: false,
+        minimum: const EdgeInsets.only(top: 8),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: FractionallySizedBox(
+            heightFactor: 1,
+            child: Material(
+              key: ValueKey('quick-sheet-surface'),
+              color: context.appBackground,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
@@ -466,12 +458,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 selected: selectedCategory,
                                 subcategories: subcategories,
                                 selectedSubcategoryId: effectiveSubcategoryId,
-                                onSelected: (category) => setState(() {
-                                  _categoryId = category.id;
-                                  _subcategoryId = null;
-                                }),
-                                onSubcategorySelected: (category) => setState(
-                                  () => _subcategoryId = category.id,
+                                onSelected: (category) => _chooseCategory(
+                                  categories,
+                                  category,
+                                  currentSubcategoryId: effectiveSubcategoryId,
                                 ),
                               ),
                             )
@@ -519,6 +509,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     ),
                   ),
               ],
+            ),
             ),
           ),
         ),
@@ -1446,6 +1437,43 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return accounts.where((item) => item.id != sourceAccount?.id).firstOrNull;
   }
 
+  Future<void> _chooseCategory(
+    List<Category> categories,
+    Category category, {
+    String? currentSubcategoryId,
+  }) async {
+    final initial =
+        widget.initialTransaction?.categoryId == category.id
+        ? widget.initialTransaction
+        : null;
+    final children = _subcategoriesFor(categories, category, initial);
+    if (children.isEmpty) {
+      setState(() {
+        _categoryId = category.id;
+        _subcategoryId = null;
+      });
+      return;
+    }
+
+    final selection = await showModalBottomSheet<_CategorySelection>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _SubcategoryPickerSheet(
+        parent: category,
+        categories: children,
+        selectedId: currentSubcategoryId,
+      ),
+    );
+    if (selection == null || !mounted) return;
+    setState(() {
+      _categoryId = category.id;
+      _subcategoryId = selection.subcategoryId;
+    });
+  }
+
   Future<void> _chooseBook(List<LedgerBook> books) async {
     final selected = await showBookChoiceSheet(
       context,
@@ -2104,6 +2132,171 @@ String _transactionTypeLabel(TransactionType type) => switch (type) {
 };
 
 /// The prototype's four-item type switch: the active tab is a solid capsule.
+class _CategorySelection {
+  const _CategorySelection(this.subcategoryId);
+
+  final String? subcategoryId;
+}
+
+class _SubcategoryPickerSheet extends StatelessWidget {
+  const _SubcategoryPickerSheet({
+    required this.parent,
+    required this.categories,
+    required this.selectedId,
+  });
+
+  final Category parent;
+  final List<Category> categories;
+  final String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(14);
+    final columns = textScale > 19 ? 3 : 4;
+    return Material(
+      color: context.appSurface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: FractionallySizedBox(
+        heightFactor: .72,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.appDivider,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
+              child: Row(
+                children: [
+                  CategoryIcon(
+                    category: parent.name,
+                    iconKey: parent.icon,
+                    size: 42,
+                    monochrome: true,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          parent.name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '选择二级分类',
+                          style: TextStyle(color: context.appSecondaryText),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: context.appDivider),
+            Expanded(
+              child: GridView.builder(
+                key: const ValueKey('quick-subcategory-picker'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  mainAxisExtent: textScale > 19 ? 122 : 104,
+                ),
+                itemCount: categories.length + 1,
+                itemBuilder: (context, index) {
+                  final useParent = index == 0;
+                  final category = useParent ? parent : categories[index - 1];
+                  final selected = useParent
+                      ? selectedId == null
+                      : selectedId == category.id;
+                  return Semantics(
+                    button: true,
+                    selected: selected,
+                    label: useParent ? '不细分，使用${parent.name}' : category.name,
+                    child: InkWell(
+                      key: ValueKey(
+                        useParent
+                            ? 'quick-subcategory-parent'
+                            : 'quick-subcategory-${category.id}',
+                      ),
+                      onTap: () => Navigator.pop(
+                        context,
+                        _CategorySelection(useParent ? null : category.id),
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      child: AnimatedContainer(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? context.appPrimarySoft
+                              : context.appSurfaceSoft,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selected
+                                ? context.appPrimary
+                                : context.appDivider,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CategoryIcon(
+                              category: category.name,
+                              iconKey: category.icon,
+                              size: 38,
+                              monochrome: true,
+                            ),
+                            const SizedBox(height: 7),
+                            Text(
+                              useParent ? '不细分' : category.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: selected
+                                    ? context.appPrimary
+                                    : context.appPrimaryText,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EntryTabs extends StatelessWidget {
   const _EntryTabs({required this.selected, required this.onChanged});
 

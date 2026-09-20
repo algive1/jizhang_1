@@ -4,6 +4,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
+import { allFeaturesFreeForTesting } from './testing_access.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
 
@@ -86,6 +87,7 @@ export function registerAssistantPolicy(
   };
 
   const hasActiveMembership = (userId: string, now: number): boolean => {
+    if (allFeaturesFreeForTesting()) return true;
     if (store.db.prepare(
       'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
     ).get(userId, now)) return true;
