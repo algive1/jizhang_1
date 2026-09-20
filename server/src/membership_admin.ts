@@ -2,10 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { requireAdminPrincipal,auditAdmin } from './admin_auth.js';
-import { quotaSnapshot } from './entitlement_usage.js';
+import { ensureQuotaSchema, quotaSnapshot } from './entitlement_usage.js';
 import { membershipState } from './membership_state.js';
 
 export function registerMembershipAdminRoutes(app:FastifyInstance,store:Store){
+  ensureQuotaSchema(store);
   app.get('/api/v1/admin/users/:userId/membership',async req=>{
     const principal=requireAdminPrincipal(req.headers['x-admin-token'],'membership.read');
     const {userId}=z.object({userId:z.string().min(1).max(100)}).parse(req.params);
