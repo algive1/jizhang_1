@@ -800,13 +800,20 @@ class FinancialInsightEngine {
       ..sort((a, b) => a.targetDate.compareTo(b.targetDate));
     if (active.isEmpty) return null;
     final goal = active.first;
-    final totalDays = goal.targetDate.difference(goal.createdAt).inDays;
-    if (totalDays <= 0 || goal.targetAmount <= 0) return null;
-    final elapsedDays = now.difference(goal.createdAt).inDays.clamp(0, totalDays);
-    final timeProgress = (elapsedDays / totalDays).clamp(0, 1).toDouble();
+    final targetEndExclusive = DateTime(
+      goal.targetDate.year,
+      goal.targetDate.month,
+      goal.targetDate.day + 1,
+    );
+    final total = targetEndExclusive.difference(goal.createdAt);
+    if (total <= Duration.zero || goal.targetAmount <= 0) return null;
+    final elapsed = now.difference(goal.createdAt).inMilliseconds;
+    final timeProgress =
+        (elapsed / total.inMilliseconds).clamp(0, 1).toDouble();
     final moneyProgress = goal.progress;
     final gap = timeProgress - moneyProgress;
-    final overdue = now.isAfter(goal.targetDate) && moneyProgress < 1;
+    final overdue =
+        !now.isBefore(targetEndExclusive) && moneyProgress < 1;
 
     if (!overdue && gap.abs() < .10) return null;
     final behind = overdue || gap > 0;

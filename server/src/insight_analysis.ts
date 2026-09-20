@@ -1355,18 +1355,36 @@ export function analyzeInsightContext(
     .sort((a, b) => a.targetDate - b.targetDate);
   if (activeGoals.length) {
     const goal = activeGoals[0]!;
-    const total = goal.targetDate - goal.createdAt;
+    const targetLocal = localDateParts(
+      goal.targetDate,
+      timezoneOffsetMinutes,
+    );
+    const targetEndExclusive = localBoundary(
+      targetLocal.year,
+      targetLocal.month,
+      targetLocal.day + 1,
+      timezoneOffsetMinutes,
+    );
+    const total = targetEndExclusive - goal.createdAt;
     if (total > 0) {
-      const timeProgress = clamp((now.getTime() - goal.createdAt) / total);
+      const timeProgress = clamp(
+        (now.getTime() - goal.createdAt) / total,
+      );
       const moneyProgress = clamp(goal.currentAmount / goal.targetAmount);
       const gap = timeProgress - moneyProgress;
-      if (Math.abs(gap) >= 0.1) {
-        const behind = gap > 0;
+      const overdue =
+        now.getTime() >= targetEndExclusive && moneyProgress < 1;
+      if (overdue || Math.abs(gap) >= 0.1) {
+        const behind = overdue || gap > 0;
         results.push(
           item({
             id: `goal:${goal.id}:progress`,
             kind: behind ? 'goal' : 'positive',
-            priority: behind ? 'attention' : 'info',
+            priority: overdue
+              ? 'important'
+              : behind
+                ? 'attention'
+                : 'info',
             title: behind
               ? `${goal.name}需要再追一点进度`
               : `${goal.name}进度走在计划前面`,
