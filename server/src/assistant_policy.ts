@@ -7,7 +7,6 @@ import type { Store } from './store.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
-import { recordAiUsage } from './ai_usage.js';
 
 const feature = z.enum(['export', 'summary', 'voice', 'ocr']);
 const voiceParseRequestSchema = z.strictObject({
