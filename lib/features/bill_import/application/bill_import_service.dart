@@ -287,6 +287,13 @@ class BillImportService {
 
     final note = _first(map, const ['备注']);
     final tagText = _first(map, const ['标签']);
+    final reimbursementText = _first(map, const ['报销']).replaceAll(' ', '');
+    final reimbursementStatus = switch (reimbursementText) {
+      '已报销' => ReimbursementStatus.reimbursed,
+      '待报销' => ReimbursementStatus.pending,
+      _ when sourceCategory == '待报销' => ReimbursementStatus.pending,
+      _ => ReimbursementStatus.none,
+    };
     return ImportedBillRow(
       provider: BillImportProvider.mumu,
       occurredAt: occurredAt,
@@ -302,9 +309,7 @@ class BillImportService {
       sourceBook: _emptyToNull(_first(map, const ['所属账本', '账本'])),
       sourceAccount: sourceAccount,
       destinationAccount: destinationAccount,
-      reimbursementStatus: sourceCategory == '待报销'
-          ? ReimbursementStatus.pending
-          : ReimbursementStatus.none,
+      reimbursementStatus: reimbursementStatus,
       tags: tagText.isEmpty
           ? const []
           : tagText
