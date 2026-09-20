@@ -18,6 +18,8 @@ class PendingAutoBookkeepingCandidate {
     this.originalAmountInCents,
     this.discountAmountInCents,
     this.identifierSuffix,
+    this.targetIdentifierSuffix,
+    this.targetAccountHint,
     this.screenshotPath,
   });
 
@@ -41,6 +43,8 @@ class PendingAutoBookkeepingCandidate {
       originalAmountInCents: _nullableInt(map['originalAmountInCents']),
       discountAmountInCents: _nullableInt(map['discountAmountInCents']),
       identifierSuffix: _nullableText(map['identifierSuffix']),
+      targetIdentifierSuffix: _nullableText(map['targetIdentifierSuffix']),
+      targetAccountHint: _nullableText(map['targetAccountHint']),
       screenshotPath: _nullableText(map['screenshotPath']),
     );
   }
@@ -58,6 +62,8 @@ class PendingAutoBookkeepingCandidate {
   final int? originalAmountInCents;
   final int? discountAmountInCents;
   final String? identifierSuffix;
+  final String? targetIdentifierSuffix;
+  final String? targetAccountHint;
   final String? screenshotPath;
 
   static String? _nullableText(Object? value) {
@@ -118,6 +124,10 @@ class MethodChannelAutoBookkeepingPendingBridge
           'discountAmountInCents': candidate.discountAmountInCents,
         if (candidate.identifierSuffix != null)
           'identifierSuffix': candidate.identifierSuffix,
+        if (candidate.targetIdentifierSuffix != null)
+          'targetIdentifierSuffix': candidate.targetIdentifierSuffix,
+        if (candidate.targetAccountHint != null)
+          'targetAccountHint': candidate.targetAccountHint,
       });
       if (raw is Map) {
         return switch (raw['status']?.toString()) {

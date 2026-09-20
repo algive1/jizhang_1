@@ -343,6 +343,12 @@ class QuickBookkeepingService {
     if (request.isOneTime && request.isRecurring) {
       throw ArgumentError('A transaction cannot be one-time and recurring');
     }
+    if (request.type == TransactionType.transfer) {
+      final destination = request.destinationAccountId;
+      if (destination == null || destination == request.accountId) {
+        throw ArgumentError('内部转账需要两个不同的转出/转入账户');
+      }
+    }
     if (request.reimbursementAmount != null &&
         (!request.reimbursementAmount!.isFinite ||
             request.reimbursementAmount! <= 0 ||

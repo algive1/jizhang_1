@@ -66,6 +66,7 @@ jobs:
           test/budget_alert_notification_service_test.dart
           test/analysis_multibook_and_annual_report_test.dart
           test/bookkeeping_template_repository_test.dart
+          test/quick_bookkeeping_service_test.dart
           test/bill_import_service_test.dart
           test/bill_import_category_mapper_test.dart
           test/xlsx_bill_import_test.dart
@@ -77,6 +78,7 @@ jobs:
           test/autobookkeeping_page_test.dart
           test/autobookkeeping_learning_test.dart
           test/autobookkeeping_refund_matcher_test.dart
+          test/autobookkeeping_transfer_resolver_test.dart
 
       - name: Run Android auto-bookkeeping unit tests
         run: |

@@ -8,9 +8,9 @@ import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import java.math.BigDecimal
 
 /**
- * Conservative accessibility parser for non-expense completed transaction
- * states. It intentionally requires an exact status, a unique amount and an
- * explicit counterparty field; it never falls back to arbitrary page text.
+ * Conservative accessibility parser for completed non-purchase transaction
+ * states. A detected TRANSFER is only a scene signal; the Flutter confirmation
+ * layer decides whether it is an external expense or an internal account move.
  */
 class TransactionStatusParser(
     private val registry: AutoBookkeepingRuleRegistry =
@@ -27,49 +27,80 @@ class TransactionStatusParser(
 
         val hasRefund = labels.any(::isRefundStatus)
         val hasIncome = labels.any(::isIncomeStatus)
-        if (hasRefund == hasIncome) return null
+        val hasTransfer =
+            labels.any(::isTransferStatus) ||
+                isWeChatTransferConfirmation(sourceApp, labels)
+        if (listOf(hasRefund, hasIncome, hasTransfer).count { it } != 1) {
+            return null
+        }
 
-        val transactionType = if (hasRefund) "REFUND" else "INCOME"
-        val merchant = if (hasRefund) {
-            explicitValue(
+        val transactionType = when {
+            hasRefund -> "REFUND"
+            hasIncome -> "INCOME"
+            else -> "TRANSFER"
+        }
+        val counterparty = when (transactionType) {
+            "REFUND" -> explicitValue(
                 labels,
                 setOf("退款方", "退款商户", "商户", "商家", "店铺", "门店", "对方"),
                 setOf("退款方", "退款商户", "来自", "对方"),
             )
-        } else {
-            explicitValue(
+            "INCOME" -> explicitValue(
                 labels,
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            else -> transferCounterparty(labels)
         } ?: return null
 
-        val amount = uniqueAmount(
-            labels,
-            if (hasRefund) {
-                setOf("退款金额", "到账金额", "退款")
-            } else {
-                setOf("收款金额", "到账金额", "收入金额", "收款")
-            },
-        ) ?: return null
+        val amountKeys = when (transactionType) {
+            "REFUND" -> setOf("退款金额", "到账金额", "退款")
+            "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+            else -> setOf("转账金额", "转出金额", "付款金额", "金额")
+        }
+        val amount = uniqueAmount(labels, amountKeys) ?: return null
 
+        val methodKeys = when (transactionType) {
+            "TRANSFER" -> setOf("转出方式", "付款方式", "支付方式", "转出账户")
+            "REFUND" -> setOf("退款方式", "支付方式", "付款方式")
+            else -> setOf("收款方式", "支付方式", "付款方式")
+        }
         val method = CandidateFieldExtractor
-            .field(labels, setOf("退款方式", "收款方式", "支付方式", "付款方式"))
+            .field(labels, methodKeys)
             ?.takeIf { it.isNotBlank() }
             ?: "UNKNOWN"
 
+        val targetAccountHint =
+            if (transactionType == "TRANSFER") {
+                CandidateFieldExtractor.targetAccountHint(labels)
+            } else {
+                null
+            }
+        val targetIdentifierSuffix =
+            if (transactionType == "TRANSFER") {
+                CandidateFieldExtractor.targetIdentifierSuffix(labels)
+            } else {
+                null
+            }
+        val sourceIdentifierSuffix =
+            if (transactionType == "TRANSFER") {
+                CandidateFieldExtractor.identifierSuffix(method, emptyList())
+            } else {
+                CandidateFieldExtractor.identifierSuffix(method, labels)
+            }
+
         return PaymentCandidate(
             amountInCents = amount,
-            merchantRaw = merchant.take(80),
-            merchantNormalized = MerchantNormalizer.normalize(merchant).take(80),
+            merchantRaw = counterparty.take(80),
+            merchantNormalized = MerchantNormalizer.normalize(counterparty).take(80),
             paymentMethod = method.take(80),
             timestamp = timestamp,
             scene = PaymentScene(
                 sourceApp = sourceApp,
-                scene = if (hasRefund) {
-                    "${sourceApp}_REFUND_SUCCESS"
-                } else {
-                    "${sourceApp}_INCOME_SUCCESS"
+                scene = when (transactionType) {
+                    "REFUND" -> "${sourceApp}_REFUND_SUCCESS"
+                    "INCOME" -> "${sourceApp}_INCOME_SUCCESS"
+                    else -> "${sourceApp}_TRANSFER_SUCCESS"
                 },
                 confidence = if (method == "UNKNOWN") .92 else .96,
             ),
@@ -79,10 +110,9 @@ class TransactionStatusParser(
             transactionType = transactionType,
             orderId = CandidateFieldExtractor.orderId(labels),
             note = CandidateFieldExtractor.note(labels),
-            identifierSuffix = CandidateFieldExtractor.identifierSuffix(
-                method,
-                labels,
-            ),
+            identifierSuffix = sourceIdentifierSuffix,
+            targetIdentifierSuffix = targetIdentifierSuffix,
+            targetAccountHint = targetAccountHint,
         )
     }
 
@@ -90,34 +120,43 @@ class TransactionStatusParser(
         packageName: String,
         nodes: List<ScreenNode>,
     ): String? {
-        if (registry.ruleFor(packageName) == null) return null
+        val sourceApp = registry.ruleFor(packageName)?.sourceApp ?: return null
         val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
         val hasRefund = labels.any(::isRefundStatus)
         val hasIncome = labels.any(::isIncomeStatus)
-        if (!hasRefund && !hasIncome) return null
-        if (hasRefund && hasIncome) return "AMBIGUOUS_TRANSACTION_STATUS"
+        val hasTransfer =
+            labels.any(::isTransferStatus) ||
+                isWeChatTransferConfirmation(sourceApp, labels)
+        val matchCount = listOf(hasRefund, hasIncome, hasTransfer).count { it }
+        if (matchCount == 0) return null
+        if (matchCount != 1) return "AMBIGUOUS_TRANSACTION_STATUS"
 
-        val merchant = if (hasRefund) {
-            explicitValue(
+        val type = when {
+            hasRefund -> "REFUND"
+            hasIncome -> "INCOME"
+            else -> "TRANSFER"
+        }
+        val counterparty = when (type) {
+            "REFUND" -> explicitValue(
                 labels,
                 setOf("退款方", "退款商户", "商户", "商家", "店铺", "门店", "对方"),
                 setOf("退款方", "退款商户", "来自", "对方"),
             )
-        } else {
-            explicitValue(
+            "INCOME" -> explicitValue(
                 labels,
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            else -> transferCounterparty(labels)
         }
-        if (merchant == null) return "NO_COUNTERPARTY"
+        if (counterparty == null) return "NO_COUNTERPARTY"
 
         val amount = uniqueAmount(
             labels,
-            if (hasRefund) {
-                setOf("退款金额", "到账金额", "退款")
-            } else {
-                setOf("收款金额", "到账金额", "收入金额", "收款")
+            when (type) {
+                "REFUND" -> setOf("退款金额", "到账金额", "退款")
+                "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+                else -> setOf("转账金额", "转出金额", "付款金额", "金额")
             },
         )
         if (amount == null) return "NO_UNIQUE_TRANSACTION_AMOUNT"
@@ -129,6 +168,44 @@ class TransactionStatusParser(
 
     private fun isIncomeStatus(label: String): Boolean =
         INCOME_STATUSES.any { label == it || label.startsWith(it) }
+
+    private fun isTransferStatus(label: String): Boolean =
+        TRANSFER_STATUSES.any { label == it || label.startsWith(it) }
+
+    private fun isWeChatTransferConfirmation(
+        sourceApp: String,
+        labels: List<String>,
+    ): Boolean =
+        sourceApp == "WECHAT" &&
+            labels.any { label ->
+                PAYMENT_SUCCESS_STATUSES.any { status ->
+                    label == status || label.startsWith(status)
+                }
+            } &&
+            labels.any {
+                it.contains("确认收款") ||
+                    it.startsWith("转给") ||
+                    it.startsWith("转账给")
+            }
+
+    private fun transferCounterparty(labels: List<String>): String? {
+        explicitValue(
+            labels,
+            setOf("收款人", "收款方", "对方", "转账对象"),
+            setOf("收款人", "收款方", "对方", "转给", "转账给"),
+        )?.let { return it }
+
+        return labels.firstNotNullOfOrNull { label ->
+            if (!label.contains("确认收款")) return@firstNotNullOfOrNull null
+            label.substringBeforeLast("确认收款")
+                .trim()
+                .removePrefix("等待")
+                .removePrefix("待")
+                .trim()
+                .trimEnd('-', '—', ' ')
+                .takeIf(::validCounterparty)
+        }
+    }
 
     private fun explicitValue(
         labels: List<String>,
@@ -168,7 +245,8 @@ class TransactionStatusParser(
                 label.contains("订单") ||
                     label.contains("原价") ||
                     label.contains("优惠") ||
-                    label.contains("余额")
+                    label.contains("余额") ||
+                    label.contains("尾号")
             }
             .flatMap { label ->
                 CURRENCY_PATTERN.findAll(label)
@@ -198,6 +276,20 @@ class TransactionStatusParser(
             "收款成功",
             "收款已到账",
             "收入到账",
+        )
+        val TRANSFER_STATUSES = setOf(
+            "转账成功",
+            "转账已成功",
+            "转出成功",
+            "转账完成",
+            "转出完成",
+            "已转账",
+        )
+        val PAYMENT_SUCCESS_STATUSES = setOf(
+            "支付成功",
+            "付款成功",
+            "支付完成",
+            "付款完成",
         )
         val CURRENCY_PATTERN = Regex(
             "[¥￥]\\s*([0-9]+(?:\\.[0-9]{1,2})?)(?![0-9.])",

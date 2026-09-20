@@ -328,6 +328,71 @@ void main() {
     expect(pending.candidates.single.merchant, '张三');
   });
 
+  test('completed transfer notification keeps transfer scene and target account hint', () async {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'transfer-notification',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text:
+            '转账成功 ¥66.00，收款人：张三，转入账户：招商银行储蓄卡 尾号7777，转出方式：微信支付',
+        postedAt: DateTime(2026, 9, 20, 10),
+      ),
+    );
+    expect(parsed, isNotNull);
+    expect(parsed!.transactionType, 'TRANSFER');
+    expect(parsed.amount, 66);
+    expect(parsed.merchant, '张三');
+    expect(parsed.targetIdentifierSuffix, '7777');
+    expect(parsed.targetAccountHint, '招商银行储蓄卡 尾号7777');
+
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final bridge = _FakeBridge([
+      PaymentNotification(
+        id: 'transfer-queued',
+        packageName: 'com.tencent.mm',
+        title: '微信支付',
+        text:
+            '转账成功 ¥66.00，收款人：张三，转入账户：招商银行储蓄卡 尾号7777，转出方式：微信支付',
+        postedAt: DateTime(2026, 9, 20, 10),
+      ),
+    ]);
+    final pending = _FakePendingBridge();
+    final transactions = DriftTransactionRepository(database);
+    final result = await PaymentNotificationAutoBookkeepingService(
+      bridge: bridge,
+      transactions: transactions,
+      bookkeeping: QuickBookkeepingService(
+        transactions,
+        DriftAppSettingsRepository(database),
+      ),
+      pendingBridge: pending,
+    ).processPending();
+
+    expect(result.queued, 1);
+    expect(result.created, 0);
+    expect(pending.candidates, hasLength(1));
+    expect(pending.candidates.single.transactionType, 'TRANSFER');
+    expect(pending.candidates.single.scene, 'PAYMENT_NOTIFICATION_TRANSFER');
+    expect(pending.candidates.single.targetIdentifierSuffix, '7777');
+    expect(await transactions.getAll(), isEmpty);
+  });
+
+  test('wechat chat transfer text is not accepted without payment context', () {
+    final parsed = const PaymentNotificationParser().parse(
+      PaymentNotification(
+        id: 'transfer-chat',
+        packageName: 'com.tencent.mm',
+        title: '小王',
+        text: '转账成功 ¥66.00，收款人：张三',
+        postedAt: DateTime(2026, 9, 20, 10),
+      ),
+    );
+    expect(parsed, isNull);
+  });
+
   test('Android notification path queues for confirmation instead of saving silently', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
