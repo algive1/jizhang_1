@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
+import { activeMembershipProduct, resolvedEntitlements } from './entitlements.js';
 import { applePlanForProductId } from './apple_iap.js';
 import type { Store } from './store.js';
 
@@ -153,12 +154,13 @@ function addMonths(timestamp: number, months: number): number {
 
 function grantMembership(store: Store, row: OrderRow) {
   const now = store.now();
-  const catalog = getMembershipCatalog(store);
-  const product = catalog.plans.find((item) => item.id === row.product_id);
-  if (!product) return;
+  const canonical = activeMembershipProduct(store,row.product_id);
+  const legacy = getMembershipCatalog(store).plans.find((item) => item.id === row.product_id);
+  const months = canonical ? Math.max(1,Math.round(canonical.durationDays/30)) : legacy?.months;
+  if (!months) return;
   const current = store.db.prepare('SELECT expires_at FROM membership_subscriptions WHERE user_id=?').get(row.user_id) as { expires_at: number } | undefined;
   const startedAt = current && current.expires_at > now ? current.expires_at : now;
-  const expiresAt = addMonths(startedAt, product.months);
+  const expiresAt = addMonths(startedAt, months);
   store.db.prepare('INSERT INTO membership_subscriptions(user_id,product_id,provider,order_id,started_at,expires_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET product_id=excluded.product_id,provider=excluded.provider,order_id=excluded.order_id,started_at=excluded.started_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at').run(row.user_id, row.product_id, row.channel, row.id, startedAt, expiresAt, now);
 }
 
@@ -238,7 +240,7 @@ function membershipCurrent(store: Store, userId: string) {
   return {
     membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
     subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? memberEntitlementKeys.map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
+    entitlements: status === 'active' ? (()=>{const configured=resolvedEntitlements(store,userId,subscription.product_id);return configured.length?configured.map(e=>({...e,source:`${subscription.provider}_payment`,grantedAt:subscription.started_at,expiresAt:subscription.expires_at})):memberEntitlementKeys.map((key)=>({key,source:`${subscription.provider}_payment`,grantedAt:subscription.started_at,expiresAt:subscription.expires_at}))})() : [],
     quotas: status === 'active' ? assistantQuotas(store, userId) : [],
   };
 }
@@ -391,9 +393,10 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
       check(existing.product_id === input.productId && existing.channel === input.channel, '幂等键已用于其他会员订单', 409);
       return publicOrder(existing);
     }
-    const catalog = getMembershipCatalog(store);
-    const product = catalog.plans.find((item) => item.id === input.productId);
-    check(product, '会员套餐不存在或已下架', 404);
+    const canonical = activeMembershipProduct(store,input.productId);
+    const legacy = getMembershipCatalog(store).plans.find((item) => item.id === input.productId);
+    const product = canonical ? {id:canonical.id,priceInCents:Number(String(canonical.displayPrice??'').replace(/[^0-9.]/g,''))*100} : legacy;
+    check(product && Number.isInteger(product.priceInCents) && product.priceInCents>0, '会员套餐不存在、未上架或价格配置无效', 404);
     // The amount is always loaded from the server catalog; clients cannot alter it.
     const id = randomUUID().replaceAll('-', '');
     const now = store.now();
