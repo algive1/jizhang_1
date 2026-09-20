@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
+import '../../../core/config/testing_access.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../../core/models/membership.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../application/theme_controller.dart';
 
 class ThemeSettingsPage extends ConsumerWidget {
@@ -15,7 +17,9 @@ class ThemeSettingsPage extends ConsumerWidget {
     final catalog = ref.watch(themeCatalogProvider);
     final preferred = ref.watch(preferredThemeProvider).value ?? BuiltInThemes.freshGreen.id;
     final member = ref.watch(membershipProvider).value;
-    final premium = member != null && member.has(EntitlementKey.customTheme);
+    final premium =
+        testingAllFeaturesFree ||
+        (member != null && member.has(EntitlementKey.customTheme));
     return Scaffold(
       appBar: AppBar(title: const Text('主题外观')),
       body: catalog.when(
@@ -26,7 +30,12 @@ class ThemeSettingsPage extends ConsumerWidget {
           children: [
             Text('选择你喜欢的界面气质', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 6),
-            Text('默认主题永久免费。会员可使用更多主题；会员到期后会暂时恢复默认主题，但会保留你的选择。', style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              testingAllFeaturesFree
+                  ? '测试阶段全部主题免费开放，可直接切换验证；正式上线前再恢复会员主题权益。'
+                  : '默认主题永久免费。会员可使用更多主题；会员到期后会暂时恢复默认主题，但会保留你的选择。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 22),
             for (final theme in value.themes) ...[
               _ThemeCard(
@@ -86,7 +95,23 @@ class _ThemeCard extends StatelessWidget {
         _ThemePreview(theme: theme),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Flexible(child: Text(theme.name, style: Theme.of(context).textTheme.titleMedium)), if (theme.premium) ...[const SizedBox(width: 6), const Icon(Icons.workspace_premium_outlined, size: 18)]]),
+          Row(children: [
+            Flexible(child: Text(theme.name, style: Theme.of(context).textTheme.titleMedium)),
+            if (theme.premium && !testingAllFeaturesFree) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.workspace_premium_outlined, size: 18),
+            ],
+            if (theme.premium && testingAllFeaturesFree) ...[
+              const SizedBox(width: 8),
+              Text(
+                '测试期免费',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: context.appPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ]),
           const SizedBox(height: 4),
           Text(theme.description, style: Theme.of(context).textTheme.bodyMedium),
         ])),
