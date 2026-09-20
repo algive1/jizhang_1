@@ -23,6 +23,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
+import '../auto_bookkeeping_repayment_resolver.dart';
 import '../auto_bookkeeping_transfer_resolver.dart';
 import '../../transactions/data/refund_service.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
@@ -48,6 +49,7 @@ class _AutoBookkeepingConfirmPageState
   AutoBookkeepingRecommendation? _recommendation;
   TransactionRecord? _matchedRefundOriginal;
   AutoBookkeepingTransferRecommendation? _transferRecommendation;
+  AutoBookkeepingRepaymentRecommendation? _repaymentRecommendation;
   bool _internalTransfer = false;
   bool _rememberForMerchant = true;
   bool _keepScreenshot = true;
@@ -69,6 +71,7 @@ class _AutoBookkeepingConfirmPageState
       AutoBookkeepingRecommendation? recommendation;
       TransactionRecord? matchedRefundOriginal;
       AutoBookkeepingTransferRecommendation? transferRecommendation;
+      AutoBookkeepingRepaymentRecommendation? repaymentRecommendation;
       String? sourceAccountId;
       String? resolvedBookId;
       if (candidate != null) {
@@ -112,6 +115,15 @@ class _AutoBookkeepingConfirmPageState
                   accounts: accounts,
                   sourceAccountId: sourceAccountId,
                 );
+          } else if (candidate.transactionType == 'REPAYMENT') {
+            repaymentRecommendation = await ref
+                .read(autoBookkeepingRepaymentResolverProvider)
+                .recommend(
+                  candidate: candidate,
+                  bookId: targetBookId,
+                  accounts: accounts,
+                  sourceAccountId: sourceAccountId,
+                );
           }
         }
       }
@@ -121,12 +133,15 @@ class _AutoBookkeepingConfirmPageState
         _recommendation = recommendation;
         _matchedRefundOriginal = matchedRefundOriginal;
         _transferRecommendation = transferRecommendation;
+        _repaymentRecommendation = repaymentRecommendation;
         _bookId = resolvedBookId;
         _accountId = sourceAccountId;
         _categoryId = recommendation?.categoryId;
         _internalTransfer =
             transferRecommendation?.suggestsInternalTransfer == true;
-        _destinationAccountId = transferRecommendation?.destinationAccountId;
+        _destinationAccountId =
+            transferRecommendation?.destinationAccountId ??
+            repaymentRecommendation?.destinationAccountId;
         _loading = false;
       });
       if (candidate != null && candidate.screenshotPath == null) {
@@ -195,14 +210,24 @@ class _AutoBookkeepingConfirmPageState
     });
     try {
       final isTransferScene = candidate.transactionType == 'TRANSFER';
+      final isRepaymentScene = candidate.transactionType == 'REPAYMENT';
       final finalTransactionType = isTransferScene
           ? (_internalTransfer
                 ? TransactionType.transfer
                 : TransactionType.expense)
           : _transactionTypeFor(candidate.transactionType);
-      if (finalTransactionType == TransactionType.transfer) {
+      if (finalTransactionType == TransactionType.transfer ||
+          finalTransactionType == TransactionType.repayment) {
         if (destinationAccount == null || destinationAccount.id == account.id) {
-          throw ArgumentError('内部转账需要选择不同的转入账户');
+          throw ArgumentError(
+            finalTransactionType == TransactionType.repayment
+                ? '还款需要选择不同的债务账户'
+                : '内部转账需要选择不同的转入账户',
+          );
+        }
+        if (finalTransactionType == TransactionType.repayment &&
+            !destinationAccount.type.isDebt) {
+          throw ArgumentError('还款目标必须是信用卡或负债账户');
         }
       } else if (category == null) {
         throw ArgumentError('请选择分类');
@@ -271,7 +296,8 @@ class _AutoBookkeepingConfirmPageState
                   amount: candidate.amountInCents / 100,
                   accountId: account.id,
                   destinationAccountId:
-                      transactionType == TransactionType.transfer
+                      transactionType == TransactionType.transfer ||
+                          transactionType == TransactionType.repayment
                       ? destinationAccount!.id
                       : null,
                   categoryId: category?.id,
@@ -335,8 +361,19 @@ class _AutoBookkeepingConfirmPageState
                 destinationAccountId: saved.destinationAccountId,
                 remember: _rememberForMerchant,
               );
+        } else if (isRepaymentScene && saved.destinationAccountId != null) {
+          await ref
+              .read(autoBookkeepingRepaymentResolverProvider)
+              .remember(
+                candidate: candidate,
+                bookId: bookId,
+                destinationAccountId: saved.destinationAccountId!,
+                remember: _rememberForMerchant,
+              );
         }
-        if (transactionType != TransactionType.transfer && category != null) {
+        if (transactionType != TransactionType.transfer &&
+            transactionType != TransactionType.repayment &&
+            category != null) {
           await ref
               .read(autoBookkeepingLearningServiceProvider)
               .remember(
