@@ -12,6 +12,7 @@ const _focusKey = 'insights.focus';
 const _toneKey = 'insights.tone';
 const _configuredKey = 'insights.configured';
 const _dismissedKey = 'insights.dismissed';
+const _updatedAtKey = 'insights.updatedAt';
 
 class InsightPreferencesRepository {
   const InsightPreferencesRepository(
@@ -26,13 +27,23 @@ class InsightPreferencesRepository {
 
   Future<InsightPreferences> load() async {
     final local = await _loadLocal();
+    final localUpdatedAt =
+        int.tryParse(await _settings.get(_updatedAtKey) ?? '') ?? 0;
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return local;
       final remote = await _api
           .request('/insights/profile')
           .timeout(const Duration(seconds: 3));
-      if (remote['configured'] != true) return local;
+      if (remote['configured'] != true) {
+        if (local.configured) unawaited(_syncProfile(local));
+        return local;
+      }
+      final remoteUpdatedAt = (remote['updatedAt'] as num?)?.toInt() ?? 0;
+      if (local.configured && localUpdatedAt >= remoteUpdatedAt) {
+        if (localUpdatedAt > remoteUpdatedAt) unawaited(_syncProfile(local));
+        return local;
+      }
       final remoteIntents = (remote['intents'] as List? ?? const [])
           .whereType<String>()
           .toSet();
@@ -52,7 +63,7 @@ class InsightPreferencesRepository {
             .firstOrNull ?? local.tone,
         configured: true,
       );
-      await _writeLocal(merged);
+      await _writeLocal(merged, updatedAt: remoteUpdatedAt);
       return merged;
     } on SharedApiException catch (error) {
       if (error.status == 401) await _session.markSessionExpired();
@@ -91,7 +102,8 @@ class InsightPreferencesRepository {
 
 
   Future<void> save(InsightPreferences value) async {
-    await _writeLocal(value);
+    final updatedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await _writeLocal(value, updatedAt: updatedAt);
     unawaited(_syncProfile(value));
   }
 
@@ -99,7 +111,7 @@ class InsightPreferencesRepository {
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return;
-      await _api
+      final response = await _api
           .request(
             '/insights/profile',
             method: 'PUT',
@@ -111,6 +123,10 @@ class InsightPreferencesRepository {
             },
           )
           .timeout(const Duration(seconds: 4));
+      final updatedAt = (response['updatedAt'] as num?)?.toInt();
+      if (updatedAt != null) {
+        await _settings.set(_updatedAtKey, updatedAt.toString());
+      }
     } on SharedApiException catch (error) {
       if (error.status == 401) await _session.markSessionExpired();
     } on Object {
@@ -118,13 +134,18 @@ class InsightPreferencesRepository {
     }
   }
 
-  Future<void> _writeLocal(InsightPreferences value) async {
+  Future<void> _writeLocal(
+    InsightPreferences value, {
+    int? updatedAt,
+  }) async {
     await Future.wait([
       _settings.set(_intentsKey, value.intents.map((e) => e.name).join(',')),
       _settings.set(_focusKey, value.focus.map((e) => e.name).join(',')),
       _settings.set(_toneKey, value.tone.name),
       _settings.set(_configuredKey, value.configured ? '1' : '0'),
       _settings.set(_dismissedKey, value.dismissedIds.join('|')),
+      if (updatedAt != null)
+        _settings.set(_updatedAtKey, updatedAt.toString()),
       for (final kind in FinancialInsightKind.values)
         _settings.set(
           'insights.kindAdjustment.${kind.name}',

@@ -458,12 +458,13 @@ class FinancialInsightEngine {
     InsightConfidence quality,
     DateTime now,
   ) {
-    final until = now.add(const Duration(days: 14));
+    final today = DateTime(now.year, now.month, now.day);
+    final endExclusive = DateTime(now.year, now.month, now.day + 15);
     final active = bills.where(
       (bill) =>
           bill.status == RecurringBillStatus.active &&
-          !bill.nextDate.isBefore(DateTime(now.year, now.month, now.day)) &&
-          !bill.nextDate.isAfter(until),
+          !bill.nextDate.isBefore(today) &&
+          bill.nextDate.isBefore(endExclusive),
     );
     final expenses = active.where((bill) => !bill.isIncome).toList();
     final incomes = active.where((bill) => bill.isIncome).toList();

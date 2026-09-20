@@ -44,6 +44,11 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
   @override
   void didUpdateWidget(HomeInsightDrawer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.insight?.id != widget.insight?.id ||
+        oldWidget.available != widget.available) {
+      _checked = false;
+      _expanded = false;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _showOnceToday());
   }
 

@@ -1410,21 +1410,32 @@ export function analyzeInsightContext(
     }
   }
 
-  const fourteenDays = now.getTime() + 14 * 86400000;
+  const recurringDayStart = localBoundary(
+    localNow.year,
+    localNow.month,
+    localNow.day,
+    timezoneOffsetMinutes,
+  );
+  const recurringEndExclusive = localBoundary(
+    localNow.year,
+    localNow.month,
+    localNow.day + 15,
+    timezoneOffsetMinutes,
+  );
   const upcoming = input.recurringBills.filter(
     bill =>
       bill.status === 'active' &&
       bill.type !== 'income' &&
-      bill.nextDate >= now.getTime() &&
-      bill.nextDate <= fourteenDays,
+      bill.nextDate >= recurringDayStart &&
+      bill.nextDate < recurringEndExclusive,
   );
   const upcomingIncome = input.recurringBills
     .filter(
       bill =>
         bill.status === 'active' &&
         bill.type === 'income' &&
-        bill.nextDate >= now.getTime() &&
-        bill.nextDate <= fourteenDays,
+        bill.nextDate >= recurringDayStart &&
+        bill.nextDate < recurringEndExclusive,
     )
     .reduce((sum, bill) => sum + bill.amount, 0);
   const upcomingExpense = upcoming.reduce((sum, bill) => sum + bill.amount, 0);
