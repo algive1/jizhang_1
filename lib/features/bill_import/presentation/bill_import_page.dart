@@ -200,22 +200,24 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ),
           ),
           const SizedBox(height: 10),
-          if (!isMumu)
-            DropdownButtonFormField<String>(
-              initialValue: accounts.any((item) => item.id == _accountId)
-                  ? _accountId
-                  : null,
-              decoration: const InputDecoration(labelText: '默认账户'),
-              items: [
-                for (final account in accounts.where((item) => !item.isArchived))
-                  DropdownMenuItem(
-                    value: account.id,
-                    child: Text(account.displayName),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _accountId = value),
-            )
-          else ...[
+          DropdownButtonFormField<String>(
+            initialValue: accounts.any((item) => item.id == _accountId)
+                ? _accountId
+                : null,
+            decoration: InputDecoration(
+              labelText: isMumu ? '未标账户兜底' : '默认账户',
+            ),
+            items: [
+              for (final account in accounts.where((item) => !item.isArchived))
+                DropdownMenuItem(
+                  value: account.id,
+                  child: Text(account.displayName),
+                ),
+            ],
+            onChanged: (value) => setState(() => _accountId = value),
+          ),
+          if (isMumu) ...[
+            const SizedBox(height: 4),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
