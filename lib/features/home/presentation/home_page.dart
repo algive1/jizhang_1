@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../books/presentation/book_selector.dart';
