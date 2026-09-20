@@ -55,6 +55,7 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
       ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
   final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
+  final categories = ref.watch(allCategoriesProvider).value ?? const [];
   final goals = ref.watch(goalsProvider).value ?? const [];
   final recurringBills =
       ref.watch(recurringBillsProvider).value ?? const [];
@@ -70,6 +71,7 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
         transactions: transactions,
         accounts: accounts,
         budgets: budgets,
+        categories: categories,
         goals: goals,
         recurringBills: recurringBills,
         preferences: preferences,
