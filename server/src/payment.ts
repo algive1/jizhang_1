@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
+import { testingAllFeaturesFree } from './testing_access.js';
 import { applePlanForProductId } from './apple_iap.js';
 import type { Store } from './store.js';
 
@@ -222,6 +223,14 @@ function assistantQuotas(store: Store, userId: string) {
 }
 
 function membershipCurrent(store: Store, userId: string) {
+  const allFree = testingAllFeaturesFree();
+  const testingGrants = () =>
+    memberEntitlementKeys.map((key) => ({
+      key,
+      source: 'testing_all_free',
+      grantedAt: store.now(),
+      expiresAt: null,
+    }));
   const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
   if (apple) {
     return {
@@ -232,14 +241,22 @@ function membershipCurrent(store: Store, userId: string) {
     };
   }
   const subscription = store.db.prepare('SELECT * FROM membership_subscriptions WHERE user_id=?').get(userId) as { user_id: string; product_id: string; provider: PaymentChannel; order_id: string; started_at: number; expires_at: number; updated_at: number } | undefined;
-  if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], quotas: [] };
+  if (!subscription) return {
+    membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() },
+    entitlements: allFree ? testingGrants() : [],
+    quotas: allFree ? assistantQuotas(store, userId) : [],
+  };
   const now = store.now();
   const status = subscription.expires_at > now ? 'active' : 'expired';
   return {
     membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
     subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? memberEntitlementKeys.map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at })) : [],
-    quotas: status === 'active' ? assistantQuotas(store, userId) : [],
+    entitlements: status === 'active'
+      ? memberEntitlementKeys.map((key) => ({ key, source: `${subscription.provider}_payment`, grantedAt: subscription.started_at, expiresAt: subscription.expires_at }))
+      : allFree
+        ? testingGrants()
+        : [],
+    quotas: status === 'active' || allFree ? assistantQuotas(store, userId) : [],
   };
 }
 
