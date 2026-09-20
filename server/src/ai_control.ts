@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { Store } from './store.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
+import { requireCondition as check } from './contract.js';
 
 const provider=z.strictObject({
   id:z.string().regex(/^[a-z0-9_.-]{2,80}$/),
@@ -66,6 +67,8 @@ export function registerAiControlRoutes(app:FastifyInstance,store:Store){
     const principal=requireAdminPrincipal(request.headers['x-admin-token'],'ai.write');
     const {feature}=z.object({feature:z.string()}).parse(request.params);
     const body=route.parse({...request.body,feature});
+    const providerRows=store.db.prepare(`SELECT id FROM ai_providers WHERE id IN (${body.providerIds.map(()=>'?').join(',')}) AND enabled=1`).all(...body.providerIds) as Array<{id:string}>;
+    check(providerRows.length===body.providerIds.length,'路由包含不存在或未启用的 Provider',400);
     store.db.prepare(`INSERT INTO ai_routes(feature,provider_ids_json,member_only,monthly_free_quota,monthly_member_quota,updated_at)
       VALUES(?,?,?,?,?,?) ON CONFLICT(feature) DO UPDATE SET provider_ids_json=excluded.provider_ids_json,member_only=excluded.member_only,monthly_free_quota=excluded.monthly_free_quota,monthly_member_quota=excluded.monthly_member_quota,updated_at=excluded.updated_at`)
       .run(feature,JSON.stringify(body.providerIds),Number(body.memberOnly),body.monthlyFreeQuota,body.monthlyMemberQuota,store.now());
@@ -85,6 +88,7 @@ export function registerAiControlRoutes(app:FastifyInstance,store:Store){
   app.post('/api/v1/admin/ai/prompts/:key/:version/activate',async request=>{
     const principal=requireAdminPrincipal(request.headers['x-admin-token'],'ai.write');
     const p=z.object({key:z.string(),version:z.coerce.number().int().positive()}).parse(request.params);
+    check(store.db.prepare('SELECT 1 FROM prompt_versions WHERE key=? AND version=?').get(p.key,p.version),'Prompt 版本不存在',404);
     store.db.transaction(()=>{store.db.prepare('UPDATE prompt_versions SET active=0 WHERE key=?').run(p.key);store.db.prepare('UPDATE prompt_versions SET active=1 WHERE key=? AND version=?').run(p.key,p.version)})();
     auditAdmin(store,principal,'prompt_activate',{permission:'ai.write',targetType:'prompt',targetId:`${p.key}:v${p.version}`});
     return {ok:true};
