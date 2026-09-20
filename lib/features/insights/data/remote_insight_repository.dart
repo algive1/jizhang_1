@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/account.dart';
 import '../../../core/models/budget.dart';
+import '../../../core/models/category.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/models/transaction_record.dart';
@@ -65,6 +66,7 @@ class RemoteInsightRepository {
     required List<TransactionRecord> transactions,
     required List<Account> accounts,
     required List<Budget> budgets,
+    required List<Category> categories,
     required List<Goal> goals,
     required List<RecurringBill> recurringBills,
     required InsightPreferences preferences,
@@ -112,6 +114,7 @@ class RemoteInsightRepository {
                   'amount': item.amount,
                   'currency': item.currency.toUpperCase(),
                   'categoryId': item.categoryId,
+                  'subcategoryId': item.subcategoryId,
                   'categoryName': item.categoryName,
                   'semanticHints': _semanticHints(item),
                   'occurredAt': item.occurredAt.millisecondsSinceEpoch,
@@ -136,6 +139,16 @@ class RemoteInsightRepository {
                 'balance': item.balance,
                 'currency': item.currency.toUpperCase(),
                 'assetForm': item.assetForm.name,
+                'isArchived': item.isArchived,
+              },
+          ],
+          'categories': [
+            for (final item in categories)
+              {
+                'id': item.id,
+                'parentId': item.parentId,
+                'name': item.name,
+                'type': item.type.name,
                 'isArchived': item.isArchived,
               },
           ],

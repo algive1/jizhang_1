@@ -23,6 +23,7 @@ const transactionSchema = z.strictObject({
   amount: z.number().finite().nonnegative(),
   currency: z.string().regex(/^[A-Z]{3}$/),
   categoryId: nullableText,
+  subcategoryId: nullableText,
   categoryName: nullableText,
   semanticHints: z.strictObject({
     delivery: z.boolean().default(false),
@@ -69,6 +70,14 @@ const accountSchema = z.strictObject({
       'other',
     ])
     .default('unspecified'),
+  isArchived: z.boolean().default(false),
+});
+
+const categorySchema = z.strictObject({
+  id: z.string().min(1).max(600),
+  parentId: nullableText,
+  name: z.string().trim().min(1).max(120),
+  type: z.enum(['expense', 'income']),
   isArchived: z.boolean().default(false),
 });
 
@@ -159,6 +168,7 @@ export const insightContextSchema = z.strictObject({
   }).optional(),
   transactions: z.array(transactionSchema).max(12000),
   accounts: z.array(accountSchema).max(500),
+  categories: z.array(categorySchema).max(2000).default([]),
   budgets: z.array(budgetSchema).max(1000),
   goals: z.array(goalSchema).max(300),
   recurringBills: z.array(recurringSchema).max(1000),
@@ -463,6 +473,7 @@ function budgetRecommendation(
   now: Date,
   timezoneOffsetMinutes: number,
   profile: InsightProfile,
+  matches: (tx: Tx) => boolean = () => true,
 ) {
   const totals: number[] = [];
   for (let offset = 1; offset <= 3; offset++) {
@@ -477,7 +488,8 @@ function budgetRecommendation(
       return (
         date.year === year &&
         date.month === month &&
-        netExpense(tx) > 0
+        netExpense(tx) > 0 &&
+        matches(tx)
       );
     });
     if (rows.length >= 4) {
@@ -1008,6 +1020,32 @@ function dataAnomalyInsight(
   });
 }
 
+function categoryMap(
+  categories: InsightAnalysisContext['categories'],
+) {
+  return new Map(categories.map(value => [value.id, value]));
+}
+
+function belongsToBudgetCategory(
+  tx: Tx,
+  budgetCategoryId: string,
+  categories: Map<
+    string,
+    InsightAnalysisContext['categories'][number]
+  >,
+) {
+  for (const start of [tx.categoryId, tx.subcategoryId]) {
+    let id = start ?? undefined;
+    const seen = new Set<string>();
+    while (id && !seen.has(id)) {
+      if (id === budgetCategoryId) return true;
+      seen.add(id);
+      id = categories.get(id)?.parentId ?? undefined;
+    }
+  }
+  return false;
+}
+
 export function analyzeInsightContext(
   input: InsightAnalysisContext,
   profile: InsightProfile,
@@ -1026,6 +1064,7 @@ export function analyzeInsightContext(
       tx.occurredAt >= historyStart,
   );
   const expenses = transactions.filter(tx => netExpense(tx) > 0);
+  const categories = categoryMap(input.categories);
   const confidence = quality(transactions, now, timezoneOffsetMinutes);
   const results: InsightItem[] = [];
 
@@ -1194,6 +1233,192 @@ export function analyzeInsightContext(
           confidence: {
             ...confidence,
             baseline: Math.max(recommendation.confidence, confidence.baseline),
+          },
+          profile,
+          feedback,
+          generatedAt: now.getTime(),
+        }),
+      );
+    }
+  }
+
+  const categoryBudgets = input.budgets.filter(
+    budget =>
+      budget.monthKey === currentMonthKey &&
+      Boolean(budget.categoryId),
+  );
+  for (const budget of categoryBudgets) {
+    const categoryId = budget.categoryId!;
+    const used = expenses
+      .filter(
+        tx =>
+          tx.occurredAt >= currentMonthStart &&
+          belongsToBudgetCategory(tx, categoryId, categories),
+      )
+      .reduce((sum, tx) => sum + netExpense(tx), 0);
+    const days = new Date(
+      Date.UTC(localNow.year, localNow.month + 1, 0),
+    ).getUTCDate();
+    const timeProgress = clamp(localNow.day / days, 0.03, 1);
+    const usage = used / budget.amount;
+    const forecast = used / timeProgress;
+    const overspend = forecast - budget.amount;
+    if (
+      usage < 0.8 &&
+      usage - timeProgress < 0.15 &&
+      overspend <= budget.amount * 0.08
+    ) {
+      continue;
+    }
+    const important = usage > 1 || forecast > budget.amount * 1.3;
+    const name = categories.get(categoryId)?.name ?? '这个分类';
+    results.push(
+      item({
+        id: `budget:${currentMonthKey}:category:${categoryId}`,
+        kind: 'risk',
+        priority: important ? 'important' : 'attention',
+        title: usage > 1 ? `${name}预算已经超出` : `${name}预算消耗有点快`,
+        summary:
+          usage > 1
+            ? `本月 ${name} 已支出 ¥${used.toFixed(0)}，超过预算 ¥${budget.amount.toFixed(0)}。`
+            : `本月过去 ${Math.round(timeProgress * 100)}%，${name} 预算已使用 ${Math.round(usage * 100)}%。`,
+        analysis:
+          `按目前速度，月底预计约 ¥${forecast.toFixed(0)}` +
+          (overspend > 0
+            ? `，比分类预算高约 ¥${overspend.toFixed(0)}。`
+            : '。'),
+        meaning: '分类预算适合控制餐饮、购物等高频消费，比只看总预算更容易找到具体调整点。',
+        response: 'advice',
+        suggestion: '可以查看这个分类剩余额度和相关流水，再决定是否降低接下来几天的消费频率。',
+        actionLabel: '查看预算',
+        actionRoute: '/profile/budgets',
+        categoryId,
+        amount: used,
+        changePercent: (usage - timeProgress) * 100,
+        evidence: [
+          {
+            label: `${name}已使用`,
+            value: used,
+            baselineValue: budget.amount,
+            unit: currency,
+          },
+          {
+            label: '月底预测',
+            value: forecast,
+            baselineValue: budget.amount,
+            unit: currency,
+          },
+        ],
+        relatedTransactionIds: [],
+        baseScore: important ? 84 : 72,
+        confidence: {
+          ...confidence,
+          baseline: Math.max(0.65, confidence.baseline),
+        },
+        profile,
+        feedback,
+        generatedAt: now.getTime(),
+      }),
+    );
+  }
+
+  if (
+    (profile.intents.includes('controlSpending') ||
+      profile.intents.includes('saveForGoal')) &&
+    input.categories.length > 0
+  ) {
+    const budgeted = new Set(
+      categoryBudgets
+        .map(value => value.categoryId)
+        .filter((value): value is string => Boolean(value)),
+    );
+    let best:
+      | {
+          categoryId: string;
+          name: string;
+          recommendation: ReturnType<typeof budgetRecommendation>;
+          score: number;
+        }
+      | undefined;
+    for (const category of input.categories) {
+      if (
+        category.type !== 'expense' ||
+        category.parentId ||
+        category.isArchived ||
+        budgeted.has(category.id)
+      ) {
+        continue;
+      }
+      const recommendation = budgetRecommendation(
+        expenses,
+        now,
+        timezoneOffsetMinutes,
+        profile,
+        tx => belongsToBudgetCategory(tx, category.id, categories),
+      );
+      if (!recommendation || recommendation.median < 100) continue;
+      let score = recommendation.median * recommendation.confidence;
+      if (
+        profile.focus.includes('dining') &&
+        /餐饮|外卖|咖啡|饮食/.test(category.name)
+      ) {
+        score *= 1.35;
+      }
+      if (
+        profile.focus.includes('shopping') &&
+        /购物|美妆|服饰/.test(category.name)
+      ) {
+        score *= 1.25;
+      }
+      if (!best || score > best.score) {
+        best = {
+          categoryId: category.id,
+          name: category.name,
+          recommendation,
+          score,
+        };
+      }
+    }
+    if (best?.recommendation) {
+      const recommendation = best.recommendation;
+      results.push(
+        item({
+          id: `budget:recommendation:category:${best.categoryId}`,
+          kind: 'goal',
+          priority: 'attention',
+          title: `${best.name}可以单独设预算`,
+          summary:
+            `最近完整月份的 ${best.name} 支出中位数约 ¥${recommendation.median.toFixed(0)}，` +
+            `按你的记账目标建议先设 ¥${recommendation.recommended.toFixed(0)} 左右。`,
+          analysis: '推荐值来自你自己的最近完整月份，并根据“保持、适度控制、积极节省”三个档位调整。',
+          meaning: '把高频分类单独设预算，之后系统可以按消费速度提前提醒，而不是月底才发现超支。',
+          response: 'advice',
+          suggestion: '可以先采用建议值，用一个月观察是否可持续；如果明显过紧或过松，再调整档位。',
+          actionLabel: '设置分类预算',
+          actionRoute:
+            `/profile/budgets?recommend=1&categoryId=${encodeURIComponent(best.categoryId)}`,
+          categoryId: best.categoryId,
+          amount: recommendation.recommended,
+          evidence: [
+            {
+              label: '历史月中位数',
+              value: recommendation.median,
+              unit: currency,
+            },
+            {
+              label: '建议分类预算',
+              value: recommendation.recommended,
+              unit: currency,
+            },
+          ],
+          relatedTransactionIds: [],
+          baseScore: 69,
+          confidence: {
+            ...confidence,
+            baseline: Math.max(
+              recommendation.confidence,
+              confidence.baseline,
+            ),
           },
           profile,
           feedback,

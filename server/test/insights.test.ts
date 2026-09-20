@@ -240,6 +240,224 @@ test('server analysis honors local feedback state before background sync catches
   );
 });
 
+test('server recommends a dining budget from stable three-month history', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  const monthly = new Map([
+    [6, 420],
+    [7, 440],
+    [8, 440],
+  ]);
+  for (const [month, total] of monthly) {
+    for (let index = 0; index < 8; index++) {
+      rows.push(
+        tx(
+          `dining-${month}-${index}`,
+          Date.parse(
+            `2026-${String(month).padStart(2, '0')}-${String(
+              index + 2,
+            ).padStart(2, '0')}T12:00:00+08:00`,
+          ),
+          total / 8,
+          { categoryId: 'food', categoryName: '餐饮' },
+        ),
+      );
+    }
+  }
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['controlSpending'],
+        focus: ['dining'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [
+        {
+          id: 'food',
+          parentId: null,
+          name: '餐饮',
+          type: 'expense',
+          isArchived: false,
+        },
+      ],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const insight = response.json().items.find(
+    (item: { id: string }) =>
+      item.id === 'budget:recommendation:category:food',
+  );
+  assert.ok(insight);
+  assert.match(insight.title, /餐饮/);
+  assert.ok(insight.amount >= 350 && insight.amount <= 420);
+});
+
+test('server category budgets include child-category spending', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-10T12:00:00+08:00');
+  const rows = [];
+  for (let index = 0; index < 8; index++) {
+    rows.push(
+      tx(
+        `coffee-${index}`,
+        Date.parse(
+          `2026-09-${String(index + 1).padStart(2, '0')}T12:00:00+08:00`,
+        ),
+        30,
+        {
+          categoryId: 'food',
+          subcategoryId: 'coffee',
+          categoryName: '咖啡',
+        },
+      ),
+    );
+  }
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['controlSpending'],
+        focus: ['dining'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [
+        {
+          id: 'food',
+          parentId: null,
+          name: '餐饮',
+          type: 'expense',
+          isArchived: false,
+        },
+        {
+          id: 'coffee',
+          parentId: 'food',
+          name: '咖啡',
+          type: 'expense',
+          isArchived: false,
+        },
+      ],
+      budgets: [
+        {
+          id: 'food-budget',
+          monthKey: '2026-09',
+          categoryId: 'food',
+          amount: 400,
+        },
+      ],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const insight = response.json().items.find(
+    (item: { id: string }) =>
+      item.id === 'budget:2026-09:category:food',
+  );
+  assert.ok(insight);
+  assert.equal(insight.amount, 240);
+});
+
+test('server warns when a category budget is burning too quickly', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-10T12:00:00+08:00');
+  const rows = [];
+  for (let index = 0; index < 8; index++) {
+    rows.push(
+      tx(
+        `sep-food-${index}`,
+        Date.parse(
+          `2026-09-${String(index + 1).padStart(2, '0')}T12:00:00+08:00`,
+        ),
+        30,
+        { categoryId: 'food', categoryName: '餐饮' },
+      ),
+    );
+  }
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['controlSpending'],
+        focus: ['dining'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [
+        {
+          id: 'food',
+          parentId: null,
+          name: '餐饮',
+          type: 'expense',
+          isArchived: false,
+        },
+      ],
+      budgets: [
+        {
+          id: 'food-budget',
+          monthKey: '2026-09',
+          categoryId: 'food',
+          amount: 400,
+        },
+      ],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const insight = response.json().items.find(
+    (item: { id: string }) =>
+      item.id === 'budget:2026-09:category:food',
+  );
+  assert.ok(insight);
+  assert.match(insight.analysis, /月底预计/);
+});
+
 test('server insight analysis respects local timezone and excludes ambiguous transfer support', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());

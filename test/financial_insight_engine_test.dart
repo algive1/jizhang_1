@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/account.dart';
 import 'package:jizhang_app/core/models/analysis.dart';
 import 'package:jizhang_app/core/models/budget.dart';
+import 'package:jizhang_app/core/models/category.dart';
 import 'package:jizhang_app/core/models/goal.dart';
 import 'package:jizhang_app/core/models/recurring_bill.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
@@ -107,6 +108,188 @@ void main() {
     expect(
       feed.items.any((item) => item.id == 'analysis:category:shopping'),
       isFalse,
+    );
+  });
+
+  test('three-month dining history can proactively recommend a category budget', () {
+    final transactions = <TransactionRecord>[];
+    final monthlyTotals = [420.0, 440.0, 440.0];
+    for (var monthIndex = 0; monthIndex < monthlyTotals.length; monthIndex++) {
+      final month = 8 - monthIndex;
+      for (var index = 0; index < 8; index++) {
+        transactions.add(
+          _tx(
+            'dining-$month-$index',
+            DateTime(2026, month, 3 + index),
+            monthlyTotals[monthIndex] / 8,
+            categoryId: 'food',
+            categoryName: '餐饮',
+          ).copyWith(isOneTime: false),
+        );
+      }
+    }
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      categories: const [
+        Category(
+          id: 'food',
+          name: '餐饮',
+          icon: 'food',
+          type: CategoryType.expense,
+          sortOrder: 0,
+          isDefault: true,
+          isArchived: false,
+        ),
+      ],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.controlSpending},
+        focus: {InsightFocus.dining},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    final insight = feed.items.firstWhere(
+      (item) => item.id == 'budget:recommendation:category:food',
+    );
+    expect(insight.title, contains('餐饮'));
+    expect(insight.amount, inInclusiveRange(350, 420));
+    expect(insight.summary, contains('中位数'));
+    expect(insight.actionRoute, '/profile/budgets?recommend=1&categoryId=food');
+  });
+
+  test('category budget pace warns before month-end overspend', () {
+    final transactions = _history(now);
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final category = Category(
+      id: 'food',
+      name: '餐饮',
+      icon: 'food',
+      type: CategoryType.expense,
+      sortOrder: 0,
+      isDefault: true,
+      isArchived: false,
+    );
+    final budget = Budget(
+      id: 'food-budget',
+      monthKey: '2026-09',
+      categoryId: 'food',
+      amount: 400,
+      createdAt: now,
+      updatedAt: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: BudgetOverview(
+        categories: [
+          BudgetProgress(
+            budget: budget,
+            category: category,
+            used: 220,
+            remaining: 180,
+            percentage: .55,
+            remainingDays: 21,
+            dailyAvailable: 8.57,
+            status: BudgetAlertStatus.normal,
+          ),
+        ],
+      ),
+      accounts: const [],
+      categories: [category],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.controlSpending},
+        focus: {InsightFocus.dining},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    final insight = feed.items.firstWhere(
+      (item) => item.id == 'budget:2026-09:category:food',
+    );
+    expect(insight.kind, FinancialInsightKind.risk);
+    expect(insight.analysis, contains('月底预计'));
+    expect(insight.title, contains('餐饮'));
+  });
+
+  test('control-spending intent ranks category budget risk above lifestyle discovery', () {
+    final transactions = <TransactionRecord>[
+      ..._history(now),
+      for (var index = 0; index < 6; index++)
+        _tx(
+          'beauty-$index',
+          now.subtract(Duration(days: 2 + index)),
+          80,
+          categoryId: 'beauty',
+          categoryName: '美妆护理',
+        ).copyWith(merchant: '护肤'),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final dining = Category(
+      id: 'food',
+      name: '餐饮',
+      icon: 'food',
+      type: CategoryType.expense,
+      sortOrder: 0,
+      isDefault: true,
+      isArchived: false,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: BudgetOverview(
+        categories: [
+          BudgetProgress(
+            budget: Budget(
+              id: 'food-budget',
+              monthKey: '2026-09',
+              categoryId: 'food',
+              amount: 400,
+              createdAt: now,
+              updatedAt: now,
+            ),
+            category: dining,
+            used: 260,
+            remaining: 140,
+            percentage: .65,
+            remainingDays: 21,
+            dailyAvailable: 6.67,
+            status: BudgetAlertStatus.normal,
+          ),
+        ],
+      ),
+      accounts: const [],
+      categories: [dining],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.controlSpending},
+        focus: {InsightFocus.dining, InsightFocus.healthHabits},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    expect(feed.homeCandidate, isNotNull);
+    expect(feed.homeCandidate!.id, 'budget:2026-09:category:food');
+    expect(
+      feed.items.any((item) => item.id == 'life:beauty-care'),
+      isTrue,
     );
   });
 
