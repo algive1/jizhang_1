@@ -30,6 +30,8 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
   final budgets = ref.watch(budgetOverviewProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
   final goals = ref.watch(goalsProvider).value ?? const [];
+  final recurringBills =
+      ref.watch(recurringBillsProvider).value ?? const [];
   final preferences =
       ref.watch(insightPreferencesProvider).value ??
       const InsightPreferences();
@@ -41,6 +43,7 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
         budgets: budgets,
         accounts: accounts,
         goals: goals,
+        recurringBills: recurringBills,
         preferences: preferences,
       );
 });

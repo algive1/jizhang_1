@@ -1065,13 +1065,17 @@ export function analyzeInsightContext(
   const currentSpend = expenses
     .filter(tx => tx.occurredAt >= currentMonthStart)
     .reduce((sum, tx) => sum + netExpense(tx), 0);
+  const goalReservation = input.goals
+    .filter(goal => goal.status === 'active')
+    .reduce((sum, goal) => sum + goal.monthlyReservation, 0);
   if (totalBudget) {
     const days = new Date(
       Date.UTC(localNow.year, localNow.month + 1, 0),
     ).getUTCDate();
     const timeProgress = clamp(localNow.day / days, 0.03, 1);
-    const usage = currentSpend / totalBudget.amount;
-    const forecast = currentSpend / timeProgress;
+    const committed = currentSpend + goalReservation;
+    const usage = committed / totalBudget.amount;
+    const forecast = currentSpend / timeProgress + goalReservation;
     const overspend = forecast - totalBudget.amount;
     if (
       usage - timeProgress >= 0.12 ||
@@ -1102,7 +1106,7 @@ export function analyzeInsightContext(
           amount: currentSpend,
           changePercent: (usage - timeProgress) * 100,
           evidence: [
-            { label: '预算已使用', value: usage * 100, unit: '%' },
+            { label: '预算已占用', value: usage * 100, unit: '%' },
             { label: '月份已过去', value: timeProgress * 100, unit: '%' },
             {
               label: '月底预测',

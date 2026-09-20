@@ -4,6 +4,7 @@ import '../../../core/models/account.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/budget.dart';
 import '../../../core/models/goal.dart';
+import '../../../core/models/recurring_bill.dart';
 import 'budget_recommendation_service.dart';
 import '../../../core/models/transaction_record.dart';
 import 'insight_models.dart';
@@ -17,6 +18,7 @@ class FinancialInsightEngine {
     required BudgetOverview budgets,
     required List<Account> accounts,
     List<Goal> goals = const [],
+    List<RecurringBill> recurringBills = const [],
     required InsightPreferences preferences,
     DateTime? now,
   }) {
@@ -35,6 +37,14 @@ class FinancialInsightEngine {
     final quality = _quality(expenses, clock);
     final candidates = <FinancialInsightItem>[];
 
+    final balance = _comparableBalanceInsight(
+      eligible,
+      preferences,
+      quality,
+      clock,
+    );
+    if (balance != null) candidates.add(balance);
+
     if (quality.baseline >= .35) {
       for (final source in analysis.insights) {
         candidates.add(_fromAnalysis(source, preferences, quality));
@@ -50,6 +60,7 @@ class FinancialInsightEngine {
 
     final budget = _budgetInsight(
       budgets.total,
+      expenses,
       preferences,
       quality,
       clock,
@@ -118,6 +129,15 @@ class FinancialInsightEngine {
       clock,
     );
     if (credit != null) candidates.add(credit);
+
+    final recurringCashflow = _recurringCashflowInsight(
+      recurringBills,
+      accounts,
+      preferences,
+      quality,
+      clock,
+    );
+    if (recurringCashflow != null) candidates.add(recurringCashflow);
 
     final family = _familyInsight(
       eligible,
@@ -266,6 +286,7 @@ class FinancialInsightEngine {
 
   FinancialInsightItem? _budgetInsight(
     BudgetProgress? progress,
+    List<TransactionRecord> expenses,
     InsightPreferences preferences,
     InsightConfidence quality,
     DateTime now,
@@ -273,8 +294,16 @@ class FinancialInsightEngine {
     if (progress == null) return null;
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
     final timeProgress = (now.day / lastDay).clamp(.03, 1.0).toDouble();
-    final usage = progress.percentage;
-    final forecast = progress.used / timeProgress;
+    final used = expenses
+        .where(
+          (item) =>
+              item.occurredAt.year == now.year &&
+              item.occurredAt.month == now.month,
+        )
+        .fold<double>(0, (sum, item) => sum + _personalExpense(item));
+    final committed = used + progress.goalReservation;
+    final usage = committed / progress.budget.amount;
+    final forecast = used / timeProgress + progress.goalReservation;
     final overspend = forecast - progress.budget.amount;
     if (usage - timeProgress < .12 &&
         overspend <= progress.budget.amount * .05) {
@@ -297,10 +326,10 @@ class FinancialInsightEngine {
       suggestion: '打开预算可以查看剩余额度和日均可用金额，再决定是否调整接下来的消费节奏。',
       actionLabel: '查看预算',
       actionRoute: '/profile/budgets',
-      amount: progress.used,
+      amount: used,
       changePercent: (usage - timeProgress) * 100,
       evidence: [
-        InsightEvidence(label: '预算已使用', value: usage * 100, unit: '%'),
+        InsightEvidence(label: '预算已占用', value: usage * 100, unit: '%'),
         InsightEvidence(label: '月份已过去', value: timeProgress * 100, unit: '%'),
         InsightEvidence(
           label: '月底预测',
@@ -314,6 +343,208 @@ class FinancialInsightEngine {
       confidence: quality.copyWith(baseline: math.max(.65, quality.baseline)),
       generatedAt: now,
     );
+  }
+
+  FinancialInsightItem? _comparableBalanceInsight(
+    List<TransactionRecord> records,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    final currentStart = DateTime(now.year, now.month);
+    final previousStart = DateTime(now.year, now.month - 1);
+    final previousLastDay = DateTime(now.year, now.month, 0).day;
+    final comparableDay = now.day.clamp(1, previousLastDay);
+    final previousEnd = DateTime(
+      previousStart.year,
+      previousStart.month,
+      comparableDay + 1,
+    );
+
+    ({double income, double expense}) totals(
+      DateTime start,
+      DateTime endExclusive,
+    ) {
+      var income = 0.0;
+      var expense = 0.0;
+      for (final item in records) {
+        if (item.occurredAt.isBefore(start) ||
+            !item.occurredAt.isBefore(endExclusive)) {
+          continue;
+        }
+        if (item.type == TransactionType.income) income += item.amount;
+        if (item.isConsumptionExpense) expense += _personalExpense(item);
+      }
+      return (income: income, expense: expense);
+    }
+
+    final current = totals(
+      currentStart,
+      DateTime(now.year, now.month, now.day + 1),
+    );
+    final previous = totals(previousStart, previousEnd);
+    if (current.income < 500 || previous.income < 500) return null;
+    final currentBalance = current.income - current.expense;
+    final previousBalance = previous.income - previous.expense;
+    final delta = currentBalance - previousBalance;
+    final denominator = math.max(current.income, previous.income);
+    if (delta.abs() < 300 || delta.abs() / denominator < .10) return null;
+    final improved = delta > 0;
+    return _item(
+      id: 'financial:comparable-balance',
+      kind: improved
+          ? FinancialInsightKind.positive
+          : FinancialInsightKind.financial,
+      priority: improved ? InsightPriority.info : InsightPriority.attention,
+      title: improved ? '本月可比结余有所改善' : '本月可比结余有所收紧',
+      summary:
+          '截至当前日期，收支结余约 ¥${currentBalance.toStringAsFixed(0)}，'
+          '上一可比周期约 ¥${previousBalance.toStringAsFixed(0)}。',
+      analysis: improved
+          ? '在收入达到可比水平的前提下，当前结余比上一同期更高。'
+          : '在收入达到可比水平的前提下，当前结余比上一同期更低；这不等于“花错了”，但值得看看主要变化来自哪里。',
+      meaning: '结余只和你自己的可比周期比较，并扣除已知退款和可报销部分。',
+      response: improved
+          ? InsightResponse.encouragement
+          : InsightResponse.notice,
+      suggestion:
+          !improved &&
+              preferences.intents.contains(BookkeepingIntent.optimizeFinances)
+          ? '可以先看支出增加最大的分类和近期固定支出，再决定是否需要调整。'
+          : null,
+      actionLabel: '查看趋势',
+      actionRoute: '/analysis',
+      amount: currentBalance,
+      changePercent: previousBalance == 0
+          ? null
+          : delta / previousBalance.abs().clamp(1, double.infinity) * 100,
+      evidence: [
+        InsightEvidence(
+          label: '本期收入',
+          value: current.income,
+          baselineValue: previous.income,
+          unit: 'CNY',
+        ),
+        InsightEvidence(
+          label: '本期个人消费',
+          value: current.expense,
+          baselineValue: previous.expense,
+          unit: 'CNY',
+        ),
+        InsightEvidence(
+          label: '收支结余',
+          value: currentBalance,
+          baselineValue: previousBalance,
+          unit: 'CNY',
+        ),
+      ],
+      baseScore: improved ? 49 : 66,
+      preferences: preferences,
+      confidence: quality,
+      generatedAt: now,
+    );
+  }
+
+  FinancialInsightItem? _recurringCashflowInsight(
+    List<RecurringBill> bills,
+    List<Account> accounts,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    final until = now.add(const Duration(days: 14));
+    final active = bills.where(
+      (bill) =>
+          bill.status == RecurringBillStatus.active &&
+          !bill.nextDate.isBefore(DateTime(now.year, now.month, now.day)) &&
+          !bill.nextDate.isAfter(until),
+    );
+    final expenses = active.where((bill) => !bill.isIncome).toList();
+    final incomes = active.where((bill) => bill.isIncome).toList();
+    final upcomingExpense = expenses.fold<double>(
+      0,
+      (sum, bill) => sum + bill.amount,
+    );
+    final upcomingIncome = incomes.fold<double>(
+      0,
+      (sum, bill) => sum + bill.amount,
+    );
+    if (expenses.length < 2 && upcomingExpense < 300) return null;
+
+    final liquid = accounts
+        .where(
+          (account) =>
+              !account.isArchived &&
+              !account.type.isDebt &&
+              (account.assetForm == AssetForm.cash ||
+                  account.assetForm == AssetForm.walletBalance ||
+                  account.assetForm == AssetForm.demandDeposit ||
+                  account.assetForm == AssetForm.unspecified),
+        )
+        .fold<double>(
+          0,
+          (sum, account) => sum + math.max(0, account.balance),
+        );
+    final netUpcoming = math.max(0.0, upcomingExpense - upcomingIncome);
+    final risk =
+        liquid > 0 &&
+        quality.completeness >= .65 &&
+        netUpcoming > liquid * .7;
+    return _item(
+      id: 'cashflow:upcoming-recurring',
+      kind: risk
+          ? FinancialInsightKind.risk
+          : FinancialInsightKind.discovery,
+      priority: risk ? InsightPriority.important : InsightPriority.attention,
+      title: risk ? '未来两周固定支出比较集中' : '未来两周有几项固定支出',
+      summary:
+          '已知周期支出约 ¥${upcomingExpense.toStringAsFixed(0)}，共 ${expenses.length} 项。',
+      analysis: upcomingIncome > 0
+          ? '同期已知周期收入约 ¥${upcomingIncome.toStringAsFixed(0)}，会把两边一起看。'
+          : '这里只基于已经记录的周期账单，不会把未知收入或支出当成事实。',
+      meaning: risk
+          ? '结合当前记录的流动资产，这段时间的现金流余量可能偏紧。'
+          : '提前看固定支出，可以避免只凭账户当前余额判断“还能花多少”。',
+      response: risk ? InsightResponse.advice : InsightResponse.notice,
+      suggestion: risk ? '建议先确认近期收入与待还账户，再决定可调整消费额度。' : null,
+      actionLabel: '查看周期账单',
+      actionRoute: '/profile/recurring-bills',
+      amount: upcomingExpense,
+      evidence: [
+        InsightEvidence(
+          label: '未来14天周期支出',
+          value: upcomingExpense,
+          unit: 'CNY',
+        ),
+        if (upcomingIncome > 0)
+          InsightEvidence(
+            label: '未来14天周期收入',
+            value: upcomingIncome,
+            unit: 'CNY',
+          ),
+        if (liquid > 0)
+          InsightEvidence(
+            label: '当前记录的流动资产',
+            value: liquid,
+            unit: 'CNY',
+          ),
+      ],
+      baseScore: risk ? 82 : 61,
+      preferences: preferences,
+      confidence: quality,
+      generatedAt: now,
+    );
+  }
+
+  double _personalExpense(TransactionRecord item) {
+    final afterRefund = item.netExpenseAmount;
+    final reimbursable = switch (item.reimbursementStatus) {
+      ReimbursementStatus.none => 0.0,
+      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
+        item.reimbursementAmount ?? afterRefund,
+      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
+    };
+    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
   }
 
   FinancialInsightItem? _creditInsight(

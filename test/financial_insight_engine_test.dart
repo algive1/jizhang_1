@@ -3,6 +3,7 @@ import 'package:jizhang_app/core/models/account.dart';
 import 'package:jizhang_app/core/models/analysis.dart';
 import 'package:jizhang_app/core/models/budget.dart';
 import 'package:jizhang_app/core/models/goal.dart';
+import 'package:jizhang_app/core/models/recurring_bill.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/analysis/domain/statistical_analysis_service.dart';
 import 'package:jizhang_app/features/insights/domain/financial_insight_engine.dart';
@@ -188,6 +189,76 @@ void main() {
       isTrue,
     );
   });
+
+  test('offline engine notices concentrated recurring cashflow', () {
+    final transactions = _history(now);
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final recurring = [
+      RecurringBill(
+        id: 'rent',
+        bookId: 'book-personal',
+        name: '房租',
+        type: RecurringBillType.rent,
+        amount: 420,
+        cycle: RecurringBillCycle.monthly,
+        startDate: DateTime(2026, 1, 1),
+        nextDate: now.add(const Duration(days: 3)),
+        accountId: 'cash',
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: now,
+      ),
+      RecurringBill(
+        id: 'subscription',
+        bookId: 'book-personal',
+        name: '订阅',
+        type: RecurringBillType.subscription,
+        amount: 120,
+        cycle: RecurringBillCycle.monthly,
+        startDate: DateTime(2026, 1, 1),
+        nextDate: now.add(const Duration(days: 5)),
+        accountId: 'cash',
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: now,
+      ),
+    ];
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: [
+        Account(
+          id: 'cash',
+          name: '现金',
+          type: AccountType.cash,
+          balance: 600,
+          currency: 'CNY',
+          icon: 'wallet',
+          color: 0,
+          sortOrder: 0,
+          isArchived: false,
+          assetForm: AssetForm.cash,
+          createdAt: DateTime(2026, 1, 1),
+          updatedAt: now,
+        ),
+      ],
+      recurringBills: recurring,
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.optimizeFinances},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'cashflow:upcoming-recurring'),
+      isTrue,
+    );
+  });
+
 }
 
 List<TransactionRecord> _history(DateTime now) {
