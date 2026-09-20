@@ -248,23 +248,23 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ],
             onChanged: (value) => setState(() => _accountId = value),
           ),
-          if (needsAccountMapping) ...[
-            const SizedBox(height: 4),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('保持当前账户余额'),
-              subtitle: Text(
-                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。适用于木木及其他记账 App 的历史账单。',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
+          const SizedBox(height: 4),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('保持当前账户余额'),
+            subtitle: Text(
+              '推荐用于导入历史账单：流水会进入统计和消费日历，但不会把历史收支再次累计到当前账户余额。关闭后才会按导入流水调整余额。',
+              style: TextStyle(
+                color: context.appSecondaryText,
+                fontSize: 12,
+                height: 1.35,
               ),
-              value: _preserveCurrentBalances,
-              onChanged: (value) =>
-                  setState(() => _preserveCurrentBalances = value),
             ),
+            value: _preserveCurrentBalances,
+            onChanged: (value) =>
+                setState(() => _preserveCurrentBalances = value),
+          ),
+          if (needsAccountMapping) ...[
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
@@ -709,7 +709,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           metadata: {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
-            if (row.provider.needsAccountMapping && _preserveCurrentBalances)
+            if (_preserveCurrentBalances)
               'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
