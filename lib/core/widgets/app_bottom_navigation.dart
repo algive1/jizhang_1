@@ -33,7 +33,13 @@ class AppBottomNavigation extends StatelessWidget {
             _horizontalInset + 8,
             _bottomInset + 4,
           ),
-          color: glass ? Colors.transparent : context.appSurface,
+          // BottomAppBar applies [padding] inside its Material. Keep a
+          // translucent tint on the Material itself so the entire notched
+          // pill stays glass-like, including the padded edge around the
+          // BackdropFilter content.
+          color: glass
+              ? material.glassTint.withValues(alpha: highContrast ? .94 : .72)
+              : context.appSurface,
           surfaceTintColor: Colors.transparent,
           elevation: glass ? 7 : 0,
           shadowColor: glass
