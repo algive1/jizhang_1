@@ -174,7 +174,8 @@ class _AutoBookkeepingConfirmPageState
   Future<void> _save({
     required String bookId,
     required Account account,
-    required Category category,
+    required Category? category,
+    Account? destinationAccount,
   }) async {
     final candidate = _candidate;
     if (candidate == null || _saving) return;
@@ -183,6 +184,20 @@ class _AutoBookkeepingConfirmPageState
       _message = null;
     });
     try {
+      final isTransferScene = candidate.transactionType == 'TRANSFER';
+      final finalTransactionType = isTransferScene
+          ? (_internalTransfer
+                ? TransactionType.transfer
+                : TransactionType.expense)
+          : _transactionTypeFor(candidate.transactionType);
+      if (finalTransactionType == TransactionType.transfer) {
+        if (destinationAccount == null || destinationAccount.id == account.id) {
+          throw ArgumentError('内部转账需要选择不同的转入账户');
+        }
+      } else if (category == null) {
+        throw ArgumentError('请选择分类');
+      }
+
       final metadata = <String, Object?>{
         'paymentChannel': _paymentChannel(candidate),
         if (candidate.orderId != null) 'orderId': candidate.orderId,
@@ -194,6 +209,11 @@ class _AutoBookkeepingConfirmPageState
           'scene': candidate.scene,
           'paymentMethod': candidate.paymentMethod,
           'transactionType': candidate.transactionType,
+          'confirmedTransactionType': finalTransactionType.name,
+          if (candidate.targetIdentifierSuffix != null)
+            'targetIdentifierSuffix': candidate.targetIdentifierSuffix,
+          if (candidate.targetAccountHint != null)
+            'targetAccountHint': candidate.targetAccountHint,
           if (candidate.orderId != null) 'orderId': candidate.orderId,
           if (candidate.identifierSuffix != null)
             'identifierSuffix': candidate.identifierSuffix,
@@ -208,7 +228,7 @@ class _AutoBookkeepingConfirmPageState
           _keepScreenshot && candidate.screenshotPath != null
           ? candidate.screenshotPath
           : null;
-      final transactionType = _transactionTypeFor(candidate.transactionType);
+      final transactionType = finalTransactionType;
       final matchedRefund = transactionType == TransactionType.refund &&
               _matchedRefundOriginal?.bookId == bookId
           ? _matchedRefundOriginal
@@ -222,7 +242,7 @@ class _AutoBookkeepingConfirmPageState
         ).register(
           original: matchedRefund,
           amount: candidate.amountInCents / 100,
-          category: category,
+          category: category!,
           occurredAt: candidate.timestamp,
           transactionId: 'auto-${candidate.fingerprint}',
           note: candidate.note ?? '自动识别退款：${candidate.merchant}',
@@ -240,8 +260,12 @@ class _AutoBookkeepingConfirmPageState
                   type: transactionType,
                   amount: candidate.amountInCents / 100,
                   accountId: account.id,
-                  categoryId: category.id,
-                  categoryName: category.name,
+                  destinationAccountId:
+                      transactionType == TransactionType.transfer
+                      ? destinationAccount!.id
+                      : null,
+                  categoryId: category?.id,
+                  categoryName: category?.name,
                   merchant: candidate.merchant,
                   note: candidate.note,
                   occurredAt: candidate.timestamp,
@@ -291,16 +315,29 @@ class _AutoBookkeepingConfirmPageState
       }
 
       try {
-        await ref
-            .read(autoBookkeepingLearningServiceProvider)
-            .remember(
-              transactionId: saved.id,
-              candidate: candidate,
-              bookId: bookId,
-              accountId: saved.accountId,
-              categoryId: category.id,
-              rememberForMerchant: _rememberForMerchant,
-            );
+        if (isTransferScene) {
+          await ref
+              .read(autoBookkeepingTransferResolverProvider)
+              .rememberDecision(
+                candidate: candidate,
+                bookId: bookId,
+                internalTransfer: transactionType == TransactionType.transfer,
+                destinationAccountId: saved.destinationAccountId,
+                remember: _rememberForMerchant,
+              );
+        }
+        if (transactionType != TransactionType.transfer && category != null) {
+          await ref
+              .read(autoBookkeepingLearningServiceProvider)
+              .remember(
+                transactionId: saved.id,
+                candidate: candidate,
+                bookId: bookId,
+                accountId: saved.accountId,
+                categoryId: category.id,
+                rememberForMerchant: _rememberForMerchant,
+              );
+        }
       } on Object {
         // Learning is a secondary local enhancement. A successful transaction
         // must never be rolled back or shown as failed because memory could
