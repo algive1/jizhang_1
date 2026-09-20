@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../domain/statistical_analysis_service.dart';
 
 abstract interface class AnalysisRepository {
@@ -15,10 +16,15 @@ abstract interface class AnalysisRepository {
 }
 
 class LocalAnalysisRepository implements AnalysisRepository {
-  const LocalAnalysisRepository(this._transactions, this._service);
+  const LocalAnalysisRepository(
+    this._transactions,
+    this._service, {
+    this.excludedTransactionIds = const {},
+  });
 
   final List<TransactionRecord> _transactions;
   final StatisticalAnalysisService _service;
+  final Set<String> excludedTransactionIds;
 
   @override
   AnalysisSnapshot analyze({
@@ -33,6 +39,7 @@ class LocalAnalysisRepository implements AnalysisRepository {
       now: now,
       month: month,
       currency: currency,
+      excludedTransactionIds: excludedTransactionIds,
     );
   }
 }
@@ -87,6 +94,8 @@ final analysisRepositoryProvider = Provider<AnalysisRepository>((ref) {
   return LocalAnalysisRepository(
     transactions,
     ref.watch(statisticalAnalysisServiceProvider),
+    excludedTransactionIds:
+        ref.watch(financialTruthSuppressedTransactionIdsProvider),
   );
 });
 

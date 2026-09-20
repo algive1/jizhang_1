@@ -13,8 +13,10 @@ class FinancialTruthService {
     TransactionRecord item, {
     required String currency,
     required DateTime now,
+    Set<String> excludedTransactionIds = const {},
   }) =>
       item.deletedAt == null &&
+      !excludedTransactionIds.contains(item.id) &&
       !item.occurredAt.isAfter(now) &&
       item.currency.toUpperCase() == currency.toUpperCase();
 
@@ -58,10 +60,16 @@ class FinancialTruthService {
     Iterable<TransactionRecord> records, {
     required String currency,
     required DateTime now,
+    Set<String> excludedTransactionIds = const {},
   }) =>
       records
           .where(
-            (item) => isEligible(item, currency: currency, now: now),
+            (item) => isEligible(
+              item,
+              currency: currency,
+              now: now,
+              excludedTransactionIds: excludedTransactionIds,
+            ),
           )
           .toList(growable: false);
 
@@ -69,8 +77,14 @@ class FinancialTruthService {
     Iterable<TransactionRecord> records, {
     required String currency,
     required DateTime now,
+    Set<String> excludedTransactionIds = const {},
   }) =>
-      eligibleRows(records, currency: currency, now: now)
+      eligibleRows(
+        records,
+        currency: currency,
+        now: now,
+        excludedTransactionIds: excludedTransactionIds,
+      )
           .where(isPersonalConsumption)
           .toList(growable: false);
 
@@ -83,9 +97,15 @@ class FinancialTruthService {
     Iterable<TransactionRecord> records, {
     required String currency,
     required DateTime now,
+    Set<String> excludedTransactionIds = const {},
   }) {
     final normalized = <TransactionRecord>[];
-    for (final item in eligibleRows(records, currency: currency, now: now)) {
+    for (final item in eligibleRows(
+      records,
+      currency: currency,
+      now: now,
+      excludedTransactionIds: excludedTransactionIds,
+    )) {
       if (!item.isConsumptionExpense) {
         normalized.add(item);
         continue;
@@ -115,6 +135,7 @@ class FinancialTruthService {
     required DateTime endExclusive,
     required String currency,
     required DateTime now,
+    Set<String> excludedTransactionIds = const {},
   }) {
     var earnedIncomeCents = 0;
     var personalConsumptionCents = 0;
@@ -127,6 +148,7 @@ class FinancialTruthService {
       records,
       currency: currency,
       now: now,
+      excludedTransactionIds: excludedTransactionIds,
     )) {
       if (item.occurredAt.isBefore(start) ||
           !item.occurredAt.isBefore(endExclusive)) {
@@ -154,6 +176,52 @@ class FinancialTruthService {
     );
   }
 }
+
+  Set<String> confirmedDuplicateSuppressionIds({
+    required Iterable<TransactionRecord> records,
+    required Map<String, List<String>> confirmedEventTransactionIds,
+  }) {
+    final byId = {for (final item in records) item.id: item};
+    final suppressed = <String>{};
+    for (final ids in confirmedEventTransactionIds.values) {
+      final candidates = ids
+          .map((id) => byId[id])
+          .whereType<TransactionRecord>()
+          .toList(growable: false);
+      if (candidates.length < 2) continue;
+      final canonical = [...candidates]
+        ..sort((left, right) {
+          final score = _canonicalScore(right) - _canonicalScore(left);
+          if (score != 0) return score;
+          final time = left.createdAt.compareTo(right.createdAt);
+          if (time != 0) return time;
+          return left.id.compareTo(right.id);
+        });
+      final keep = canonical.first.id;
+      suppressed.addAll(
+        candidates.where((item) => item.id != keep).map((item) => item.id),
+      );
+    }
+    return Set.unmodifiable(suppressed);
+  }
+
+  int _canonicalScore(TransactionRecord item) {
+    var score = 0;
+    if (item.userCorrected) score += 100;
+    if (item.categoryId?.trim().isNotEmpty == true) score += 24;
+    if (item.subcategoryId?.trim().isNotEmpty == true) score += 8;
+    if (item.merchant?.trim().isNotEmpty == true) score += 16;
+    if (item.note?.trim().isNotEmpty == true) score += 8;
+    if (item.metadataJson?.trim().isNotEmpty == true) score += 6;
+    score += switch (item.source) {
+      TransactionSource.manual => 20,
+      TransactionSource.voice => 18,
+      TransactionSource.auto => 16,
+      TransactionSource.ocr => 14,
+      TransactionSource.import => 12,
+    };
+    return score;
+  }
 
 class FinancialTruthSummary {
   const FinancialTruthSummary({

@@ -14,6 +14,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../domain/safe_to_spend_service.dart';
 import '../../goals/data/goal_repository.dart';
 import '../../intelligence/domain/financial_truth_service.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../../../core/models/goal.dart';
 
 abstract interface class BudgetRepository {
@@ -31,6 +32,7 @@ abstract interface class BudgetRepository {
     required List<Category> categories,
     required DateTime now,
     double goalReservation = 0,
+    Set<String> excludedTransactionIds = const {},
   });
 }
 
@@ -110,12 +112,14 @@ class DriftBudgetRepository implements BudgetRepository {
     required List<Category> categories,
     required DateTime now,
     double goalReservation = 0,
+    Set<String> excludedTransactionIds = const {},
   }) {
     final monthTransactions = const FinancialTruthService()
         .personalConsumptionRows(
           transactions,
           currency: 'CNY',
           now: now,
+          excludedTransactionIds: excludedTransactionIds,
         )
         .where(
           (item) =>
@@ -249,6 +253,8 @@ final budgetOverviewProvider = Provider<BudgetOverview>((ref) {
         transactions: transactions,
         categories: categories,
         now: DateTime.now(),
+        excludedTransactionIds:
+            ref.watch(financialTruthSuppressedTransactionIdsProvider),
         goalReservation:
             (ref.watch(goalsProvider).value ?? const <Goal>[])
                 .where((goal) => goal.status == GoalStatus.active)

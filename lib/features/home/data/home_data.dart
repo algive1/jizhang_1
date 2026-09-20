@@ -7,6 +7,7 @@ import '../../budgets/data/budget_repository.dart';
 import '../../insights/application/insight_feed_provider.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../intelligence/domain/financial_truth_service.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 
@@ -151,12 +152,14 @@ final homeAmountVisibilityProvider =
 final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
   final transactions = ref.watch(transactionsProvider).value ?? const [];
   final now = DateTime.now();
+  final suppressed = ref.watch(financialTruthSuppressedTransactionIdsProvider);
   final truth = const FinancialTruthService().summarize(
     transactions,
     start: DateTime(now.year, now.month),
     endExclusive: DateTime(now.year, now.month + 1),
     currency: 'CNY',
     now: now,
+    excludedTransactionIds: suppressed,
   );
   final income = truth.earnedIncome;
   final spending = truth.personalConsumption;
@@ -208,14 +211,16 @@ final selectedHomeMonthProvider =
 MonthlyLedgerSummary monthlySummary(
   Iterable<TransactionRecord> records,
   DateTime month,
-  DateTime now,
-) {
+  DateTime now, {
+  Set<String> excludedTransactionIds = const {},
+}) {
   final truth = const FinancialTruthService().summarize(
     records,
     start: DateTime(month.year, month.month),
     endExclusive: DateTime(month.year, month.month + 1),
     currency: 'CNY',
     now: now,
+    excludedTransactionIds: excludedTransactionIds,
   );
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),
@@ -230,5 +235,7 @@ final homeMonthlySummaryProvider = Provider<MonthlyLedgerSummary>((ref) {
     ref.watch(transactionsProvider).value ?? [],
     ref.watch(selectedHomeMonthProvider) ?? now,
     now,
+    excludedTransactionIds:
+        ref.watch(financialTruthSuppressedTransactionIdsProvider),
   );
 });

@@ -2185,6 +2185,21 @@ class IntelligenceDao extends DatabaseAccessor<AppDatabase>
     await into(economicEventRecordEntries).insertOnConflictUpdate(record);
   }
 
+  Stream<List<EconomicEventRecordEntity>>
+  watchConfirmedEconomicEventRecords() {
+    final query = select(economicEventRecordEntries).join([
+      innerJoin(
+        economicEventEntries,
+        economicEventEntries.id.equalsExp(economicEventRecordEntries.eventId),
+      ),
+    ])..where(economicEventEntries.status.equals('confirmed'));
+    return query.watch().map(
+      (rows) => rows
+          .map((row) => row.readTable(economicEventRecordEntries))
+          .toList(growable: false),
+    );
+  }
+
   Future<EconomicEventEntity?> findEconomicEventByTransactionId(
     String transactionId,
   ) async {

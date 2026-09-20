@@ -89,12 +89,14 @@ class StatisticalAnalysisService {
     String currency = 'CNY',
     DateTime? now,
     DateTime? month,
+    Set<String> excludedTransactionIds = const {},
   }) {
     final clock = now ?? DateTime.now();
     allTransactions = truth.normalizeForAnalysis(
       allTransactions,
       currency: currency,
       now: clock,
+      excludedTransactionIds: excludedTransactionIds,
     );
     final selectedCurrent =
         month != null && month.year == clock.year && month.month == clock.month;

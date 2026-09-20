@@ -52,6 +52,42 @@ void main() {
     expect(summary.disposableDelta, 9500);
   });
 
+  test('confirmed economic events count exactly once using the richer record', () {
+    final imported = _row(
+      'imported',
+      TransactionType.expense,
+      88,
+      now,
+    ).copyWith(
+      categoryId: 'food',
+      merchant: '餐厅',
+    );
+    final bank = _row(
+      'bank',
+      TransactionType.expense,
+      88,
+      now,
+    ).copyWith();
+    final suppressed = truth.confirmedDuplicateSuppressionIds(
+      records: [bank, imported],
+      confirmedEventTransactionIds: {
+        'event-1': ['bank', 'imported'],
+      },
+    );
+
+    expect(suppressed, {'bank'});
+    final summary = truth.summarize(
+      [bank, imported],
+      start: DateTime(2026, 9),
+      endExclusive: DateTime(2026, 10),
+      currency: 'CNY',
+      now: now,
+      excludedTransactionIds: suppressed,
+    );
+    expect(summary.personalConsumption, 88);
+    expect(summary.consumptionCount, 1);
+  });
+
   test('analysis normalization drops fully reimbursable rows and rewrites partials', () {
     final rows = [
       _row('full', TransactionType.expense, 300, now).copyWith(

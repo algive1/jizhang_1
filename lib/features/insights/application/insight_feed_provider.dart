@@ -11,6 +11,7 @@ import '../../analysis/data/analysis_repository.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/financial_insight_engine.dart';
 import '../domain/insight_models.dart';
@@ -20,8 +21,12 @@ final financialInsightEngineProvider = Provider<FinancialInsightEngine>(
 );
 
 final localInsightFeedProvider = Provider<InsightFeed>((ref) {
-  final transactions =
+  final rawTransactions =
       ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final suppressed = ref.watch(financialTruthSuppressedTransactionIdsProvider);
+  final transactions = rawTransactions
+      .where((item) => !suppressed.contains(item.id))
+      .toList(growable: false);
   final engine = ref.watch(financialInsightEngineProvider);
   final analysis = ref.watch(statisticalAnalysisServiceProvider).analyze(
         engine.normalizeAnalysisTransactions(transactions),
@@ -51,8 +56,12 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
 
 
 final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
-  final transactions =
+  final rawTransactions =
       ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final suppressed = ref.watch(financialTruthSuppressedTransactionIdsProvider);
+  final transactions = rawTransactions
+      .where((item) => !suppressed.contains(item.id))
+      .toList(growable: false);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
   final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
   final categories = ref.watch(allCategoriesProvider).value ?? const [];
