@@ -44,6 +44,7 @@ class AutoBillOverlayService : Service() {
             "INCOME" -> "收入"
             "REFUND" -> "退款"
             "REIMBURSEMENT" -> "报销回款"
+            "TRANSFER" -> "转账"
             else -> "支出"
         }
         val box = LinearLayout(this).apply {
@@ -51,7 +52,7 @@ class AutoBillOverlayService : Service() {
             setPadding(28, 20, 28, 20)
             setBackgroundColor(Color.rgb(38, 38, 42))
             addView(TextView(context).apply {
-                text = "好好记账 · %s\n¥%.2f  %s\n%s\n请打开应用确认账本、账户与分类".format(
+                text = "好好记账 · %s\n¥%.2f  %s\n%s\n请打开应用确认记账方式与账户".format(
                     transactionLabel,
                     candidate.amountInCents / 100.0,
                     candidate.merchantNormalized,
@@ -61,7 +62,7 @@ class AutoBillOverlayService : Service() {
                 textSize = 16f
             })
             addView(TextView(context).apply {
-                text = "当前悬浮层只展示识别结果，不会在未确认账本和分类时自动保存。"
+                text = "当前悬浮层只展示识别结果，不会在未确认记账方式和账户时自动保存。"
                 setTextColor(Color.LTGRAY)
                 textSize = 13f
                 setPadding(0, 12, 0, 12)

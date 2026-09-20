@@ -80,6 +80,30 @@ internal object CandidateFieldExtractor {
                     !value.contains("暂无")
             }
 
+    fun targetAccountHint(labels: List<String>): String? =
+        field(
+            labels,
+            setOf(
+                "转入账户",
+                "收款账户",
+                "到账账户",
+                "收款银行卡",
+                "转入银行卡",
+            ),
+            maxLength = 120,
+        )
+
+    fun targetIdentifierSuffix(labels: List<String>): String? {
+        val hint = targetAccountHint(labels) ?: return null
+        return Regex(
+            "(?:尾号|后四位|卡号后四位)[^0-9]{0,8}([0-9]{4})(?![0-9])|" +
+                "(?:银行卡|信用卡|储蓄卡)[^0-9]{0,8}([0-9]{4})(?![0-9])",
+        ).find(hint)?.let { match ->
+            match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
+                ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+        }
+    }
+
     fun identifierSuffix(paymentMethod: String, labels: List<String>): String? {
         val joined = buildString {
             append(paymentMethod)

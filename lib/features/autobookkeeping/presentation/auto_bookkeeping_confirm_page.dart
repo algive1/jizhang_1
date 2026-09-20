@@ -23,6 +23,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
+import '../auto_bookkeeping_transfer_resolver.dart';
 import '../../transactions/data/refund_service.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../notifications/application/payment_notification_service.dart';
@@ -42,9 +43,12 @@ class _AutoBookkeepingConfirmPageState
   String? _bookId;
   String? _accountId;
   String? _categoryId;
+  String? _destinationAccountId;
   String? _message;
   AutoBookkeepingRecommendation? _recommendation;
   TransactionRecord? _matchedRefundOriginal;
+  AutoBookkeepingTransferRecommendation? _transferRecommendation;
+  bool _internalTransfer = false;
   bool _rememberForMerchant = true;
   bool _keepScreenshot = true;
   bool _loading = true;
@@ -64,6 +68,9 @@ class _AutoBookkeepingConfirmPageState
           .getPending();
       AutoBookkeepingRecommendation? recommendation;
       TransactionRecord? matchedRefundOriginal;
+      AutoBookkeepingTransferRecommendation? transferRecommendation;
+      String? sourceAccountId;
+      String? resolvedBookId;
       if (candidate != null) {
         final fallbackBookId = ref.read(activeBookIdProvider);
         recommendation = await ref
@@ -73,20 +80,53 @@ class _AutoBookkeepingConfirmPageState
               fallbackBookId: fallbackBookId,
               transactionType: _transactionTypeFor(candidate.transactionType),
             );
-        final targetBookId = recommendation.bookId ?? fallbackBookId;
-        matchedRefundOriginal = await ref
-            .read(autoBookkeepingRefundMatcherProvider)
-            .findOriginal(candidate: candidate, bookId: targetBookId);
+        final books = await ref.read(booksProvider.future);
+        final requestedBookId = recommendation.bookId ?? fallbackBookId;
+        final targetBookId = books.any((book) => book.id == requestedBookId)
+            ? requestedBookId
+            : books.any((book) => book.id == fallbackBookId)
+            ? fallbackBookId
+            : books.firstOrNull?.id;
+        resolvedBookId = targetBookId;
+        if (targetBookId != null) {
+          matchedRefundOriginal = await ref
+              .read(autoBookkeepingRefundMatcherProvider)
+              .findOriginal(candidate: candidate, bookId: targetBookId);
+
+          final accounts = await ref.read(
+            accountsByBookProvider(targetBookId).future,
+          );
+          sourceAccountId =
+              matchedRefundOriginal?.accountId ??
+              _bestAccountId(
+                accounts,
+                candidate: candidate,
+                preferredId: recommendation.accountId,
+              );
+          if (candidate.transactionType == 'TRANSFER') {
+            transferRecommendation = await ref
+                .read(autoBookkeepingTransferResolverProvider)
+                .recommend(
+                  candidate: candidate,
+                  bookId: targetBookId,
+                  accounts: accounts,
+                  sourceAccountId: sourceAccountId,
+                );
+          }
+        }
       }
       if (!mounted) return;
       setState(() {
         _candidate = candidate;
         _recommendation = recommendation;
         _matchedRefundOriginal = matchedRefundOriginal;
-        _bookId = recommendation?.bookId;
-        _accountId =
-            matchedRefundOriginal?.accountId ?? recommendation?.accountId;
+        _transferRecommendation = transferRecommendation;
+        _bookId = resolvedBookId;
+        _accountId = sourceAccountId;
         _categoryId = recommendation?.categoryId;
+        _internalTransfer =
+            transferRecommendation?.suggestsInternalTransfer == true;
+        _destinationAccountId = transferRecommendation?.destinationAccountId;
         _loading = false;
       });
       if (candidate != null && candidate.screenshotPath == null) {
@@ -144,7 +184,8 @@ class _AutoBookkeepingConfirmPageState
   Future<void> _save({
     required String bookId,
     required Account account,
-    required Category category,
+    required Category? category,
+    Account? destinationAccount,
   }) async {
     final candidate = _candidate;
     if (candidate == null || _saving) return;
@@ -153,6 +194,20 @@ class _AutoBookkeepingConfirmPageState
       _message = null;
     });
     try {
+      final isTransferScene = candidate.transactionType == 'TRANSFER';
+      final finalTransactionType = isTransferScene
+          ? (_internalTransfer
+                ? TransactionType.transfer
+                : TransactionType.expense)
+          : _transactionTypeFor(candidate.transactionType);
+      if (finalTransactionType == TransactionType.transfer) {
+        if (destinationAccount == null || destinationAccount.id == account.id) {
+          throw ArgumentError('内部转账需要选择不同的转入账户');
+        }
+      } else if (category == null) {
+        throw ArgumentError('请选择分类');
+      }
+
       final metadata = <String, Object?>{
         'paymentChannel': _paymentChannel(candidate),
         if (candidate.orderId != null) 'orderId': candidate.orderId,
@@ -164,6 +219,11 @@ class _AutoBookkeepingConfirmPageState
           'scene': candidate.scene,
           'paymentMethod': candidate.paymentMethod,
           'transactionType': candidate.transactionType,
+          'confirmedTransactionType': finalTransactionType.name,
+          if (candidate.targetIdentifierSuffix != null)
+            'targetIdentifierSuffix': candidate.targetIdentifierSuffix,
+          if (candidate.targetAccountHint != null)
+            'targetAccountHint': candidate.targetAccountHint,
           if (candidate.orderId != null) 'orderId': candidate.orderId,
           if (candidate.identifierSuffix != null)
             'identifierSuffix': candidate.identifierSuffix,
@@ -178,7 +238,7 @@ class _AutoBookkeepingConfirmPageState
           _keepScreenshot && candidate.screenshotPath != null
           ? candidate.screenshotPath
           : null;
-      final transactionType = _transactionTypeFor(candidate.transactionType);
+      final transactionType = finalTransactionType;
       final matchedRefund = transactionType == TransactionType.refund &&
               _matchedRefundOriginal?.bookId == bookId
           ? _matchedRefundOriginal
@@ -192,7 +252,7 @@ class _AutoBookkeepingConfirmPageState
         ).register(
           original: matchedRefund,
           amount: candidate.amountInCents / 100,
-          category: category,
+          category: category!,
           occurredAt: candidate.timestamp,
           transactionId: 'auto-${candidate.fingerprint}',
           note: candidate.note ?? '自动识别退款：${candidate.merchant}',
@@ -210,8 +270,12 @@ class _AutoBookkeepingConfirmPageState
                   type: transactionType,
                   amount: candidate.amountInCents / 100,
                   accountId: account.id,
-                  categoryId: category.id,
-                  categoryName: category.name,
+                  destinationAccountId:
+                      transactionType == TransactionType.transfer
+                      ? destinationAccount!.id
+                      : null,
+                  categoryId: category?.id,
+                  categoryName: category?.name,
                   merchant: candidate.merchant,
                   note: candidate.note,
                   occurredAt: candidate.timestamp,
@@ -261,16 +325,29 @@ class _AutoBookkeepingConfirmPageState
       }
 
       try {
-        await ref
-            .read(autoBookkeepingLearningServiceProvider)
-            .remember(
-              transactionId: saved.id,
-              candidate: candidate,
-              bookId: bookId,
-              accountId: saved.accountId,
-              categoryId: category.id,
-              rememberForMerchant: _rememberForMerchant,
-            );
+        if (isTransferScene) {
+          await ref
+              .read(autoBookkeepingTransferResolverProvider)
+              .rememberDecision(
+                candidate: candidate,
+                bookId: bookId,
+                internalTransfer: transactionType == TransactionType.transfer,
+                destinationAccountId: saved.destinationAccountId,
+                remember: _rememberForMerchant,
+              );
+        }
+        if (transactionType != TransactionType.transfer && category != null) {
+          await ref
+              .read(autoBookkeepingLearningServiceProvider)
+              .remember(
+                transactionId: saved.id,
+                candidate: candidate,
+                bookId: bookId,
+                accountId: saved.accountId,
+                categoryId: category.id,
+                rememberForMerchant: _rememberForMerchant,
+              );
+        }
       } on Object {
         // Learning is a secondary local enhancement. A successful transaction
         // must never be rolled back or shown as failed because memory could
@@ -346,13 +423,23 @@ class _AutoBookkeepingConfirmPageState
     if (accounts == null || categories == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final transactionType = _transactionTypeFor(candidate.transactionType);
+    final isTransferScene = candidate.transactionType == 'TRANSFER';
+    final transactionType = isTransferScene && _internalTransfer
+        ? TransactionType.transfer
+        : _transactionTypeFor(candidate.transactionType);
+    final displayTransactionType = isTransferScene
+        ? TransactionType.transfer
+        : transactionType;
     final categoryType = _categoryTypeFor(transactionType);
     final selectableCategories = categories
         .where((item) => item.type == categoryType)
         .where((item) => item.parentId == null)
         .toList(growable: false);
     final selectedAccountId = _validAccountId(accounts);
+    final selectedDestinationAccountId = _validDestinationAccountId(
+      accounts,
+      sourceAccountId: selectedAccountId,
+    );
     final selectedCategoryId = _validCategoryId(selectableCategories);
 
     return ListView(
@@ -376,14 +463,14 @@ class _AutoBookkeepingConfirmPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '已识别${_transactionLabel(transactionType)}',
+                '已识别${_transactionLabel(displayTransactionType)}',
                 style: TextStyle(color: context.appSecondaryText),
               ),
               const SizedBox(height: 8),
               Text(
                 '¥${(candidate.amountInCents / 100).toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: _amountColor(transactionType),
+                  color: _amountColor(displayTransactionType),
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
                 ),
@@ -458,6 +545,79 @@ class _AutoBookkeepingConfirmPageState
             ],
           ),
         ),
+        if (isTransferScene) ...[
+          const SizedBox(height: 14),
+          AppCard(
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '这笔转账怎么记？',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: Icon(Icons.call_made_outlined),
+                        label: Text('转给别人 · 支出'),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: Icon(Icons.swap_horiz),
+                        label: Text('自己账户间转账'),
+                      ),
+                    ],
+                    selected: <bool>{_internalTransfer},
+                    onSelectionChanged: _saving
+                        ? null
+                        : (selection) {
+                            final internal = selection.single;
+                            setState(() {
+                              _internalTransfer = internal;
+                              _message = null;
+                              if (internal) {
+                                _destinationAccountId =
+                                    _validDestinationAccountId(
+                                      accounts,
+                                      sourceAccountId: selectedAccountId,
+                                    );
+                              } else {
+                                _destinationAccountId = null;
+                              }
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _transferGuidance(candidate),
+                    style: TextStyle(
+                      color: _transferRecommendation
+                                  ?.suggestsInternalTransfer ==
+                              true
+                          ? context.appPrimary
+                          : context.appSecondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (candidate.targetAccountHint != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '识别到的目标账户：${candidate.targetAccountHint}',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         AppCard(
           child: Material(
@@ -477,6 +637,10 @@ class _AutoBookkeepingConfirmPageState
                           _bookId = value;
                           _accountId = null;
                           _categoryId = null;
+                          _destinationAccountId = null;
+                          if (isTransferScene) {
+                            _internalTransfer = false;
+                          }
                           if (_matchedRefundOriginal?.bookId != value) {
                             _matchedRefundOriginal = null;
                           }
@@ -485,7 +649,9 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedAccountId,
-                  decoration: appFieldDecoration('支付账户'),
+                  decoration: appFieldDecoration(
+                    isTransferScene ? '转出账户' : '支付账户',
+                  ),
                   items: [
                     for (final account in accounts)
                       DropdownMenuItem(
@@ -498,7 +664,12 @@ class _AutoBookkeepingConfirmPageState
                           selectedBook == null ||
                           _matchedRefundOriginal?.bookId == selectedBookId
                       ? null
-                      : (value) => setState(() => _accountId = value),
+                      : (value) => setState(() {
+                          _accountId = value;
+                          if (_destinationAccountId == value) {
+                            _destinationAccountId = null;
+                          }
+                        }),
                 ),
                 if (_matchedRefundOriginal?.bookId == selectedBookId)
                   Padding(
@@ -514,13 +685,33 @@ class _AutoBookkeepingConfirmPageState
                       ),
                     ),
                   ),
-                const SizedBox(height: 12),
-                AppSelect<String>(
+                if (isTransferScene && _internalTransfer) ...[
+                  const SizedBox(height: 12),
+                  AppSelect<String>(
+                    initialValue: selectedDestinationAccountId,
+                    decoration: appFieldDecoration('转入账户'),
+                    items: [
+                      for (final destination in accounts.where(
+                        (item) => item.id != selectedAccountId,
+                      ))
+                        DropdownMenuItem(
+                          value: destination.id,
+                          child: Text(destination.displayName),
+                        ),
+                    ],
+                    onChanged: _saving || selectedBook == null
+                        ? null
+                        : (value) => setState(
+                            () => _destinationAccountId = value,
+                          ),
+                  ),
+                ],
+                if (!(isTransferScene && _internalTransfer)) ...[
+                  const SizedBox(height: 12),
+                  AppSelect<String>(
                   initialValue: selectedCategoryId,
-                  decoration: InputDecoration(
-                    labelText: categoryType == CategoryType.income
-                        ? '收入分类'
-                        : '支出分类',
+                  decoration: appFieldDecoration(
+                    categoryType == CategoryType.income ? '收入分类' : '支出分类',
                   ),
                   items: [
                     for (final category in selectableCategories)
@@ -532,12 +723,23 @@ class _AutoBookkeepingConfirmPageState
                   onChanged: _saving || selectedBook == null
                       ? null
                       : (value) => setState(() => _categoryId = value),
-                ),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('记住这个商户的选择'),
-                  subtitle: const Text('下次自动带出账本、账户和分类'),
+                  title: Text(
+                    isTransferScene && _internalTransfer
+                        ? '记住这是自己的账户'
+                        : isTransferScene
+                        ? '记住这个收款方的选择'
+                        : '记住这个商户的选择',
+                  ),
+                  subtitle: Text(
+                    isTransferScene && _internalTransfer
+                        ? '下次遇到同一收款对象时可建议账户间转账'
+                        : '下次自动带出账本、账户和分类',
+                  ),
                   value: _rememberForMerchant,
                   onChanged: _saving
                       ? null
@@ -568,10 +770,28 @@ class _AutoBookkeepingConfirmPageState
                   final category = selectableCategories
                       .where((item) => item.id == selectedCategoryId)
                       .firstOrNull;
-                  if (account == null || category == null) {
+                  final destinationAccount = accounts
+                      .where(
+                        (item) => item.id == selectedDestinationAccountId,
+                      )
+                      .firstOrNull;
+                  if (account == null) {
                     setState(
                       () => _message =
-                          '请选择支付账户和${categoryType == CategoryType.income ? '收入' : '支出'}分类',
+                          isTransferScene ? '请选择转出账户' : '请选择支付账户',
+                    );
+                    return;
+                  }
+                  if (isTransferScene && _internalTransfer) {
+                    if (destinationAccount == null ||
+                        destinationAccount.id == account.id) {
+                      setState(() => _message = '请选择不同的转入账户');
+                      return;
+                    }
+                  } else if (category == null) {
+                    setState(
+                      () => _message =
+                          '请选择${categoryType == CategoryType.income ? '收入' : '支出'}分类',
                     );
                     return;
                   }
@@ -579,7 +799,14 @@ class _AutoBookkeepingConfirmPageState
                     _save(
                       bookId: selectedBookId,
                       account: account,
-                      category: category,
+                      category:
+                          isTransferScene && _internalTransfer
+                          ? null
+                          : category,
+                      destinationAccount:
+                          isTransferScene && _internalTransfer
+                          ? destinationAccount
+                          : null,
                     ),
                   );
                 },
@@ -600,8 +827,19 @@ class _AutoBookkeepingConfirmPageState
     );
   }
 
-  String? _validAccountId(List<Account> accounts) {
-    final suffix = _candidate?.identifierSuffix;
+  String? _validAccountId(List<Account> accounts) =>
+      _bestAccountId(
+        accounts,
+        candidate: _candidate,
+        preferredId: _accountId,
+      );
+
+  String? _bestAccountId(
+    List<Account> accounts, {
+    required PendingAutoBookkeepingCandidate? candidate,
+    String? preferredId,
+  }) {
+    final suffix = candidate?.identifierSuffix;
     if (suffix != null && suffix.isNotEmpty) {
       final suffixMatches = accounts
           .where((item) => item.identifierSuffix == suffix)
@@ -609,9 +847,12 @@ class _AutoBookkeepingConfirmPageState
       if (suffixMatches.length == 1) return suffixMatches.single.id;
     }
 
-    if (accounts.any((item) => item.id == _accountId)) return _accountId;
+    if (preferredId != null &&
+        accounts.any((item) => item.id == preferredId)) {
+      return preferredId;
+    }
 
-    final method = _candidate?.paymentMethod ?? '';
+    final method = candidate?.paymentMethod ?? '';
     final preferredByMethod = accounts.where((item) {
       if (method.contains('支付宝')) return item.type == AccountType.alipay;
       if (method.contains('微信')) return item.type == AccountType.wechat;
@@ -627,7 +868,7 @@ class _AutoBookkeepingConfirmPageState
     if (preferredByMethod != null) return preferredByMethod.id;
 
     final preferred = accounts.where((item) {
-      final source = _candidate?.sourceApp;
+      final source = candidate?.sourceApp;
       return switch (source) {
         'WECHAT' => item.type == AccountType.wechat,
         'ALIPAY' => item.type == AccountType.alipay,
@@ -637,6 +878,53 @@ class _AutoBookkeepingConfirmPageState
       };
     }).firstOrNull;
     return (preferred ?? accounts.firstOrNull)?.id;
+  }
+
+  String? _validDestinationAccountId(
+    List<Account> accounts, {
+    required String? sourceAccountId,
+  }) {
+    if (_destinationAccountId != null &&
+        _destinationAccountId != sourceAccountId &&
+        accounts.any((item) => item.id == _destinationAccountId)) {
+      return _destinationAccountId;
+    }
+
+    final recommended = _transferRecommendation?.destinationAccountId;
+    if (recommended != null &&
+        recommended != sourceAccountId &&
+        accounts.any((item) => item.id == recommended)) {
+      return recommended;
+    }
+
+    final suffix = _candidate?.targetIdentifierSuffix;
+    if (suffix != null && suffix.isNotEmpty) {
+      final matches = accounts
+          .where(
+            (item) =>
+                item.id != sourceAccountId &&
+                item.identifierSuffix == suffix,
+          )
+          .toList(growable: false);
+      if (matches.length == 1) return matches.single.id;
+    }
+    return null;
+  }
+
+  String _transferGuidance(PendingAutoBookkeepingCandidate candidate) {
+    final recommendation = _transferRecommendation;
+    if (recommendation?.evidence ==
+        AutoBookkeepingTransferEvidence.targetIdentifierSuffix) {
+      return '检测到目标账户尾号 ${candidate.targetIdentifierSuffix} 与你的账户唯一匹配，建议按自己账户间转账。';
+    }
+    if (recommendation?.evidence ==
+        AutoBookkeepingTransferEvidence.learnedDestination) {
+      return '根据你之前的确认，建议按自己账户间转账。';
+    }
+    if (_internalTransfer) {
+      return '系统没有足够证据确认这是自己的账户，请核对转入账户后再保存。';
+    }
+    return '无法确认收款方是不是你自己的账户，默认按支出；只有确认转给自己时再切换为账户间转账。';
   }
 
   String? _validCategoryId(List<Category> categories) {
@@ -663,6 +951,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.income => '收入',
     TransactionType.refund => '退款',
     TransactionType.reimbursement => '报销回款',
+    TransactionType.transfer => '转账',
     _ => '支出',
   };
 
@@ -671,6 +960,7 @@ class _AutoBookkeepingConfirmPageState
     TransactionType.refund ||
     TransactionType.reimbursement ||
     TransactionType.borrow => AppColors.income,
+    TransactionType.transfer => AppColors.primary,
     _ => AppColors.expense,
   };
 

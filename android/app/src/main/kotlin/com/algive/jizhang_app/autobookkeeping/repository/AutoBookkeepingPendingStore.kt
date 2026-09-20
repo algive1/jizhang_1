@@ -130,6 +130,14 @@ object AutoBookkeepingPendingStore {
             (arguments["discountAmountInCents"] as? Number)?.toLong()
         val identifierSuffix =
             (arguments["identifierSuffix"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val targetIdentifierSuffix =
+            (arguments["targetIdentifierSuffix"] as? String)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        val targetAccountHint =
+            (arguments["targetAccountHint"] as? String)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
         val screenshotPath =
             (arguments["screenshotPath"] as? String)?.trim()?.takeIf { it.isNotBlank() }
 
@@ -145,6 +153,9 @@ object AutoBookkeepingPendingStore {
             (originalAmount != null && originalAmount !in amount..99_999_999_999L) ||
             (discountAmount != null && discountAmount !in 0..99_999_999_999L) ||
             (identifierSuffix != null && !identifierSuffix.matches(Regex("\\d{4}"))) ||
+            (targetIdentifierSuffix != null &&
+                !targetIdentifierSuffix.matches(Regex("\\d{4}"))) ||
+            (targetAccountHint != null && targetAccountHint.length > 120) ||
             (screenshotPath != null && screenshotPath.length > 500)
         ) {
             return null
@@ -170,6 +181,8 @@ object AutoBookkeepingPendingStore {
             originalAmountInCents = originalAmount,
             discountAmountInCents = discountAmount,
             identifierSuffix = identifierSuffix,
+            targetIdentifierSuffix = targetIdentifierSuffix,
+            targetAccountHint = targetAccountHint?.take(120),
             screenshotPath = screenshotPath,
         )
     }
@@ -193,6 +206,10 @@ object AutoBookkeepingPendingStore {
                     value.optLong("discountAmountInCents").takeIf { value.has("discountAmountInCents") },
                 "identifierSuffix" to
                     value.optString("identifierSuffix").takeIf { it.isNotBlank() },
+                "targetIdentifierSuffix" to
+                    value.optString("targetIdentifierSuffix").takeIf { it.isNotBlank() },
+                "targetAccountHint" to
+                    value.optString("targetAccountHint").takeIf { it.isNotBlank() },
                 "screenshotPath" to
                     value.optString("screenshotPath").takeIf { it.isNotBlank() },
             ),
@@ -215,6 +232,8 @@ object AutoBookkeepingPendingStore {
             "originalAmountInCents" to value.optLong("originalAmountInCents"),
             "discountAmountInCents" to value.optLong("discountAmountInCents"),
             "identifierSuffix" to value.optString("identifierSuffix"),
+            "targetIdentifierSuffix" to value.optString("targetIdentifierSuffix"),
+            "targetAccountHint" to value.optString("targetAccountHint"),
             "screenshotPath" to value.optString("screenshotPath"),
         )
     }
@@ -315,6 +334,10 @@ object AutoBookkeepingPendingStore {
                 candidate.originalAmountInCents?.let { put("originalAmountInCents", it) }
                 candidate.discountAmountInCents?.let { put("discountAmountInCents", it) }
                 candidate.identifierSuffix?.let { put("identifierSuffix", it) }
+                candidate.targetIdentifierSuffix?.let {
+                    put("targetIdentifierSuffix", it)
+                }
+                candidate.targetAccountHint?.let { put("targetAccountHint", it) }
                 candidate.screenshotPath?.let { put("screenshotPath", it) }
             }
 
@@ -337,9 +360,17 @@ object AutoBookkeepingPendingStore {
     ): Boolean {
         val sameSource =
             first.optString("sourceApp") == second.optString("sourceApp")
+        val firstNotification =
+            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
+        val secondNotification =
+            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
+        val crossCaptureSource = firstNotification != secondNotification
         if (
-            first.optString("transactionType", "EXPENSE") !=
-            second.optString("transactionType", "EXPENSE")
+            !transactionTypesCompatible(
+                first.optString("transactionType", "EXPENSE"),
+                second.optString("transactionType", "EXPENSE"),
+                crossCaptureSource,
+            )
         ) {
             return false
         }
@@ -374,11 +405,7 @@ object AutoBookkeepingPendingStore {
                 secondMerchant.isNotBlank() &&
                 firstMerchant == secondMerchant
 
-        val firstNotification =
-            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        val secondNotification =
-            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        if (firstNotification != secondNotification) {
+        if (crossCaptureSource) {
             // The same marketplace payment may be observed from the merchant
             // app page and from the underlying Alipay/WeChat/UnionPay
             // notification. Merchant labels often differ, so also correlate
@@ -396,6 +423,16 @@ object AutoBookkeepingPendingStore {
         }
 
         return sameSource && sameMerchant
+    }
+
+    internal fun transactionTypesCompatible(
+        first: String,
+        second: String,
+        crossCaptureSource: Boolean,
+    ): Boolean {
+        if (first == second) return true
+        if (!crossCaptureSource) return false
+        return setOf(first, second) == setOf("EXPENSE", "TRANSFER")
     }
 
     private fun paymentMethodMatchesSource(
@@ -489,6 +526,7 @@ object AutoBookkeepingPendingStore {
         "INCOME",
         "REFUND",
         "REIMBURSEMENT",
+        "TRANSFER",
     )
 
     private val SUPPORTED_SOURCE_APPS = setOf(

@@ -32,6 +32,7 @@ class PaymentNotificationCandidateParser(
         val transactionType = when {
             REFUND_PATTERN.containsMatchIn(content) -> "REFUND"
             INCOME_PATTERN.containsMatchIn(content) -> "INCOME"
+            TRANSFER_PATTERN.containsMatchIn(content) -> "TRANSFER"
             else -> "EXPENSE"
         }
 
@@ -93,6 +94,7 @@ class PaymentNotificationCandidateParser(
                 scene = when (transactionType) {
                     "REFUND" -> "PAYMENT_NOTIFICATION_REFUND"
                     "INCOME" -> "PAYMENT_NOTIFICATION_INCOME"
+                    "TRANSFER" -> "PAYMENT_NOTIFICATION_TRANSFER"
                     else -> "PAYMENT_NOTIFICATION"
                 },
                 confidence = .90,
@@ -110,10 +112,17 @@ class PaymentNotificationCandidateParser(
                 ?.take(160),
             originalAmountInCents = normalizedBreakdown.first,
             discountAmountInCents = normalizedBreakdown.second,
-            identifierSuffix = IDENTIFIER_SUFFIX_PATTERN.find(content)?.let { match ->
-                match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
-                    ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
-            },
+            identifierSuffix = identifierSuffix(
+                if (transactionType == "TRANSFER") paymentMethod else content,
+            ),
+            targetIdentifierSuffix =
+                if (transactionType == "TRANSFER") {
+                    targetAccountHint(content)?.let(::identifierSuffix)
+                } else {
+                    null
+                },
+            targetAccountHint =
+                if (transactionType == "TRANSFER") targetAccountHint(content) else null,
         )
     }
 
@@ -181,6 +190,20 @@ class PaymentNotificationCandidateParser(
             ?.take(40)
             ?.takeIf { it.isNotBlank() }
 
+    private fun identifierSuffix(content: String): String? =
+        IDENTIFIER_SUFFIX_PATTERN.find(content)?.let { match ->
+            match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
+                ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+        }
+
+    private fun targetAccountHint(content: String): String? =
+        TARGET_ACCOUNT_PATTERN.find(content)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.take(120)
+            ?.takeIf { it.isNotBlank() }
+
     private fun counterparty(content: String): String? {
         val match = COUNTERPARTY_PATTERN.find(content)
         val value = match?.groupValues?.getOrNull(1)?.trim()?.take(80)
@@ -232,6 +255,9 @@ class PaymentNotificationCandidateParser(
         val INCOME_PATTERN = Regex(
             "收款到账|收款成功|收款已到账|收入到账",
         )
+        val TRANSFER_PATTERN = Regex(
+            "转账成功|转账已成功|转出成功|转账完成|转出完成|已转账",
+        )
         val SUCCESS_PATTERN = Regex(
             "支付成功|付款成功|交易成功|扣款成功|消费成功|" +
                 "已支付|已付款|支付完成|付款完成|订单支付成功|" +
@@ -243,13 +269,14 @@ class PaymentNotificationCandidateParser(
 
         val EXPLICIT_AMOUNT_PATTERN = Regex(
             "(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|" +
-                "退款金额|收款金额|到账金额|收入金额)" +
+                "退款金额|收款金额|到账金额|收入金额|转账金额|转出金额)" +
                 "[^0-9]{0,10}(?:¥|￥)?\\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
         )
         val STATUS_AMOUNT_PATTERN = Regex(
             "(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|" +
                 "支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|" +
-                "支付已完成|付款已完成|交易已完成|消费|扣款|支出)" +
+                "支付已完成|付款已完成|交易已完成|转账成功|转出成功|" +
+                "转账完成|转出完成|已转账|消费|扣款|支出)" +
                 "[^0-9]{0,12}(?:¥|￥)?\\s*" +
                 "([0-9]{1,9}(?:[.,][0-9]{1,2})?)",
         )
@@ -260,6 +287,10 @@ class PaymentNotificationCandidateParser(
         )
         val ORDER_ID_PATTERN = Regex(
             "(?:订单号|交易单号|交易号|流水号|支付单号)[：:\\s]*([A-Za-z0-9_-]{6,64})",
+        )
+        val TARGET_ACCOUNT_PATTERN = Regex(
+            "(?:转入账户|收款账户|到账账户|收款银行卡|转入银行卡)" +
+                "[：:\\s]*([^，。；;\\n]{2,120})",
         )
         val IDENTIFIER_SUFFIX_PATTERN = Regex(
             "(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,8}([0-9]{4})|" +
@@ -278,7 +309,7 @@ class PaymentNotificationCandidateParser(
         )
 
         val COUNTERPARTY_PATTERN = Regex(
-            "(?:来自|付款方|付款人|退款方|对方)[：:\\s]*([^，。；;\\n]{2,32})",
+            "(?:来自|付款方|付款人|退款方|收款人|收款方|对方)[：:\\s]*([^，。；;\\n]{2,32})",
         )
         val EXPLICIT_MERCHANT_PATTERN = Regex(
             "(?:商户名称|商户|商家名称|商家|店铺名称|店铺|门店|收款方)" +
