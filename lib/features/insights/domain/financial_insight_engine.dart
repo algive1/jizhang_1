@@ -9,6 +9,7 @@ import '../../../core/models/recurring_bill.dart';
 import 'budget_recommendation_service.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/utils/transaction_semantic_text.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import 'insight_models.dart';
 
 class FinancialInsightEngine {
@@ -17,29 +18,17 @@ class FinancialInsightEngine {
   List<TransactionRecord> normalizeAnalysisTransactions(
     List<TransactionRecord> transactions,
   ) {
-    final result = <TransactionRecord>[];
-    for (final item in transactions) {
-      if (!item.isConsumptionExpense) {
-        result.add(item);
-        continue;
-      }
-      final personal = item.personalExpenseAmount;
-      if (personal <= .005) continue;
-      if ((personal - item.netExpenseAmount).abs() < .005) {
-        result.add(item);
-        continue;
-      }
-      result.add(
-        item.copyWith(
-          amount: personal,
-          reimbursementStatus: ReimbursementStatus.none,
-          reimbursementAmount: null,
-          refundStatus: RefundStatus.none,
-          clearRefundAmount: true,
-        ),
-      );
-    }
-    return List.unmodifiable(result);
+    final now = transactions.isEmpty
+        ? DateTime.now()
+        : transactions
+              .map((item) => item.occurredAt)
+              .reduce((a, b) => a.isAfter(b) ? a : b)
+              .add(const Duration(days: 1));
+    return const FinancialTruthService().normalizeForAnalysis(
+      transactions,
+      currency: 'CNY',
+      now: now,
+    );
   }
 
   InsightFeed build({

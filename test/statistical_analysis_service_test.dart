@@ -111,9 +111,9 @@ void main() {
       _expense('lunch', 35, DateTime(2026, 8, 8, 12)),
     ], now: now);
 
-    expect(snapshot.totalExpense, 160035);
+    expect(snapshot.totalExpense, 35);
     expect(snapshot.regularExpense, 35);
-    expect(snapshot.excludedLargeExpense, 160000);
+    expect(snapshot.excludedLargeExpense, 0);
     expect(snapshot.categoryTrends.single.name, '餐饮');
     expect(snapshot.heatmap.expand((row) => row).reduce((a, b) => a + b), 35);
   });
@@ -167,6 +167,41 @@ void main() {
     final snapshot = service.analyze([...current, previous], now: now);
 
     expect(snapshot.insights.first.reasonCode, 'delivery_frequency_increase');
+  });
+
+  test('refund, reimbursement and borrowing are not earned income', () {
+    final snapshot = service.analyze([
+      _expense(
+        'salary',
+        5000,
+        DateTime(2026, 8, 5),
+        type: TransactionType.income,
+      ),
+      _expense(
+        'refund',
+        300,
+        DateTime(2026, 8, 6),
+        type: TransactionType.refund,
+      ),
+      _expense(
+        'reimbursement',
+        400,
+        DateTime(2026, 8, 7),
+        type: TransactionType.reimbursement,
+      ),
+      _expense(
+        'borrow',
+        1000,
+        DateTime(2026, 8, 8),
+        type: TransactionType.borrow,
+      ),
+      _expense('meal', 100, DateTime(2026, 8, 9)),
+    ], now: now);
+
+    expect(snapshot.totalIncome, 5000);
+    expect(snapshot.incomeCount, 1);
+    expect(snapshot.totalExpense, 100);
+    expect(snapshot.netCashflow, 4900);
   });
 
   test('personal distribution detects an outlier below fixed threshold', () {

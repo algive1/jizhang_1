@@ -68,6 +68,7 @@ jobs:
           test/budget_recommendation_service_test.dart
           test/statistical_analysis_service_test.dart
           test/financial_insight_engine_test.dart
+          test/financial_truth_service_test.dart
           test/home_insight_drawer_test.dart
           test/home_redesign_domain_test.dart
           test/analysis_multibook_and_annual_report_test.dart

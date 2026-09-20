@@ -111,6 +111,46 @@ void main() {
     expect(refund.personalExpenseAmount, 150);
   });
 
+  test('financial truth keeps refunds, reimbursements and borrowing out of income', () {
+    final now = DateTime(2026, 9, 20, 12);
+    final records = [
+      _transaction(
+        'salary',
+        now,
+        10000,
+        type: TransactionType.income,
+      ),
+      _transaction(
+        'refund-receipt',
+        now,
+        200,
+        type: TransactionType.refund,
+      ),
+      _transaction(
+        'reimbursement-receipt',
+        now,
+        300,
+        type: TransactionType.reimbursement,
+      ),
+      _transaction(
+        'borrow',
+        now,
+        1000,
+        type: TransactionType.borrow,
+      ),
+      _transaction('meal', now, 100),
+      _transaction('work-taxi', now, 500).copyWith(
+        reimbursementStatus: ReimbursementStatus.pending,
+        reimbursementAmount: 400,
+      ),
+    ];
+
+    final summary = monthlySummary(records, now, now);
+
+    expect(summary.income, 10000);
+    expect(summary.expense, 200);
+  });
+
   test('year trend includes actual expenses including large purchases, excludes transfers, future and other currencies', () {
     final now = DateTime(2026, 9, 8, 12);
     final snapshot = const StatisticalAnalysisService().analyze(

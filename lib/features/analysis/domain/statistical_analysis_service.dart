@@ -1,6 +1,7 @@
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/utils/transaction_semantic_text.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 
 class TransactionFeatureService {
   const TransactionFeatureService();
@@ -43,10 +44,9 @@ class LargeTransactionDetector {
     final amounts =
         transactions
             .where(
-              (item) =>
-                  item.isExpense && item.type != TransactionType.assetPurchase,
+              (item) => item.isConsumptionExpense,
             )
-            .map((item) => item.netExpenseAmount)
+            .map((item) => item.personalExpenseAmount)
             .where((amount) => amount > 0)
             .toList()
           ..sort();
@@ -66,8 +66,9 @@ class LargeTransactionDetector {
     if (item.type == TransactionType.assetPurchase || item.isLargeTransaction) {
       return true;
     }
-    return item.netExpenseAmount >= fixedThreshold ||
-        item.netExpenseAmount >= (threshold ?? distributionThreshold(history));
+    return item.personalExpenseAmount >= fixedThreshold ||
+        item.personalExpenseAmount >=
+            (threshold ?? distributionThreshold(history));
   }
 }
 
@@ -75,10 +76,12 @@ class StatisticalAnalysisService {
   const StatisticalAnalysisService({
     this.features = const TransactionFeatureService(),
     this.largeDetector = const LargeTransactionDetector(),
+    this.truth = const FinancialTruthService(),
   });
 
   final TransactionFeatureService features;
   final LargeTransactionDetector largeDetector;
+  final FinancialTruthService truth;
 
   AnalysisSnapshot analyze(
     List<TransactionRecord> allTransactions, {
@@ -88,14 +91,11 @@ class StatisticalAnalysisService {
     DateTime? month,
   }) {
     final clock = now ?? DateTime.now();
-    allTransactions = allTransactions
-        .where(
-          (item) =>
-              item.currency.toUpperCase() == currency.toUpperCase() &&
-              item.deletedAt == null &&
-              !item.occurredAt.isAfter(clock),
-        )
-        .toList();
+    allTransactions = truth.normalizeForAnalysis(
+      allTransactions,
+      currency: currency,
+      now: clock,
+    );
     final selectedCurrent =
         month != null && month.year == clock.year && month.month == clock.month;
     final range = month == null
@@ -137,7 +137,7 @@ class StatisticalAnalysisService {
             ),
           };
     final expenses = allTransactions
-        .where((item) => item.deletedAt == null && item.isExpense)
+        .where(truth.isPersonalConsumption)
         .toList(growable: false);
     final current = expenses
         .where(
@@ -155,7 +155,10 @@ class StatisticalAnalysisService {
     final regular = _sum(currentRegular);
     final previousRegularAmount = _sum(previousRegular);
     final incomes = allTransactions
-        .where((item) => item.isIncome && range.contains(item.occurredAt))
+        .where(
+          (item) =>
+              truth.isEarnedIncome(item) && range.contains(item.occurredAt),
+        )
         .toList();
 
     return AnalysisSnapshot(
@@ -246,7 +249,8 @@ class StatisticalAnalysisService {
           item.occurredAt.day,
         );
         values.putIfAbsent(date, () => [0, 0])[kind] +=
-            ((kind == 1 ? item.netExpenseAmount : item.amount) * 100).round();
+            ((kind == 1 ? item.personalExpenseAmount : item.amount) * 100)
+                .round();
       }
     }
     return [
@@ -541,7 +545,10 @@ class StatisticalAnalysisService {
         0,
         (total, item) =>
             total +
-            ((item.isExpense ? item.netExpenseAmount : item.amount) * 100)
+            ((item.isConsumptionExpense
+                        ? item.personalExpenseAmount
+                        : item.amount) *
+                    100)
                 .round(),
       ) /
       100;

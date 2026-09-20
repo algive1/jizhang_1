@@ -6,6 +6,7 @@ import '../../../core/models/transaction_record.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../insights/application/insight_feed_provider.dart';
 import '../../insights/domain/insight_models.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 
@@ -150,29 +151,16 @@ final homeAmountVisibilityProvider =
 final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
   final transactions = ref.watch(transactionsProvider).value ?? const [];
   final now = DateTime.now();
-  final monthTransactions = transactions.where(
-    (item) =>
-        item.currency.toUpperCase() == 'CNY' &&
-        item.deletedAt == null &&
-        !item.occurredAt.isAfter(now) &&
-        item.occurredAt.year == now.year &&
-        item.occurredAt.month == now.month,
+  final truth = const FinancialTruthService().summarize(
+    transactions,
+    start: DateTime(now.year, now.month),
+    endExclusive: DateTime(now.year, now.month + 1),
+    currency: 'CNY',
+    now: now,
   );
-  final income =
-      monthTransactions
-          .where((item) => item.isIncome)
-          .fold<int>(0, (total, item) => total + (item.amount * 100).round()) /
-      100;
-  final spending =
-      monthTransactions
-          .where((item) => item.isConsumptionExpense)
-          .fold<int>(
-            0,
-            (total, item) =>
-                total + (item.personalExpenseAmount * 100).round(),
-          ) /
-      100;
-  final forecastBalance = income - spending;
+  final income = truth.earnedIncome;
+  final spending = truth.personalConsumption;
+  final forecastBalance = truth.disposableDelta;
   final budgetOverview = ref.watch(budgetOverviewProvider);
   return DashboardSnapshot(
     safeToSpend: budgetOverview.total?.dailyAvailable ?? 0,
@@ -222,23 +210,17 @@ MonthlyLedgerSummary monthlySummary(
   DateTime month,
   DateTime now,
 ) {
-  var income = 0;
-  var expense = 0;
-  for (final item in records) {
-    if (item.deletedAt != null ||
-        item.currency.toUpperCase() != 'CNY' ||
-        item.occurredAt.isAfter(now) ||
-        item.occurredAt.year != month.year ||
-        item.occurredAt.month != month.month)
-      continue;
-    if (item.isIncome) income += (item.amount * 100).round();
-    if (item.isConsumptionExpense)
-      expense += (item.personalExpenseAmount * 100).round();
-  }
+  final truth = const FinancialTruthService().summarize(
+    records,
+    start: DateTime(month.year, month.month),
+    endExclusive: DateTime(month.year, month.month + 1),
+    currency: 'CNY',
+    now: now,
+  );
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),
-    income: income / 100,
-    expense: expense / 100,
+    income: truth.earnedIncome,
+    expense: truth.personalConsumption,
   );
 }
 

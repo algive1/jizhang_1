@@ -13,6 +13,7 @@ import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../domain/safe_to_spend_service.dart';
 import '../../goals/data/goal_repository.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import '../../../core/models/goal.dart';
 
 abstract interface class BudgetRepository {
@@ -110,15 +111,17 @@ class DriftBudgetRepository implements BudgetRepository {
     required DateTime now,
     double goalReservation = 0,
   }) {
-    final monthTransactions = transactions.where(
-      (item) =>
-          item.isConsumptionExpense &&
-          item.currency.toUpperCase() == 'CNY' &&
-          !item.occurredAt.isAfter(now) &&
-          item.deletedAt == null &&
-          item.occurredAt.year == now.year &&
-          item.occurredAt.month == now.month,
-    );
+    final monthTransactions = const FinancialTruthService()
+        .personalConsumptionRows(
+          transactions,
+          currency: 'CNY',
+          now: now,
+        )
+        .where(
+          (item) =>
+              item.occurredAt.year == now.year &&
+              item.occurredAt.month == now.month,
+        );
     final totalUsed =
         monthTransactions.fold<int>(
           0,
