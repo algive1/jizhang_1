@@ -15,6 +15,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../application/bill_import_category_mapper.dart';
 import '../application/bill_import_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -31,6 +32,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   String? _accountId;
   String? _expenseCategoryId;
   String? _incomeCategoryId;
+  final Map<String, String?> _accountMappings = {};
+  final Map<int, String> _rowSourceAccountOverrides = {};
+  final Map<int, String> _rowDestinationAccountOverrides = {};
+  bool _preserveCurrentBalances = true;
   String? _fileName;
   bool _loading = false;
   bool _saving = false;
@@ -74,7 +79,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    '支持微信支付、支付宝官方导出的 CSV 账单。导入前会预览，不会直接写入；退款、关闭交易会自动跳过。',
+                    '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
                     style: TextStyle(
                       color: context.appSecondaryText,
                       height: 1.45,
@@ -100,12 +105,12 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   const SizedBox(height: 12),
                   _mapping(accounts, categories),
                   const SizedBox(height: 12),
-                  _preview(_result!),
+                  _preview(_result!, categories),
                   const SizedBox(height: 14),
                   FilledButton.icon(
                     onPressed: _saving || _selected.isEmpty
                         ? null
-                        : () => _save(categories),
+                        : () => _save(accounts, categories),
                     icon: _saving
                         ? const SizedBox.square(
                             dimension: 16,
@@ -140,7 +145,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
               ),
               const SizedBox(height: 3),
               Text(
-                '${result.provider == BillImportProvider.wechat ? '微信支付' : '支付宝'}'
+                '${_providerLabel(result.provider)}'
                 ' · 可导入 ${result.rows.length} 笔'
                 '${result.skipped == 0 ? '' : ' · 已跳过 ${result.skipped} 行'}',
                 style: TextStyle(
@@ -172,16 +177,39 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   Widget _mapping(List<Account> accounts, List<Category> categories) {
     final expense = _rootCategories(categories, CategoryType.expense);
     final income = _rootCategories(categories, CategoryType.income);
+    final result = _result;
+    final needsAccountMapping = result?.provider.needsAccountMapping == true;
+    final accountNames = needsAccountMapping && result != null
+        ? _mumuAccountNames(result)
+        : const <String>[];
+    final unmappedAccounts = accountNames
+        .where((name) => _accountMappings[name] == null)
+        .length;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('导入映射', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(
+            needsAccountMapping
+                ? '第三方账单会先按账户名称自动匹配；无法确定时可在这里预设，也可以在导入时逐笔选择“仅此笔”或“全部同来源”。分类会尽量自动匹配。'
+                : '微信/支付宝账单使用默认账户，并按收支类型落入下方默认分类。',
+            style: TextStyle(
+              color: context.appSecondaryText,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            initialValue:
-                accounts.any((item) => item.id == _accountId) ? _accountId : null,
-            decoration: const InputDecoration(labelText: '默认账户'),
+            initialValue: accounts.any((item) => item.id == _accountId)
+                ? _accountId
+                : null,
+            decoration: InputDecoration(
+              labelText: needsAccountMapping ? '未标账户默认（可不选）' : '默认账户',
+            ),
             items: [
               for (final account in accounts.where((item) => !item.isArchived))
                 DropdownMenuItem(
@@ -191,6 +219,70 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             ],
             onChanged: (value) => setState(() => _accountId = value),
           ),
+          if (needsAccountMapping) ...[
+            const SizedBox(height: 4),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('保持当前账户余额'),
+              subtitle: Text(
+                '推荐用于历史迁移：流水参与统计，但不会把历史收支再次累计到当前余额。适用于木木及其他记账 App 的历史账单。',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              value: _preserveCurrentBalances,
+              onChanged: (value) =>
+                  setState(() => _preserveCurrentBalances = value),
+            ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              initiallyExpanded: unmappedAccounts > 0,
+              title: Text('来源账户映射 · ${accountNames.length} 个'),
+              subtitle: Text(
+                unmappedAccounts == 0
+                    ? '已全部映射'
+                    : '还有 $unmappedAccounts 个账户需要选择',
+                style: TextStyle(
+                  color: unmappedAccounts == 0
+                      ? context.appSecondaryText
+                      : AppColors.warning,
+                  fontSize: 12,
+                ),
+              ),
+              children: [
+                for (final name in accountNames)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: DropdownButtonFormField<String>(
+                      initialValue: accounts.any(
+                        (item) => item.id == _accountMappings[name],
+                      )
+                          ? _accountMappings[name]
+                          : null,
+                      isExpanded: true,
+                      decoration: InputDecoration(labelText: name),
+                      items: [
+                        for (final account
+                            in accounts.where((item) => !item.isArchived))
+                          DropdownMenuItem(
+                            value: account.id,
+                            child: Text(
+                              account.displayName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => setState(
+                        () => _accountMappings[name] = value,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -199,7 +291,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   initialValue: expense.any((c) => c.id == _expenseCategoryId)
                       ? _expenseCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '支出默认分类'),
+                  decoration: InputDecoration(
+                    labelText: needsAccountMapping ? '未识别支出兜底' : '支出默认分类',
+                  ),
                   items: [
                     for (final category in expense)
                       DropdownMenuItem(
@@ -217,7 +311,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   initialValue: income.any((c) => c.id == _incomeCategoryId)
                       ? _incomeCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '收入默认分类'),
+                  decoration: InputDecoration(
+                    labelText: needsAccountMapping ? '未识别收入兜底' : '收入默认分类',
+                  ),
                   items: [
                     for (final category in income)
                       DropdownMenuItem(
@@ -236,14 +332,29 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     );
   }
 
-  Widget _preview(BillImportResult result) => AppCard(
+  List<String> _mumuAccountNames(BillImportResult result) {
+    final values = <String>{};
+    for (final row in result.rows) {
+      final source = row.sourceAccount?.trim();
+      final destination = row.destinationAccount?.trim();
+      if (source != null && source.isNotEmpty) values.add(source);
+      if (destination != null && destination.isNotEmpty) values.add(destination);
+    }
+    final sorted = values.toList(growable: false)..sort();
+    return sorted;
+  }
+
+  Widget _preview(
+    BillImportResult result,
+    List<Category> categories,
+  ) => AppCard(
     padding: EdgeInsets.zero,
     child: Column(
       children: [
         for (var index = 0;
             index < result.rows.length && index < 200;
             index++) ...[
-          _row(index, result.rows[index]),
+          _row(index, result.rows[index], categories),
           if (index != result.rows.length - 1 && index != 199)
             const Divider(height: 1),
         ],
@@ -259,54 +370,141 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     ),
   );
 
-  Widget _row(int index, ImportedBillRow row) => CheckboxListTile(
-    value: _selected.contains(index),
-    onChanged: (value) {
-      setState(() {
-        value == true ? _selected.add(index) : _selected.remove(index);
-      });
-    },
-    title: Row(
-      children: [
-        Expanded(
-          child: Text(
-            row.merchant.isEmpty
-                ? (row.note.isEmpty ? '未命名交易' : row.note)
-                : row.merchant,
-            overflow: TextOverflow.ellipsis,
+  Widget _row(
+    int index,
+    ImportedBillRow row,
+    List<Category> categories,
+  ) {
+    final sourceCategory = [
+      row.sourceCategory,
+      row.sourceSubcategory,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' / ');
+    final mapped = row.provider.needsAccountMapping
+        ? const BillImportCategoryMapper().resolve(row, categories)
+        : null;
+    final mappedCategory = mapped?.category == null
+        ? ''
+        : [
+            mapped!.category!.name,
+            if (mapped.subcategory != null) mapped.subcategory!.name,
+          ].join(' / ');
+    final fallbackTitle = row.type == TransactionType.transfer
+        ? '转账'
+        : (row.sourceSubcategory?.trim().isNotEmpty == true
+              ? row.sourceSubcategory!.trim()
+              : row.sourceCategory?.trim().isNotEmpty == true
+              ? row.sourceCategory!.trim()
+              : '未命名交易');
+    final subtitleParts = <String>[
+      _dateTime(row.occurredAt),
+      if (row.paymentMethod?.trim().isNotEmpty == true) row.paymentMethod!.trim(),
+      if (sourceCategory.isNotEmpty)
+        mappedCategory.isEmpty
+            ? sourceCategory
+            : '$sourceCategory → $mappedCategory',
+    ];
+
+    return CheckboxListTile(
+      value: _selected.contains(index),
+      onChanged: (value) {
+        setState(() {
+          value == true ? _selected.add(index) : _selected.remove(index);
+        });
+      },
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              row.merchant.isEmpty
+                  ? (row.note.isEmpty ? fallbackTitle : row.note)
+                  : row.merchant,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-        Text(
-          '${row.type == TransactionType.expense ? '-' : '+'}'
-          '¥${row.amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: row.type == TransactionType.expense
-                ? context.appPrimaryText
-                : context.appPrimary,
+          Text(
+            '${_amountPrefix(row.type)}¥${row.amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: row.type == TransactionType.expense
+                  ? context.appPrimaryText
+                  : row.type == TransactionType.transfer
+                  ? context.appSecondaryText
+                  : context.appPrimary,
+            ),
           ),
-        ),
-      ],
-    ),
-    subtitle: Text(
-      '${_dateTime(row.occurredAt)}'
-      '${row.paymentMethod == null ? '' : ' · ${row.paymentMethod}'}',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    controlAffinity: ListTileControlAffinity.leading,
-  );
+        ],
+      ),
+      subtitle: Text(
+        subtitleParts.join(' · '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
 
   void _initializeSelections(
     List<Account> accounts,
     List<Category> categories,
   ) {
-    _accountId ??= accounts.where((item) => !item.isArchived).firstOrNull?.id;
     _expenseCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.expense))?.id;
     _incomeCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.income))?.id;
+
+    final result = _result;
+    if (result?.provider.needsAccountMapping != true) return;
+    for (final name in _mumuAccountNames(result!)) {
+      _accountMappings.putIfAbsent(
+        name,
+        () => _guessAccountId(name, accounts),
+      );
+    }
   }
+
+  String? _guessAccountId(String sourceName, List<Account> accounts) {
+    final active = accounts.where((item) => !item.isArchived).toList();
+    final normalized = _normalizeAccountName(sourceName);
+    final exact = active
+        .where(
+          (item) =>
+              _normalizeAccountName(item.displayName) == normalized ||
+              _normalizeAccountName(item.name) == normalized,
+        )
+        .toList(growable: false);
+    if (exact.length == 1) return exact.single.id;
+
+    final contained = active
+        .where((item) {
+          final value = _normalizeAccountName(item.name);
+          if (normalized.length < 2 || value.length < 2) return false;
+          return normalized.contains(value) || value.contains(normalized);
+        })
+        .toList(growable: false);
+    if (contained.length == 1) return contained.single.id;
+
+    final lower = sourceName.toLowerCase();
+    if (lower.contains('微信')) {
+      final values = active
+          .where((item) => item.type == AccountType.wechat)
+          .toList(growable: false);
+      if (values.length == 1) return values.single.id;
+    }
+    if (lower.contains('支付宝')) {
+      final values = active
+          .where((item) => item.type == AccountType.alipay)
+          .toList(growable: false);
+      if (values.length == 1) return values.single.id;
+    }
+    return null;
+  }
+
+  String _normalizeAccountName(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_\-·/]+'), '')
+      .replaceAll(RegExp(r'银行|储蓄卡|信用卡|银行卡|账户'), '');
+
 
   List<Category> _rootCategories(
     List<Category> values,
@@ -332,7 +530,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     try {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
-        allowedExtensions: const ['csv', 'txt'],
+        allowedExtensions: const ['csv', 'txt', 'tsv', 'xlsx'],
       );
       if (file == null || file.path == null) return;
       final result = await const BillImportService().parseFile(file.path!);
@@ -340,6 +538,11 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       setState(() {
         _fileName = file.name;
         _result = result;
+        _accountMappings.clear();
+        _rowSourceAccountOverrides.clear();
+        _rowDestinationAccountOverrides.clear();
+        _preserveCurrentBalances = true;
+        _accountId = null;
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
         );
@@ -352,25 +555,36 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     }
   }
 
-  Future<void> _save(List<Category> categories) async {
+  Future<void> _save(
+    List<Account> accounts,
+    List<Category> categories,
+  ) async {
     final result = _result;
-    final accountId = _accountId;
-    if (result == null || accountId == null) {
+    if (result == null) return;
+
+    if (!result.provider.needsAccountMapping && _accountId == null) {
       setState(() => _error = '请选择默认账户');
       return;
     }
-    final expenseCategory = categories
+
+    if (result.provider.needsAccountMapping) {
+      final resolved = await _resolveUncertainAccounts(result, accounts);
+      if (!resolved || !mounted) return;
+    }
+
+    final expenseFallback = categories
         .where((item) => item.id == _expenseCategoryId)
         .firstOrNull;
-    final incomeCategory = categories
+    final incomeFallback = categories
         .where((item) => item.id == _incomeCategoryId)
         .firstOrNull;
-    if (expenseCategory == null || incomeCategory == null) {
-      setState(() => _error = '请选择收入和支出的默认分类');
+    if (expenseFallback == null || incomeFallback == null) {
+      setState(() => _error = '请选择收入和支出的兜底分类');
       return;
     }
 
     final importedIds = <String>{};
+    final importedFingerprints = <String>{};
     final transactions = ref.read(allTransactionsProvider).value ?? const [];
     for (final transaction in transactions) {
       if (transaction.source != TransactionSource.import ||
@@ -379,42 +593,110 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       }
       try {
         final metadata = jsonDecode(transaction.metadataJson!);
-        if (metadata is Map && metadata['externalId'] is String) {
-          importedIds.add(metadata['externalId'] as String);
+        if (metadata is! Map) continue;
+        final externalId = metadata['externalId'];
+        if (externalId is String && externalId.trim().isNotEmpty) {
+          importedIds.add(externalId);
+        }
+        final fingerprint = metadata['importFingerprint'];
+        if (fingerprint is String && fingerprint.trim().isNotEmpty) {
+          importedFingerprints.add(fingerprint);
         }
       } on Object {
         // Historical malformed metadata must not block a new import.
       }
     }
 
+    final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
     var duplicates = 0;
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
-      if (row.externalId != null && importedIds.contains(row.externalId)) {
+      if ((row.externalId != null && importedIds.contains(row.externalId)) ||
+          importedFingerprints.contains(row.importFingerprint)) {
         duplicates++;
         continue;
       }
-      final category = row.type == TransactionType.expense
-          ? expenseCategory
-          : incomeCategory;
+
+      final accountId = result.provider.needsAccountMapping
+          ? _resolvedAccountId(index, row.sourceAccount, destination: false)
+          : _accountId;
+      if (accountId == null) {
+        setState(() => _error = '仍有流水没有选择账户，请重新导入');
+        return;
+      }
+
+      String? destinationAccountId;
+      if (row.type == TransactionType.transfer) {
+        destinationAccountId = _resolvedAccountId(
+          index,
+          row.destinationAccount,
+          destination: true,
+        );
+        if (destinationAccountId == null || destinationAccountId == accountId) {
+          setState(() => _error = '转账必须选择两个不同的账户');
+          return;
+        }
+      }
+
+      Category? category;
+      Category? subcategory;
+      if (row.type != TransactionType.transfer) {
+        if (row.provider.needsAccountMapping) {
+          final mapped = mapper.resolve(row, categories);
+          category = mapped.category;
+          subcategory = mapped.subcategory;
+        }
+        category ??= row.type == TransactionType.expense
+            ? expenseFallback
+            : incomeFallback;
+      }
+
       requests.add(
         QuickBookkeepingRequest(
           type: row.type,
           amount: row.amount,
           accountId: accountId,
+          destinationAccountId: destinationAccountId,
           bookId: ref.read(activeBookIdProvider),
           occurredAt: row.occurredAt,
-          categoryId: category.id,
-          categoryName: category.name,
+          categoryId: category?.id,
+          subcategoryId: subcategory?.id,
+          categoryName: category?.name,
           merchant: row.merchant.isEmpty ? null : row.merchant,
           note: row.note.isEmpty ? null : row.note,
+          reimbursementStatus: row.reimbursementStatus,
+          reimbursementAmount:
+              row.reimbursementStatus == ReimbursementStatus.reimbursed
+              ? row.amount
+              : null,
+          tags: row.tags,
           source: TransactionSource.import,
           metadata: {
             'importProvider': row.provider.name,
+            'importFingerprint': row.importFingerprint,
+            if (row.provider.needsAccountMapping && _preserveCurrentBalances)
+              'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
               'paymentMethod': row.paymentMethod!,
+            if (row.sourceCategory != null)
+              'sourceCategory': row.sourceCategory!,
+            if (row.sourceSubcategory != null)
+              'sourceSubcategory': row.sourceSubcategory!,
+            if (row.sourceBook != null) 'sourceBook': row.sourceBook!,
+            if (row.sourceAccount != null)
+              'sourceAccount': row.sourceAccount!,
+            if (row.destinationAccount != null)
+              'destinationAccount': row.destinationAccount!,
+            if (row.raw['报销']?.trim().isNotEmpty == true)
+              'sourceReimbursementStatus': row.raw['报销']!.trim(),
+            if (row.raw['优惠']?.trim().isNotEmpty == true)
+              'sourceDiscount': row.raw['优惠']!.trim(),
+            if (row.raw['成员']?.trim().isNotEmpty == true)
+              'sourceMember': row.raw['成员']!.trim(),
+            if (row.raw['账单图片']?.trim().isNotEmpty == true)
+              'sourceBillImage': row.raw['账单图片']!.trim(),
             'fileName': _fileName ?? '',
           },
         ),
@@ -454,6 +736,216 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  String? _resolvedAccountId(
+    int rowIndex,
+    String? sourceName, {
+    required bool destination,
+  }) {
+    final rowOverrides = destination
+        ? _rowDestinationAccountOverrides
+        : _rowSourceAccountOverrides;
+    final rowOverride = rowOverrides[rowIndex];
+    if (rowOverride != null) return rowOverride;
+    final name = sourceName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return _accountMappings[name];
+    }
+    return _accountId;
+  }
+
+  Future<bool> _resolveUncertainAccounts(
+    BillImportResult result,
+    List<Account> accounts,
+  ) async {
+    final activeAccounts = accounts
+        .where((item) => !item.isArchived)
+        .toList(growable: false);
+    if (activeAccounts.isEmpty) {
+      setState(() => _error = '当前没有可用账户，请先创建账户后再导入');
+      return false;
+    }
+
+    for (final index in _selected.toList()..sort()) {
+      final row = result.rows[index];
+      var sourceId = _resolvedAccountId(
+        index,
+        row.sourceAccount,
+        destination: false,
+      );
+      if (sourceId == null) {
+        final decision = await _promptAccountAssignment(
+          accounts: activeAccounts,
+          sourceName: row.sourceAccount,
+          row: row,
+          destination: false,
+        );
+        if (decision == null || !mounted) return false;
+        _applyAccountDecision(
+          index: index,
+          sourceName: row.sourceAccount,
+          destination: false,
+          decision: decision,
+        );
+        sourceId = decision.accountId;
+      }
+
+      if (row.type != TransactionType.transfer) continue;
+
+      var destinationId = _resolvedAccountId(
+        index,
+        row.destinationAccount,
+        destination: true,
+      );
+      if (destinationId == null || destinationId == sourceId) {
+        final decision = await _promptAccountAssignment(
+          accounts: activeAccounts
+              .where((item) => item.id != sourceId)
+              .toList(growable: false),
+          sourceName: row.destinationAccount,
+          row: row,
+          destination: true,
+          sameAccountConflict: destinationId == sourceId,
+        );
+        if (decision == null || !mounted) return false;
+        _applyAccountDecision(
+          index: index,
+          sourceName: row.destinationAccount,
+          destination: true,
+          decision: decision,
+        );
+      }
+    }
+    return true;
+  }
+
+  void _applyAccountDecision({
+    required int index,
+    required String? sourceName,
+    required bool destination,
+    required _AccountAssignmentDecision decision,
+  }) {
+    if (decision.applyToAll) {
+      final name = sourceName?.trim();
+      if (name == null || name.isEmpty) {
+        _accountId = decision.accountId;
+      } else {
+        _accountMappings[name] = decision.accountId;
+      }
+      return;
+    }
+    final target = destination
+        ? _rowDestinationAccountOverrides
+        : _rowSourceAccountOverrides;
+    target[index] = decision.accountId;
+  }
+
+  Future<_AccountAssignmentDecision?> _promptAccountAssignment({
+    required List<Account> accounts,
+    required String? sourceName,
+    required ImportedBillRow row,
+    required bool destination,
+    bool sameAccountConflict = false,
+  }) {
+    String? selectedAccountId;
+    final sourceLabel = sourceName?.trim().isNotEmpty == true
+        ? sourceName!.trim()
+        : '未标账户';
+    return showDialog<_AccountAssignmentDecision>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(destination ? '选择转入账户' : '选择流水账户'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sameAccountConflict
+                      ? '“$sourceLabel”与转出账户被映射成了同一账户，请重新选择。'
+                      : '来源账户“$sourceLabel”无法自动确定归属。',
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${_dateTime(row.occurredAt)} · ¥${row.amount.toStringAsFixed(2)}'
+                  '${row.note.trim().isEmpty ? '' : ' · ${row.note.trim()}'}',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedAccountId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '归属账户'),
+                  items: [
+                    for (final account in accounts)
+                      DropdownMenuItem(
+                        value: account.id,
+                        child: Text(
+                          account.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) =>
+                      setDialogState(() => selectedAccountId = value),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('取消导入'),
+              ),
+              TextButton(
+                onPressed: selectedAccountId == null
+                    ? null
+                    : () => Navigator.pop(
+                        dialogContext,
+                        _AccountAssignmentDecision(
+                          accountId: selectedAccountId!,
+                          applyToAll: false,
+                        ),
+                      ),
+                child: const Text('仅此笔'),
+              ),
+              FilledButton(
+                onPressed: selectedAccountId == null
+                    ? null
+                    : () => Navigator.pop(
+                        dialogContext,
+                        _AccountAssignmentDecision(
+                          accountId: selectedAccountId!,
+                          applyToAll: true,
+                        ),
+                      ),
+                child: Text(
+                  sourceName?.trim().isNotEmpty == true
+                      ? '全部同来源'
+                      : '全部未标账户',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+}
+
+class _AccountAssignmentDecision {
+  const _AccountAssignmentDecision({
+    required this.accountId,
+    required this.applyToAll,
+  });
+
+  final String accountId;
+  final bool applyToAll;
 }
 
 String _dateTime(DateTime value) =>
@@ -461,3 +953,19 @@ String _dateTime(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')} '
     '${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}';
+
+String _amountPrefix(TransactionType type) => switch (type) {
+  TransactionType.expense ||
+  TransactionType.lend ||
+  TransactionType.assetPurchase => '-',
+  TransactionType.transfer => '↔',
+  _ => '+',
+};
+
+
+String _providerLabel(BillImportProvider provider) => switch (provider) {
+  BillImportProvider.wechat => '微信支付',
+  BillImportProvider.alipay => '支付宝',
+  BillImportProvider.mumu => '木木记账',
+  BillImportProvider.generic => '第三方账单',
+};
