@@ -325,6 +325,29 @@ class PaymentEngineTest {
     @Test fun genericParserRejectsAmbiguousExplicitAmounts() {
         assertNull(PaymentAppParser().parse("com.eg.android.AlipayGphone", nodes("支付成功", "商户", "商店", "支付金额", "12", "支付金额", "18"), 100000))
     }
+    @Test fun pendingStoreKeepsTransferTargetFields() {
+        val candidate = AutoBookkeepingPendingStore.candidateFromMap(
+            mapOf(
+                "amountInCents" to 50000L,
+                "merchant" to "张三",
+                "paymentMethod" to "支付宝余额",
+                "timestamp" to 100000L,
+                "sourceApp" to "ALIPAY",
+                "scene" to "PAYMENT_NOTIFICATION_TRANSFER",
+                "transactionType" to "TRANSFER",
+                "targetIdentifierSuffix" to "1234",
+                "targetAccountHint" to "招商银行储蓄卡 尾号1234",
+            ),
+        )
+        assertNotNull(candidate)
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("1234", candidate?.targetIdentifierSuffix)
+        assertEquals(
+            "招商银行储蓄卡 尾号1234",
+            candidate?.targetAccountHint,
+        )
+    }
+
     @Test fun pendingStoreAcceptsAllNotificationSourceApps() {
         val sources = listOf("WECHAT", "ALIPAY", "UNIONPAY", "MEITUAN", "JD", "PINDUODUO", "DOUYIN")
         sources.forEach { source ->
@@ -353,10 +376,75 @@ class PaymentEngineTest {
     }
 
     @Test fun normalization() { assertEquals("麦当劳", parse("支付成功", "商户", "McDonald's 成都", "￥38.50")?.merchantNormalized) }
-    @Test fun transferSuccessUsesRecipientAsMerchant() {
-        val candidate = parse("支付成功", "待陆勤老师-专注职工社保确认收款", "￥1.00")
+    @Test fun transferSuccessUsesRecipientAsCounterparty() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.tencent.mm",
+            nodes(
+                "支付成功",
+                "待陆勤老师-专注职工社保确认收款",
+                "￥1.00",
+            ),
+            100000,
+        )
         assertEquals(100L, candidate?.amountInCents)
-        assertEquals("待陆勤老师-专注职工社保确认收款", candidate?.merchantRaw)
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("WECHAT_TRANSFER_SUCCESS", candidate?.scene?.scene)
+        assertEquals("待陆勤老师-专注职工社保", candidate?.merchantRaw)
+    }
+
+    @Test fun explicitTransferPageExtractsOwnAccountTargetHint() {
+        val candidate = PaymentSceneDetector().detect(
+            "com.eg.android.AlipayGphone",
+            nodes(
+                "转账成功",
+                "收款人",
+                "张三",
+                "转账金额",
+                "500.00",
+                "转出方式",
+                "支付宝余额",
+                "转入账户",
+                "招商银行储蓄卡 尾号1234",
+            ),
+            100000,
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals(50000L, candidate?.amountInCents)
+        assertEquals("张三", candidate?.merchantRaw)
+        assertEquals("招商银行储蓄卡 尾号1234", candidate?.targetAccountHint)
+        assertEquals("1234", candidate?.targetIdentifierSuffix)
+    }
+
+    @Test fun nativeTransferNotificationKeepsTargetHintAndType() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.eg.android.AlipayGphone",
+            "支付宝",
+            "转账成功 ￥500.00，收款人：张三，转入账户：招商银行储蓄卡 尾号1234",
+            100000,
+        )
+        assertEquals("TRANSFER", candidate?.transactionType)
+        assertEquals("PAYMENT_NOTIFICATION_TRANSFER", candidate?.scene?.scene)
+        assertEquals(50000L, candidate?.amountInCents)
+        assertEquals("张三", candidate?.merchantRaw)
+        assertEquals("1234", candidate?.targetIdentifierSuffix)
+    }
+
+    @Test fun transferReminderAndWechatChatAreRejected() {
+        assertNull(
+            PaymentSceneDetector().detect(
+                "com.eg.android.AlipayGphone",
+                nodes("转账提醒", "收款人", "张三", "￥500.00"),
+                100000,
+            ),
+        )
+        assertNull(
+            PaymentNotificationCandidateParser().parse(
+                "com.tencent.mm",
+                "小王",
+                "我刚转账成功 ￥500.00，收款人：张三",
+                100000,
+            ),
+        )
     }
     @Test fun repeatedPageVersusNewPayment() {
         val c = parse("支付成功", "收款方", "商店", "￥20")!!
