@@ -112,7 +112,7 @@ class DriftBudgetRepository implements BudgetRepository {
   }) {
     final monthTransactions = transactions.where(
       (item) =>
-          item.isExpense &&
+          item.isConsumptionExpense &&
           item.currency.toUpperCase() == 'CNY' &&
           !item.occurredAt.isAfter(now) &&
           item.deletedAt == null &&
@@ -122,7 +122,7 @@ class DriftBudgetRepository implements BudgetRepository {
     final totalUsed =
         monthTransactions.fold<int>(
           0,
-          (total, item) => total + (item.netExpenseAmount * 100).round(),
+          (total, item) => total + (_personalExpense(item) * 100).round(),
         ) /
         100;
     final totalBudget = budgets
@@ -142,11 +142,22 @@ class DriftBudgetRepository implements BudgetRepository {
                 (item) =>
                     _belongsToCategory(item, budget.categoryId!, categoryMap),
               )
-              .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
+              .fold<double>(0, (sum, item) => sum + _personalExpense(item));
           return _progress(budget, used, now, categoryMap[budget.categoryId]);
         })
         .toList(growable: false);
     return BudgetOverview(total: total, categories: categoryProgress);
+  }
+
+  double _personalExpense(TransactionRecord item) {
+    final afterRefund = item.netExpenseAmount;
+    final reimbursable = switch (item.reimbursementStatus) {
+      ReimbursementStatus.none => 0.0,
+      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
+        item.reimbursementAmount ?? afterRefund,
+      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
+    };
+    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
   }
 
   bool _belongsToCategory(

@@ -680,6 +680,7 @@ class FinancialInsightEngine {
     final cutoff = now.subtract(const Duration(days: 90));
     final items = expenses.where((item) {
       if (item.occurredAt.isBefore(cutoff)) return false;
+      if (_personalExpense(item) <= .005) return false;
       final text =
           '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
       return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text);
@@ -687,7 +688,7 @@ class FinancialInsightEngine {
     if (items.length < 4) return null;
     final amount = items.fold<double>(
       0,
-      (sum, item) => sum + item.netExpenseAmount,
+      (sum, item) => sum + _personalExpense(item),
     );
     return _item(
       id: 'life:beauty-care',

@@ -258,6 +258,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
         _aiText = text;
         _aiError = text == null ? '当前无法提供 AI 深度解读' : null;
       });
+      ref.invalidate(insightRemotePolicyProvider);
     } on Object catch (error) {
       if (!mounted) return;
       setState(() => _aiError = error.toString());
