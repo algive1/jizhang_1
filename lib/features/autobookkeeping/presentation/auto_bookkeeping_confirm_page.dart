@@ -616,7 +616,7 @@ class _AutoBookkeepingConfirmPageState
               children: [
                 AppSelect<String>(
                   initialValue: selectedBookId,
-                  decoration: const InputDecoration(labelText: '账本'),
+                  decoration: appFieldDecoration('账本'),
                   items: [
                     for (final book in books)
                       DropdownMenuItem(value: book.id, child: Text(book.name)),
@@ -639,8 +639,8 @@ class _AutoBookkeepingConfirmPageState
                 const SizedBox(height: 12),
                 AppSelect<String>(
                   initialValue: selectedAccountId,
-                  decoration: InputDecoration(
-                    labelText: isTransferScene ? '转出账户' : '支付账户',
+                  decoration: appFieldDecoration(
+                    isTransferScene ? '转出账户' : '支付账户',
                   ),
                   items: [
                     for (final account in accounts)
@@ -679,7 +679,7 @@ class _AutoBookkeepingConfirmPageState
                   const SizedBox(height: 12),
                   AppSelect<String>(
                     initialValue: selectedDestinationAccountId,
-                    decoration: const InputDecoration(labelText: '转入账户'),
+                    decoration: appFieldDecoration('转入账户'),
                     items: [
                       for (final destination in accounts.where(
                         (item) => item.id != selectedAccountId,
@@ -700,10 +700,8 @@ class _AutoBookkeepingConfirmPageState
                   const SizedBox(height: 12),
                   AppSelect<String>(
                   initialValue: selectedCategoryId,
-                  decoration: InputDecoration(
-                    labelText: categoryType == CategoryType.income
-                        ? '收入分类'
-                        : '支出分类',
+                  decoration: appFieldDecoration(
+                    categoryType == CategoryType.income ? '收入分类' : '支出分类',
                   ),
                   items: [
                     for (final category in selectableCategories)
