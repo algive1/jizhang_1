@@ -395,7 +395,7 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
     }
     const canonical = activeMembershipProduct(store,input.productId);
     const legacy = getMembershipCatalog(store).plans.find((item) => item.id === input.productId);
-    const product = canonical ? {id:canonical.id,priceInCents:Number(String(canonical.displayPrice??'').replace(/[^0-9.]/g,''))*100} : legacy;
+    const product = canonical ? {id:canonical.id,priceInCents:canonical.currency==='CNY'?canonical.priceInMinor:null} : legacy;
     check(product && Number.isInteger(product.priceInCents) && product.priceInCents>0, '会员套餐不存在、未上架或价格配置无效', 404);
     // The amount is always loaded from the server catalog; clients cannot alter it.
     const id = randomUUID().replaceAll('-', '');
