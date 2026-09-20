@@ -74,13 +74,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('本月支出'), findsOneWidget);
-      expect(find.text('日均支出'), findsOneWidget);
-      expect(find.text('消费天数'), findsOneWidget);
-      expect(find.text('最高消费日'), findsOneWidget);
-      expect(find.text('¥80'), findsOneWidget);
-      expect(find.text('1日'), findsOneWidget);
-      expect(find.text('999'), findsNothing);
+      expect(find.text('本月概览'), findsOneWidget);
+      expect(find.text('月支出'), findsOneWidget);
+      expect(find.text('月收入'), findsOneWidget);
+      expect(find.text('有消费'), findsOneWidget);
+      expect(find.text('¥80.00'), findsOneWidget);
+      expect(find.text(now.day == 1 ? '1天' : '2天'), findsOneWidget);
+      expect(find.textContaining('999'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -184,7 +184,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('全部账本'), findsOneWidget);
-    expect(find.text('¥115'), findsOneWidget);
+    expect(find.text('¥115.00'), findsOneWidget);
     expect(find.text(now.day == 1 ? '1天' : '2天'), findsOneWidget);
 
     await tester.tap(find.text('全部账本'));
@@ -192,7 +192,7 @@ void main() {
     await tester.tap(find.text('测试家庭账本'));
     await tester.pumpAndSettle();
     expect(find.text('测试家庭账本'), findsOneWidget);
-    expect(find.text('¥35'), findsNWidgets(2));
+    expect(find.text('¥35.00'), findsNWidgets(2));
   });
 }
 
