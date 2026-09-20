@@ -142,7 +142,7 @@ class DriftBudgetRepository implements BudgetRepository {
                 (item) =>
                     _belongsToCategory(item, budget.categoryId!, categoryMap),
               )
-              .fold<double>(0, (sum, item) => sum + _personalExpense(item));
+              .fold<double>(0, (sum, item) => sum + item.personalExpenseAmount);
           return _progress(budget, used, now, categoryMap[budget.categoryId]);
         })
         .toList(growable: false);
