@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../goals/data/goal_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../analysis/data/analysis_repository.dart';
 import '../../budgets/data/budget_repository.dart';
@@ -25,6 +26,7 @@ final insightFeedProvider = Provider<InsightFeed>((ref) {
       );
   final budgets = ref.watch(budgetOverviewProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
+  final goals = ref.watch(goalsProvider).value ?? const [];
   final preferences =
       ref.watch(insightPreferencesProvider).value ??
       const InsightPreferences();
@@ -35,6 +37,7 @@ final insightFeedProvider = Provider<InsightFeed>((ref) {
         analysis: analysis,
         budgets: budgets,
         accounts: accounts,
+        goals: goals,
         preferences: preferences,
       );
 });

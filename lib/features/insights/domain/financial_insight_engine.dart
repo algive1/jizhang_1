@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import '../../../core/models/account.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/budget.dart';
+import '../../../core/models/goal.dart';
+import 'budget_recommendation_service.dart';
 import '../../../core/models/transaction_record.dart';
 import 'insight_models.dart';
 
@@ -14,6 +16,7 @@ class FinancialInsightEngine {
     required AnalysisSnapshot analysis,
     required BudgetOverview budgets,
     required List<Account> accounts,
+    List<Goal> goals = const [],
     required InsightPreferences preferences,
     DateTime? now,
   }) {
@@ -51,7 +54,62 @@ class FinancialInsightEngine {
       quality,
       clock,
     );
-    if (budget != null) candidates.add(budget);
+    if (budget != null) {
+      candidates.add(budget);
+    } else {
+      final recommendation =
+          const BudgetRecommendationService().recommendTotal(
+        transactions: eligible,
+        preferences: preferences,
+        now: clock,
+      );
+      if (recommendation != null &&
+          (preferences.intents.contains(BookkeepingIntent.controlSpending) ||
+              preferences.intents.contains(BookkeepingIntent.saveForGoal))) {
+        candidates.add(
+          _item(
+            id: 'budget:recommendation',
+            kind: FinancialInsightKind.goal,
+            priority: InsightPriority.attention,
+            title: '可以用你的真实消费来设预算了',
+            summary:
+                '根据最近完整月份，当前建议总预算约 ¥${recommendation.recommended.toStringAsFixed(0)}。',
+            analysis:
+                '系统不是把历史平均直接当预算，而是结合稳定消费区间和你的记账目标给出档位。',
+            meaning: '先从可持续的预算开始，比随手填一个过紧或过松的数字更容易长期执行。',
+            response: InsightResponse.advice,
+            suggestion: '你可以在“保持、适度控制、积极节省”三个档位之间自己选择。',
+            actionLabel: '设置预算',
+            actionRoute: '/profile/budgets',
+            amount: recommendation.recommended,
+            evidence: [
+              InsightEvidence(
+                label: '历史月中位数',
+                value: recommendation.historicalMedian,
+                unit: 'CNY',
+              ),
+              InsightEvidence(
+                label: '建议预算',
+                value: recommendation.recommended,
+                unit: 'CNY',
+              ),
+            ],
+            baseScore: 70,
+            preferences: preferences,
+            confidence: quality.copyWith(
+              baseline: math.max(
+                recommendation.confidence,
+                quality.baseline,
+              ),
+            ),
+            generatedAt: clock,
+          ),
+        );
+      }
+    }
+
+    final goal = _goalInsight(goals, preferences, quality, clock);
+    if (goal != null) candidates.add(goal);
 
     final credit = _creditInsight(
       accounts,
@@ -206,7 +264,7 @@ class FinancialInsightEngine {
   ) {
     if (progress == null) return null;
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
-    final timeProgress = (now.day / lastDay).clamp(.03, 1.0);
+    final timeProgress = (now.day / lastDay).clamp(.03, 1.0).toDouble();
     final usage = progress.percentage;
     final forecast = progress.used / timeProgress;
     final overspend = forecast - progress.budget.amount;
@@ -425,6 +483,73 @@ class FinancialInsightEngine {
     );
   }
 
+  FinancialInsightItem? _goalInsight(
+    List<Goal> goals,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    final active = goals
+        .where((goal) => goal.status == GoalStatus.active)
+        .toList()
+      ..sort((a, b) => a.targetDate.compareTo(b.targetDate));
+    if (active.isEmpty) return null;
+    final goal = active.first;
+    final totalDays = goal.targetDate.difference(goal.createdAt).inDays;
+    if (totalDays <= 0 || goal.targetAmount <= 0) return null;
+    final elapsedDays = now.difference(goal.createdAt).inDays.clamp(0, totalDays);
+    final timeProgress = (elapsedDays / totalDays).clamp(0, 1).toDouble();
+    final moneyProgress = goal.progress;
+    final gap = timeProgress - moneyProgress;
+    final overdue = now.isAfter(goal.targetDate) && moneyProgress < 1;
+
+    if (!overdue && gap.abs() < .10) return null;
+    final behind = overdue || gap > 0;
+    return _item(
+      id: 'goal:${goal.id}:progress',
+      kind: behind ? FinancialInsightKind.goal : FinancialInsightKind.positive,
+      priority: overdue
+          ? InsightPriority.important
+          : behind
+          ? InsightPriority.attention
+          : InsightPriority.info,
+      title: behind ? '${goal.name}需要再追一点进度' : '${goal.name}进度走在计划前面',
+      summary:
+          '资金进度 ${(moneyProgress * 100).round()}%，时间进度 ${(timeProgress * 100).round()}%。',
+      analysis: behind
+          ? '按当前目标时间看，资金积累速度低于时间进度。'
+          : '当前资金积累速度高于目标时间进度。',
+      meaning: behind
+          ? '目标洞察会把消费、预算和储蓄放到同一个目标里看，而不是只评价某一笔支出。'
+          : '这是与你设定的目标方向一致的积极变化。',
+      response: behind ? InsightResponse.advice : InsightResponse.encouragement,
+      suggestion: behind
+          ? '可以先查看目标每月预留，再决定是否调整预算或目标日期。'
+          : '保持当前节奏即可，不需要为了更快而过度压缩正常生活支出。',
+      actionLabel: '查看目标',
+      actionRoute: '/goals/${goal.id}',
+      amount: goal.currentAmount,
+      changePercent: (moneyProgress - timeProgress) * 100,
+      evidence: [
+        InsightEvidence(
+          label: '目标资金进度',
+          value: moneyProgress * 100,
+          baselineValue: timeProgress * 100,
+          unit: '%',
+        ),
+        InsightEvidence(
+          label: '还差金额',
+          value: math.max(0.0, goal.targetAmount - goal.currentAmount),
+          unit: 'CNY',
+        ),
+      ],
+      baseScore: behind ? 66 : 48,
+      preferences: preferences,
+      confidence: quality.copyWith(baseline: math.max(.65, quality.baseline)),
+      generatedAt: now,
+    );
+  }
+
   FinancialInsightItem? _positiveChange(
     AnalysisSnapshot analysis,
     InsightPreferences preferences,
@@ -446,7 +571,7 @@ class FinancialInsightEngine {
     final trend = candidates.first;
     final drop = trend.previousAmount - trend.currentAmount;
     final percent =
-        trend.previousAmount == 0 ? 0 : drop / trend.previousAmount * 100;
+        trend.previousAmount == 0 ? 0.0 : drop / trend.previousAmount * 100;
     return _item(
       id: 'positive:category:${trend.categoryId}',
       kind: FinancialInsightKind.positive,
@@ -514,12 +639,12 @@ class FinancialInsightEngine {
     var dataTotal = 0.0;
     for (final item in recent) {
       classTotal += item.userCorrected
-          ? 1
+          ? 1.0
           : item.aiConfidence ?? (item.categoryId == null ? .55 : .9);
       final duplicatePenalty = item.duplicateConfidence == null
           ? 0.0
           : (item.duplicateConfidence! * .6);
-      dataTotal += (1 - duplicatePenalty).clamp(.2, 1);
+      dataTotal += (1 - duplicatePenalty).clamp(.2, 1).toDouble();
     }
     final classification = recent.isEmpty
         ? .2
@@ -610,40 +735,40 @@ class FinancialInsightEngine {
           BookkeepingIntent.controlSpending =>
             kind == FinancialInsightKind.behavior ||
                     kind == FinancialInsightKind.risk
-                ? 12
-                : 0,
+                ? 12.0
+                : 0.0,
           BookkeepingIntent.understandSpending =>
             kind == FinancialInsightKind.behavior ||
                     kind == FinancialInsightKind.discovery
-                ? 8
-                : 0,
+                ? 8.0
+                : 0.0,
           BookkeepingIntent.saveForGoal =>
             kind == FinancialInsightKind.risk ||
                     kind == FinancialInsightKind.positive ||
                     kind == FinancialInsightKind.goal
-                ? 12
-                : 0,
+                ? 12.0
+                : 0.0,
           BookkeepingIntent.optimizeFinances =>
             kind == FinancialInsightKind.financial ||
                     kind == FinancialInsightKind.risk ||
                     kind == FinancialInsightKind.discovery
-                ? 12
-                : 0,
+                ? 12.0
+                : 0.0,
           BookkeepingIntent.familyFinances =>
             kind == FinancialInsightKind.life ||
                     kind == FinancialInsightKind.financial
-                ? 12
-                : 0,
+                ? 12.0
+                : 0.0,
           BookkeepingIntent.improveHabits =>
             kind == FinancialInsightKind.behavior ||
                     kind == FinancialInsightKind.life
-                ? 10
-                : 0,
+                ? 10.0
+                : 0.0,
           BookkeepingIntent.recordLife =>
             kind == FinancialInsightKind.life ||
                     kind == FinancialInsightKind.positive
-                ? 12
-                : 0,
+                ? 12.0
+                : 0.0,
         },
       );
     }
@@ -665,7 +790,7 @@ class FinancialInsightEngine {
         InsightFocus.family => RegExp(r'家庭|家人|父母').hasMatch(text),
         InsightFocus.learning => RegExp(r'学习|教育|课程|书').hasMatch(text),
       };
-      if (matched) boost = math.max(boost, 10);
+      if (matched) boost = math.max(boost, 10.0);
     }
     return boost;
   }

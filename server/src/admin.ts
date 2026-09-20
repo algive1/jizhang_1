@@ -16,6 +16,11 @@ import {
 } from './push_delivery.js';
 import { ensureSupportSchema } from './support.js';
 import type { Store } from './store.js';
+import {
+  ensureInsightSchema,
+  readInsightPolicy,
+  writeInsightPolicy,
+} from './insights.js';
 
 function digest(value: string) {
   return createHash('sha256').update(value).digest();
@@ -32,6 +37,7 @@ function ensureAdminSchema(store: Store) {
   ensureMessageCenterSchema(store);
   ensureSupportSchema(store);
   ensurePushDeliverySchema(store);
+  ensureInsightSchema(store);
   store.db.exec(`
     CREATE TABLE IF NOT EXISTS admin_audit_log(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,9 +123,28 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
       announcements: scalar('SELECT COUNT(*) AS n FROM announcements'),
       registeredPushDevices: scalar('SELECT COUNT(*) AS n FROM push_devices'),
       pendingPush: scalar("SELECT COUNT(*) AS n FROM push_outbox WHERE status='pending'"),
+      insightFeedback: scalar('SELECT COUNT(*) AS n FROM insight_feedback'),
       failedPush: scalar("SELECT COUNT(*) AS n FROM push_outbox WHERE status='failed'"),
       retention: retentionPolicy(),
     };
+  });
+
+  app.get('/api/v1/admin/insights/policy', async request => {
+    requireAdmin(request.headers['x-admin-token']);
+    return readInsightPolicy(store);
+  });
+
+  app.put('/api/v1/admin/insights/policy', async request => {
+    requireAdmin(request.headers['x-admin-token']);
+    const policy = writeInsightPolicy(store, request.body);
+    audit(store, 'insight_policy_updated', {
+      homeMinScore: policy.homeMinScore,
+      minConfidence: policy.minConfidence,
+      cooldownDays: policy.cooldownDays,
+      aiEnabled: policy.aiEnabled,
+      promptVersion: policy.promptVersion,
+    });
+    return policy;
   });
 
   app.get('/api/v1/admin/support-tickets', async (request) => {
