@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { ApiError, requireCondition as check } from './contract.js';
-import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
+import { AssistantModelUnavailable, type AssistantModelProvider } from './assistant_ai.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
 import { hasMembership } from './membership_state.js';
 import { entitlementValue } from './entitlement_usage.js';
@@ -66,7 +66,7 @@ export function registerAssistantPolicy(
   app: FastifyInstance,
   store: Store,
   authenticate: (header: string | undefined) => { id: string },
-  modelProvider: AssistantModelProvider = new DeepSeekCompatibleProvider(),
+  modelProvider: AssistantModelProvider,
 ) {
   store.db.exec(`
     CREATE TABLE IF NOT EXISTS assistant_policy(id INTEGER PRIMARY KEY CHECK(id=1),data_json TEXT NOT NULL);
