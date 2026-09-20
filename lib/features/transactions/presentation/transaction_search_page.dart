@@ -79,7 +79,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
-                        autofocus: true,
+                        autofocus: widget.transactionIds.isEmpty,
                         onChanged: (value) => setState(() => _query = value),
                         decoration: InputDecoration(
                           hintText: '搜索商户、分类或备注',
@@ -157,7 +157,8 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                           .toList(),
                     ),
                   ),
-                if (_query.trim().isNotEmpty &&
+                if (widget.transactionIds.isEmpty &&
+                    _query.trim().isNotEmpty &&
                     recurringResults.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Text(
