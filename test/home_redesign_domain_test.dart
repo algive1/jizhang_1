@@ -13,6 +13,7 @@ import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/goals/data/goal_repository.dart';
 import 'package:jizhang_app/features/budgets/data/budget_repository.dart';
 import 'package:jizhang_app/features/budgets/domain/safe_to_spend_service.dart';
+import 'package:jizhang_app/features/home/data/home_data.dart';
 import 'package:jizhang_app/features/analysis/domain/statistical_analysis_service.dart';
 
 void main() {
