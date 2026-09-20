@@ -153,6 +153,56 @@ void main() {
     expect(insight.summary, isNot(contains('超支')));
   });
 
+  test('ambiguous family transfers do not become family-support insights', () {
+    final transactions = [
+      ..._history(now),
+      TransactionRecord(
+        id: 'transfer-family-1',
+        bookId: 'book-personal',
+        type: TransactionType.transfer,
+        amount: 800,
+        accountId: 'cash',
+        note: '给妈妈',
+        occurredAt: now.subtract(const Duration(days: 5)),
+        createdAt: now,
+        updatedAt: now,
+      ),
+      TransactionRecord(
+        id: 'transfer-family-2',
+        bookId: 'book-personal',
+        type: TransactionType.transfer,
+        amount: 600,
+        accountId: 'cash',
+        note: '给爸爸',
+        occurredAt: now.subtract(const Duration(days: 9)),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.recordLife},
+        focus: {InsightFocus.family},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'life:family-support'),
+      isFalse,
+    );
+  });
+
   test('goal context can produce progress insight', () {
     final transactions = _history(now);
     final analysis = const StatisticalAnalysisService().analyze(

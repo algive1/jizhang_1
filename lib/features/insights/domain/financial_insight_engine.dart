@@ -597,6 +597,10 @@ class FinancialInsightEngine {
     final cutoff = now.subtract(const Duration(days: 90));
     final family = records.where((item) {
       if (item.occurredAt.isBefore(cutoff)) return false;
+      if (item.type != TransactionType.expense &&
+          item.type != TransactionType.lend) {
+        return false;
+      }
       final text =
           '${item.note ?? ''} ${item.merchant ?? ''} ${item.categoryName ?? ''}';
       return RegExp(r'爸爸|妈妈|父母|家人|家里|爸妈').hasMatch(text);
@@ -604,8 +608,7 @@ class FinancialInsightEngine {
     if (family.length < 2) return null;
     final amount = family.fold<double>(
       0,
-      (sum, item) =>
-          sum + (item.isExpense ? item.netExpenseAmount : item.amount),
+      (sum, item) => sum + _personalExpense(item),
     );
     if (amount < 100) return null;
     return _item(
