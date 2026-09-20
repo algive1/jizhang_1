@@ -102,7 +102,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   const SizedBox(height: 12),
                   _mapping(accounts, categories),
                   const SizedBox(height: 12),
-                  _preview(_result!),
+                  _preview(_result!, categories),
                   const SizedBox(height: 14),
                   FilledButton.icon(
                     onPressed: _saving || _selected.isEmpty
@@ -326,14 +326,17 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     return sorted;
   }
 
-  Widget _preview(BillImportResult result) => AppCard(
+  Widget _preview(
+    BillImportResult result,
+    List<Category> categories,
+  ) => AppCard(
     padding: EdgeInsets.zero,
     child: Column(
       children: [
         for (var index = 0;
             index < result.rows.length && index < 200;
             index++) ...[
-          _row(index, result.rows[index]),
+          _row(index, result.rows[index], categories),
           if (index != result.rows.length - 1 && index != 199)
             const Divider(height: 1),
         ],
@@ -349,43 +352,78 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     ),
   );
 
-  Widget _row(int index, ImportedBillRow row) => CheckboxListTile(
-    value: _selected.contains(index),
-    onChanged: (value) {
-      setState(() {
-        value == true ? _selected.add(index) : _selected.remove(index);
-      });
-    },
-    title: Row(
-      children: [
-        Expanded(
-          child: Text(
-            row.merchant.isEmpty
-                ? (row.note.isEmpty ? '未命名交易' : row.note)
-                : row.merchant,
-            overflow: TextOverflow.ellipsis,
+  Widget _row(
+    int index,
+    ImportedBillRow row,
+    List<Category> categories,
+  ) {
+    final sourceCategory = [
+      row.sourceCategory,
+      row.sourceSubcategory,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' / ');
+    final mapped = row.provider == BillImportProvider.mumu
+        ? const BillImportCategoryMapper().resolve(row, categories)
+        : null;
+    final mappedCategory = mapped?.category == null
+        ? ''
+        : [
+            mapped!.category!.name,
+            if (mapped.subcategory != null) mapped.subcategory!.name,
+          ].join(' / ');
+    final fallbackTitle = row.type == TransactionType.transfer
+        ? '转账'
+        : (row.sourceSubcategory?.trim().isNotEmpty == true
+              ? row.sourceSubcategory!.trim()
+              : row.sourceCategory?.trim().isNotEmpty == true
+              ? row.sourceCategory!.trim()
+              : '未命名交易');
+    final subtitleParts = <String>[
+      _dateTime(row.occurredAt),
+      if (row.paymentMethod?.trim().isNotEmpty == true) row.paymentMethod!.trim(),
+      if (sourceCategory.isNotEmpty)
+        mappedCategory.isEmpty
+            ? sourceCategory
+            : '$sourceCategory → $mappedCategory',
+    ];
+
+    return CheckboxListTile(
+      value: _selected.contains(index),
+      onChanged: (value) {
+        setState(() {
+          value == true ? _selected.add(index) : _selected.remove(index);
+        });
+      },
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              row.merchant.isEmpty
+                  ? (row.note.isEmpty ? fallbackTitle : row.note)
+                  : row.merchant,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-        Text(
-          '${row.type == TransactionType.expense ? '-' : '+'}'
-          '¥${row.amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: row.type == TransactionType.expense
-                ? context.appPrimaryText
-                : context.appPrimary,
+          Text(
+            '${_amountPrefix(row.type)}¥${row.amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: row.type == TransactionType.expense
+                  ? context.appPrimaryText
+                  : row.type == TransactionType.transfer
+                  ? context.appSecondaryText
+                  : context.appPrimary,
+            ),
           ),
-        ),
-      ],
-    ),
-    subtitle: Text(
-      '${_dateTime(row.occurredAt)}'
-      '${row.paymentMethod == null ? '' : ' · ${row.paymentMethod}'}',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    controlAffinity: ListTileControlAffinity.leading,
-  );
+        ],
+      ),
+      subtitle: Text(
+        subtitleParts.join(' · '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
 
   void _initializeSelections(
     List<Account> accounts,
@@ -396,7 +434,60 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         _preferred(_rootCategories(categories, CategoryType.expense))?.id;
     _incomeCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.income))?.id;
+
+    final result = _result;
+    if (result?.provider != BillImportProvider.mumu) return;
+    for (final name in _mumuAccountNames(result!)) {
+      _accountMappings.putIfAbsent(
+        name,
+        () => _guessAccountId(name, accounts),
+      );
+    }
   }
+
+  String? _guessAccountId(String sourceName, List<Account> accounts) {
+    final active = accounts.where((item) => !item.isArchived).toList();
+    final normalized = _normalizeAccountName(sourceName);
+    final exact = active
+        .where(
+          (item) =>
+              _normalizeAccountName(item.displayName) == normalized ||
+              _normalizeAccountName(item.name) == normalized,
+        )
+        .toList(growable: false);
+    if (exact.length == 1) return exact.single.id;
+
+    final contained = active
+        .where((item) {
+          final value = _normalizeAccountName(item.name);
+          if (normalized.length < 2 || value.length < 2) return false;
+          return normalized.contains(value) || value.contains(normalized);
+        })
+        .toList(growable: false);
+    if (contained.length == 1) return contained.single.id;
+
+    final lower = sourceName.toLowerCase();
+    if (lower.contains('微信')) {
+      final values = active
+          .where((item) => item.type == AccountType.wechat)
+          .toList(growable: false);
+      if (values.length == 1) return values.single.id;
+    }
+    if (lower.contains('支付宝')) {
+      final values = active
+          .where((item) => item.type == AccountType.alipay)
+          .toList(growable: false);
+      if (values.length == 1) return values.single.id;
+    }
+    return null;
+  }
+
+  String _normalizeAccountName(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_\-·/]+'), '')
+      .replaceAll(RegExp(r'银行|储蓄卡|信用卡|银行卡|账户'), '');
+
 
   List<Category> _rootCategories(
     List<Category> values,
@@ -552,6 +643,14 @@ String _dateTime(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')} '
     '${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}';
+
+String _amountPrefix(TransactionType type) => switch (type) {
+  TransactionType.expense ||
+  TransactionType.lend ||
+  TransactionType.assetPurchase => '-',
+  TransactionType.transfer => '↔',
+  _ => '+',
+};
 
 
 String _providerLabel(BillImportProvider provider) => switch (provider) {
