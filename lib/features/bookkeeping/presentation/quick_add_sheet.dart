@@ -77,12 +77,11 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
 }
 
-/// Opens the bookkeeping sheet above the app shell.
+/// Opens bookkeeping as a full-screen route above the app shell.
 ///
-/// Pages rendered by [ShellRoute] have their own navigator below the root
-/// navigator. Using that nested navigator leaves the shell's bottom bar above
-/// the modal route, so the bar can remain visible over the keypad. All entry
-/// points use this helper to keep the stacking order consistent.
+/// The quick-add flow contains dense category, amount and account interactions.
+/// Presenting it as a page avoids cramped modal geometry and guarantees that
+/// the shell bottom navigation never remains visible underneath the keypad.
 Future<void> showQuickAddSheet(
   BuildContext context, {
   TransactionRecord? initialTransaction,
@@ -91,17 +90,16 @@ Future<void> showQuickAddSheet(
   DateTime? initialOccurredAt,
   String? initialBookId,
 }) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => QuickAddSheet(
-      initialTransaction: initialTransaction,
-      copyFrom: copyFrom,
-      initialType: initialType,
-      initialOccurredAt: initialOccurredAt,
-      initialBookId: initialBookId,
+  await Navigator.of(context, rootNavigator: true).push<void>(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => QuickAddSheet(
+        initialTransaction: initialTransaction,
+        copyFrom: copyFrom,
+        initialType: initialType,
+        initialOccurredAt: initialOccurredAt,
+        initialBookId: initialBookId,
+      ),
     ),
   );
 }
@@ -361,15 +359,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final input = _amount;
 
     return SafeArea(
-      // Keep the sheet background opaque through the system gesture area.
-      // The keypad gets its own inner SafeArea below, so controls stay clear
-      // without exposing the app shell/navigation underneath the modal.
       bottom: false,
-      // Modal routes may remove MediaQuery's top padding. Read the actual
-      // window inset so every entry point stays below the status bar.
-      minimum: EdgeInsets.only(
-        top: MediaQueryData.fromView(View.of(context)).padding.top + 8,
-      ),
+      minimum: const EdgeInsets.only(top: 8),
       child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -380,9 +371,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             key: ValueKey('quick-sheet-surface'),
             color: context.appBackground,
             clipBehavior: Clip.antiAlias,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
             child: Column(
               children: [
                 Padding(
@@ -466,10 +454,11 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 selected: selectedCategory,
                                 subcategories: subcategories,
                                 selectedSubcategoryId: effectiveSubcategoryId,
-                                onSelected: (category) => setState(() {
-                                  _categoryId = category.id;
-                                  _subcategoryId = null;
-                                }),
+                                onSelected: (category) => _chooseCategory(
+                                  categories,
+                                  category,
+                                  currentSubcategoryId: effectiveSubcategoryId,
+                                ),
                                 onSubcategorySelected: (category) => setState(
                                   () => _subcategoryId = category.id,
                                 ),
