@@ -35,6 +35,7 @@ import { registerAdminHealthRoutes } from './admin_health.js';
 import { RoutedAssistantProvider } from './ai_runtime.js';
 import { dispatchDueCampaigns } from './campaigns.js';
 import { registerAiMediaRoutes } from './ai_media_routes.js';
+import { registerEntitlementUsageRoutes } from './entitlement_usage_routes.js';
 import { startPushWorker } from './push_delivery.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
@@ -118,6 +119,7 @@ export async function createApp(
   registerAiUsageAdminRoutes(app,store);
   registerAdminHealthRoutes(app,store);
   registerAiMediaRoutes(app,store,authenticate);
+  registerEntitlementUsageRoutes(app,store,authenticate);
   registerOperationalRoutes(app,store);
   registerMarketDataRoutes(app, marketProvider);
   registerAssistantPolicy(app,store,authenticate,modelProvider ?? new RoutedAssistantProvider(store));
