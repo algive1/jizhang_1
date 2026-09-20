@@ -38,6 +38,7 @@ import '../../family/data/shared_family_service.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
