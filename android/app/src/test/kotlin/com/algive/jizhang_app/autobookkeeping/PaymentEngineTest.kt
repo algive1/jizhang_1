@@ -348,7 +348,7 @@ class PaymentEngineTest {
         )
         assertEquals("TRANSFER", candidate?.transactionType)
         assertEquals(100L, candidate?.amountInCents)
-        assertEquals("待陆勤老师-专注职工社保", candidate?.merchantRaw)
+        assertEquals("陆勤老师-专注职工社保", candidate?.merchantRaw)
     }
 
     @Test fun nativeNotificationParserDetectsCompletedTransferAndTargetSuffix() {
