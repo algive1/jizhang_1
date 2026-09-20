@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/theme/app_theme_tokens.dart';
+
 class CategoryIcon extends StatelessWidget {
   const CategoryIcon({
     required this.category,
@@ -28,9 +30,9 @@ class CategoryIcon extends StatelessWidget {
     // softens the container so list rows and the quick-add sheet do not drift.
     final style = vivid
         ? vividStyle
-        : (const Color(0xFFF1F4EA), vividStyle.$2, vividStyle.$3);
+        : (context.appSurfaceSoft, vividStyle.$2, vividStyle.$3);
     final resolvedStyle = monochrome
-        ? (const Color(0xFFEAF2D9), style.$2, const Color(0xFF709A34))
+        ? (context.appPrimarySoft, style.$2, context.appPrimary)
         : style;
     return Container(
       width: size,
@@ -60,9 +62,123 @@ class CategoryIcon extends StatelessWidget {
       _styleFor(category, iconKey).$3;
 
   static (Color, IconData, Color) _styleFor(String category, String? iconKey) {
-    return _vividStyles[category] ??
+    final base =
+        _vividStyles[category] ??
         _vividStyles[_categoryByIconKey[iconKey]] ??
         _vividStyles['其他']!;
+    final icon =
+        _semanticIconForName(category) ?? _iconByKey[iconKey] ?? base.$2;
+    return (base.$1, icon, base.$3);
+  }
+
+  static IconData? _semanticIconForName(String name) {
+    if (RegExp('早餐|午餐|晚餐|正餐|聚餐|客户用餐|团队用餐|出差餐饮|旅行餐饮').hasMatch(name)) {
+      return Icons.restaurant_rounded;
+    }
+    if (RegExp('奶茶|咖啡|茶歇|饮料|乳品').hasMatch(name)) {
+      return Icons.local_cafe_rounded;
+    }
+    if (RegExp('火锅').hasMatch(name)) return Icons.soup_kitchen_rounded;
+    if (RegExp('零食|夜宵').hasMatch(name)) return Icons.fastfood_rounded;
+    if (RegExp('买菜|米面粮油|家庭采购').hasMatch(name)) {
+      return Icons.shopping_cart_rounded;
+    }
+    if (RegExp('水果').hasMatch(name)) return Icons.eco_rounded;
+    if (RegExp('外卖').hasMatch(name)) return Icons.delivery_dining_rounded;
+    if (RegExp('甜品|烘焙').hasMatch(name)) return Icons.cake_rounded;
+
+    if (RegExp('打车|出租').hasMatch(name)) return Icons.local_taxi_rounded;
+    if (RegExp('地铁|公交|市内交通').hasMatch(name)) return Icons.directions_bus_rounded;
+    if (RegExp('加油|燃油').hasMatch(name)) return Icons.local_gas_station_rounded;
+    if (RegExp('停车').hasMatch(name)) return Icons.local_parking_rounded;
+    if (RegExp('火车|高铁').hasMatch(name)) return Icons.train_rounded;
+    if (RegExp('机票|航班').hasMatch(name)) return Icons.flight_rounded;
+    if (RegExp('单车').hasMatch(name)) return Icons.pedal_bike_rounded;
+    if (RegExp('过路费|通行').hasMatch(name)) return Icons.toll_rounded;
+    if (RegExp('租车').hasMatch(name)) return Icons.car_rental_rounded;
+
+    if (RegExp('服饰|衣物|鞋包').hasMatch(name)) return Icons.checkroom_rounded;
+    if (RegExp('美妆|美容|护理').hasMatch(name)) return Icons.face_retouching_natural_rounded;
+    if (RegExp('淘宝|京东|拼多多|抖音|小红书|商品采购|原材料').hasMatch(name)) {
+      return Icons.storefront_rounded;
+    }
+    if (RegExp('饰品|礼品|礼物|礼赠').hasMatch(name)) return Icons.card_giftcard_rounded;
+    if (RegExp('母婴|托育').hasMatch(name)) return Icons.child_friendly_rounded;
+
+    if (RegExp('日用品|办公用品').hasMatch(name)) return Icons.shopping_basket_rounded;
+    if (RegExp('清洁|保洁').hasMatch(name)) return Icons.cleaning_services_rounded;
+    if (RegExp('厨房').hasMatch(name)) return Icons.kitchen_rounded;
+    if (RegExp('收纳|仓储').hasMatch(name)) return Icons.inventory_2_rounded;
+    if (RegExp('家纺|寝具').hasMatch(name)) return Icons.bed_rounded;
+    if (RegExp('家具').hasMatch(name)) return Icons.chair_rounded;
+    if (RegExp('家电|设备|硬件').hasMatch(name)) return Icons.devices_other_rounded;
+    if (RegExp('卫浴').hasMatch(name)) return Icons.bathtub_rounded;
+
+    if (RegExp('香烟').hasMatch(name)) return Icons.smoking_rooms_rounded;
+    if (RegExp('酒').hasMatch(name)) return Icons.local_bar_rounded;
+    if (RegExp('茶叶|茶具').hasMatch(name)) return Icons.emoji_food_beverage_rounded;
+
+    if (RegExp('电影').hasMatch(name)) return Icons.movie_rounded;
+    if (RegExp('游戏').hasMatch(name)) return Icons.sports_esports_rounded;
+    if (RegExp('音乐').hasMatch(name)) return Icons.music_note_rounded;
+    if (RegExp('运动|健身').hasMatch(name)) return Icons.fitness_center_rounded;
+    if (RegExp('聚会|团队建设').hasMatch(name)) return Icons.groups_rounded;
+    if (RegExp('唱歌').hasMatch(name)) return Icons.mic_rounded;
+    if (RegExp('演出|商务活动').hasMatch(name)) return Icons.theater_comedy_rounded;
+    if (RegExp('会员订阅|软件订阅|云服务').hasMatch(name)) return Icons.subscriptions_rounded;
+
+    if (RegExp('房租|租金|办公室租金|仓储租金').hasMatch(name)) return Icons.home_rounded;
+    if (RegExp('房贷').hasMatch(name)) return Icons.account_balance_rounded;
+    if (RegExp('物业').hasMatch(name)) return Icons.apartment_rounded;
+    if (RegExp('维修|维护|修车|保养').hasMatch(name)) return Icons.build_rounded;
+    if (RegExp('装修').hasMatch(name)) return Icons.construction_rounded;
+
+    if (RegExp('水费').hasMatch(name)) return Icons.water_drop_rounded;
+    if (RegExp('电费').hasMatch(name)) return Icons.bolt_rounded;
+    if (RegExp('燃气').hasMatch(name)) return Icons.local_fire_department_rounded;
+    if (RegExp('话费').hasMatch(name)) return Icons.phone_android_rounded;
+    if (RegExp('宽带|网络').hasMatch(name)) return Icons.router_rounded;
+    if (RegExp('取暖').hasMatch(name)) return Icons.thermostat_rounded;
+    if (RegExp('税费').hasMatch(name)) return Icons.receipt_long_rounded;
+    if (RegExp('手续费').hasMatch(name)) return Icons.account_balance_wallet_rounded;
+
+    if (RegExp('药品').hasMatch(name)) return Icons.medication_rounded;
+    if (RegExp('门诊|挂号|住院|体检|医疗').hasMatch(name)) return Icons.local_hospital_rounded;
+    if (RegExp('牙科').hasMatch(name)) return Icons.medical_services_rounded;
+    if (RegExp('保险|车险').hasMatch(name)) return Icons.shield_rounded;
+
+    if (RegExp('书籍|资料').hasMatch(name)) return Icons.menu_book_rounded;
+    if (RegExp('学费|课程|培训|辅导|兴趣班').hasMatch(name)) return Icons.school_rounded;
+    if (RegExp('考试|认证').hasMatch(name)) return Icons.assignment_rounded;
+    if (RegExp('文具').hasMatch(name)) return Icons.edit_rounded;
+
+    if (RegExp('住宿|酒店').hasMatch(name)) return Icons.hotel_rounded;
+    if (RegExp('门票|展会').hasMatch(name)) return Icons.confirmation_number_rounded;
+    if (RegExp('旅行团|旅途').hasMatch(name)) return Icons.tour_rounded;
+
+    if (RegExp('红包|礼金').hasMatch(name)) return Icons.redeem_rounded;
+    if (RegExp('婚庆').hasMatch(name)) return Icons.favorite_rounded;
+    if (RegExp('请客').hasMatch(name)) return Icons.restaurant_rounded;
+    if (RegExp('公益|捐赠').hasMatch(name)) return Icons.volunteer_activism_rounded;
+    if (RegExp('家人|家庭补贴|生活费').hasMatch(name)) return Icons.family_restroom_rounded;
+    if (RegExp('朋友|同事|客户|合作伙伴').hasMatch(name)) return Icons.groups_rounded;
+
+    if (RegExp('宠物').hasMatch(name)) return Icons.pets_rounded;
+    if (RegExp('手机').hasMatch(name)) return Icons.phone_android_rounded;
+    if (RegExp('电脑').hasMatch(name)) return Icons.computer_rounded;
+    if (RegExp('配件|包装').hasMatch(name)) return Icons.cable_rounded;
+
+    if (RegExp('工资|绩效|加班|津贴|补助|产品销售|服务收入|合同回款').hasMatch(name)) {
+      return Icons.payments_rounded;
+    }
+    if (RegExp('奖金|奖励|返利').hasMatch(name)) return Icons.stars_rounded;
+    if (RegExp('自由职业|劳务|副业|佣金').hasMatch(name)) return Icons.work_outline_rounded;
+    if (RegExp('利息|分红|基金|股票|投资').hasMatch(name)) return Icons.trending_up_rounded;
+    if (RegExp('退款|退回').hasMatch(name)) return Icons.undo_rounded;
+    if (RegExp('闲置出售|资产处置').hasMatch(name)) return Icons.sell_rounded;
+    if (RegExp('广告|推广|营销|内容制作').hasMatch(name)) return Icons.campaign_rounded;
+
+    return null;
   }
 
   static const _emojiByName = <String, String>{
@@ -107,6 +223,17 @@ class CategoryIcon extends StatelessWidget {
     'campaign_outlined': '📣',
   };
 
+  static const _iconByKey = <String, IconData>{
+    'home_work_outlined': Icons.home_work_outlined,
+    'local_bar_outlined': Icons.local_bar_outlined,
+    'local_drink_outlined': Icons.local_drink_outlined,
+    'nightlife_outlined': Icons.nightlife_outlined,
+    'bakery_dining_outlined': Icons.bakery_dining_outlined,
+    'dinner_dining_outlined': Icons.dinner_dining_outlined,
+    'health_and_safety_outlined': Icons.health_and_safety_outlined,
+    'campaign_outlined': Icons.campaign_outlined,
+  };
+
   static const _categoryByIconKey = <String, String>{
     'restaurant_outlined': '餐饮',
     'local_cafe_outlined': '奶茶咖啡',
@@ -116,6 +243,12 @@ class CategoryIcon extends StatelessWidget {
     'delivery_dining_outlined': '外卖',
     'directions_car_outlined': '交通',
     'shopping_bag_outlined': '购物',
+    'home_work_outlined': '居家',
+    'local_bar_outlined': '其他',
+    'local_drink_outlined': '餐饮',
+    'nightlife_outlined': '娱乐',
+    'bakery_dining_outlined': '餐饮',
+    'dinner_dining_outlined': '餐饮',
     'movie_outlined': '娱乐',
     'home_outlined': '住房',
     'receipt_long_outlined': '生活缴费',
