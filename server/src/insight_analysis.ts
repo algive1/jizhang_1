@@ -1395,7 +1395,8 @@ export function analyzeInsightContext(
           response: 'advice',
           suggestion: '可以先采用建议值，用一个月观察是否可持续；如果明显过紧或过松，再调整档位。',
           actionLabel: '设置分类预算',
-          actionRoute: '/profile/budgets',
+          actionRoute:
+            `/profile/budgets?recommend=1&categoryId=${encodeURIComponent(best.categoryId)}`,
           categoryId: best.categoryId,
           amount: recommendation.recommended,
           evidence: [

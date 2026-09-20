@@ -30,6 +30,8 @@ class BudgetPage extends ConsumerStatefulWidget {
 }
 
 class _BudgetPageState extends ConsumerState<BudgetPage> {
+  bool _routeRecommendationScheduled = false;
+
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
@@ -42,6 +44,24 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                   item.type == CategoryType.expense && item.parentId == null,
             )
             .toList();
+    final uri = GoRouterState.of(context).uri;
+    final routeCategoryId = uri.queryParameters['categoryId'];
+    if (!_routeRecommendationScheduled &&
+        uri.queryParameters['recommend'] == '1' &&
+        routeCategoryId != null &&
+        categories.any((item) => item.id == routeCategoryId)) {
+      _routeRecommendationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _setBudget(
+          context,
+          ref,
+          selectableCategories: categories,
+          initialCategoryId: routeCategoryId,
+        );
+        if (mounted) context.replace('/profile/budgets');
+      });
+    }
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -152,6 +172,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
     Budget? existing,
     List<Category> selectableCategories = const [],
     String? categoryName,
+    String? initialCategoryId,
   }) async {
     final isCategoryBudget =
         existing?.categoryId != null || selectableCategories.isNotEmpty;
@@ -190,6 +211,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         existing: existing,
         selectableCategories: selectableCategories,
         categoryName: categoryName,
+        initialCategoryId: initialCategoryId,
         totalRecommendation: totalRecommendation,
         categoryRecommendations: categoryRecommendations,
       ),
@@ -219,6 +241,7 @@ class _BudgetDialog extends StatefulWidget {
     this.existing,
     required this.selectableCategories,
     this.categoryName,
+    this.initialCategoryId,
     this.totalRecommendation,
     this.categoryRecommendations = const {},
   });
@@ -226,6 +249,7 @@ class _BudgetDialog extends StatefulWidget {
   final Budget? existing;
   final List<Category> selectableCategories;
   final String? categoryName;
+  final String? initialCategoryId;
   final BudgetRecommendation? totalRecommendation;
   final Map<String, BudgetRecommendation> categoryRecommendations;
 
@@ -242,7 +266,8 @@ class _BudgetDialogState extends State<_BudgetDialog> {
   @override
   void initState() {
     super.initState();
-    final categoryId = widget.existing?.categoryId;
+    final categoryId =
+        widget.existing?.categoryId ?? widget.initialCategoryId;
     _categoryId = categoryId;
   }
 
