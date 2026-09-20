@@ -48,7 +48,7 @@ const initial = catalog.parse({
 export function registerThemeCatalog(app:FastifyInstance, store:Store) {
   store.db.exec('CREATE TABLE IF NOT EXISTS theme_catalog(id INTEGER PRIMARY KEY CHECK(id=1), data_json TEXT NOT NULL, updated_at INTEGER NOT NULL)');
   store.db.prepare('INSERT OR IGNORE INTO theme_catalog VALUES(1,?,?)').run(JSON.stringify(initial),store.now());
-  upgradeLegacyCatalog(store);
+  migrateLiquidGlassTheme(store);
   app.get('/api/v1/themes/catalog',async()=>read(store));
   app.put('/api/v1/admin/themes/catalog',async(req)=>{
     const secret=process.env.MEMBERSHIP_ADMIN_TOKEN;
@@ -63,16 +63,21 @@ export function registerThemeCatalog(app:FastifyInstance, store:Store) {
   });
 }
 
-function upgradeLegacyCatalog(store:Store) {
-  const row=store.db.prepare('SELECT data_json FROM theme_catalog WHERE id=1').get() as {data_json:string}|undefined;
-  if (!row) return;
-  const current=catalog.parse(JSON.parse(row.data_json));
-  if (current.version!==1 || current.themes.some(t=>t.id==='liquid_glass')) return;
-  const next=catalog.parse({
-    version:2,
-    themes:[...current.themes,liquidGlassTheme],
-  });
-  store.db.prepare('UPDATE theme_catalog SET data_json=?,updated_at=? WHERE id=1').run(JSON.stringify(next),store.now());
+function migrateLiquidGlassTheme(store:Store) {
+  const migrationId='liquid_glass_v1';
+  store.db.exec('CREATE TABLE IF NOT EXISTS theme_catalog_migrations(id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
+  const applied=store.db.prepare('SELECT id FROM theme_catalog_migrations WHERE id=?').get(migrationId);
+  if (applied) return;
+
+  const current=read(store);
+  if (!current.themes.some(t=>t.id==='liquid_glass')) {
+    const next=catalog.parse({
+      version:current.version+1,
+      themes:[...current.themes,liquidGlassTheme],
+    });
+    store.db.prepare('UPDATE theme_catalog SET data_json=?,updated_at=? WHERE id=1').run(JSON.stringify(next),store.now());
+  }
+  store.db.prepare('INSERT INTO theme_catalog_migrations(id,applied_at) VALUES(?,?)').run(migrationId,store.now());
 }
 
 function read(store:Store):z.infer<typeof catalog>{
