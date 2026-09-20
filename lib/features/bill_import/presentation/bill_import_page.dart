@@ -536,23 +536,24 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
 
   Future<void> _save(List<Category> categories) async {
     final result = _result;
-    final accountId = _accountId;
-    if (result == null || accountId == null) {
-      setState(() => _error = '请选择默认账户');
+    final fallbackAccountId = _accountId;
+    if (result == null || fallbackAccountId == null) {
+      setState(() => _error = '请选择未标账户的兜底账户');
       return;
     }
-    final expenseCategory = categories
+    final expenseFallback = categories
         .where((item) => item.id == _expenseCategoryId)
         .firstOrNull;
-    final incomeCategory = categories
+    final incomeFallback = categories
         .where((item) => item.id == _incomeCategoryId)
         .firstOrNull;
-    if (expenseCategory == null || incomeCategory == null) {
-      setState(() => _error = '请选择收入和支出的默认分类');
+    if (expenseFallback == null || incomeFallback == null) {
+      setState(() => _error = '请选择收入和支出的兜底分类');
       return;
     }
 
     final importedIds = <String>{};
+    final importedFingerprints = <String>{};
     final transactions = ref.read(allTransactionsProvider).value ?? const [];
     for (final transaction in transactions) {
       if (transaction.source != TransactionSource.import ||
@@ -561,46 +562,119 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       }
       try {
         final metadata = jsonDecode(transaction.metadataJson!);
-        if (metadata is Map && metadata['externalId'] is String) {
-          importedIds.add(metadata['externalId'] as String);
+        if (metadata is! Map) continue;
+        final externalId = metadata['externalId'];
+        if (externalId is String && externalId.trim().isNotEmpty) {
+          importedIds.add(externalId);
+        }
+        final fingerprint = metadata['importFingerprint'];
+        if (fingerprint is String && fingerprint.trim().isNotEmpty) {
+          importedFingerprints.add(fingerprint);
         }
       } on Object {
         // Historical malformed metadata must not block a new import.
       }
     }
 
+    final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
+    final mappingProblems = <String>{};
     var duplicates = 0;
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
-      if (row.externalId != null && importedIds.contains(row.externalId)) {
+      if ((row.externalId != null && importedIds.contains(row.externalId)) ||
+          importedFingerprints.contains(row.importFingerprint)) {
         duplicates++;
         continue;
       }
-      final category = row.type == TransactionType.expense
-          ? expenseCategory
-          : incomeCategory;
+
+      String resolveAccount(String? sourceName) {
+        final name = sourceName?.trim();
+        if (name == null || name.isEmpty) return fallbackAccountId;
+        final mapped = _accountMappings[name];
+        if (mapped == null || mapped.isEmpty) {
+          mappingProblems.add('账户“$name”未映射');
+          return '';
+        }
+        return mapped;
+      }
+
+      final accountId = row.provider == BillImportProvider.mumu
+          ? resolveAccount(row.sourceAccount)
+          : fallbackAccountId;
+      if (accountId.isEmpty) continue;
+
+      String? destinationAccountId;
+      if (row.type == TransactionType.transfer) {
+        destinationAccountId = resolveAccount(row.destinationAccount);
+        if (destinationAccountId.isEmpty) continue;
+        if (destinationAccountId == accountId) {
+          final source = row.sourceAccount ?? '来源账户';
+          final destination = row.destinationAccount ?? '目标账户';
+          mappingProblems.add('“$source → $destination”不能映射到同一账户');
+          continue;
+        }
+      }
+
+      Category? category;
+      Category? subcategory;
+      if (row.type != TransactionType.transfer) {
+        if (row.provider == BillImportProvider.mumu) {
+          final mapped = mapper.resolve(row, categories);
+          category = mapped.category;
+          subcategory = mapped.subcategory;
+        }
+        category ??= row.type == TransactionType.expense
+            ? expenseFallback
+            : incomeFallback;
+      }
+
       requests.add(
         QuickBookkeepingRequest(
           type: row.type,
           amount: row.amount,
           accountId: accountId,
+          destinationAccountId: destinationAccountId,
           bookId: ref.read(activeBookIdProvider),
           occurredAt: row.occurredAt,
-          categoryId: category.id,
-          categoryName: category.name,
+          categoryId: category?.id,
+          subcategoryId: subcategory?.id,
+          categoryName: category?.name,
           merchant: row.merchant.isEmpty ? null : row.merchant,
           note: row.note.isEmpty ? null : row.note,
+          reimbursementStatus: row.reimbursementStatus,
+          tags: row.tags,
           source: TransactionSource.import,
           metadata: {
             'importProvider': row.provider.name,
+            'importFingerprint': row.importFingerprint,
             if (row.externalId != null) 'externalId': row.externalId!,
             if (row.paymentMethod != null)
               'paymentMethod': row.paymentMethod!,
+            if (row.sourceCategory != null)
+              'sourceCategory': row.sourceCategory!,
+            if (row.sourceSubcategory != null)
+              'sourceSubcategory': row.sourceSubcategory!,
+            if (row.sourceBook != null) 'sourceBook': row.sourceBook!,
+            if (row.sourceAccount != null)
+              'sourceAccount': row.sourceAccount!,
+            if (row.destinationAccount != null)
+              'destinationAccount': row.destinationAccount!,
             'fileName': _fileName ?? '',
           },
         ),
       );
+    }
+
+    if (mappingProblems.isNotEmpty) {
+      final details = mappingProblems.take(4).join('；');
+      final more = mappingProblems.length > 4
+          ? '；另有 ${mappingProblems.length - 4} 项'
+          : '';
+      setState(() {
+        _error = '请先完成木木账户映射：$details$more';
+      });
+      return;
     }
 
     if (requests.isEmpty) {
@@ -636,6 +710,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
 }
 
 String _dateTime(DateTime value) =>
