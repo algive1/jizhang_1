@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Store } from './store.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
+import { testingAllFeaturesFree } from './testing_access.js';
 
 const feature = z.enum(['export', 'summary', 'voice', 'ocr']);
 const voiceParseRequestSchema = z.strictObject({
@@ -86,6 +87,7 @@ export function registerAssistantPolicy(
   };
 
   const hasActiveMembership = (userId: string, now: number): boolean => {
+    if (testingAllFeaturesFree()) return true;
     if (store.db.prepare(
       'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
     ).get(userId, now)) return true;
