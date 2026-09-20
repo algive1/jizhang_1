@@ -449,7 +449,26 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
     final name = item.categoryName?.trim();
     if (name == null || name.isEmpty) return null;
     return categories
-        .where((c) => c.name == name && !c.isArchived)
+        .where(
+          (c) => c.name == name && c.parentId == null && !c.isArchived,
+        )
+        .firstOrNull;
+  }
+
+  Category? _resolveSubcategory(
+    List<Category> categories,
+    ParsedVoiceTransaction item,
+    Category parent,
+  ) {
+    final name = item.subcategoryName?.trim();
+    if (name == null || name.isEmpty) return null;
+    return categories
+        .where(
+          (category) =>
+              !category.isArchived &&
+              category.parentId == parent.id &&
+              category.name == name,
+        )
         .firstOrNull;
   }
 }
