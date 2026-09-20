@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/amount_input.dart';
-import '../../../../../app/theme/app_theme_tokens.dart';
+import '../../../../app/theme/app_theme_tokens.dart';
 
 class AmountInputView extends StatelessWidget {
   const AmountInputView({
@@ -18,8 +18,11 @@ class AmountInputView extends StatelessWidget {
     height: 58,
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: BoxDecoration(
-      color: const Color(0xFFF3F3F3),
+      color: context.appUsesLiquidGlass
+          ? context.appSurface.withValues(alpha: .80)
+          : context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: context.appDivider.withValues(alpha: .45)),
     ),
     child: Row(
       children: [
