@@ -5,8 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
-import { activeMembershipProduct, resolvedEntitlements } from './entitlements.js';
-import { applePlanForProduct } from './apple_iap.js';
+import { activeMembershipProduct } from './entitlements.js';
 import { membershipState } from './membership_state.js';
 import type { Store } from './store.js';
 
@@ -178,56 +177,6 @@ function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
     grantMembership(store, row);
   } else if (!row.provider_trade_no && providerTradeNo) {
     updateOrder(store, row.id, { providerTradeNo });
-  }
-}
-
-const memberEntitlementKeys = [
-  'automaticBookkeeping',
-  'cloudSync',
-  'multiDevice',
-  'aiAnalysis',
-  'voiceAi',
-  'ocr',
-  'advancedReport',
-  'familyBook',
-  'dataExport',
-  'basicBackup',
-  'adFree',
-  'customTheme',
-] as const;
-
-function assistantQuotas(store: Store, userId: string) {
-  try {
-    const policyRow = store.db.prepare(
-      'SELECT data_json FROM assistant_policy WHERE id=1',
-    ).get() as { data_json: string } | undefined;
-    if (!policyRow) return [];
-    const policy = JSON.parse(policyRow.data_json) as {
-      memberDailyLimit?: number;
-    };
-    const limit = Number(policy.memberDailyLimit ?? 0);
-    if (!Number.isInteger(limit) || limit <= 0) return [];
-    const now = store.now();
-    const day = new Date((now + 8 * 3600) * 1000).toISOString().slice(0, 10);
-    const used =
-      (store.db.prepare(
-        'SELECT used FROM assistant_usage WHERE user_id=? AND day=?',
-      ).get(userId, day) as { used: number } | undefined)?.used ?? 0;
-    const periodStart = Math.floor(
-      new Date(`${day}T00:00:00+08:00`).getTime() / 1000,
-    );
-    const periodEnd = periodStart + 86400;
-    return ['voiceAi', 'ocr', 'aiAnalysis'].map(key => ({
-      key,
-      limit,
-      used: Math.min(limit, Math.max(0, used)),
-      periodStart,
-      periodEnd,
-    }));
-  } catch {
-    // Membership remains usable if the assistant tables are temporarily
-    // unavailable during a migration. Model endpoints still enforce limits.
-    return [];
   }
 }
 
