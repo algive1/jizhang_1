@@ -15,6 +15,9 @@ function period(now:number){return new Date(now*1000).toISOString().slice(0,7)}
 export function entitlementValue(store:Store,userId:string,key:string):unknown{
   const state=membershipState(store,userId);return (state.entitlements.find(e=>e.key===key) as any)?.value;
 }
+export function checkEntitlement(store:Store,userId:string,key:string,amount=1){
+  ensureQuotaSchema(store);const value=entitlementValue(store,userId,key);if(value===true)return {allowed:true,unlimited:true};if(typeof value!=='number'||value<=0)throw new ApiError(403,'当前会员权益不包含此功能');const p=period(store.now());const row=store.db.prepare('SELECT used FROM entitlement_usage WHERE user_id=? AND entitlement_key=? AND period=?').get(userId,key,p) as {used:number}|undefined;if((row?.used??0)+amount>value)throw new ApiError(429,'本周期权益额度已用完');return {allowed:true,unlimited:false,remaining:value-(row?.used??0)};
+}
 export function consumeEntitlement(store:Store,userId:string,key:string,amount=1){
   ensureQuotaSchema(store);const now=store.now(),p=period(now);
   return store.db.transaction(()=>{
