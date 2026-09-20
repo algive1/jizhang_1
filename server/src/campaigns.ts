@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Store } from './store.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
 import { queuePushForUser } from './push_delivery.js';
+import { hasMembership } from './membership_state.js';
 
 const audience=z.strictObject({
   membership:z.enum(['all','free','member']).default('all'),
@@ -27,8 +28,7 @@ function targetUsers(store:Store,a:z.infer<typeof audience>){
   const rows=store.db.prepare('SELECT id,created_at FROM users WHERE (? IS NULL OR created_at>=?) AND (? IS NULL OR created_at<=?) ORDER BY created_at DESC').all(a.minCreatedAt,a.minCreatedAt,a.maxCreatedAt,a.maxCreatedAt) as Array<{id:string;created_at:number}>;
   return rows.filter(u=>{
     if(a.membership==='all')return true;
-    let member=false;
-    try{member=Boolean(store.db.prepare('SELECT 1 FROM membership_subscriptions WHERE user_id=? AND expires_at>?').get(u.id,now))||Boolean(store.db.prepare('SELECT 1 FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>?').get(u.id,now))}catch{}
+    const member=hasMembership(store,u.id);
     return a.membership==='member'?member:!member;
   }).filter(u=>a.platforms.length===0||Boolean(store.db.prepare(`SELECT 1 FROM push_devices WHERE user_id=? AND platform IN (${a.platforms.map(()=>'?').join(',')}) LIMIT 1`).get(u.id,...a.platforms)));
 }
