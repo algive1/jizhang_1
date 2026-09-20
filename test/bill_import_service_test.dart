@@ -66,6 +66,35 @@ void main() {
     expect(result.rows.single.externalId, 'wx-xlsx-1');
   });
 
+  test('natural fingerprint survives official XLSX provider reclassification', () {
+    final occurredAt = DateTime(2026, 9, 20, 10, 7);
+    final legacy = ImportedBillRow(
+      provider: BillImportProvider.generic,
+      occurredAt: occurredAt,
+      type: TransactionType.expense,
+      amount: 9,
+      merchant: '周姐老面包子',
+      note: '/',
+      externalId: null,
+      paymentMethod: null,
+      raw: const {},
+    );
+    final current = ImportedBillRow(
+      provider: BillImportProvider.wechat,
+      occurredAt: occurredAt,
+      type: TransactionType.expense,
+      amount: 9,
+      merchant: '周姐老面包子',
+      note: '',
+      externalId: null,
+      paymentMethod: '零钱',
+      raw: const {},
+    );
+
+    expect(current.importFingerprint, isNot(legacy.importFingerprint));
+    expect(current.naturalFingerprint, legacy.naturalFingerprint);
+  });
+
   test('imported transaction title keeps merchant ahead of provider remarks', () {
     final now = DateTime(2026, 9, 20, 10, 7);
     final record = TransactionRecord(
