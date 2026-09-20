@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/core/models/account.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
+import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/features/bookkeeping/application/amount_input.dart';
 import 'package:jizhang_app/features/bookkeeping/application/quick_bookkeeping_service.dart';
 import 'package:jizhang_app/features/intelligence/application/transaction_intelligence_service.dart';
@@ -161,6 +163,85 @@ void main() {
     expect(
       (await database.accountDao.findById(SeedIds.bankAccount))!.balanceInCents,
       destinationBefore + 6600,
+    );
+  });
+
+  test('repayment moves money to debt account and is not consumption', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final accounts = DriftAccountRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime(2026, 9, 20, 12);
+    await accounts.create(
+      Account(
+        id: 'credit-card-4321',
+        name: '招商信用卡',
+        type: AccountType.creditCard,
+        balance: -500,
+        currency: 'CNY',
+        icon: 'credit_card',
+        color: 0xff73963b,
+        sortOrder: 20,
+        isArchived: false,
+        identifierSuffix: '4321',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+    final sourceBefore =
+        (await database.accountDao.findById(SeedIds.alipayAccount))!
+            .balanceInCents;
+    final debtBefore =
+        (await database.accountDao.findById('credit-card-4321'))!
+            .balanceInCents;
+
+    await expectLater(
+      service.save(
+        QuickBookkeepingRequest(
+          type: TransactionType.repayment,
+          amount: 20,
+          accountId: SeedIds.alipayAccount,
+          occurredAt: now,
+        ),
+      ),
+      throwsArgumentError,
+    );
+
+    final saved = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.repayment,
+        amount: 120,
+        accountId: SeedIds.alipayAccount,
+        destinationAccountId: 'credit-card-4321',
+        merchant: '招商信用卡',
+        occurredAt: now,
+        source: TransactionSource.auto,
+      ),
+    );
+
+    expect(saved.type, TransactionType.repayment);
+    expect(saved.categoryId, isNull);
+    expect(saved.destinationAccountId, 'credit-card-4321');
+    expect(saved.isConsumptionExpense, isFalse);
+    expect(saved.isDebtRepayment, isTrue);
+    expect(
+      (await database.accountDao.findById(SeedIds.alipayAccount))!
+          .balanceInCents,
+      sourceBefore - 12000,
+    );
+    expect(
+      (await database.accountDao.findById('credit-card-4321'))!
+          .balanceInCents,
+      debtBefore + 12000,
     );
   });
 
