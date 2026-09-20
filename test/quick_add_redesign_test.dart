@@ -222,8 +222,11 @@ void main() {
     expect(note.bottom, lessThan(amount.top));
     expect(detail.top, lessThanOrEqualTo(note.top));
     expect(detail.bottom, greaterThanOrEqualTo(amount.bottom));
-    expect(decoration.isCollapsed, isTrue);
-    expect(decoration.constraints, const BoxConstraints.tightFor(height: 40));
+    expect(decoration.isDense, isTrue);
+    expect(
+      decoration.contentPadding,
+      const EdgeInsets.symmetric(vertical: 10),
+    );
     expect(decoration.enabledBorder, InputBorder.none);
     expect(decoration.focusedBorder, InputBorder.none);
     expect(tester.takeException(), isNull);
