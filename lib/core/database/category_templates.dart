@@ -100,6 +100,18 @@ const _family = [
     'expense',
   ),
   SeedCategoryTemplate(
+    'expense-household',
+    '家居日用',
+    'home_work_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
+    'expense-tobacco-tea',
+    '烟酒茶',
+    'local_bar_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
     'expense-entertainment',
     '家庭娱乐',
     'movie_outlined',
