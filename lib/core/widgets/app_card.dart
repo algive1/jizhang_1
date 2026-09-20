@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_tokens.dart';
+import 'app_glass_surface.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -21,20 +21,11 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppGlassSurface(
       padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? context.appSurface,
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: border ?? Border.all(color: context.appDivider),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
+      borderRadius: borderRadius,
+      tint: color ?? context.appSurface,
+      border: border,
       child: child,
     );
   }
