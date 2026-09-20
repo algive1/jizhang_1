@@ -1088,11 +1088,18 @@ export function analyzeInsightContext(
           id: `budget:${currentMonthKey}:total`,
           kind: 'risk',
           priority: important ? 'important' : 'attention',
-          title: usage > 1 ? '本月预算已经超出' : '本月预算消耗有点快',
+          title:
+            usage > 1
+              ? goalReservation > 0
+                ? '本月预算已被支出和目标预留占满'
+                : '本月预算已经超出'
+              : '本月预算消耗有点快',
           summary:
             usage > 1
-              ? `本月支出已经超过预算 ¥${totalBudget.amount.toFixed(0)}。`
-              : `本月过去 ${Math.round(timeProgress * 100)}%，预算已使用 ${Math.round(usage * 100)}%。`,
+              ? goalReservation > 0
+                ? `本月个人支出与目标预留合计已超过预算 ¥${totalBudget.amount.toFixed(0)}。`
+                : `本月支出已经超过预算 ¥${totalBudget.amount.toFixed(0)}。`
+              : `本月过去 ${Math.round(timeProgress * 100)}%，预算已占用 ${Math.round(usage * 100)}%。`,
           analysis:
             `按目前消费速度，月底预计约 ¥${forecast.toFixed(0)}` +
             (overspend > 0
@@ -1226,7 +1233,7 @@ export function analyzeInsightContext(
       tx.semanticHints.family &&
       ['expense', 'lend'].includes(tx.type),
   );
-  const familyAmount = familyRows.reduce((sum, tx) => sum + tx.amount, 0);
+  const familyAmount = familyRows.reduce((sum, tx) => sum + netExpense(tx), 0);
   if (familyRows.length >= 2 && familyAmount >= 100) {
     results.push(
       item({
@@ -1515,17 +1522,28 @@ export function analyzeInsightContext(
   const items: InsightItem[] = [];
   for (const candidate of ranked) {
     const candidateIds = new Set(candidate.relatedTransactionIds);
-    const overlapsExisting = candidateIds.size > 0 && items.some(existing => {
-      if (existing.relatedTransactionIds.length === 0) return false;
-      const overlap = existing.relatedTransactionIds.filter(
-        id => candidateIds.has(id),
-      ).length;
-      const smaller = Math.min(
-        candidateIds.size,
-        existing.relatedTransactionIds.length,
-      );
-      return smaller > 0 && overlap / smaller >= 0.75;
-    });
+    const candidateCanOverlap =
+      candidate.kind === 'behavior' || candidate.kind === 'discovery';
+    const overlapsExisting =
+      candidateCanOverlap &&
+      candidateIds.size > 0 &&
+      items.some(existing => {
+        if (
+          existing.kind !== 'behavior' &&
+          existing.kind !== 'discovery'
+        ) {
+          return false;
+        }
+        if (existing.relatedTransactionIds.length === 0) return false;
+        const overlap = existing.relatedTransactionIds.filter(
+          id => candidateIds.has(id),
+        ).length;
+        const smaller = Math.min(
+          candidateIds.size,
+          existing.relatedTransactionIds.length,
+        );
+        return smaller > 0 && overlap / smaller >= 0.75;
+      });
     if (!overlapsExisting) items.push(candidate);
   }
 

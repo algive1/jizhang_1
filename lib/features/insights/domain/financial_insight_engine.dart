@@ -314,10 +314,16 @@ class FinancialInsightEngine {
       id: 'budget:${progress.budget.monthKey}:total',
       kind: FinancialInsightKind.risk,
       priority: critical ? InsightPriority.important : InsightPriority.attention,
-      title: usage > 1 ? '本月预算已经超出' : '本月预算消耗有点快',
+      title: usage > 1
+          ? progress.goalReservation > 0
+              ? '本月预算已被支出和目标预留占满'
+              : '本月预算已经超出'
+          : '本月预算消耗有点快',
       summary: usage > 1
-          ? '本月支出已经超过预算 ¥${progress.budget.amount.toStringAsFixed(0)}。'
-          : '本月过去 ${(timeProgress * 100).round()}%，预算已使用 ${(usage * 100).round()}%。',
+          ? progress.goalReservation > 0
+              ? '本月个人支出与目标预留合计已超过预算 ¥${progress.budget.amount.toStringAsFixed(0)}。'
+              : '本月支出已经超过预算 ¥${progress.budget.amount.toStringAsFixed(0)}。'
+          : '本月过去 ${(timeProgress * 100).round()}%，预算已占用 ${(usage * 100).round()}%。',
       analysis:
           '按目前消费速度，月底预计约 ¥${forecast.toStringAsFixed(0)}'
           '${overspend > 0 ? '，比预算高约 ¥${overspend.toStringAsFixed(0)}' : ''}。',
@@ -417,7 +423,7 @@ class FinancialInsightEngine {
       amount: currentBalance,
       changePercent: previousBalance == 0
           ? null
-          : delta / previousBalance.abs().clamp(1, double.infinity) * 100,
+          : delta / math.max(1.0, previousBalance.abs()) * 100,
       evidence: [
         InsightEvidence(
           label: '本期收入',
@@ -483,7 +489,7 @@ class FinancialInsightEngine {
         )
         .fold<double>(
           0,
-          (sum, account) => sum + math.max(0, account.balance),
+          (sum, account) => sum + math.max(0.0, account.balance),
         );
     final netUpcoming = math.max(0.0, upcomingExpense - upcomingIncome);
     final risk =
