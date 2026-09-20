@@ -118,8 +118,12 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final visible =
-        widget.available && widget.insight != null && _expanded;
+    final insight = widget.insight;
+    if (!widget.available || insight == null) {
+      return const SizedBox.shrink();
+    }
+
+    final visible = _expanded;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: visible ? 1 : 0),
       duration: MediaQuery.disableAnimationsOf(context)
@@ -154,7 +158,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
               child: Column(
                 children: [
                   HomeInsightCard(
-                    insight: widget.insight!,
+                    insight: insight,
                     amountHidden: widget.amountHidden,
                     onTap: widget.onTap,
                   ),

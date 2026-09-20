@@ -85,6 +85,33 @@ void main() {
     },
   );
 
+
+  testWidgets(
+    'home insight drawer stays collapsed while insight is unavailable',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: HomeInsightDrawer(
+                bookId: 'book-personal',
+                day: DateTime(2026, 9, 20),
+                insight: null,
+                available: true,
+                onTap: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ErrorWidget), findsNothing);
+      expect(find.text('值得关注'), findsNothing);
+    },
+  );
+
 }
 
 FinancialInsightItem _insight(String id, String title) => FinancialInsightItem(
