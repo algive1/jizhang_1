@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
+import { allFeaturesFreeForTesting } from './testing_access.js';
 import { applePlanForProductId } from './apple_iap.js';
 import type { Store } from './store.js';
 
@@ -222,6 +223,18 @@ function assistantQuotas(store: Store, userId: string) {
 }
 
 function membershipCurrent(store: Store, userId: string) {
+  if (allFeaturesFreeForTesting()) {
+    const now = store.now();
+    return {
+      membership: { userId, plan: 'free', status: 'active', updatedAt: now },
+      entitlements: memberEntitlementKeys.map((key) => ({
+        key,
+        source: 'testing_free_access',
+        grantedAt: now,
+      })),
+      quotas: assistantQuotas(store, userId),
+    };
+  }
   const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
   if (apple) {
     return {
