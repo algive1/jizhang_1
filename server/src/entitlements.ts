@@ -62,7 +62,7 @@ export function registerEntitlementRoutes(app:FastifyInstance,store:Store){
 
   app.get('/api/v1/membership/products',async()=>{
     const rows=store.db.prepare('SELECT * FROM membership_products WHERE enabled=1 ORDER BY sort,id').all() as any[];
-    return {products:rows.map(r=>({id:r.id,title:r.title,tierId:r.tier_id,tierVersion:r.tier_version,durationDays:r.duration_days,recommended:Boolean(r.recommended),displayPrice:r.display_price,appleProductId:r.apple_product_id,googleProductId:r.google_product_id}))};
+    return {products:rows.map(r=>({id:r.id,title:r.title,tierId:r.tier_id,tierVersion:r.tier_version,durationDays:r.duration_days,recommended:Boolean(r.recommended),displayPrice:r.display_price,priceInMinor:r.price_in_minor,currency:r.currency,appleProductId:r.apple_product_id,googleProductId:r.google_product_id}))};
   });
 
   app.put('/api/v1/admin/membership/tiers/:id/:version',async request=>{
