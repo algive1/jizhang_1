@@ -32,6 +32,8 @@ import { registerCommercialDashboardRoutes } from './commercial_dashboard.js';
 import { registerCampaignRoutes } from './campaigns.js';
 import { registerAiUsageAdminRoutes } from './ai_usage.js';
 import { registerAdminHealthRoutes } from './admin_health.js';
+import { RoutedAssistantProvider } from './ai_runtime.js';
+import { dispatchDueCampaigns } from './campaigns.js';
 import { startPushWorker } from './push_delivery.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
@@ -116,8 +118,10 @@ export async function createApp(
   registerAdminHealthRoutes(app,store);
   registerOperationalRoutes(app,store);
   registerMarketDataRoutes(app, marketProvider);
-  registerAssistantPolicy(app,store,authenticate,modelProvider);
-  stopPushWorker = startPushWorker(store);
+  registerAssistantPolicy(app,store,authenticate,modelProvider ?? new RoutedAssistantProvider(store));
+  const stopPush = startPushWorker(store);
+  const campaignTimer=setInterval(()=>{try{dispatchDueCampaigns(store)}catch(error){console.error('campaign worker failed',error)}},30_000);campaignTimer.unref();
+  stopPushWorker=()=>{stopPush();clearInterval(campaignTimer)};
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password,displayName,deviceName}=registration.parse(req.body);
     check(!store.db.prepare('SELECT 1 FROM users WHERE username=?').get(username),'用户名已被使用',409);
