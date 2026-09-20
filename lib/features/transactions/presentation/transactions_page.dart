@@ -62,8 +62,16 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     };
     final inboxCount = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final typedTransactions = switch (_typeFilter) {
-      1 => all.where(truth.isPersonalConsumption),
-      2 => all.where(truth.isEarnedIncome),
+      1 => all.where(
+        (item) =>
+            !suppressed.contains(item.id) &&
+            truth.isPersonalConsumption(item),
+      ),
+      2 => all.where(
+        (item) =>
+            !suppressed.contains(item.id) &&
+            truth.isEarnedIncome(item),
+      ),
       _ => all,
     };
     final transactions = typedTransactions

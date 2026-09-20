@@ -1500,14 +1500,19 @@ export function analyzeInsightContext(
   }
 
   const ninetyDaysAgo = now.getTime() - 90 * 86400000;
+  const familySupportAmount = (tx: Tx) =>
+    tx.type === 'lend' ? tx.amount : netExpense(tx);
   const familyRows = transactions.filter(
     tx =>
       tx.occurredAt >= ninetyDaysAgo &&
       tx.semanticHints.family &&
       ['expense', 'lend'].includes(tx.type) &&
-      netExpense(tx) > 0,
+      familySupportAmount(tx) > 0,
   );
-  const familyAmount = familyRows.reduce((sum, tx) => sum + netExpense(tx), 0);
+  const familyAmount = familyRows.reduce(
+    (sum, tx) => sum + familySupportAmount(tx),
+    0,
+  );
   if (familyRows.length >= 2 && familyAmount >= 100) {
     results.push(
       item({

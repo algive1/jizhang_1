@@ -560,6 +560,69 @@ void main() {
     );
   });
 
+  test(
+    'family lending can produce support insight without becoming consumption',
+    () {
+      final transactions = [
+        ..._history(now),
+        TransactionRecord(
+          id: 'lend-family-1',
+          bookId: 'book-personal',
+          type: TransactionType.lend,
+          amount: 500,
+          accountId: 'cash',
+          note: '给妈妈周转',
+          occurredAt: now.subtract(const Duration(days: 5)),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        TransactionRecord(
+          id: 'lend-family-2',
+          bookId: 'book-personal',
+          type: TransactionType.lend,
+          amount: 400,
+          accountId: 'cash',
+          note: '给爸爸周转',
+          occurredAt: now.subtract(const Duration(days: 9)),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ];
+      final analysis = const StatisticalAnalysisService().analyze(
+        transactions,
+        period: AnalysisPeriod.currentMonth,
+        now: now,
+      );
+      final feed = const FinancialInsightEngine().build(
+        transactions: transactions,
+        analysis: analysis,
+        budgets: const BudgetOverview(categories: []),
+        accounts: const [],
+        preferences: const InsightPreferences(
+          intents: {BookkeepingIntent.recordLife},
+          focus: {InsightFocus.family},
+          configured: true,
+        ),
+        now: now,
+      );
+
+      final insight = feed.items
+          .where((item) => item.id == 'life:family-support')
+          .firstOrNull;
+      expect(insight, isNotNull);
+      expect(insight!.amount, 900);
+      expect(
+        transactions
+            .where((item) => item.type == TransactionType.lend)
+            .fold<double>(
+              0,
+              (sum, item) => sum + item.personalExpenseAmount,
+            ),
+        0,
+      );
+    },
+  );
+
   test('ambiguous family transfers do not become family-support insights', () {
     final transactions = [
       ..._history(now),

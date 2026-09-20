@@ -208,7 +208,7 @@ class FinancialInsightEngine {
     if (recurringCashflow != null) candidates.add(recurringCashflow);
 
     final family = _familyInsight(
-      expenses,
+      eligible,
       preferences,
       quality,
       clock,
@@ -1052,7 +1052,11 @@ class FinancialInsightEngine {
     if (family.length < 2) return null;
     final amount = family.fold<double>(
       0,
-      (sum, item) => sum + item.personalExpenseAmount,
+      (sum, item) =>
+          sum +
+          (item.type == TransactionType.lend
+              ? item.amount
+              : item.personalExpenseAmount),
     );
     if (amount < 100) return null;
     return _item(

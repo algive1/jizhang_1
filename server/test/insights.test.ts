@@ -590,6 +590,83 @@ test('server detects multiple imported credit sources without duplicate account 
   assert.match(insight.summary, /美团月付/);
 });
 
+test('server treats family lending as support but not consumer spending', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [
+    tx('family-lend-1', Date.parse('2026-09-10T12:00:00+08:00'), 500, {
+      type: 'lend',
+      categoryId: null,
+      categoryName: null,
+      semanticHints: {
+        delivery: false,
+        family: true,
+        beauty: false,
+      },
+    }),
+    tx('family-lend-2', Date.parse('2026-09-12T12:00:00+08:00'), 400, {
+      type: 'lend',
+      categoryId: null,
+      categoryName: null,
+      semanticHints: {
+        delivery: false,
+        family: true,
+        beauty: false,
+      },
+    }),
+  ];
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['recordLife'],
+        focus: ['family'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [],
+      budgets: [
+        {
+          id: 'total-budget',
+          monthKey: '2026-09',
+          categoryId: null,
+          amount: 500,
+        },
+      ],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const items = response.json().items;
+  const family = items.find(
+    (item: { id: string }) => item.id === 'life:family-support',
+  );
+  assert.ok(family);
+  assert.equal(family.amount, 900);
+  assert.equal(
+    items.some(
+      (item: { id: string }) => item.id === 'budget:2026-09:total',
+    ),
+    false,
+  );
+});
+
 test('server insight analysis respects local timezone and excludes ambiguous transfer support', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());
