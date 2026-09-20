@@ -1421,6 +1421,142 @@ class FinancialInsightEngine {
     );
   }
 
+  String _creditKey(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_\-·/]+'), '')
+      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡
+
+  FinancialInsightItem _item({
+    required String id,
+    required FinancialInsightKind kind,
+    required InsightPriority priority,
+    required String title,
+    required String summary,
+    required String analysis,
+    required String meaning,
+    required InsightResponse response,
+    required double baseScore,
+    required InsightPreferences preferences,
+    required InsightConfidence confidence,
+    required DateTime generatedAt,
+    String? suggestion,
+    String? actionLabel,
+    String? actionRoute,
+    String? categoryId,
+    double? amount,
+    double? changePercent,
+    List<InsightEvidence> evidence = const [],
+    List<String> relatedTransactionIds = const [],
+  }) {
+    var score = baseScore;
+    score += _intentBoost(kind, preferences);
+    score += _focusBoost('$title $summary', preferences);
+    score += preferences.kindAdjustments[kind] ?? 0;
+    score += (confidence.overall - .5) * 16;
+    if (preferences.tone == InsightTone.quiet) score -= 7;
+    if (preferences.tone == InsightTone.strict &&
+        (kind == FinancialInsightKind.risk ||
+            kind == FinancialInsightKind.behavior)) {
+      score += 4;
+    }
+    return FinancialInsightItem(
+      id: id,
+      kind: kind,
+      priority: priority,
+      title: title,
+      summary: summary,
+      analysis: analysis,
+      meaning: meaning,
+      response: response,
+      suggestion: suggestion,
+      actionLabel: actionLabel,
+      actionRoute: actionRoute,
+      categoryId: categoryId,
+      amount: amount,
+      changePercent: changePercent,
+      evidence: evidence,
+      relatedTransactionIds: relatedTransactionIds,
+      score: score.clamp(0, 100).toDouble(),
+      confidence: confidence,
+      generatedAt: generatedAt,
+    );
+  }
+
+  double _intentBoost(
+    FinancialInsightKind kind,
+    InsightPreferences preferences,
+  ) {
+    var boost = 0.0;
+    for (final intent in preferences.intents) {
+      boost = math.max(
+        boost,
+        switch (intent) {
+          BookkeepingIntent.controlSpending =>
+            kind == FinancialInsightKind.behavior ||
+                    kind == FinancialInsightKind.risk
+                ? 12.0
+                : 0.0,
+          BookkeepingIntent.understandSpending =>
+            kind == FinancialInsightKind.behavior ||
+                    kind == FinancialInsightKind.discovery
+                ? 8.0
+                : 0.0,
+          BookkeepingIntent.saveForGoal =>
+            kind == FinancialInsightKind.risk ||
+                    kind == FinancialInsightKind.positive ||
+                    kind == FinancialInsightKind.goal
+                ? 12.0
+                : 0.0,
+          BookkeepingIntent.optimizeFinances =>
+            kind == FinancialInsightKind.financial ||
+                    kind == FinancialInsightKind.risk ||
+                    kind == FinancialInsightKind.discovery
+                ? 12.0
+                : 0.0,
+          BookkeepingIntent.familyFinances =>
+            kind == FinancialInsightKind.life ||
+                    kind == FinancialInsightKind.financial
+                ? 12.0
+                : 0.0,
+          BookkeepingIntent.improveHabits =>
+            kind == FinancialInsightKind.behavior ||
+                    kind == FinancialInsightKind.life
+                ? 10.0
+                : 0.0,
+          BookkeepingIntent.recordLife =>
+            kind == FinancialInsightKind.life ||
+                    kind == FinancialInsightKind.positive
+                ? 12.0
+                : 0.0,
+        },
+      );
+    }
+    return boost;
+  }
+
+  double _focusBoost(String text, InsightPreferences preferences) {
+    var boost = 0.0;
+    for (final focus in preferences.focus) {
+      final matched = switch (focus) {
+        InsightFocus.dining => RegExp(r'餐饮|外卖|吃|夜').hasMatch(text),
+        InsightFocus.shopping =>
+          RegExp(r'购物|淘宝|拼多多|京东|美妆').hasMatch(text),
+        InsightFocus.travel => RegExp(r'旅行|出行|交通|住宿').hasMatch(text),
+        InsightFocus.healthHabits =>
+          RegExp(r'健康|健身|餐饮|夜|美妆').hasMatch(text),
+        InsightFocus.savings => RegExp(r'预算|储蓄|支出下降').hasMatch(text),
+        InsightFocus.credit => RegExp(r'信用|月付|负债|还款').hasMatch(text),
+        InsightFocus.family => RegExp(r'家庭|家人|父母').hasMatch(text),
+        InsightFocus.learning => RegExp(r'学习|教育|课程|书').hasMatch(text),
+      };
+      if (matched) boost = math.max(boost, 10.0);
+    }
+    return boost;
+  }
+}
+), '');
+
   bool _looksLikeCredit(String name) =>
       RegExp(r'花呗|月付|白条|信用|分期|先用后付').hasMatch(name);
 
