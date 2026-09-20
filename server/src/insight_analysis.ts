@@ -37,6 +37,8 @@ const transactionSchema = z.strictObject({
   reimbursementAmount: z.number().finite().nonnegative().nullable().optional(),
   refundAmount: z.number().finite().nonnegative().nullable().optional(),
   isRecurring: z.boolean().default(false),
+  isOneTime: z.boolean().default(true),
+  isLargeTransaction: z.boolean().default(false),
 });
 
 const accountSchema = z.strictObject({
@@ -485,6 +487,9 @@ function categoryChanges(
     previousCount: number;
     currentIds: string[];
     familyAmount: number;
+    oneTimeAmount: number;
+    oneTimeIds: string[];
+    largestAmount: number;
   };
   const buckets = new Map<string, Bucket>();
   const familyPattern = /爸爸|妈妈|父母|爸妈|家人|家里/;
@@ -504,6 +509,9 @@ function categoryChanges(
         previousCount: 0,
         currentIds: [],
         familyAmount: 0,
+        oneTimeAmount: 0,
+        oneTimeIds: [],
+        largestAmount: 0,
       };
     if (
       tx.occurredAt >= range.currentStart &&
@@ -512,6 +520,11 @@ function categoryChanges(
       bucket.currentAmount += value;
       bucket.currentCount++;
       bucket.currentIds.push(tx.id);
+      bucket.largestAmount = Math.max(bucket.largestAmount, value);
+      if (tx.isOneTime || tx.isLargeTransaction) {
+        bucket.oneTimeAmount += value;
+        bucket.oneTimeIds.push(tx.id);
+      }
       if (familyPattern.test(`${tx.note ?? ''} ${tx.merchant ?? ''}`)) {
         bucket.familyAmount += value;
       }
@@ -537,6 +550,58 @@ function categoryChanges(
     ) {
       continue;
     }
+    if (
+      delta >= 100 &&
+      percent >= 0.3 &&
+      bucket.oneTimeAmount > 0 &&
+      (bucket.oneTimeAmount >= delta * 0.6 ||
+        bucket.oneTimeAmount >= bucket.currentAmount * 0.5)
+    ) {
+      results.push(
+        item({
+          id: `server:category:${bucket.id ?? bucket.name}:one-time`,
+          kind: 'discovery',
+          priority: 'attention',
+          title: `${bucket.name}增加主要来自一次性支出`,
+          summary:
+            `本期 ${bucket.name} 比上一可比周期多 ¥${delta.toFixed(0)}，` +
+            `其中一次性/大额记录约 ¥${bucket.oneTimeAmount.toFixed(0)}。`,
+          analysis: '这次变化不适合直接解释为消费习惯持续变差，系统会把一次性支出和常规消费分开看。',
+          meaning: '特殊支出会影响当月总额，但不应该自动被当作长期消费趋势。',
+          response: 'notice',
+          suggestion: profile.intents.includes('controlSpending')
+            ? '可以先确认这笔支出是否确实是一次性的，再决定要不要调整日常预算。'
+            : undefined,
+          actionLabel: '查看相关流水',
+          actionRoute: '/transactions',
+          categoryId: bucket.id,
+          amount: bucket.currentAmount,
+          changePercent: percent * 100,
+          evidence: [
+            {
+              label: bucket.name,
+              value: bucket.currentAmount,
+              baselineValue: bucket.previousAmount,
+              unit: 'CNY',
+            },
+            {
+              label: '一次性/大额支出',
+              value: bucket.oneTimeAmount,
+              unit: 'CNY',
+              transactionIds: bucket.oneTimeIds,
+            },
+          ],
+          relatedTransactionIds: bucket.oneTimeIds,
+          baseScore: 59,
+          confidence,
+          profile,
+          feedback,
+          generatedAt: now.getTime(),
+        }),
+      );
+      continue;
+    }
+
     if (delta >= 100 && percent >= 0.3) {
       const previousTicket =
         bucket.previousCount <= 0
@@ -739,6 +804,143 @@ function behaviorPatternInsight(
   });
 }
 
+function comparableBalanceInsight(
+  transactions: Tx[],
+  now: Date,
+  timezoneOffsetMinutes: number,
+  confidence: Confidence,
+  profile: InsightProfile,
+  feedback: InsightFeedbackProfile,
+) {
+  const range = comparisonRange(now.getTime(), timezoneOffsetMinutes);
+  const totals = (start: number, end: number) => {
+    let income = 0;
+    let expense = 0;
+    for (const tx of transactions) {
+      if (tx.occurredAt < start || tx.occurredAt > end) continue;
+      if (tx.type === 'income') income += tx.amount;
+      expense += netExpense(tx);
+    }
+    return { income, expense, balance: income - expense };
+  };
+  const current = totals(range.currentStart, range.currentEnd);
+  const previous = totals(range.previousStart, range.previousEnd);
+  if (previous.income < 500 || current.income < 500) return null;
+  const delta = current.balance - previous.balance;
+  const denominator = Math.max(previous.income, current.income);
+  if (Math.abs(delta) < 300 || Math.abs(delta) / denominator < 0.1) return null;
+  const improved = delta > 0;
+  return item({
+    id: 'server:financial:comparable-balance',
+    kind: improved ? 'positive' : 'financial',
+    priority: improved ? 'info' : 'attention',
+    title: improved ? '本月可比结余有所改善' : '本月可比结余有所收紧',
+    summary:
+      `截至当前日期，收支结余约 ¥${current.balance.toFixed(0)}，` +
+      `上一可比周期约 ¥${previous.balance.toFixed(0)}。`,
+    analysis: improved
+      ? '在收入达到可比水平的前提下，当前结余比上一同期更高。'
+      : '在收入达到可比水平的前提下，当前结余比上一同期更低；这不等于“花错了”，但值得看看主要变化来自哪里。',
+    meaning: '结余洞察只比较你自己的可比周期，并把退款、报销和一次性资产转换与普通消费区分开。',
+    response: improved ? 'encouragement' : 'notice',
+    suggestion: !improved && profile.intents.includes('optimizeFinances')
+      ? '可以先看支出增加最大的分类和近期固定支出，再决定是否需要调整。'
+      : undefined,
+    actionLabel: '查看趋势',
+    actionRoute: '/analysis',
+    amount: current.balance,
+    changePercent:
+      previous.balance === 0
+        ? undefined
+        : (delta / Math.max(1, Math.abs(previous.balance))) * 100,
+    evidence: [
+      {
+        label: '本期收入',
+        value: current.income,
+        baselineValue: previous.income,
+        unit: 'CNY',
+      },
+      {
+        label: '本期消费',
+        value: current.expense,
+        baselineValue: previous.expense,
+        unit: 'CNY',
+      },
+      {
+        label: '收支结余',
+        value: current.balance,
+        baselineValue: previous.balance,
+        unit: 'CNY',
+      },
+    ],
+    relatedTransactionIds: [],
+    baseScore: improved ? 49 : 66,
+    confidence,
+    profile,
+    feedback,
+    generatedAt: now.getTime(),
+  });
+}
+
+function dataAnomalyInsight(
+  transactions: Tx[],
+  now: Date,
+  confidence: Confidence,
+  profile: InsightProfile,
+  feedback: InsightFeedbackProfile,
+) {
+  const cutoff = now.getTime() - 30 * 86400000;
+  const rows = transactions.filter(tx => {
+    if (tx.occurredAt < cutoff) return false;
+    const duplicate = (tx.duplicateConfidence ?? 0) >= 0.75;
+    const lowAutoConfidence =
+      ['auto', 'ocr', 'import'].includes(tx.source) &&
+      tx.aiConfidence != null &&
+      tx.aiConfidence < 0.55;
+    const missingCategory =
+      tx.type === 'expense' &&
+      !tx.categoryId?.trim() &&
+      !tx.categoryName?.trim();
+    return duplicate || lowAutoConfidence || missingCategory;
+  });
+  if (rows.length < 2) return null;
+  const duplicateCount = rows.filter(
+    tx => (tx.duplicateConfidence ?? 0) >= 0.75,
+  ).length;
+  const lowConfidenceCount = rows.length - duplicateCount;
+  return item({
+    id: 'server:data:review-needed',
+    kind: 'discovery',
+    priority: rows.length >= 6 ? 'important' : 'attention',
+    title: '有几笔流水值得人工确认',
+    summary: `近 30 天发现 ${rows.length} 笔疑似重复、低置信度或未分类流水。`,
+    analysis:
+      `其中疑似重复 ${duplicateCount} 笔，其他低置信度/未分类 ${lowConfidenceCount} 笔。`,
+    meaning: '先把这些记录确认清楚，比在可疑数据上继续生成更多消费结论更可靠。',
+    response: 'advice',
+    suggestion: '建议优先检查自动记账、OCR 和导入产生的可疑流水。',
+    actionLabel: '检查流水',
+    actionRoute: '/transactions',
+    evidence: [
+      {
+        label: '待确认流水',
+        value: rows.length,
+        unit: '笔',
+        transactionIds: rows.map(tx => tx.id),
+      },
+    ],
+    relatedTransactionIds: rows.map(tx => tx.id),
+    baseScore: rows.length >= 6 ? 80 : 70,
+    confidence: {
+      ...confidence,
+      classification: Math.max(0.4, confidence.classification),
+    },
+    profile,
+    feedback,
+    generatedAt: now.getTime(),
+  });
+}
+
 export function analyzeInsightContext(
   input: InsightAnalysisContext,
   profile: InsightProfile,
@@ -759,6 +961,25 @@ export function analyzeInsightContext(
   const expenses = transactions.filter(tx => netExpense(tx) > 0);
   const confidence = quality(transactions, now, timezoneOffsetMinutes);
   const results: InsightItem[] = [];
+
+  const anomaly = dataAnomalyInsight(
+    transactions,
+    now,
+    confidence,
+    profile,
+    feedback,
+  );
+  if (anomaly) results.push(anomaly);
+
+  const balance = comparableBalanceInsight(
+    transactions,
+    now,
+    timezoneOffsetMinutes,
+    confidence,
+    profile,
+    feedback,
+  );
+  if (balance) results.push(balance);
 
   if (confidence.baseline >= 0.35) {
     results.push(

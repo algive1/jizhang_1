@@ -143,6 +143,14 @@ class FinancialInsightEngine {
     );
     if (reimbursement != null) candidates.add(reimbursement);
 
+    final anomaly = _dataAnomalyInsight(
+      eligible,
+      preferences,
+      quality,
+      clock,
+    );
+    if (anomaly != null) candidates.add(anomaly);
+
     if (quality.classification < .68 && expenses.length >= 12) {
       candidates.add(
         _item(
@@ -437,6 +445,62 @@ class FinancialInsightEngine {
         InsightEvidence(label: '涉及金额', value: amount, unit: 'CNY'),
       ],
       baseScore: 48,
+      preferences: preferences,
+      confidence: quality,
+      generatedAt: now,
+    );
+  }
+
+  FinancialInsightItem? _dataAnomalyInsight(
+    List<TransactionRecord> records,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    final cutoff = now.subtract(const Duration(days: 30));
+    final rows = records.where((item) {
+      if (item.occurredAt.isBefore(cutoff)) return false;
+      final duplicate = (item.duplicateConfidence ?? 0) >= .75;
+      final lowConfidence =
+          (item.source == TransactionSource.auto ||
+              item.source == TransactionSource.ocr ||
+              item.source == TransactionSource.import) &&
+          item.aiConfidence != null &&
+          item.aiConfidence! < .55;
+      final missingCategory =
+          item.type == TransactionType.expense &&
+          item.categoryId == null &&
+          (item.categoryName?.trim().isEmpty ?? true);
+      return duplicate || lowConfidence || missingCategory;
+    }).toList();
+    if (rows.length < 2) return null;
+    final duplicateCount =
+        rows.where((item) => (item.duplicateConfidence ?? 0) >= .75).length;
+    return _item(
+      id: 'data:review-needed',
+      kind: FinancialInsightKind.discovery,
+      priority: rows.length >= 6
+          ? InsightPriority.important
+          : InsightPriority.attention,
+      title: '有几笔流水值得人工确认',
+      summary: '近 30 天发现 ${rows.length} 笔疑似重复、低置信度或未分类流水。',
+      analysis:
+          '其中疑似重复 $duplicateCount 笔，其余主要来自自动记账、OCR、导入或未分类记录。',
+      meaning: '先把这些记录确认清楚，比在可疑数据上继续生成更多消费结论更可靠。',
+      response: InsightResponse.advice,
+      suggestion: '建议优先检查最近的自动识别与导入流水。',
+      actionLabel: '检查流水',
+      actionRoute: '/transactions',
+      relatedTransactionIds: rows.map((item) => item.id).toList(),
+      evidence: [
+        InsightEvidence(
+          label: '待确认流水',
+          value: rows.length.toDouble(),
+          unit: '笔',
+          transactionIds: rows.map((item) => item.id).toList(),
+        ),
+      ],
+      baseScore: rows.length >= 6 ? 80 : 70,
       preferences: preferences,
       confidence: quality,
       generatedAt: now,

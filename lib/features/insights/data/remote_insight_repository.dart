@@ -108,6 +108,8 @@ class RemoteInsightRepository {
                   'reimbursementAmount': item.reimbursementAmount,
                   'refundAmount': item.refundAmount,
                   'isRecurring': item.isRecurring,
+                  'isOneTime': item.isOneTime,
+                  'isLargeTransaction': item.isLargeTransaction,
                 },
           ],
           'accounts': [

@@ -298,3 +298,86 @@ test('member AI interpretation is cached and grounded behind server policy', asy
   }
   assert.equal(model.calls, 1);
 });
+
+
+test('one-time expense is not mislabeled as a persistent spending habit', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  await app.inject({
+    method: 'PUT',
+    url: '/api/v1/insights/profile',
+    headers: auth,
+    payload: {
+      intents: ['understandSpending'],
+      focus: ['shopping'],
+      tone: 'balanced',
+      configured: true,
+    },
+  });
+  const now = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [];
+  for (let index = 0; index < 12; index++) {
+    rows.push(
+      tx(
+        `aug-${index}`,
+        Date.parse(`2026-08-${String(index + 2).padStart(2, '0')}T12:00:00+08:00`),
+        30,
+        { categoryId: 'shopping', categoryName: '购物', isOneTime: false },
+      ),
+    );
+  }
+  for (let index = 0; index < 8; index++) {
+    rows.push(
+      tx(
+        `sep-${index}`,
+        Date.parse(`2026-09-${String(index + 2).padStart(2, '0')}T12:00:00+08:00`),
+        30,
+        { categoryId: 'shopping', categoryName: '购物', isOneTime: false },
+      ),
+    );
+  }
+  rows.push(
+    tx(
+      'sep-special',
+      Date.parse('2026-09-18T12:00:00+08:00'),
+      900,
+      {
+        categoryId: 'shopping',
+        categoryName: '购物',
+        isOneTime: true,
+        isLargeTransaction: true,
+      },
+    ),
+  );
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt: now,
+      timezoneOffsetMinutes: 480,
+      transactions: rows,
+      accounts: [],
+      budgets: [],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  const items = response.json().items as Array<{ id: string; kind: string }>;
+  assert.equal(
+    items.some(item => item.id === 'server:category:shopping:one-time'),
+    true,
+  );
+  assert.equal(
+    items.some(item => item.id === 'server:category:shopping:increase'),
+    false,
+  );
+});
