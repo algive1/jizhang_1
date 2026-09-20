@@ -15,7 +15,7 @@ const _dismissedKey = 'insights.dismissed';
 const _updatedAtKey = 'insights.updatedAt';
 
 class InsightPreferencesRepository {
-  const InsightPreferencesRepository(
+  InsightPreferencesRepository(
     this._settings,
     this._session,
     this._api,
@@ -24,6 +24,14 @@ class InsightPreferencesRepository {
   final AppSettingsRepository _settings;
   final SessionRepository _session;
   final SharedApi _api;
+  Future<void> _profileSyncTail = Future<void>.value();
+
+  void _queueProfileSync(InsightPreferences value) {
+    _profileSyncTail = _profileSyncTail
+        .catchError((_) {})
+        .then((_) => _syncProfile(value));
+    unawaited(_profileSyncTail);
+  }
 
   Future<InsightPreferences> load() async {
     final local = await _loadLocal();
@@ -36,12 +44,12 @@ class InsightPreferencesRepository {
           .request('/insights/profile')
           .timeout(const Duration(seconds: 3));
       if (remote['configured'] != true) {
-        if (local.configured) unawaited(_syncProfile(local));
+        if (local.configured) _queueProfileSync(local);
         return local;
       }
       final remoteUpdatedAt = (remote['updatedAt'] as num?)?.toInt() ?? 0;
       if (local.configured && localUpdatedAt >= remoteUpdatedAt) {
-        if (localUpdatedAt > remoteUpdatedAt) unawaited(_syncProfile(local));
+        if (localUpdatedAt > remoteUpdatedAt) _queueProfileSync(local);
         return local;
       }
       final remoteIntents = (remote['intents'] as List? ?? const [])
@@ -104,7 +112,7 @@ class InsightPreferencesRepository {
   Future<void> save(InsightPreferences value) async {
     final updatedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _writeLocal(value, updatedAt: updatedAt);
-    unawaited(_syncProfile(value));
+    _queueProfileSync(value);
   }
 
   Future<void> _syncProfile(InsightPreferences value) async {
