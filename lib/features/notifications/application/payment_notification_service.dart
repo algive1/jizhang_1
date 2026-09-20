@@ -564,10 +564,12 @@ class PaymentNotificationAutoBookkeepingService {
         continue;
       }
 
-      if (parsed.transactionType == 'REPAYMENT') {
-        // Repayment requires a separately confirmed debt account. The normal
-        // app path always uses pendingBridge; a legacy direct-save caller must
-        // wait rather than turning debt repayment into consumption.
+      if (parsed.transactionType == 'REPAYMENT' ||
+          parsed.transactionType == 'REIMBURSEMENT') {
+        // Repayment needs a debt-account pair, while reimbursement may need
+        // linkage to a user-marked source expense. The normal app path always
+        // uses pendingBridge; legacy direct-save callers must wait instead of
+        // silently losing those semantics.
         waiting++;
         continue;
       }
