@@ -15,6 +15,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../application/bill_import_category_mapper.dart';
 import '../application/bill_import_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -31,6 +32,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   String? _accountId;
   String? _expenseCategoryId;
   String? _incomeCategoryId;
+  final Map<String, String?> _accountMappings = {};
   String? _fileName;
   bool _loading = false;
   bool _saving = false;
@@ -74,7 +76,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    '支持微信支付、支付宝官方导出的 CSV 账单。导入前会预览，不会直接写入；退款、关闭交易会自动跳过。',
+                    '支持微信支付、支付宝官方 CSV，以及木木记账导出的 XLSX。导入前会预览；木木分类、账户、转账和报销语义会尽量保留。',
                     style: TextStyle(
                       color: context.appSecondaryText,
                       height: 1.45,
@@ -140,7 +142,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
               ),
               const SizedBox(height: 3),
               Text(
-                '${result.provider == BillImportProvider.wechat ? '微信支付' : '支付宝'}'
+                '${_providerLabel(result.provider)}'
                 ' · 可导入 ${result.rows.length} 笔'
                 '${result.skipped == 0 ? '' : ' · 已跳过 ${result.skipped} 行'}',
                 style: TextStyle(
@@ -332,7 +334,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     try {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
-        allowedExtensions: const ['csv', 'txt'],
+        allowedExtensions: const ['csv', 'txt', 'xlsx'],
       );
       if (file == null || file.path == null) return;
       final result = await const BillImportService().parseFile(file.path!);
@@ -340,6 +342,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       setState(() {
         _fileName = file.name;
         _result = result;
+        _accountMappings.clear();
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
         );
@@ -461,3 +464,10 @@ String _dateTime(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')} '
     '${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}';
+
+
+String _providerLabel(BillImportProvider provider) => switch (provider) {
+  BillImportProvider.wechat => '微信支付',
+  BillImportProvider.alipay => '支付宝',
+  BillImportProvider.mumu => '木木记账',
+};
