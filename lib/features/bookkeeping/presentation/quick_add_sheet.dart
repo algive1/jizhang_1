@@ -344,7 +344,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               const <TransactionRecord>[];
     final activeCategories = _sortedCategories(categories, transactions);
     final selectedCategory = _selectedCategory(activeCategories);
-    // 子分类条必须在未裁剪的分类全集里查找，否则永远查不到子级。
+    // 二级分类必须从未裁剪的分类全集查找，主网格只保留一级分类。
     final subcategories = _subcategoriesFor(
       categories,
       selectedCategory,
@@ -459,9 +459,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                   categories,
                                   category,
                                   currentSubcategoryId: effectiveSubcategoryId,
-                                ),
-                                onSubcategorySelected: (category) => setState(
-                                  () => _subcategoryId = category.id,
                                 ),
                               ),
                             )
