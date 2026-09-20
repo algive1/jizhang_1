@@ -11,7 +11,6 @@ import '../../../core/database/database_seeder.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/membership.dart';
-import '../../../core/config/testing_access.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../settings/data/app_settings_repository.dart';
 
@@ -20,14 +19,11 @@ abstract final class BookLimitPolicy {
   static const pro = 20;
   static const family = 50;
 
-  static int forPlan(MembershipPlan plan) {
-    if (kAllFeaturesFreeForTesting) return family;
-    return switch (plan) {
-      MembershipPlan.free => free,
-      MembershipPlan.pro => pro,
-      MembershipPlan.family => family,
-    };
-  }
+  static int forPlan(MembershipPlan plan) => switch (plan) {
+    MembershipPlan.free => free,
+    MembershipPlan.pro => pro,
+    MembershipPlan.family => family,
+  };
 
   static int ownedCount(
     Iterable<LedgerBook> books, {
