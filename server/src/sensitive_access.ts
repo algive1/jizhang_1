@@ -21,6 +21,6 @@ export function requireSensitiveGrant(store:Store,p:AdminPrincipal,token:string|
  if(p.role!=='super_admin')throw new ApiError(403,'仅超级管理员可以查看敏感财务数据');
  const supplied=(Array.isArray(token)?token[0]:token)??'';if(!supplied)throw new ApiError(401,'需要临时敏感数据访问授权');
  ensureSensitiveAccessSchema(store);const row=store.db.prepare('SELECT token_hash,reason,expires_at FROM admin_sensitive_grants WHERE admin_id=? AND expires_at>? ORDER BY created_at DESC LIMIT 20').all(p.id,store.now()) as Array<{token_hash:string;reason:string;expires_at:number}>;
- const digest=hash(supplied),matched=row.find(x=>timingSafeEqual(Buffer.from(x.token_hash),Buffer.from(digest)));if(!matched)throw new ApiError(401,'敏感数据访问授权无效或已过期');
- return matched;
+ const digest=hash(supplied),matched=row.find(x=>x.token_hash.length===digest.length&&timingSafeEqual(Buffer.from(x.token_hash),Buffer.from(digest)));if(!matched)throw new ApiError(401,'敏感数据访问授权无效或已过期');
+ store.db.prepare('DELETE FROM admin_sensitive_grants WHERE token_hash=?').run(matched.token_hash);return matched;
 }
