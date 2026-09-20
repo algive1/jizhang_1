@@ -24,7 +24,6 @@ export function ensureCampaignSchema(store:Store){
   `);
 }
 function targetUsers(store:Store,a:z.infer<typeof audience>){
-  const now=store.now();
   const rows=store.db.prepare('SELECT id,created_at FROM users WHERE (? IS NULL OR created_at>=?) AND (? IS NULL OR created_at<=?) ORDER BY created_at DESC').all(a.minCreatedAt,a.minCreatedAt,a.maxCreatedAt,a.maxCreatedAt) as Array<{id:string;created_at:number}>;
   return rows.filter(u=>{
     if(a.membership==='all')return true;
