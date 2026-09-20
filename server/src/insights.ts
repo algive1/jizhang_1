@@ -59,7 +59,10 @@ export const insightPolicySchema = z.strictObject({
   freeHistoryDays: z.number().int().min(30).max(3650).default(90),
   proHistoryDays: z.number().int().min(90).max(3650).default(730),
   promptVersion: z.string().trim().min(1).max(64).default('financial-insight-v1'),
-});
+}).refine(
+  value => value.proHistoryDays >= value.freeHistoryDays,
+  '会员历史范围不能短于免费用户',
+);
 export type InsightPolicy = z.infer<typeof insightPolicySchema>;
 
 const profileSchema = z.strictObject({

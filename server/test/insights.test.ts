@@ -110,6 +110,37 @@ test('insight policy is configurable from the admin API', async t => {
 });
 
 
+
+test('insight policy rejects a shorter member history window', async t => {
+  const previous = process.env.ADMIN_TOKEN;
+  process.env.ADMIN_TOKEN = 'insight-admin-token-with-at-least-32-chars';
+  t.after(() => {
+    if (previous == null) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = previous;
+  });
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/v1/admin/insights/policy',
+    headers: {
+      'x-admin-token': process.env.ADMIN_TOKEN,
+      'content-type': 'application/json',
+    },
+    payload: {
+      homeMinScore: 70,
+      minConfidence: 0.55,
+      cooldownDays: 7,
+      aiEnabled: false,
+      freeHistoryDays: 365,
+      proHistoryDays: 180,
+      promptVersion: 'financial-insight-v1',
+    },
+  });
+  assert.equal(response.statusCode, 400);
+});
+
 class FakeInsightModel implements AssistantModelProvider {
   calls = 0;
   async complete() {
