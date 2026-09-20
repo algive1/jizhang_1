@@ -119,10 +119,14 @@ class BudgetRecommendationService {
       item.isConsumptionExpense;
 
   double _personalExpense(TransactionRecord item) {
-    final reimbursable = item.reimbursementAmount ?? 0;
-    return (item.netExpenseAmount - reimbursable)
-        .clamp(0, item.netExpenseAmount)
-        .toDouble();
+    final afterRefund = item.netExpenseAmount;
+    final reimbursable = switch (item.reimbursementStatus) {
+      ReimbursementStatus.none => 0.0,
+      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
+        item.reimbursementAmount ?? afterRefund,
+      ReimbursementStatus.partial => item.reimbursementAmount ?? 0.0,
+    };
+    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
   }
 
   double _friendly(double value) {

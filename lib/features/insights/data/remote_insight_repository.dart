@@ -227,3 +227,8 @@ final remoteInsightRepositoryProvider = Provider<RemoteInsightRepository>((ref) 
     ref.watch(sessionRepositoryProvider),
   );
 });
+
+
+final insightRemotePolicyProvider = FutureProvider<InsightRemotePolicy?>((ref) {
+  return ref.watch(remoteInsightRepositoryProvider).policy();
+});

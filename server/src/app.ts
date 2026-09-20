@@ -214,6 +214,7 @@ export async function createApp(
       store.db.prepare('DELETE FROM cloud_datasets WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM insight_feedback WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM insight_ai_cache WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM insight_confirmed_items WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM insight_profiles WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM diagnostic_events WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_outbox WHERE user_id=?').run(user.id);

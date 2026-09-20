@@ -34,6 +34,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(insightFeedProvider);
+    final remotePolicy = ref.watch(insightRemotePolicyProvider).value;
     FinancialInsightItem? insight;
     for (final item in feed.items) {
       if (item.id == widget.insightId) {
@@ -140,6 +141,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
           ],
           const SizedBox(height: 18),
           if (feed.isServerConfirmed &&
+              remotePolicy?.aiAvailable == true &&
               (ref.watch(membershipProvider).value?.has(
                     EntitlementKey.aiAnalysis,
                   ) ??

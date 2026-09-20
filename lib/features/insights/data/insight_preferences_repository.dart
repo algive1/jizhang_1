@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/data/app_settings_repository.dart';
@@ -23,30 +25,7 @@ class InsightPreferencesRepository {
   final SharedApi _api;
 
   Future<InsightPreferences> load() async {
-    final values = await Future.wait([
-      _settings.get(_intentsKey),
-      _settings.get(_focusKey),
-      _settings.get(_toneKey),
-      _settings.get(_configuredKey),
-      _settings.get(_dismissedKey),
-      for (final kind in FinancialInsightKind.values)
-        _settings.get('insights.kindAdjustment.${kind.name}'),
-    ]);
-    final tones = InsightTone.values.where((item) => item.name == values[2]);
-    final local = InsightPreferences(
-      intents: _decode<BookkeepingIntent>(
-        values[0],
-        BookkeepingIntent.values,
-      ),
-      focus: _decode<InsightFocus>(values[1], InsightFocus.values),
-      tone: tones.isEmpty ? InsightTone.balanced : tones.first,
-      configured: values[3] == '1',
-      dismissedIds: (values[4] ?? '')
-          .split('|')
-          .where((item) => item.trim().isNotEmpty)
-          .toSet(),
-      kindAdjustments: _kindAdjustments(values),
-    );
+    final local = await _loadLocal();
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return local;
@@ -83,21 +62,55 @@ class InsightPreferencesRepository {
     }
   }
 
+  Future<InsightPreferences> _loadLocal() async {
+    final values = await Future.wait([
+      _settings.get(_intentsKey),
+      _settings.get(_focusKey),
+      _settings.get(_toneKey),
+      _settings.get(_configuredKey),
+      _settings.get(_dismissedKey),
+      for (final kind in FinancialInsightKind.values)
+        _settings.get('insights.kindAdjustment.${kind.name}'),
+    ]);
+    final tones = InsightTone.values.where((item) => item.name == values[2]);
+    return InsightPreferences(
+      intents: _decode<BookkeepingIntent>(
+        values[0],
+        BookkeepingIntent.values,
+      ),
+      focus: _decode<InsightFocus>(values[1], InsightFocus.values),
+      tone: tones.isEmpty ? InsightTone.balanced : tones.first,
+      configured: values[3] == '1',
+      dismissedIds: (values[4] ?? '')
+          .split('|')
+          .where((item) => item.trim().isNotEmpty)
+          .toSet(),
+      kindAdjustments: _kindAdjustments(values),
+    );
+  }
+
+
   Future<void> save(InsightPreferences value) async {
     await _writeLocal(value);
+    unawaited(_syncProfile(value));
+  }
+
+  Future<void> _syncProfile(InsightPreferences value) async {
     try {
       await _session.initialize();
       if (_session.userId == null || _api.sessionToken == null) return;
-      await _api.request(
-        '/insights/profile',
-        method: 'PUT',
-        body: {
-          'intents': value.intents.map((item) => item.name).toList(),
-          'focus': value.focus.map((item) => item.name).toList(),
-          'tone': value.tone.name,
-          'configured': value.configured,
-        },
-      ).timeout(const Duration(seconds: 4));
+      await _api
+          .request(
+            '/insights/profile',
+            method: 'PUT',
+            body: {
+              'intents': value.intents.map((item) => item.name).toList(),
+              'focus': value.focus.map((item) => item.name).toList(),
+              'tone': value.tone.name,
+              'configured': value.configured,
+            },
+          )
+          .timeout(const Duration(seconds: 4));
     } on SharedApiException catch (error) {
       if (error.status == 401) await _session.markSessionExpired();
     } on Object {
@@ -121,11 +134,11 @@ class InsightPreferencesRepository {
   }
 
   Future<void> dismiss(String insightId) async {
-    final current = await load();
-    await save(
+    final current = await _loadLocal();
+    await _writeLocal(
       current.copyWith(dismissedIds: {...current.dismissedIds, insightId}),
     );
-    await _sendFeedback(insightId, null, 'dismissed');
+    unawaited(_sendFeedback(insightId, null, 'dismissed'));
   }
 
   Future<void> recordFeedback(
@@ -134,21 +147,22 @@ class InsightPreferencesRepository {
     String action,
   ) async {
     await _settings.set('insights.feedback.$insightId', action);
-    await _sendFeedback(insightId, kind, action);
-    final current = await load();
+    final current = await _loadLocal();
     final previous = current.kindAdjustments[kind] ?? 0;
     final delta = switch (action) {
       'helpful' => 2.0,
       'inaccurate' => -4.0,
       _ => 0.0,
     };
-    if (delta == 0) return;
-    final next = (previous + delta).clamp(-12, 12).toDouble();
-    await save(
-      current.copyWith(
-        kindAdjustments: {...current.kindAdjustments, kind: next},
-      ),
-    );
+    if (delta != 0) {
+      final next = (previous + delta).clamp(-12, 12).toDouble();
+      await _writeLocal(
+        current.copyWith(
+          kindAdjustments: {...current.kindAdjustments, kind: next},
+        ),
+      );
+    }
+    unawaited(_sendFeedback(insightId, kind, action));
   }
 
   Future<void> _sendFeedback(
