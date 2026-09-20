@@ -161,8 +161,15 @@ function grantMembership(store: Store, row: OrderRow) {
   if (!months) return;
   const current = store.db.prepare('SELECT expires_at FROM membership_subscriptions WHERE user_id=?').get(row.user_id) as { expires_at: number } | undefined;
   const startedAt = current && current.expires_at > now ? current.expires_at : now;
-  const expiresAt = addMonths(startedAt, months);
+  const expiresAt = canonical ? startedAt + canonical.durationDays*86400 : addMonths(startedAt, months);
   store.db.prepare('INSERT INTO membership_subscriptions(user_id,product_id,provider,order_id,started_at,expires_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET product_id=excluded.product_id,provider=excluded.provider,order_id=excluded.order_id,started_at=excluded.started_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at').run(row.user_id, row.product_id, row.channel, row.id, startedAt, expiresAt, now);
+}
+
+function markRefunded(store:Store,row:OrderRow){
+  if(row.status==='refunded')return;
+  updateOrder(store,row.id,{status:'refunded'});
+  const current=store.db.prepare('SELECT order_id FROM membership_subscriptions WHERE user_id=?').get(row.user_id) as {order_id:string}|undefined;
+  if(current?.order_id===row.id)store.db.prepare('UPDATE membership_subscriptions SET expires_at=?,updated_at=? WHERE user_id=?').run(store.now(),store.now(),row.user_id);
 }
 
 function markPaid(store: Store, row: OrderRow, providerTradeNo: string | null) {
@@ -418,6 +425,8 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
     check(String(transaction.amount && (transaction.amount as Record<string, unknown>).total) === String(row.amount_in_cents), '微信支付回调金额不匹配', 400);
     if (transaction.trade_state === 'SUCCESS') {
       markPaid(store, row, String(transaction.transaction_id ?? '') || null);
+    } else if (transaction.trade_state === 'REFUND') {
+      markRefunded(store,row);
     } else if (transaction.trade_state === 'CLOSED') {
       updateOrder(store, row.id, { status: 'failed' });
     }
@@ -430,9 +439,8 @@ export function registerPaymentRoutes(app: FastifyInstance, store: Store, authen
     check(row, '会员订单不存在', 404);
     check(body.app_id === env('ALIPAY_APP_ID'), '支付宝回调应用不匹配', 400);
     check(cnyToCents(body.total_amount ?? '') === row.amount_in_cents, '支付宝回调金额不匹配', 400);
-    if (body.trade_status === 'TRADE_SUCCESS' || body.trade_status === 'TRADE_FINISHED') {
-      markPaid(store, row, body.trade_no || null);
-    }
+    if (body.trade_status === 'TRADE_SUCCESS' || body.trade_status === 'TRADE_FINISHED') markPaid(store,row,body.trade_no||null);
+    if (body.refund_fee && cnyToCents(body.refund_fee)!==null) markRefunded(store,row);
     return reply.type('text/plain').send('success');
   });
 }
