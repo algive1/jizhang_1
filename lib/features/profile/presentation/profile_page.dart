@@ -251,8 +251,8 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 ProfileMenuItem(
                   Icons.checkroom_outlined,
-                  '个性化设置',
-                  '主题外观',
+                  '主题与外观',
+                  '主题、色彩与界面',
                   () => push('/profile/appearance'),
                 ),
                 ProfileMenuItem(
@@ -415,6 +415,7 @@ class ProfilePage extends ConsumerWidget {
             ('通知设置', '/profile/notification-settings'),
             ('自动记账', '/profile/autobookkeeping'),
             ('数据与安全', '/profile/data'),
+            ('主题与外观', '/profile/appearance'),
           ])
             ListTile(
               title: Text(item.$1),
