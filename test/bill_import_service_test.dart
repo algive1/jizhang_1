@@ -89,7 +89,7 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
     expect(row.tags, ['工作日']);
   });
 
-  test('parses MuMu new XLSX transfer and pending reimbursement semantics', () {
+  test('parses MuMu new XLSX transfer and reimbursement semantics', () {
     final bytes = _xlsx([
       [
         '时间',
@@ -191,8 +191,51 @@ ali-2,merchant-2,2026-09-17 09:00:00,2026-09-17 09:01:00,其他,转账,客户,�
     );
   });
 
-}
+  test('parses generic third-party CSV with semantic headers', () {
+    const csv = '''
+时间,类型,金额,分类,二级分类,账户,备注
+2026-09-05 08:00,支出,-12.50,餐饮,早餐,招行信用卡,豆浆油条
+2026-09-05 09:00,收入,88.00,兼职,,支付宝,稿费
+''';
 
+    final result = service.parseCsv(csv);
+
+    expect(result.provider, BillImportProvider.generic);
+    expect(result.rows, hasLength(2));
+    expect(result.rows[0].sourceAccount, '招行信用卡');
+    expect(result.rows[0].sourceCategory, '餐饮');
+    expect(result.rows[0].sourceSubcategory, '早餐');
+    expect(result.rows[0].amount, 12.5);
+    expect(result.rows[1].type, TransactionType.income);
+  });
+
+  test('parses tab-separated TXT exports', () {
+    const tsv =
+        '日期\t收支类型\t金额\t分类\t账户\t备注\n'
+        '2026-09-06 10:00\t支出\t-35.00\t家居日用\t现金\t清洁用品\n';
+
+    final result = service.parseCsv(tsv);
+
+    expect(result.provider, BillImportProvider.generic);
+    expect(result.rows, hasLength(1));
+    expect(result.rows.single.sourceCategory, '家居日用');
+    expect(result.rows.single.sourceAccount, '现金');
+    expect(result.rows.single.amount, 35);
+  });
+
+  test('parses generic XLSX instead of assuming every workbook is MuMu', () {
+    final bytes = _xlsx([
+      ['时间', '类型', '金额', '分类', '账户', '备注'],
+      ['2026-09-07 20:00', '支出', '-68', '烟酒茶', '现金', '茶叶'],
+    ]);
+
+    final result = service.parseXlsx(bytes);
+
+    expect(result.provider, BillImportProvider.generic);
+    expect(result.rows.single.sourceCategory, '烟酒茶');
+    expect(result.rows.single.note, '茶叶');
+  });
+}
 
 List<int> _xlsx(List<List<String>> rows) {
   final strings = <String>[];
@@ -251,53 +294,7 @@ String _columnName(int index) {
     value ~/= 26;
   }
   return result.toString().split('').reversed.join();
-
-  test('parses generic third-party CSV with semantic headers', () {
-    const csv = '''
-时间,类型,金额,分类,二级分类,账户,备注
-2026-09-05 08:00,支出,-12.50,餐饮,早餐,招行信用卡,豆浆油条
-2026-09-05 09:00,收入,88.00,兼职,,支付宝,稿费
-''';
-
-    final result = service.parseCsv(csv);
-
-    expect(result.provider, BillImportProvider.generic);
-    expect(result.rows, hasLength(2));
-    expect(result.rows[0].sourceAccount, '招行信用卡');
-    expect(result.rows[0].sourceCategory, '餐饮');
-    expect(result.rows[0].sourceSubcategory, '早餐');
-    expect(result.rows[0].amount, 12.5);
-    expect(result.rows[1].type, TransactionType.income);
-  });
-
-  test('parses tab-separated TXT exports', () {
-    const tsv =
-        '日期\t收支类型\t金额\t分类\t账户\t备注\n'
-        '2026-09-06 10:00\t支出\t-35.00\t家居日用\t现金\t清洁用品\n';
-
-    final result = service.parseCsv(tsv);
-
-    expect(result.provider, BillImportProvider.generic);
-    expect(result.rows, hasLength(1));
-    expect(result.rows.single.sourceCategory, '家居日用');
-    expect(result.rows.single.sourceAccount, '现金');
-    expect(result.rows.single.amount, 35);
-  });
-
-  test('parses generic XLSX instead of assuming every workbook is MuMu', () {
-    final bytes = _xlsx([
-      ['时间', '类型', '金额', '分类', '账户', '备注'],
-      ['2026-09-07 20:00', '支出', '-68', '烟酒茶', '现金', '茶叶'],
-    ]);
-
-    final result = service.parseXlsx(bytes);
-
-    expect(result.provider, BillImportProvider.generic);
-    expect(result.rows.single.sourceCategory, '烟酒茶');
-    expect(result.rows.single.note, '茶叶');
-  });
-
 }
 
-String _xmlEscape(String value) => const HtmlEscape(HtmlEscapeMode.element)
-    .convert(value);
+String _xmlEscape(String value) =>
+    const HtmlEscape(HtmlEscapeMode.element).convert(value);
