@@ -8,7 +8,7 @@ extension AppThemeTokens on BuildContext {
   ColorScheme get appColors => Theme.of(this).colorScheme;
   TextTheme get appText => Theme.of(this).textTheme;
 
-  Color get appBackground => Theme.of(this).canvasColor;
+  Color get appBackground => Theme.of(this).scaffoldBackgroundColor;
   Color get appSurface => appColors.surface;
   Color get appSurfaceSoft => appColors.surfaceContainerLow;
   Color get appSurfaceRaised => appColors.surfaceContainerLowest;
