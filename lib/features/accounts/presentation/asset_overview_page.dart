@@ -405,7 +405,7 @@ class _AccountAssetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final material = Material(
-      color: context.appBackground,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
