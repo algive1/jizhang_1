@@ -20,6 +20,7 @@ const permissionSchema = z.enum([
   'ai.read',
   'ai.write',
   'logs.read',
+  'maintenance.write',
   'support.write',
   'audit.read',
 ]);
@@ -30,7 +31,7 @@ const rolePermissions: Record<AdminRole, readonly AdminPermission[]> = {
   super_admin: permissionSchema.options,
   operator: ['dashboard.read','users.read','membership.read','releases.read','messages.write','ai.read'],
   support: ['dashboard.read','users.read','membership.read','support.write'],
-  developer: ['dashboard.read','releases.read','releases.write','ai.read','ai.write','logs.read'],
+  developer: ['dashboard.read','releases.read','releases.write','ai.read','ai.write','logs.read','maintenance.write'],
   finance: ['dashboard.read','users.read','membership.read','audit.read'],
 };
 
