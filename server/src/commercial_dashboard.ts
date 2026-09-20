@@ -26,6 +26,8 @@ export function registerCommercialDashboardRoutes(app:FastifyInstance,store:Stor
         orders:orders?scalar(store,'SELECT COUNT(*) n FROM membership_orders WHERE created_at>=?',since):0,
         paidOrders:orders?scalar(store,"SELECT COUNT(*) n FROM membership_orders WHERE created_at>=? AND status='paid'",since):0,
         recognizedCnyCents:orders?scalar(store,"SELECT COALESCE(SUM(amount_in_cents),0) n FROM membership_orders WHERE created_at>=? AND status='paid'",since):0,
+        refundedCnyCents:orders?scalar(store,"SELECT COALESCE(SUM(amount_in_cents),0) n FROM membership_orders WHERE created_at>=? AND status='refunded'",since):0,
+        refundOrders:orders?scalar(store,"SELECT COUNT(*) n FROM membership_orders WHERE created_at>=? AND status='refunded'",since):0,
       },
       engagement:{activeInstallations:analytics?scalar(store,'SELECT COUNT(DISTINCT installation_id) n FROM analytics_events WHERE occurred_at>=?',since):0,assistantRequests:assistant?scalar(store,'SELECT COUNT(*) n FROM assistant_requests WHERE created_at>=?',since):0},
       operations:{openTickets:hasTable(store,'support_tickets')?scalar(store,"SELECT COUNT(*) n FROM support_tickets WHERE status IN ('open','in_progress')"):0,pendingPush:hasTable(store,'push_outbox')?scalar(store,"SELECT COUNT(*) n FROM push_outbox WHERE status='pending'"):0,failedPush:hasTable(store,'push_outbox')?scalar(store,"SELECT COUNT(*) n FROM push_outbox WHERE status='failed'"):0},
