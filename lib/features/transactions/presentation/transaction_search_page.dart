@@ -13,8 +13,13 @@ import 'transaction_actions.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class TransactionSearchPage extends ConsumerStatefulWidget {
-  const TransactionSearchPage({super.key, this.month});
+  const TransactionSearchPage({
+    super.key,
+    this.month,
+    this.transactionIds = const {},
+  });
   final DateTime? month;
+  final Set<String> transactionIds;
 
   @override
   ConsumerState<TransactionSearchPage> createState() =>
@@ -41,6 +46,10 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
       for (final account in accounts) account.id: account.displayName,
     };
     final results = all.where((transaction) {
+      if (widget.transactionIds.isNotEmpty &&
+          !widget.transactionIds.contains(transaction.id)) {
+        return false;
+      }
       if (widget.month != null &&
           (transaction.occurredAt.year != widget.month!.year ||
               transaction.occurredAt.month != widget.month!.month ||
@@ -70,7 +79,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
-                        autofocus: true,
+                        autofocus: widget.transactionIds.isEmpty,
                         onChanged: (value) => setState(() => _query = value),
                         decoration: InputDecoration(
                           hintText: '搜索商户、分类或备注',
@@ -91,7 +100,11 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _query.isEmpty ? '全部记录' : '找到 ${results.length} 笔记录',
+                  widget.transactionIds.isNotEmpty
+                      ? '相关流水 · ${results.length} 笔'
+                      : _query.isEmpty
+                      ? '全部记录'
+                      : '找到 ${results.length} 笔记录',
                   style: TextStyle(
                     color: context.appSecondaryText,
                     fontSize: 14,
@@ -144,7 +157,8 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                           .toList(),
                     ),
                   ),
-                if (_query.trim().isNotEmpty &&
+                if (widget.transactionIds.isEmpty &&
+                    _query.trim().isNotEmpty &&
                     recurringResults.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Text(

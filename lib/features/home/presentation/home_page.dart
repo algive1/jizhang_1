@@ -27,6 +27,10 @@ import '../../accounts/data/account_repository.dart';
 import '../../investments/data/investment_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../goals/data/goal_repository.dart';
+import '../../insights/application/insight_feed_provider.dart';
+import '../../insights/data/insight_preferences_repository.dart';
+import '../../insights/domain/insight_models.dart';
+import '../../insights/presentation/insight_preferences_sheet.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/home_data.dart';
@@ -46,6 +50,7 @@ class _HomePageState extends ConsumerState<HomePage>
     with WidgetsBindingObserver {
   Timer? _dayTimer;
   DateTime _day = DateUtils.dateOnly(DateTime.now());
+  bool _insightPreferencePromptScheduled = false;
   @override
   void initState() {
     super.initState();
@@ -72,7 +77,7 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.invalidate(homeMonthlySummaryProvider);
       ref.invalidate(homeRecentTransactionsProvider);
       ref.invalidate(analysisRepositoryProvider);
-      ref.invalidate(homeInsightProvider);
+      ref.invalidate(insightFeedProvider);
       if (mounted) setState(() {});
     }
     _scheduleRefresh();
@@ -101,6 +106,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     final book = ref.watch(activeBookProvider);
+    final insightPreferencesAsync = ref.watch(insightPreferencesProvider);
     final cardVisibility = ref.watch(homeCardVisibilityProvider);
     if (book != null) {
       ref.read(homeCardVisibilityProvider.notifier).ensureLoaded(book.id);
@@ -119,6 +125,7 @@ class _HomePageState extends ConsumerState<HomePage>
     final analysis = ref
         .watch(analysisRepositoryProvider)
         .analyze(period: AnalysisPeriod.currentMonth);
+    final insightFeed = ref.watch(insightFeedProvider);
     final insight = ref.watch(homeInsightProvider);
     final recentState = ref.watch(homeRecentTransactionsProvider);
     final recent = recentState.value ?? const <TransactionRecord>[];
@@ -129,6 +136,25 @@ class _HomePageState extends ConsumerState<HomePage>
     };
     final dataReady =
         book != null && !transactions.isLoading && !transactions.hasError;
+    final insightPreferences =
+        insightPreferencesAsync.value ?? const InsightPreferences();
+    if (dataReady &&
+        insightPreferencesAsync.hasValue &&
+        !insightPreferences.configured &&
+        !_insightPreferencePromptScheduled) {
+      _insightPreferencePromptScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final saved = await showInsightPreferencesSheet(
+          context,
+          insightPreferences,
+          firstRun: true,
+        );
+        if (saved == null || !mounted) return;
+        await ref.read(insightPreferencesRepositoryProvider).save(saved);
+        ref.invalidate(insightPreferencesProvider);
+      });
+    }
     return DecoratedBox(
       decoration: BoxDecoration(color: context.appBackground),
       child: SafeArea(
@@ -148,7 +174,15 @@ class _HomePageState extends ConsumerState<HomePage>
               day: _day,
               insight: insight,
               available: dataReady,
-              onTap: _analysis,
+              cooldownDays: insightFeed.cooldownDays,
+              onTap: () {
+                final item = insight;
+                if (item == null) return;
+                context.push(
+                  '/insights/${Uri.encodeComponent(item.id)}',
+                  extra: item,
+                );
+              },
             ),
             if (book?.isShared == true)
               InkWell(

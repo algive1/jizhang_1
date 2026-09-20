@@ -156,6 +156,22 @@ class TransactionRecord {
       ? (amount - (refundAmount ?? 0)).clamp(0, amount).toDouble()
       : 0;
 
+  /// Amount that should count toward the user's own consumption after known
+  /// refunds and reimbursements. Pending or completed full reimbursements do
+  /// not consume a personal budget; partial reimbursements keep only the
+  /// unreimbursed remainder.
+  double get personalExpenseAmount {
+    if (!isConsumptionExpense) return 0;
+    final afterRefund = netExpenseAmount;
+    final reimbursable = switch (reimbursementStatus) {
+      ReimbursementStatus.none => 0.0,
+      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
+        reimbursementAmount ?? afterRefund,
+      ReimbursementStatus.partial => reimbursementAmount ?? 0.0,
+    };
+    return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
+  }
+
   /// The category label shown in transaction lists and details.
   ///
   /// Category names are resolved from the persisted category ID when a

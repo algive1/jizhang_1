@@ -5,7 +5,7 @@ import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
-import 'package:jizhang_app/core/models/dashboard_snapshot.dart';
+import 'package:jizhang_app/features/insights/domain/insight_models.dart';
 import 'package:jizhang_app/features/home/data/home_data.dart';
 import 'package:jizhang_app/features/home/presentation/home_promotional_cards.dart';
 
@@ -27,12 +27,29 @@ void main() {
         overrides: [
           databaseProvider.overrideWithValue(db),
           homeInsightProvider.overrideWith(
-            (ref) => FinancialInsight(
-              timeLabel: '22:00后消费',
-              amount: amount,
-              increasePercent: null,
-              description: '上月同期样本不足，暂不显示消费增幅。',
-            ),
+            (ref) => amount <= 0
+                ? null
+                : FinancialInsightItem(
+                    id: 'test-home-insight',
+                    kind: FinancialInsightKind.behavior,
+                    priority: InsightPriority.attention,
+                    title: '22:00后消费',
+                    summary: '上月同期样本不足，暂不显示消费增幅。',
+                    analysis: '深夜消费有变化。',
+                    meaning: '用于首页交互测试。',
+                    response: InsightResponse.notice,
+                    score: 80,
+                    confidence: const InsightConfidence(
+                      data: 1,
+                      completeness: 1,
+                      classification: 1,
+                      baseline: 1,
+                    ),
+                    generatedAt: DateTime(2026, 9, 20),
+                    amount: amount,
+                    actionLabel: '查看趋势',
+                    actionRoute: '/analysis',
+                  ),
           ),
         ],
       );
@@ -80,7 +97,7 @@ void main() {
 
       await tester.tap(find.byType(HomeInsightCard));
       await tester.pumpAndSettle();
-      expect(router.state.uri.path, '/analysis');
+      expect(router.state.uri.path, '/insights/test-home-insight');
       router.pop();
       await tester.pumpAndSettle();
 

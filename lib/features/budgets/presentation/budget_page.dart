@@ -15,6 +15,10 @@ import '../../../core/models/budget.dart';
 import '../../../core/models/category.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../categories/data/category_repository.dart';
+import '../../transactions/data/transactions_repository.dart';
+import '../../insights/data/insight_preferences_repository.dart';
+import '../../insights/domain/budget_recommendation_service.dart';
+import '../../insights/domain/insight_models.dart';
 import '../application/budget_alert_notification_service.dart';
 import '../data/budget_repository.dart';
 
@@ -153,12 +157,41 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         existing?.categoryId != null || selectableCategories.isNotEmpty;
     final monthKey = budgetMonthKey(DateTime.now());
     final repository = ref.read(budgetRepositoryProvider);
+    final transactions = ref.read(transactionsProvider).value ?? const [];
+    final preferences =
+        ref.read(insightPreferencesProvider).value ??
+        const InsightPreferences();
+    final allCategories =
+        ref.read(allCategoriesProvider).value ?? selectableCategories;
+    const recommendationService = BudgetRecommendationService();
+    final totalRecommendation = isCategoryBudget
+        ? null
+        : recommendationService.recommendTotal(
+            transactions: transactions,
+            preferences: preferences,
+          );
+    final categoryRecommendations = <String, BudgetRecommendation>{};
+    if (isCategoryBudget) {
+      for (final category in selectableCategories) {
+        final recommendation = recommendationService.recommendCategory(
+          transactions: transactions,
+          categories: allCategories,
+          categoryId: category.id,
+          preferences: preferences,
+        );
+        if (recommendation != null) {
+          categoryRecommendations[category.id] = recommendation;
+        }
+      }
+    }
     final result = await showDialog<(double, String?)>(
       context: context,
       builder: (_) => _BudgetDialog(
         existing: existing,
         selectableCategories: selectableCategories,
         categoryName: categoryName,
+        totalRecommendation: totalRecommendation,
+        categoryRecommendations: categoryRecommendations,
       ),
     );
     if (result == null) return;
@@ -186,11 +219,15 @@ class _BudgetDialog extends StatefulWidget {
     this.existing,
     required this.selectableCategories,
     this.categoryName,
+    this.totalRecommendation,
+    this.categoryRecommendations = const {},
   });
 
   final Budget? existing;
   final List<Category> selectableCategories;
   final String? categoryName;
+  final BudgetRecommendation? totalRecommendation;
+  final Map<String, BudgetRecommendation> categoryRecommendations;
 
   @override
   State<_BudgetDialog> createState() => _BudgetDialogState();
@@ -254,6 +291,22 @@ class _BudgetDialogState extends State<_BudgetDialog> {
             ),
           const SizedBox(height: 12),
         ],
+        if ((widget.totalRecommendation ??
+                widget.categoryRecommendations[_categoryId]) !=
+            null) ...[
+          _BudgetRecommendationHint(
+            recommendation:
+                widget.totalRecommendation ??
+                widget.categoryRecommendations[_categoryId]!,
+            onUse: (value) {
+              _amountController.text = value.toStringAsFixed(0);
+              _amountController.selection = TextSelection.collapsed(
+                offset: _amountController.text.length,
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _amountController,
           autofocus: true,
@@ -283,6 +336,63 @@ class _BudgetDialogState extends State<_BudgetDialog> {
       ),
     ],
   );
+}
+
+class _BudgetRecommendationHint extends StatelessWidget {
+  const _BudgetRecommendationHint({
+    required this.recommendation,
+    required this.onUse,
+  });
+
+  final BudgetRecommendation recommendation;
+  final ValueChanged<double> onUse;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget choice(String label, double value) => ActionChip(
+      label: Text('$label ¥${value.toStringAsFixed(0)}'),
+      onPressed: () => onUse(value),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.appPrimarySoft,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '建议预算 ¥${recommendation.recommended.toStringAsFixed(0)}',
+            style: TextStyle(
+              color: context.appPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            recommendation.reason,
+            style: TextStyle(
+              color: context.appSecondaryText,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              choice('保持', recommendation.maintain),
+              choice('适度控制', recommendation.moderateControl),
+              choice('积极节省', recommendation.activeSaving),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TotalBudgetCard extends StatelessWidget {

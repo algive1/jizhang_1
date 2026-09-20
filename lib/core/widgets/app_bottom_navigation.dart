@@ -62,10 +62,10 @@ class AppBottomNavigation extends StatelessWidget {
                 child: _item(
                   context,
                   2,
-                  Icons.track_changes_outlined,
-                  Icons.track_changes,
-                  '目标',
-                  '/goals',
+                  Icons.auto_graph_outlined,
+                  Icons.auto_graph,
+                  '洞察',
+                  '/insights',
                 ),
               ),
               Expanded(
@@ -89,7 +89,7 @@ class AppBottomNavigation extends StatelessWidget {
     if (location.startsWith('/transactions') || location == '/analysis') {
       return 1;
     }
-    if (location.startsWith('/goals')) {
+    if (location.startsWith('/insights')) {
       return 2;
     }
     if (location.startsWith('/profile')) {

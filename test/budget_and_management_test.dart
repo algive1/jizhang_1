@@ -53,6 +53,44 @@ void main() {
   );
 
   test(
+    'budget usage excludes asset purchases and expected reimbursements',
+    () {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      final repository = DriftBudgetRepository(
+        database,
+        const SafeToSpendService(),
+      );
+      final now = DateTime(2026, 8, 20);
+      final budget = Budget(
+        id: 'total',
+        monthKey: '2026-08',
+        amount: 1000,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final personal = _expense(200, now);
+      final reimbursable = _expense(500, now).copyWith(
+        reimbursementStatus: ReimbursementStatus.pending,
+        reimbursementAmount: 400,
+      );
+      final asset = _expense(3000, now).copyWith(
+        type: TransactionType.assetPurchase,
+      );
+
+      final overview = repository.calculateOverview(
+        budgets: [budget],
+        transactions: [personal, reimbursable, asset],
+        categories: const [],
+        now: now,
+      );
+
+      expect(overview.total!.used, 300);
+      expect(overview.total!.remaining, 700);
+    },
+  );
+
+  test(
     'account edits preserve transaction-derived balance and archive safely',
     () async {
       final database = createMemoryDatabase();

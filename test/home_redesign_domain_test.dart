@@ -91,6 +91,26 @@ void main() {
     expect(calculate(0).total!.dailyAvailable, closeTo(99.99, .00001));
   });
 
+  test('personal expense amount keeps budget and home totals reimbursement-aware', () {
+    final now = DateTime(2026, 9, 20, 12);
+    final pending = _transaction('pending', now, 500).copyWith(
+      reimbursementStatus: ReimbursementStatus.pending,
+      reimbursementAmount: 400,
+    );
+    final full = _transaction('full', now, 300).copyWith(
+      reimbursementStatus: ReimbursementStatus.reimbursed,
+      reimbursementAmount: 300,
+    );
+    final refund = _transaction('refund', now, 200).copyWith(
+      refundStatus: RefundStatus.partial,
+      refundAmount: 50,
+    );
+
+    expect(pending.personalExpenseAmount, 100);
+    expect(full.personalExpenseAmount, 0);
+    expect(refund.personalExpenseAmount, 150);
+  });
+
   test('year trend includes actual expenses including large purchases, excludes transfers, future and other currencies', () {
     final now = DateTime(2026, 9, 8, 12);
     final snapshot = const StatisticalAnalysisService().analyze(

@@ -16,6 +16,11 @@ import {
 } from './push_delivery.js';
 import { ensureSupportSchema } from './support.js';
 import type { Store } from './store.js';
+import {
+  ensureInsightSchema,
+  readInsightPolicy,
+  writeInsightPolicy,
+} from './insights.js';
 
 function digest(value: string) {
   return createHash('sha256').update(value).digest();
@@ -32,6 +37,7 @@ function ensureAdminSchema(store: Store) {
   ensureMessageCenterSchema(store);
   ensureSupportSchema(store);
   ensurePushDeliverySchema(store);
+  ensureInsightSchema(store);
   store.db.exec(`
     CREATE TABLE IF NOT EXISTS admin_audit_log(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,6 +74,10 @@ pre{white-space:pre-wrap;background:#f7f8f4;padding:12px;border-radius:10px;over
 <h1>好好记账管理后台</h1>
 <div class="card"><div class="row"><input id="token" type="password" placeholder="ADMIN_TOKEN"><button onclick="saveToken()">保存令牌</button><button onclick="loadSummary()">刷新概览</button></div><p class="muted">令牌仅保存在当前浏览器 sessionStorage。</p></div>
 <div class="card"><h2>运行概览</h2><pre id="summary">尚未加载</pre></div>
+<div class="card"><h2>洞察策略</h2>
+<div class="row"><input id="insightScore" type="number" min="0" max="100" placeholder="首页最低分"><input id="insightConfidence" type="number" min="0" max="1" step="0.01" placeholder="最低置信度"><input id="insightCooldown" type="number" min="1" max="90" placeholder="冷却天数"><input id="insightFreeHistory" type="number" min="30" max="3650" placeholder="免费历史天数"><input id="insightProHistory" type="number" min="90" max="3650" placeholder="会员历史天数"></div>
+<div class="row"><input id="insightPrompt" placeholder="Prompt 版本"><label><input id="insightAi" type="checkbox">启用 AI 增强</label><button onclick="loadInsightPolicy()">加载策略</button><button onclick="saveInsightPolicy()">保存策略</button></div>
+<pre id="insightPolicy"></pre></div>
 <div class="card"><h2>发布公告</h2><div class="row"><input id="title" placeholder="标题"><input id="route" placeholder="应用路由（可选）"></div><p><textarea id="body" placeholder="公告正文"></textarea></p><button onclick="publish()">发布并推送</button><pre id="publishResult"></pre></div>
 <div class="card"><h2>反馈工单</h2>
 <div class="row"><input id="ticketId" placeholder="工单 ID"><select id="ticketStatus"><option>open</option><option>in_progress</option><option>resolved</option><option>closed</option></select><button onclick="setTicketStatus()">更新状态</button></div>
@@ -80,6 +90,8 @@ const tokenEl=document.getElementById('token');tokenEl.value=sessionStorage.getI
 function saveToken(){sessionStorage.setItem('haohao-admin-token',tokenEl.value)}
 async function api(path,options){saveToken();const r=await fetch(path,Object.assign({},options||{},{headers:Object.assign({'x-admin-token':tokenEl.value,'content-type':'application/json'},(options&&options.headers)||{})}));const t=await r.text();if(!r.ok)throw new Error(r.status+' '+t);try{return JSON.parse(t)}catch{return t}}
 async function loadSummary(){try{document.getElementById('summary').textContent=JSON.stringify(await api('/api/v1/admin/summary'),null,2)}catch(e){document.getElementById('summary').textContent=String(e)}}
+async function loadInsightPolicy(){try{const p=await api('/api/v1/admin/insights/policy');document.getElementById('insightScore').value=p.homeMinScore;document.getElementById('insightConfidence').value=p.minConfidence;document.getElementById('insightCooldown').value=p.cooldownDays;document.getElementById('insightFreeHistory').value=p.freeHistoryDays;document.getElementById('insightProHistory').value=p.proHistoryDays;document.getElementById('insightPrompt').value=p.promptVersion;document.getElementById('insightAi').checked=!!p.aiEnabled;document.getElementById('insightPolicy').textContent=JSON.stringify(p,null,2)}catch(e){document.getElementById('insightPolicy').textContent=String(e)}}
+async function saveInsightPolicy(){try{const old=await api('/api/v1/admin/insights/policy');const p=await api('/api/v1/admin/insights/policy',{method:'PUT',body:JSON.stringify({homeMinScore:Number(document.getElementById('insightScore').value),minConfidence:Number(document.getElementById('insightConfidence').value),cooldownDays:Number(document.getElementById('insightCooldown').value),freeHistoryDays:Number(document.getElementById('insightFreeHistory').value),proHistoryDays:Number(document.getElementById('insightProHistory').value),aiEnabled:document.getElementById('insightAi').checked,promptVersion:document.getElementById('insightPrompt').value||old.promptVersion})});document.getElementById('insightPolicy').textContent=JSON.stringify(p,null,2)}catch(e){document.getElementById('insightPolicy').textContent=String(e)}}
 async function publish(){try{const data=await api('/api/v1/admin/announcements',{method:'POST',body:JSON.stringify({title:document.getElementById('title').value,body:document.getElementById('body').value,route:document.getElementById('route').value||null})});document.getElementById('publishResult').textContent=JSON.stringify(data,null,2);loadSummary()}catch(e){document.getElementById('publishResult').textContent=String(e)}}
 async function tickets(){try{document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets'),null,2)}catch(e){document.getElementById('tickets').textContent=String(e)}}
 async function setTicketStatus(){try{const id=document.getElementById('ticketId').value.trim();document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets/'+id,{method:'PATCH',body:JSON.stringify({status:document.getElementById('ticketStatus').value})}),null,2);tickets()}catch(e){document.getElementById('tickets').textContent=String(e)}}
@@ -117,9 +129,28 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
       announcements: scalar('SELECT COUNT(*) AS n FROM announcements'),
       registeredPushDevices: scalar('SELECT COUNT(*) AS n FROM push_devices'),
       pendingPush: scalar("SELECT COUNT(*) AS n FROM push_outbox WHERE status='pending'"),
+      insightFeedback: scalar('SELECT COUNT(*) AS n FROM insight_feedback'),
       failedPush: scalar("SELECT COUNT(*) AS n FROM push_outbox WHERE status='failed'"),
       retention: retentionPolicy(),
     };
+  });
+
+  app.get('/api/v1/admin/insights/policy', async request => {
+    requireAdmin(request.headers['x-admin-token']);
+    return readInsightPolicy(store);
+  });
+
+  app.put('/api/v1/admin/insights/policy', async request => {
+    requireAdmin(request.headers['x-admin-token']);
+    const policy = writeInsightPolicy(store, request.body);
+    audit(store, 'insight_policy_updated', {
+      homeMinScore: policy.homeMinScore,
+      minConfidence: policy.minConfidence,
+      cooldownDays: policy.cooldownDays,
+      aiEnabled: policy.aiEnabled,
+      promptVersion: policy.promptVersion,
+    });
+    return policy;
   });
 
   app.get('/api/v1/admin/support-tickets', async (request) => {

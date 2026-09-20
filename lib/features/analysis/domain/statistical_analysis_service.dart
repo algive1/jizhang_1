@@ -523,13 +523,17 @@ class StatisticalAnalysisService {
   String _categoryKey(TransactionRecord item) {
     final name = item.categoryName?.trim();
     if (name != null && name.isNotEmpty) return 'name:$name';
-    return 'id:${item.bookId}:${item.categoryId ?? 'uncategorized'}';
+    final id = item.categoryId?.trim();
+    if (id != null && id.isNotEmpty) return 'id:${item.bookId}:$id';
+    return 'uncategorized';
   }
 
   bool _isLateNight(TransactionRecord item) => item.occurredAt.hour >= 22;
 
   bool _isDelivery(TransactionRecord item) {
-    final source = '${item.merchant ?? ''}${item.note ?? ''}'.toLowerCase();
+    final source =
+        '${item.categoryName ?? ''}${item.merchant ?? ''}${item.note ?? ''}'
+            .toLowerCase();
     return const ['外卖', '美团', '饿了么', 'eleme', 'delivery'].any(source.contains);
   }
 

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_assets.dart';
-import '../../../core/formatters/money_formatter.dart';
-import '../../../core/models/dashboard_snapshot.dart';
+import '../../insights/domain/insight_models.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class HomeCrownIcon extends StatelessWidget {
@@ -20,7 +19,7 @@ class HomeInsightCard extends StatelessWidget {
     required this.onTap,
     super.key,
   });
-  final FinancialInsight insight;
+  final FinancialInsightItem insight;
   final bool amountHidden;
   final VoidCallback onTap;
   @override
@@ -62,14 +61,14 @@ class HomeInsightCard extends StatelessWidget {
                       Container(
                         width: 52,
                         height: 52,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFE4D8),
+                        decoration: BoxDecoration(
+                          color: context.appPrimarySoft,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.nightlight_round,
-                          color: Color(0xFFEE673A),
-                          size: 30,
+                        child: Icon(
+                          _insightIcon(insight.kind),
+                          color: context.appPrimary,
+                          size: 28,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -78,17 +77,18 @@ class HomeInsightCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              amountHidden
-                                  ? '${insight.timeLabel}  金额已隐藏'
-                                  : '${insight.timeLabel}  ¥${MoneyFormatter.whole(insight.amount)}，较平时 ${insight.increasePercent == null ? '样本不足' : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent}%'}',
+                              insight.title,
                               style: TextStyle(
                                 fontSize: 15,
                                 color: context.appPrimaryText,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              insight.description,
+                              amountHidden
+                                  ? '金额已隐藏，点开后查看这条洞察的依据。'
+                                  : insight.summary,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -115,6 +115,16 @@ class HomeInsightCard extends StatelessWidget {
       ),
     ),
   );
+
+  IconData _insightIcon(FinancialInsightKind kind) => switch (kind) {
+    FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,
+    FinancialInsightKind.behavior => Icons.timeline_rounded,
+    FinancialInsightKind.risk => Icons.notifications_active_outlined,
+    FinancialInsightKind.goal => Icons.flag_outlined,
+    FinancialInsightKind.discovery => Icons.search_rounded,
+    FinancialInsightKind.positive => Icons.emoji_events_outlined,
+    FinancialInsightKind.life => Icons.favorite_border_rounded,
+  };
 }
 
 class HomeProCard extends StatelessWidget {

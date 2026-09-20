@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/models/dashboard_snapshot.dart';
+import '../../insights/domain/insight_models.dart';
 import '../../settings/data/app_settings_repository.dart';
 import 'home_promotional_cards.dart';
 
@@ -12,6 +12,7 @@ class HomeInsightDrawer extends ConsumerStatefulWidget {
     required this.day,
     required this.insight,
     required this.available,
+    this.cooldownDays = 7,
     this.amountHidden = false,
     required this.onTap,
     super.key,
@@ -19,8 +20,9 @@ class HomeInsightDrawer extends ConsumerStatefulWidget {
 
   final String bookId;
   final DateTime day;
-  final FinancialInsight insight;
+  final FinancialInsightItem? insight;
   final bool available;
+  final int cooldownDays;
   final bool amountHidden;
   final VoidCallback onTap;
 
@@ -42,6 +44,11 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
   @override
   void didUpdateWidget(HomeInsightDrawer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.insight?.id != widget.insight?.id ||
+        oldWidget.available != widget.available) {
+      _checked = false;
+      _expanded = false;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _showOnceToday());
   }
 
@@ -49,20 +56,45 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
     if (!mounted ||
         _checked ||
         !widget.available ||
-        widget.insight.amount <= 0) {
+        widget.insight == null) {
       return;
     }
     _checked = true;
     final settings = ref.read(appSettingsRepositoryProvider);
-    final key = 'home.insight.lastShown.${widget.bookId}';
-    final day = widget.day.toIso8601String();
+    final insight = widget.insight!;
+    final dailyKey = 'home.insight.lastShown.${widget.bookId}';
+    final insightKey =
+        'home.insight.lastShown.${widget.bookId}.${insight.id}';
     try {
-      if (await settings.get(key) == day || !mounted) return;
-      if (!widget.available || widget.insight.amount <= 0) {
+      final values = await Future.wait([
+        settings.get(dailyKey),
+        settings.get(insightKey),
+      ]);
+      final lastAny = values[0] == null
+          ? null
+          : DateTime.tryParse(values[0]!);
+      final lastInsight = values[1] == null
+          ? null
+          : DateTime.tryParse(values[1]!);
+      final now = widget.day;
+      if (lastAny != null && DateUtils.isSameDay(lastAny, now)) {
+        return;
+      }
+      if (lastInsight != null &&
+          now.difference(DateUtils.dateOnly(lastInsight)).inDays <
+              widget.cooldownDays) {
+        return;
+      }
+      if (!mounted) return;
+      if (!widget.available || widget.insight == null) {
         _checked = false;
         return;
       }
-      await settings.set(key, day);
+      final stamp = widget.day.toIso8601String();
+      await Future.wait([
+        settings.set(dailyKey, stamp),
+        settings.set(insightKey, stamp),
+      ]);
       if (mounted) setState(() => _expanded = true);
     } catch (error, stack) {
       debugPrint('Home insight display state failed: $error\n$stack');
@@ -87,10 +119,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
   @override
   Widget build(BuildContext context) {
     final visible =
-        widget.available &&
-        !widget.amountHidden &&
-        widget.insight.amount > 0 &&
-        _expanded;
+        widget.available && widget.insight != null && _expanded;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: visible ? 1 : 0),
       duration: MediaQuery.disableAnimationsOf(context)
@@ -125,7 +154,7 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
               child: Column(
                 children: [
                   HomeInsightCard(
-                    insight: widget.insight,
+                    insight: widget.insight!,
                     amountHidden: widget.amountHidden,
                     onTap: widget.onTap,
                   ),

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
-import '../../../core/models/analysis.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../budgets/data/budget_repository.dart';
-import '../../analysis/domain/statistical_analysis_service.dart';
+import '../../insights/application/insight_feed_provider.dart';
+import '../../insights/domain/insight_models.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 
@@ -168,7 +168,8 @@ final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
           .where((item) => item.isConsumptionExpense)
           .fold<int>(
             0,
-            (total, item) => total + (item.netExpenseAmount * 100).round(),
+            (total, item) =>
+                total + (item.personalExpenseAmount * 100).round(),
           ) /
       100;
   final forecastBalance = income - spending;
@@ -187,36 +188,8 @@ final dashboardSnapshotProvider = Provider<DashboardSnapshot>((ref) {
   );
 });
 
-final homeInsightProvider = Provider<FinancialInsight>((ref) {
-  final transactions = ref.watch(transactionsProvider).value ?? const [];
-  final now = DateTime.now();
-  const analysisService = StatisticalAnalysisService();
-  final analysis = analysisService.analyze(
-    transactions,
-    period: AnalysisPeriod.currentMonth,
-    now: now,
-  );
-  final insight = analysis.insights.firstOrNull;
-  if (insight == null) {
-    return const FinancialInsight(
-      timeLabel: '值得关注',
-      amount: 0,
-      increasePercent: null,
-      description: '',
-    );
-  }
-  final suggestion = switch (insight.type) {
-    AnalysisInsightType.categoryIncrease => '建议查看该分类明细，确认是否需要调整本月预算。',
-    AnalysisInsightType.deliveryIncrease => '建议检查外卖频次，给接下来几天留出更清晰的餐饮额度。',
-    AnalysisInsightType.lateNightIncrease => '建议查看深夜消费明细，提前规划夜间支出。',
-    AnalysisInsightType.weekendIncrease => '建议查看周末消费明细，提前安排周末可用额度。',
-  };
-  return FinancialInsight(
-    timeLabel: insight.title,
-    amount: insight.amount,
-    increasePercent: insight.deltaPercent.round(),
-    description: '${insight.description} $suggestion',
-  );
+final homeInsightProvider = Provider<FinancialInsightItem?>((ref) {
+  return ref.watch(insightFeedProvider).homeCandidate;
 });
 
 const homeRecentTransactionLimit = 10;
@@ -260,7 +233,7 @@ MonthlyLedgerSummary monthlySummary(
       continue;
     if (item.isIncome) income += (item.amount * 100).round();
     if (item.isConsumptionExpense)
-      expense += (item.netExpenseAmount * 100).round();
+      expense += (item.personalExpenseAmount * 100).round();
   }
   return MonthlyLedgerSummary(
     month: DateTime(month.year, month.month),
