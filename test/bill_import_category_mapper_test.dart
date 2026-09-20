@@ -160,6 +160,86 @@ void main() {
     expect(tea.category?.id, 'expense-tobacco-tea');
     expect(tea.subcategory?.id, 'expense-tobacco-tea-tea');
   });
+
+  test('maps shopping platforms from subcategory root and merchant context', () {
+    final categories = [
+      _category('expense-shopping', '购物'),
+      _category(
+        'expense-shopping-taobao',
+        '淘宝',
+        parentId: 'expense-shopping',
+      ),
+      _category(
+        'expense-shopping-jd',
+        '京东',
+        parentId: 'expense-shopping',
+      ),
+      _category(
+        'expense-shopping-pinduoduo',
+        '拼多多',
+        parentId: 'expense-shopping',
+      ),
+      _category(
+        'expense-shopping-douyin',
+        '抖音电商',
+        parentId: 'expense-shopping',
+      ),
+      _category(
+        'expense-shopping-xiaohongshu',
+        '小红书',
+        parentId: 'expense-shopping',
+      ),
+      _category(
+        'expense-shopping-other',
+        '其他',
+        parentId: 'expense-shopping',
+      ),
+    ];
+
+    expect(
+      mapper.resolve(
+        _row(category: '购物', subcategory: '淘宝'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-taobao',
+    );
+    expect(
+      mapper.resolve(
+        _row(category: '京东'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-jd',
+    );
+    expect(
+      mapper.resolve(
+        _row(category: '购物', merchant: '拼多多官方旗舰店'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-pinduoduo',
+    );
+    expect(
+      mapper.resolve(
+        _row(category: '购物', merchant: '抖音商城'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-douyin',
+    );
+    expect(
+      mapper.resolve(
+        _row(category: '购物', subcategory: '红书'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-xiaohongshu',
+    );
+    expect(
+      mapper.resolve(
+        _row(category: '购物', subcategory: '其他'),
+        categories,
+      ).subcategory?.id,
+      'expense-shopping-other',
+    );
+  });
+
 }
 
 Category _category(
@@ -184,14 +264,16 @@ ImportedBillRow _row({
   TransactionType type = TransactionType.expense,
   required String category,
   String? subcategory,
+  String merchant = '',
+  String note = '',
 }) {
   return ImportedBillRow(
     provider: BillImportProvider.mumu,
     occurredAt: DateTime(2026, 9, 1),
     type: type,
     amount: 10,
-    merchant: '',
-    note: '',
+    merchant: merchant,
+    note: note,
     externalId: null,
     paymentMethod: null,
     raw: const {},
