@@ -167,6 +167,49 @@ void main() {
     },
   );
 
+
+  testWidgets('fresh install with zero transactions renders a real home state', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+
+    expect(
+      await database.transactionDao.getActive(bookId: SeedIds.personalBook),
+      isEmpty,
+    );
+
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+      await tester.pump();
+    });
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: HomePage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-spending-card')), findsOneWidget);
+    expect(find.text('未设置预算'), findsWidgets);
+    expect(find.text('我的净资产'), findsOneWidget);
+    expect(find.text('支出趋势'), findsOneWidget);
+    expect(find.text('本地账本初始化失败'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home recent transactions are grouped by local calendar date', (
     tester,
   ) async {
