@@ -2212,13 +2212,7 @@ class _SubcategoryPopoverRoute extends PopupRoute<_CategorySelection> {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
-    return FadeTransition(
-      opacity: curved,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: .96, end: 1).animate(curved),
-        child: child,
-      ),
-    );
+    return FadeTransition(opacity: curved, child: child);
   }
 }
 
