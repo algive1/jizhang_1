@@ -26,17 +26,27 @@ class TransactionStatusParser(
         if (labels.isEmpty()) return null
 
         val hasRefund = labels.any(::isRefundStatus)
+        val hasReimbursement = labels.any(::isReimbursementStatus)
         val hasIncome = labels.any(::isIncomeStatus)
         val hasRepayment = labels.any(::isRepaymentStatus)
         val hasTransfer =
             labels.any(::isTransferStatus) ||
                 isWeChatTransferConfirmation(sourceApp, labels)
-        if (listOf(hasRefund, hasIncome, hasRepayment, hasTransfer).count { it } != 1) {
+        if (
+            listOf(
+                hasRefund,
+                hasReimbursement,
+                hasIncome,
+                hasRepayment,
+                hasTransfer,
+            ).count { it } != 1
+        ) {
             return null
         }
 
         val transactionType = when {
             hasRefund -> "REFUND"
+            hasReimbursement -> "REIMBURSEMENT"
             hasIncome -> "INCOME"
             hasRepayment -> "REPAYMENT"
             else -> "TRANSFER"
@@ -52,6 +62,12 @@ class TransactionStatusParser(
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            "REIMBURSEMENT" ->
+                explicitValue(
+                    labels,
+                    setOf("报销方", "付款方", "付款人", "对方"),
+                    setOf("报销方", "来自", "付款方", "付款人"),
+                ) ?: "报销回款"
             "REPAYMENT" ->
                 CandidateFieldExtractor.repaymentTargetAccountHint(labels)
                     ?: explicitValue(
@@ -66,6 +82,7 @@ class TransactionStatusParser(
         val amountKeys = when (transactionType) {
             "REFUND" -> setOf("退款金额", "到账金额", "退款")
             "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+            "REIMBURSEMENT" -> setOf("报销金额", "到账金额", "报销款")
             "REPAYMENT" -> setOf("还款金额", "本次还款", "还款")
             else -> setOf("转账金额", "转出金额", "付款金额", "金额")
         }
@@ -75,6 +92,7 @@ class TransactionStatusParser(
             "TRANSFER" -> setOf("转出方式", "付款方式", "支付方式", "转出账户")
             "REPAYMENT" -> setOf("扣款账户", "还款资金来源", "付款方式", "支付方式")
             "REFUND" -> setOf("退款方式", "支付方式", "付款方式")
+            "REIMBURSEMENT" -> setOf("到账账户", "收款账户", "收款方式", "支付方式")
             else -> setOf("收款方式", "支付方式", "付款方式")
         }
         val method = CandidateFieldExtractor
@@ -110,6 +128,7 @@ class TransactionStatusParser(
                 scene = when (transactionType) {
                     "REFUND" -> "${sourceApp}_REFUND_SUCCESS"
                     "INCOME" -> "${sourceApp}_INCOME_SUCCESS"
+                    "REIMBURSEMENT" -> "${sourceApp}_REIMBURSEMENT_SUCCESS"
                     "REPAYMENT" -> "${sourceApp}_REPAYMENT_SUCCESS"
                     else -> "${sourceApp}_TRANSFER_SUCCESS"
                 },
@@ -134,17 +153,26 @@ class TransactionStatusParser(
         val sourceApp = registry.ruleFor(packageName)?.sourceApp ?: return null
         val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
         val hasRefund = labels.any(::isRefundStatus)
+        val hasReimbursement = labels.any(::isReimbursementStatus)
         val hasIncome = labels.any(::isIncomeStatus)
         val hasRepayment = labels.any(::isRepaymentStatus)
         val hasTransfer =
             labels.any(::isTransferStatus) ||
                 isWeChatTransferConfirmation(sourceApp, labels)
-        val matchCount = listOf(hasRefund, hasIncome, hasRepayment, hasTransfer).count { it }
+        val matchCount =
+            listOf(
+                hasRefund,
+                hasReimbursement,
+                hasIncome,
+                hasRepayment,
+                hasTransfer,
+            ).count { it }
         if (matchCount == 0) return null
         if (matchCount != 1) return "AMBIGUOUS_TRANSACTION_STATUS"
 
         val type = when {
             hasRefund -> "REFUND"
+            hasReimbursement -> "REIMBURSEMENT"
             hasIncome -> "INCOME"
             hasRepayment -> "REPAYMENT"
             else -> "TRANSFER"
@@ -160,6 +188,12 @@ class TransactionStatusParser(
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            "REIMBURSEMENT" ->
+                explicitValue(
+                    labels,
+                    setOf("报销方", "付款方", "付款人", "对方"),
+                    setOf("报销方", "来自", "付款方", "付款人"),
+                ) ?: "报销回款"
             "REPAYMENT" ->
                 CandidateFieldExtractor.repaymentTargetAccountHint(labels)
                     ?: "信用卡还款"
@@ -172,6 +206,7 @@ class TransactionStatusParser(
             when (type) {
                 "REFUND" -> setOf("退款金额", "到账金额", "退款")
                 "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+                "REIMBURSEMENT" -> setOf("报销金额", "到账金额", "报销款")
                 "REPAYMENT" -> setOf("还款金额", "本次还款", "还款")
                 else -> setOf("转账金额", "转出金额", "付款金额", "金额")
             },
@@ -182,6 +217,9 @@ class TransactionStatusParser(
 
     private fun isRefundStatus(label: String): Boolean =
         REFUND_STATUSES.any { label == it || label.startsWith(it) }
+
+    private fun isReimbursementStatus(label: String): Boolean =
+        REIMBURSEMENT_STATUSES.any { label == it || label.startsWith(it) }
 
     private fun isIncomeStatus(label: String): Boolean =
         INCOME_STATUSES.any { label == it || label.startsWith(it) }
@@ -290,6 +328,13 @@ class TransactionStatusParser(
             "退款已到账",
             "已退款",
             "退款完成",
+        )
+        val REIMBURSEMENT_STATUSES = setOf(
+            "报销到账",
+            "报销款到账",
+            "费用报销到账",
+            "报销成功",
+            "费用报销成功",
         )
         val INCOME_STATUSES = setOf(
             "收款到账",
