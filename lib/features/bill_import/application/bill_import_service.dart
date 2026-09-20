@@ -51,8 +51,11 @@ class ImportedBillRow {
     amount.toStringAsFixed(2),
     sourceAccount ?? paymentMethod ?? '',
     destinationAccount ?? '',
+    sourceBook ?? '',
     sourceCategory ?? '',
     sourceSubcategory ?? '',
+    reimbursementStatus.name,
+    raw['成员']?.trim() ?? '',
     merchant.trim(),
     note.trim(),
   ].join('|');
