@@ -63,7 +63,7 @@ class CashflowSummaryCard extends StatelessWidget {
               ),
             ),
             Text(
-              '转账、初始余额和余额校准不计入收支。',
+              '退款、报销回款和借入不计作收入；转账、资产转换和余额校准不计作日常收支。',
               style: TextStyle(color: context.appSecondaryText, fontSize: 12),
             ),
           ],
