@@ -1436,7 +1436,7 @@ class FinancialInsightEngine {
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[\s_\-·/]+'), '')
-      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡
+      .replaceAll(RegExp(r'银行|信用卡|银行卡|卡'), '');
 
   FinancialInsightItem _item({
     required String id,
