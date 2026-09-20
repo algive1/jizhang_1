@@ -59,7 +59,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
           selectableCategories: categories,
           initialCategoryId: routeCategoryId,
         );
-        if (mounted) context.replace('/profile/budgets');
+        if (context.mounted) context.replace('/profile/budgets');
       });
     }
     return SafeArea(
@@ -183,6 +183,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         ref.read(insightPreferencesProvider).value ??
         const InsightPreferences();
     final allCategories = await ref.read(allCategoriesProvider.future);
+    if (!context.mounted) return;
     const recommendationService = BudgetRecommendationService();
     final totalRecommendation = isCategoryBudget
         ? null
