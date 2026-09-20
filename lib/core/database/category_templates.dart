@@ -292,6 +292,18 @@ const foodSubcategoryTemplates = [
     'delivery_dining_outlined',
     'expense',
   ),
+  SeedCategoryTemplate(
+    'expense-food-drinks',
+    '饮料',
+    'local_drink_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
+    'expense-food-late-night',
+    '夜宵',
+    'nightlife_outlined',
+    'expense',
+  ),
 ];
 
 /// Stable semantic keys survive reorder/rename; labels are editable after seeding.
@@ -312,6 +324,7 @@ const _commonChildren = <String, List<(String, String)>>{
     ('furniture', '家居用品'),
     ('online', '网购'),
     ('accessory', '饰品'),
+    ('personal-care', '个人护理'),
   ],
   'expense-entertainment': [
     ('movie', '电影'),
@@ -321,6 +334,7 @@ const _commonChildren = <String, List<(String, String)>>{
     ('party', '聚会'),
     ('ktv', '唱歌'),
     ('show', '演出'),
+    ('subscription', '会员订阅'),
   ],
   'expense-housing': [
     ('rent', '房租'),
@@ -368,6 +382,8 @@ const _commonChildren = <String, List<(String, String)>>{
     ('wedding', '婚庆礼金'),
     ('treat', '请客'),
     ('charity', '公益捐赠'),
+    ('family', '家人'),
+    ('social', '朋友同事'),
   ],
   'expense-pet': [
     ('food', '宠物食品'),
@@ -421,6 +437,7 @@ const _commonChildren = <String, List<(String, String)>>{
     ('redpacket', '收到红包'),
     ('gift', '收到礼金'),
     ('used', '闲置出售'),
+    ('support', '生活费/补助'),
     ('misc', '其他进账'),
   ],
 };
