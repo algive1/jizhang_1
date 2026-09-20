@@ -1,226 +1,268 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
+import 'app_glass_surface.dart';
 
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({required this.location, super.key});
 
   static const double _horizontalInset = 10;
   static const double _bottomInset = 8;
-  static const double _cornerRadius = 32;
+  static const double _cornerRadius = 28;
+  static const double _centerGap = 72;
+  static const Duration _indicatorDuration = Duration(milliseconds: 280);
 
   final String location;
 
   @override
   Widget build(BuildContext context) {
+    final selectedIndex = _selectedIndex;
     final glass = context.appUsesLiquidGlass;
-    final material = context.appMaterial;
-    final highContrast = MediaQuery.of(context).highContrast;
-    final blur = highContrast ? material.blurSigma * .55 : material.blurSigma;
 
     return SafeArea(
       top: false,
       child: SizedBox(
-        height: 72,
-        child: BottomAppBar(
-          key: const ValueKey('app-bottom-navigation-bar'),
+        key: const ValueKey('app-bottom-navigation-bar'),
+        height: 78,
+        width: double.infinity,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(
-            _horizontalInset + 8,
-            4,
-            _horizontalInset + 8,
-            _bottomInset + 4,
+            _horizontalInset,
+            0,
+            _horizontalInset,
+            _bottomInset,
           ),
-          // BottomAppBar applies [padding] inside its Material. Keep a
-          // translucent tint on the Material itself so the entire notched
-          // pill stays glass-like, including the padded edge around the
-          // BackdropFilter content.
-          color: glass
-              ? material.glassTint.withValues(alpha: highContrast ? .94 : .72)
-              : context.appSurface,
-          surfaceTintColor: Colors.transparent,
-          elevation: glass ? 7 : 0,
-          shadowColor: glass
-              ? context.appPrimary.withValues(alpha: .16)
-              : Colors.transparent,
-          clipBehavior: Clip.antiAlias,
-          shape: const _InsetRoundedCircularNotchedShape(
-            horizontalInset: _horizontalInset,
-            bottomInset: _bottomInset,
-            cornerRadius: _cornerRadius,
-          ),
-          notchMargin: 8,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (glass)
-                RepaintBoundary(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: blur,
-                      sigmaY: blur,
-                      tileMode: TileMode.decal,
-                    ),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            material.glassHighlight.withValues(
-                              alpha: highContrast ? .96 : .70,
-                            ),
-                            material.glassTint.withValues(
-                              alpha: highContrast ? .96 : .84,
-                            ),
-                          ],
+          child: AppGlassSurface(
+            borderRadius: _cornerRadius,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            tint: glass
+                ? Color.alphaBlend(
+                    context.appPrimary.withValues(alpha: .12),
+                    context.appSurface.withValues(alpha: .80),
+                  )
+                : context.appSurface,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tabWidth =
+                    ((constraints.maxWidth - _centerGap) / 4).clamp(1.0, double.infinity);
+                final bubbleWidth = (tabWidth - 6).clamp(42.0, 58.0);
+                final indicatorLeft = _slotStart(selectedIndex, tabWidth) +
+                    (tabWidth - bubbleWidth) / 2;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    AnimatedPositioned(
+                      key: const ValueKey('app-nav-glass-indicator'),
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : _indicatorDuration,
+                      curve: Curves.easeOutCubic,
+                      left: indicatorLeft,
+                      top: 2,
+                      width: bubbleWidth,
+                      height: 50,
+                      child: IgnorePointer(
+                        child: AppGlassSurface(
+                          borderRadius: 23,
+                          shadow: false,
+                          tint: glass
+                              ? context.appPrimary.withValues(alpha: .78)
+                              : context.appPrimarySoft,
+                          child: const SizedBox.expand(),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _item(
-                      context,
-                      0,
-                      Icons.home_outlined,
-                      Icons.home,
-                      '首页',
-                      '/',
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _NavItem(
+                            key: const ValueKey('app-nav-home'),
+                            selected: selectedIndex == 0,
+                            icon: Icons.home_outlined,
+                            activeIcon: Icons.home_rounded,
+                            label: '首页',
+                            route: '/',
+                          ),
+                        ),
+                        Expanded(
+                          child: _NavItem(
+                            key: const ValueKey('app-nav-transactions'),
+                            selected: selectedIndex == 1,
+                            icon: Icons.receipt_long_outlined,
+                            activeIcon: Icons.receipt_long_rounded,
+                            label: '流水',
+                            route: '/transactions',
+                          ),
+                        ),
+                        const SizedBox(width: _centerGap),
+                        Expanded(
+                          child: _NavItem(
+                            key: const ValueKey('app-nav-insights'),
+                            selected: selectedIndex == 2,
+                            icon: Icons.auto_graph_outlined,
+                            activeIcon: Icons.auto_graph_rounded,
+                            label: '洞察',
+                            route: '/insights',
+                          ),
+                        ),
+                        Expanded(
+                          child: _NavItem(
+                            key: const ValueKey('app-nav-profile'),
+                            selected: selectedIndex == 3,
+                            icon: Icons.person_outline_rounded,
+                            activeIcon: Icons.person_rounded,
+                            label: '我的',
+                            route: '/profile',
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Expanded(
-                    child: _item(
-                      context,
-                      1,
-                      Icons.receipt_long_outlined,
-                      Icons.receipt_long,
-                      '流水',
-                      '/transactions',
-                    ),
-                  ),
-                  const SizedBox(width: 72),
-                  Expanded(
-                    child: _item(
-                      context,
-                      2,
-                      Icons.auto_graph_outlined,
-                      Icons.auto_graph,
-                      '洞察',
-                      '/insights',
-                    ),
-                  ),
-                  Expanded(
-                    child: _item(
-                      context,
-                      3,
-                      Icons.person_outline,
-                      Icons.person,
-                      '我的',
-                      '/profile',
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
     );
+  }
+
+  double _slotStart(int index, double tabWidth) {
+    if (index < 2) return tabWidth * index;
+    return tabWidth * index + _centerGap;
   }
 
   int get _selectedIndex {
     if (location.startsWith('/transactions') || location == '/analysis') {
       return 1;
     }
-    if (location.startsWith('/insights')) {
-      return 2;
-    }
-    if (location.startsWith('/profile')) {
-      return 3;
-    }
+    if (location.startsWith('/insights')) return 2;
+    if (location.startsWith('/profile')) return 3;
     return 0;
-  }
-
-  Widget _item(
-    BuildContext context,
-    int index,
-    IconData icon,
-    IconData activeIcon,
-    String label,
-    String route,
-  ) {
-    final selected = index == _selectedIndex;
-    final color = selected ? context.appPrimary : context.appSecondaryText;
-    return InkWell(
-      onTap: () => context.go(route),
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(selected ? activeIcon : icon, color: color, size: 24),
-            const SizedBox(height: 1),
-            Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
-/// Keeps the [BottomAppBar] itself full-width so Flutter's FAB geometry and
-/// notch geometry share the same coordinate system. Only the painted/clipped
-/// navigation surface is inset, preserving the floating pill appearance.
-///
-/// This avoids compensating with an arbitrary FAB X offset: the FAB remains
-/// truly centered in the Scaffold while the notch is cut around that same
-/// center point on every screen width and safe-area configuration.
-class _InsetRoundedCircularNotchedShape extends NotchedShape {
-  const _InsetRoundedCircularNotchedShape({
-    required this.horizontalInset,
-    required this.bottomInset,
-    required this.cornerRadius,
+class _NavItem extends StatefulWidget {
+  const _NavItem({
+    required this.selected,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.route,
+    super.key,
   });
 
-  final double horizontalInset;
-  final double bottomInset;
-  final double cornerRadius;
+  final bool selected;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final String route;
 
   @override
-  Path getOuterPath(Rect host, Rect? guest) {
-    final visualHost = Rect.fromLTRB(
-      host.left + horizontalInset,
-      host.top,
-      host.right - horizontalInset,
-      host.bottom - bottomInset,
-    );
+  State<_NavItem> createState() => _NavItemState();
+}
 
-    final notchedPath = const CircularNotchedRectangle().getOuterPath(
-      visualHost,
-      guest,
-    );
-    final roundedPath = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          visualHost,
-          Radius.circular(cornerRadius),
+class _NavItemState extends State<_NavItem> {
+  double _scale = 1;
+  Duration _scaleDuration = Duration.zero;
+  int _animationTicket = 0;
+
+  void _press() {
+    _animationTicket++;
+    setState(() {
+      _scaleDuration = const Duration(milliseconds: 70);
+      _scale = .92;
+    });
+  }
+
+  void _release() {
+    final ticket = ++_animationTicket;
+    setState(() {
+      _scaleDuration = const Duration(milliseconds: 90);
+      _scale = 1.04;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 90), () {
+      if (!mounted || ticket != _animationTicket) return;
+      setState(() {
+        _scaleDuration = const Duration(milliseconds: 80);
+        _scale = 1;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final glass = context.appUsesLiquidGlass;
+    final selectedColor = glass ? Colors.white : context.appPrimary;
+    final inactiveColor = glass
+        ? context.appSecondaryText.withValues(alpha: .74)
+        : context.appSecondaryText;
+    final color = widget.selected ? selectedColor : inactiveColor;
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+
+    return Semantics(
+      selected: widget.selected,
+      button: true,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) {
+          if (!animationsDisabled) _press();
+        },
+        onTapUp: (_) {
+          if (!animationsDisabled) _release();
+        },
+        onTapCancel: () {
+          if (!animationsDisabled) _release();
+        },
+        onTap: () {
+          if (!widget.selected) context.go(widget.route);
+        },
+        child: AnimatedScale(
+          scale: animationsDisabled ? 1 : _scale,
+          duration: animationsDisabled ? Duration.zero : _scaleDuration,
+          curve: Curves.easeOutCubic,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedSwitcher(
+                duration: animationsDisabled
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
+                child: Icon(
+                  widget.selected ? widget.activeIcon : widget.icon,
+                  key: ValueKey(widget.selected),
+                  color: color,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(height: 1),
+              AnimatedDefaultTextStyle(
+                duration: animationsDisabled
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight:
+                      widget.selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+                child: Text(
+                  widget.label,
+                  textScaler: TextScaler.noScaling,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
         ),
-      );
-
-    return Path.combine(PathOperation.intersect, notchedPath, roundedPath);
+      ),
+    );
   }
 }
