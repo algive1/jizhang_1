@@ -394,6 +394,48 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         home: StartupPoster(),
       );
     }
+    if (databaseBootstrap.hasError) {
+      return MaterialApp(
+        title: '好好记账',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.storage_rounded, size: 42),
+                      const SizedBox(height: 14),
+                      Text(
+                        '本地账本初始化失败',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '没有加载完成前不会进入一个空白或灰色首页。可以直接重试，本地账单不会因为重试被清空。',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: () =>
+                            ref.invalidate(databaseBootstrapProvider),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('重新加载'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     ref.listen(budgetOverviewProvider, (previous, next) {
       unawaited(
