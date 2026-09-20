@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../../core/models/transaction_record.dart';
+import 'xlsx_table_reader.dart';
 
-enum BillImportProvider { wechat, alipay }
+enum BillImportProvider { wechat, alipay, mumu }
 
 class ImportedBillRow {
   const ImportedBillRow({
@@ -16,6 +17,13 @@ class ImportedBillRow {
     required this.externalId,
     required this.paymentMethod,
     required this.raw,
+    this.sourceCategory,
+    this.sourceSubcategory,
+    this.sourceBook,
+    this.sourceAccount,
+    this.destinationAccount,
+    this.reimbursementStatus = ReimbursementStatus.none,
+    this.tags = const [],
   });
 
   final BillImportProvider provider;
@@ -27,6 +35,27 @@ class ImportedBillRow {
   final String? externalId;
   final String? paymentMethod;
   final Map<String, String> raw;
+  final String? sourceCategory;
+  final String? sourceSubcategory;
+  final String? sourceBook;
+  final String? sourceAccount;
+  final String? destinationAccount;
+  final ReimbursementStatus reimbursementStatus;
+  final List<String> tags;
+
+  /// Stable fallback for providers that do not export a transaction ID.
+  String get importFingerprint => [
+    provider.name,
+    occurredAt.toIso8601String(),
+    type.name,
+    amount.toStringAsFixed(2),
+    sourceAccount ?? paymentMethod ?? '',
+    destinationAccount ?? '',
+    sourceCategory ?? '',
+    sourceSubcategory ?? '',
+    merchant.trim(),
+    note.trim(),
+  ].join('|');
 }
 
 class BillImportResult {
@@ -46,8 +75,60 @@ class BillImportService {
 
   Future<BillImportResult> parseFile(String path) async {
     final bytes = await File(path).readAsBytes();
+    if (path.toLowerCase().endsWith('.xlsx')) {
+      return parseMumuXlsx(bytes);
+    }
     final text = utf8.decode(bytes, allowMalformed: true).replaceFirst('\ufeff', '');
     return parseCsv(text);
+  }
+
+  BillImportResult parseMumuXlsx(List<int> bytes) {
+    final rows = const XlsxTableReader()
+        .readFirstSheet(bytes)
+        .where((row) => row.any((cell) => cell.trim().isNotEmpty))
+        .toList(growable: false);
+    if (rows.isEmpty) throw const FormatException('账单文件为空');
+
+    final headerIndex = rows.indexWhere((row) {
+      final normalized = row.map(_normalizeHeader).toSet();
+      final hasTime = normalized.contains('日期') || normalized.contains('时间');
+      final hasType =
+          normalized.contains('收支类型') || normalized.contains('类型');
+      final hasCategory =
+          normalized.contains('类别') || normalized.contains('分类');
+      return normalized.contains('金额') &&
+          hasTime &&
+          hasType &&
+          hasCategory &&
+          normalized.contains('转出账户');
+    });
+    if (headerIndex < 0) {
+      throw const FormatException('未识别到木木记账账单表头，请导入木木导出的 XLSX 文件');
+    }
+
+    final headers = rows[headerIndex].map(_normalizeHeader).toList(growable: false);
+    final output = <ImportedBillRow>[];
+    var skipped = 0;
+    for (final values in rows.skip(headerIndex + 1)) {
+      final map = <String, String>{
+        for (var index = 0; index < headers.length; index++)
+          headers[index]: index < values.length ? values[index].trim() : '',
+      };
+      final parsed = _parseMumuRow(map);
+      if (parsed == null) {
+        skipped++;
+      } else {
+        output.add(parsed);
+      }
+    }
+    if (output.isEmpty) {
+      throw const FormatException('账单中没有可导入的收支记录');
+    }
+    return BillImportResult(
+      provider: BillImportProvider.mumu,
+      rows: output,
+      skipped: skipped,
+    );
   }
 
   BillImportResult parseCsv(String input) {
@@ -60,7 +141,8 @@ class BillImportService {
       final normalized = row.map(_normalizeHeader).toSet();
       final hasAmount = normalized.any((h) => h.contains('金额'));
       final hasTime = normalized.any(
-        (h) => h.contains('交易时间') ||
+        (h) =>
+            h.contains('交易时间') ||
             h.contains('付款时间') ||
             h.contains('交易创建时间'),
       );
@@ -103,8 +185,6 @@ class BillImportService {
         joined.contains('交易单号') ||
         joined.contains('商户单号') ||
         headers.any((h) => h == '收/支')) {
-      // Both providers may contain 收/支; Alipay is distinguished by its
-      // characteristic 商家订单号/资金状态 fields.
       if (joined.contains('商家订单号') ||
           joined.contains('资金状态') ||
           joined.contains('交易来源地')) {
@@ -169,6 +249,69 @@ class BillImportService {
       externalId: externalId,
       paymentMethod: paymentMethod,
       raw: map,
+    );
+  }
+
+  ImportedBillRow? _parseMumuRow(Map<String, String> map) {
+    final direction = _first(map, const ['收支类型', '类型']).replaceAll(' ', '');
+    final sourceCategory = _emptyToNull(
+      _first(map, const ['类别', '分类']),
+    );
+    final sourceSubcategory = _emptyToNull(
+      _first(map, const ['子类', '二级分类']),
+    );
+
+    final type = switch (direction) {
+      '支出' => TransactionType.expense,
+      '收入' when sourceCategory == '退款' => TransactionType.refund,
+      '收入' when sourceCategory == '报销' => TransactionType.reimbursement,
+      '收入' => TransactionType.income,
+      '转账' => TransactionType.transfer,
+      _ => null,
+    };
+    if (type == null) return null;
+
+    final amountValue = _money(_first(map, const ['金额']));
+    if (amountValue == null || amountValue == 0) return null;
+    final amount = amountValue.abs();
+
+    final occurredAt = _time(_first(map, const ['日期', '时间']));
+    if (occurredAt == null) return null;
+
+    final sourceAccount = _emptyToNull(_first(map, const ['转出账户']));
+    final destinationAccount = _emptyToNull(_first(map, const ['转入账户']));
+    if (type == TransactionType.transfer &&
+        (sourceAccount == null || destinationAccount == null)) {
+      return null;
+    }
+
+    final note = _first(map, const ['备注']);
+    final tagText = _first(map, const ['标签']);
+    return ImportedBillRow(
+      provider: BillImportProvider.mumu,
+      occurredAt: occurredAt,
+      type: type,
+      amount: amount,
+      merchant: '',
+      note: note,
+      externalId: null,
+      paymentMethod: sourceAccount,
+      raw: map,
+      sourceCategory: sourceCategory,
+      sourceSubcategory: sourceSubcategory,
+      sourceBook: _emptyToNull(_first(map, const ['所属账本', '账本'])),
+      sourceAccount: sourceAccount,
+      destinationAccount: destinationAccount,
+      reimbursementStatus: sourceCategory == '待报销'
+          ? ReimbursementStatus.pending
+          : ReimbursementStatus.none,
+      tags: tagText.isEmpty
+          ? const []
+          : tagText
+                .split(RegExp(r'[,，、;；|]'))
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false),
     );
   }
 
