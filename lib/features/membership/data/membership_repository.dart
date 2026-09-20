@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_seeder.dart';
+import '../../../core/config/testing_access.dart';
 import '../../../core/models/membership.dart';
 import '../domain/commercial_service_contracts.dart';
 import '../../sharing/data/session_repository.dart';
@@ -47,18 +48,27 @@ class LocalOnlyMembershipRepository implements MembershipRepository {
         status: MembershipStatus.active,
         updatedAt: now,
       ),
-      entitlements: [
-        EntitlementGrant(
-          key: EntitlementKey.localBookkeeping,
-          source: 'local_free_baseline',
-          grantedAt: DateTime(2020),
-        ),
-        EntitlementGrant(
-          key: EntitlementKey.dataExport,
-          source: 'local_free_baseline',
-          grantedAt: DateTime(2020),
-        ),
-      ],
+      entitlements: kAllFeaturesFreeForTesting
+          ? [
+              for (final key in EntitlementKey.values)
+                EntitlementGrant(
+                  key: key,
+                  source: 'testing_free_access',
+                  grantedAt: DateTime(2020),
+                ),
+            ]
+          : [
+              EntitlementGrant(
+                key: EntitlementKey.localBookkeeping,
+                source: 'local_free_baseline',
+                grantedAt: DateTime(2020),
+              ),
+              EntitlementGrant(
+                key: EntitlementKey.dataExport,
+                source: 'local_free_baseline',
+                grantedAt: DateTime(2020),
+              ),
+            ],
       quotas: const [],
     );
   }
@@ -103,6 +113,31 @@ class RemoteMembershipRepository implements MembershipRepository {
     );
     final updatedAt = _date(membership['updatedAt']);
     final subscriptionJson = json['subscription'];
+    final entitlements = (json['entitlements'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (value) => EntitlementGrant(
+            key: _entitlement(value['key'] as String?),
+            source: value['source'] as String? ?? 'server',
+            grantedAt: _date(value['grantedAt']),
+            expiresAt: value['expiresAt'] == null
+                ? null
+                : _date(value['expiresAt']),
+          ),
+        )
+        .toList();
+    if (kAllFeaturesFreeForTesting) {
+      for (final key in EntitlementKey.values) {
+        if (entitlements.any((grant) => grant.key == key)) continue;
+        entitlements.add(
+          EntitlementGrant(
+            key: key,
+            source: 'testing_free_access',
+            grantedAt: DateTime(2020),
+          ),
+        );
+      }
+    }
     return MembershipSnapshot(
       membership: Membership(
         userId: membership['userId'] as String? ?? session.user!.id,
@@ -125,19 +160,7 @@ class RemoteMembershipRepository implements MembershipRepository {
                   subscriptionJson['externalSubscriptionId'] as String?,
             )
           : null,
-      entitlements: (json['entitlements'] as List? ?? const [])
-          .whereType<Map>()
-          .map(
-            (value) => EntitlementGrant(
-              key: _entitlement(value['key'] as String?),
-              source: value['source'] as String? ?? 'server',
-              grantedAt: _date(value['grantedAt']),
-              expiresAt: value['expiresAt'] == null
-                  ? null
-                  : _date(value['expiresAt']),
-            ),
-          )
-          .toList(),
+      entitlements: entitlements,
       quotas: (json['quotas'] as List? ?? const [])
           .whereType<Map>()
           .map(
