@@ -48,7 +48,6 @@ class ImportedBillRow {
   final ReimbursementStatus reimbursementStatus;
   final List<String> tags;
 
-  /// Stable fallback for providers that do not export a transaction ID.
   String? get fingerprintPaymentChannel {
     if (provider == BillImportProvider.wechat) return 'wechat';
     if (provider == BillImportProvider.alipay) return 'alipay';
@@ -67,6 +66,7 @@ class ImportedBillRow {
     return id == null || id.isEmpty ? null : '${provider.name}:$id';
   }
 
+  /// Stable fallback for providers that do not export a transaction ID.
   String get importFingerprint => [
     provider.name,
     occurredAt.toIso8601String(),
@@ -481,40 +481,36 @@ class BillImportService {
   }
 
   TransactionType? _semanticType(String value, String? sourceCategory) {
-    final text =
-        '$value ${sourceCategory ?? ''}'.replaceAll(' ', '').toLowerCase();
-    if (text.contains('转账') || text == 'transfer') {
+    final primary = value.replaceAll(' ', '').toLowerCase();
+    final category = (sourceCategory ?? '').replaceAll(' ', '').toLowerCase();
+    final combined = '$primary$category';
+
+    if (primary.contains('转账') || primary == 'transfer') {
       return TransactionType.transfer;
     }
-    if (text.contains('退款') || text.contains('退回') || text == 'refund') {
+    if (combined.contains('退款') ||
+        combined.contains('退回') ||
+        primary == 'refund') {
       return TransactionType.refund;
     }
-    if (text.contains('报销') || text == 'reimbursement') {
+    if (combined.contains('报销') || primary == 'reimbursement') {
       return TransactionType.reimbursement;
     }
-    if (text.contains('借入') ||
-        text.contains('借款') ||
-        text == 'borrow') {
+    if (combined.contains('借入') ||
+        combined.contains('借款') ||
+        primary == 'borrow') {
       return TransactionType.borrow;
     }
-    if (text.contains('借出') || text == 'lend') {
+    if (combined.contains('借出') || primary == 'lend') {
       return TransactionType.lend;
     }
-    if (text.contains('还款') || text == 'repayment') {
+    if (combined.contains('还款') || primary == 'repayment') {
       return TransactionType.repayment;
     }
-    if ((text.contains('收入') || text == '收' || text == 'income') &&
-        sourceCategory == '退款') {
-      return TransactionType.refund;
-    }
-    if ((text.contains('收入') || text == '收' || text == 'income') &&
-        sourceCategory == '报销') {
-      return TransactionType.reimbursement;
-    }
-    if (text.contains('支出') || text == '支' || text == 'expense') {
+    if (primary.contains('支出') || primary == '支' || primary == 'expense') {
       return TransactionType.expense;
     }
-    if (text.contains('收入') || text == '收' || text == 'income') {
+    if (primary.contains('收入') || primary == '收' || primary == 'income') {
       return TransactionType.income;
     }
     return null;

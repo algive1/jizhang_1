@@ -628,9 +628,18 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           category = mapped.category;
           subcategory = mapped.subcategory;
         }
-        category ??= row.type == TransactionType.expense
-            ? expenseFallback
-            : incomeFallback;
+        category ??= switch (row.type) {
+          TransactionType.expense ||
+          TransactionType.lend ||
+          TransactionType.repayment ||
+          TransactionType.assetPurchase => expenseFallback,
+          TransactionType.income ||
+          TransactionType.refund ||
+          TransactionType.reimbursement ||
+          TransactionType.borrow ||
+          TransactionType.assetSale => incomeFallback,
+          TransactionType.transfer || TransactionType.adjustment => null,
+        };
       }
 
       requests.add(

@@ -12,6 +12,8 @@ import '../../../core/widgets/transaction_tile.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../intelligence/application/financial_truth_provider.dart';
+import '../../intelligence/domain/financial_truth_service.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 
 class ConsumptionCalendarPage extends ConsumerStatefulWidget {
@@ -54,12 +56,20 @@ class _ConsumptionCalendarPageState
   Widget build(BuildContext context) {
     final all =
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
+    final suppressed =
+        ref.watch(financialTruthSuppressedTransactionIdsProvider);
+    const truth = FinancialTruthService();
+    final canonicalAll = all
+        .where((item) => !suppressed.contains(item.id))
+        .toList(growable: false);
     final booksValue = ref.watch(booksProvider).value;
     final books = booksValue ?? const <LedgerBook>[];
     final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
     final filtered = effectiveBookFilterId == null
-        ? all
-        : all.where((item) => item.bookId == effectiveBookFilterId).toList();
+        ? canonicalAll
+        : canonicalAll
+              .where((item) => item.bookId == effectiveBookFilterId)
+              .toList();
     final monthTransactions = filtered.where((item) {
       final date = item.occurredAt;
       return item.deletedAt == null &&
@@ -74,23 +84,23 @@ class _ConsumptionCalendarPageState
     final dailyOther = <int>{};
     for (final item in monthTransactions) {
       final day = item.occurredAt.day;
-      if (_isConsumption(item)) {
-        final cents = (item.netExpenseAmount * 100).round();
+      if (truth.isPersonalConsumption(item)) {
+        final cents = (item.personalExpenseAmount * 100).round();
         dailyExpense.update(
           day,
-          (value) => value + item.netExpenseAmount,
-          ifAbsent: () => item.netExpenseAmount,
+          (value) => value + item.personalExpenseAmount,
+          ifAbsent: () => item.personalExpenseAmount,
         );
         dailyExpenseCents.update(
           day,
           (value) => value + cents,
           ifAbsent: () => cents,
         );
-      } else if (item.isIncome) {
+      } else if (truth.isEarnedIncome(item)) {
         dailyIncome.update(
           day,
-          (value) => value + item.amount,
-          ifAbsent: () => item.amount,
+          (value) => value + truth.earnedIncomeAmount(item),
+          ifAbsent: () => truth.earnedIncomeAmount(item),
         );
       } else {
         dailyOther.add(day);
@@ -124,11 +134,17 @@ class _ConsumptionCalendarPageState
         .firstOrNull;
 
     final totalExpense = monthTransactions
-        .where(_isConsumption)
-        .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
+        .where(truth.isPersonalConsumption)
+        .fold<double>(
+          0,
+          (sum, item) => sum + truth.personalConsumptionAmount(item),
+        );
     final totalIncome = monthTransactions
-        .where((item) => item.isIncome)
-        .fold<double>(0, (sum, item) => sum + item.amount);
+        .where(truth.isEarnedIncome)
+        .fold<double>(
+          0,
+          (sum, item) => sum + truth.earnedIncomeAmount(item),
+        );
     final balance = totalIncome - totalExpense;
     final highest = dailyExpenseCents.entries.isEmpty
         ? null
@@ -158,17 +174,17 @@ class _ConsumptionCalendarPageState
           continue;
         }
         final day = item.occurredAt.day;
-        if (_isConsumption(item)) {
+        if (truth.isPersonalConsumption(item)) {
           calendarExpense.update(
             day,
-            (value) => value + item.netExpenseAmount,
-            ifAbsent: () => item.netExpenseAmount,
+            (value) => value + item.personalExpenseAmount,
+            ifAbsent: () => item.personalExpenseAmount,
           );
-        } else if (item.isIncome) {
+        } else if (truth.isEarnedIncome(item)) {
           calendarIncome.update(
             day,
-            (value) => value + item.amount,
-            ifAbsent: () => item.amount,
+            (value) => value + truth.earnedIncomeAmount(item),
+            ifAbsent: () => truth.earnedIncomeAmount(item),
           );
         } else {
           calendarOther.add(day);
@@ -291,13 +307,6 @@ class _ConsumptionCalendarPageState
       date.year * 10000 + date.month * 100 + date.day;
 
   bool _isFutureDate(DateTime date) => date.isAfter(_today);
-
-  /// Keep the calendar aligned with the app's consumption-expense flag while
-  /// excluding fully offset or refunded records whose net expense is not positive.
-  bool _isConsumption(TransactionRecord item) =>
-      item.deletedAt == null &&
-      item.isConsumptionExpense &&
-      item.netExpenseAmount > 0;
 
   List<DateTime> _monthDates(DateTime month) {
     final first = DateTime(month.year, month.month, 1);

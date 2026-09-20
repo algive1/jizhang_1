@@ -25,9 +25,19 @@ class BillImportCategoryMapper {
       return const ImportedCategorySelection(category: null, subcategory: null);
     }
 
-    final type = row.type == TransactionType.expense
-        ? CategoryType.expense
-        : CategoryType.income;
+    final type = switch (row.type) {
+      TransactionType.expense ||
+      TransactionType.lend ||
+      TransactionType.repayment ||
+      TransactionType.assetPurchase => CategoryType.expense,
+      TransactionType.income ||
+      TransactionType.refund ||
+      TransactionType.reimbursement ||
+      TransactionType.borrow ||
+      TransactionType.assetSale => CategoryType.income,
+      TransactionType.transfer || TransactionType.adjustment =>
+        CategoryType.expense,
+    };
     final active = categories
         .where((item) => item.type == type && !item.isArchived)
         .toList(growable: false);

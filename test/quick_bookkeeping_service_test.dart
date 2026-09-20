@@ -367,6 +367,42 @@ void main() {
     },
   );
 
+  test('imported bookkeeping survives reload with merchant and metadata intact', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+    final occurredAt = DateTime(2026, 9, 20, 12);
+
+    final saved = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 28.5,
+        accountId: SeedIds.wechatAccount,
+        categoryId: 'expense-food',
+        merchant: '午餐店',
+        occurredAt: occurredAt,
+        source: TransactionSource.import,
+        metadata: const {
+          'importProvider': 'wechat',
+          'externalId': 'wx-reload-1',
+          'paymentChannel': 'wechat',
+        },
+      ),
+    );
+
+    final reloaded = await transactions.getById(saved.id);
+    expect(reloaded, isNotNull);
+    expect(reloaded!.source, TransactionSource.import);
+    expect(reloaded.merchant, '午餐店');
+    expect(reloaded.displayTitle, '午餐店');
+    expect(reloaded.metadataJson, contains('wx-reload-1'));
+  });
+
   test('batch bookkeeping rolls back every item when one item fails', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);

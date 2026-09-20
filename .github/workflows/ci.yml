@@ -71,6 +71,7 @@ jobs:
           test/financial_truth_service_test.dart
           test/home_insight_drawer_test.dart
           test/home_redesign_domain_test.dart
+          test/consumption_calendar_test.dart
           test/analysis_multibook_and_annual_report_test.dart
           test/bookkeeping_template_repository_test.dart
           test/quick_bookkeeping_service_test.dart

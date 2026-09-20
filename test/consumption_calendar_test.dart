@@ -85,6 +85,76 @@ void main() {
     },
   );
 
+  testWidgets(
+    'imported transactions appear in calendar totals and selected-day list',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final repository = DriftTransactionRepository(database);
+      final container = ProviderContainer(
+        overrides: [databaseProvider.overrideWithValue(database)],
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        container.dispose();
+        await tester.pump();
+      });
+      final now = DateTime.now();
+      final occurredAt = DateTime(now.year, now.month, now.day, 10);
+
+      await repository.create(
+        _record(
+          id: 'calendar-imported',
+          type: TransactionType.expense,
+          amount: 36,
+          occurredAt: occurredAt,
+          source: TransactionSource.import,
+          merchant: '导入午餐店',
+        ),
+      );
+      await repository.create(
+        _record(
+          id: 'calendar-reimbursable',
+          type: TransactionType.expense,
+          amount: 100,
+          occurredAt: occurredAt.add(const Duration(minutes: 10)),
+          reimbursementStatus: ReimbursementStatus.pending,
+          reimbursementAmount: 80,
+          source: TransactionSource.import,
+        ),
+      );
+      await repository.create(
+        _record(
+          id: 'calendar-import-refund',
+          type: TransactionType.refund,
+          amount: 50,
+          occurredAt: occurredAt.add(const Duration(minutes: 20)),
+          source: TransactionSource.import,
+        ),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: ConsumptionCalendarPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('导入午餐店'), findsOneWidget);
+      expect(find.text('¥56'), findsWidgets);
+      expect(find.text('¥50'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('calendar defaults to all ledgers and can filter one ledger', (
     tester,
   ) async {
@@ -159,6 +229,10 @@ TransactionRecord _record({
   String? destinationAccountId,
   RefundStatus refundStatus = RefundStatus.none,
   double? refundAmount,
+  ReimbursementStatus reimbursementStatus = ReimbursementStatus.none,
+  double? reimbursementAmount,
+  TransactionSource source = TransactionSource.manual,
+  String? merchant,
 }) {
   return TransactionRecord(
     id: id,
@@ -172,5 +246,9 @@ TransactionRecord _record({
     updatedAt: occurredAt,
     refundStatus: refundStatus,
     refundAmount: refundAmount,
+    reimbursementStatus: reimbursementStatus,
+    reimbursementAmount: reimbursementAmount,
+    source: source,
+    merchant: merchant,
   );
 }
