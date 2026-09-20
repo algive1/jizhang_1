@@ -59,6 +59,8 @@ class BillImportCategoryMapper {
       type: type,
       sourceCategory: sourceCategory,
       sourceSubcategory: sourceSubcategory,
+      merchant: row.merchant,
+      note: row.note,
       root: root,
       children: children,
     );
@@ -96,7 +98,18 @@ class BillImportCategoryMapper {
     return switch (category) {
       '餐饮' || '餐饮美食' || '美食' || '零食' || '水果' => 'expense-food',
       '交通' || '出行' || '交通出行' => 'expense-transport',
-      '购物' || '网购' || '美妆' => 'expense-shopping',
+      '购物' ||
+      '网购' ||
+      '美妆' ||
+      '淘宝' ||
+      '天猫' ||
+      '京东' ||
+      '拼多多' ||
+      '抖音' ||
+      '抖音商城' ||
+      '抖音电商' ||
+      '红书' ||
+      '小红书' => 'expense-shopping',
       '家居日用' || '日用' || '日用品' || '居家' || '生活用品' =>
         'expense-household',
       '烟酒茶' || '烟酒' || '酒水' || '茶叶' => 'expense-tobacco-tea',
@@ -124,17 +137,31 @@ class BillImportCategoryMapper {
     required CategoryType type,
     required String sourceCategory,
     required String sourceSubcategory,
+    required String merchant,
+    required String note,
     required Category root,
     required List<Category> children,
   }) {
     final seedKey = type == CategoryType.expense
-        ? _expenseChildKey(sourceCategory, sourceSubcategory)
+        ? _expenseChildKey(
+            sourceCategory,
+            sourceSubcategory,
+            rootKey: _semanticSeedKey(root.id),
+            merchant: merchant,
+            note: note,
+          )
         : _incomeChildKey(sourceCategory, sourceSubcategory);
     if (seedKey == null) return null;
     return _findBySeedKey(children, seedKey);
   }
 
-  String? _expenseChildKey(String category, String subcategory) {
+  String? _expenseChildKey(
+    String category,
+    String subcategory, {
+    required String rootKey,
+    required String merchant,
+    required String note,
+  }) {
     if (category == '零食' && subcategory.isEmpty) {
       return 'expense-food-snacks';
     }
@@ -143,6 +170,17 @@ class BillImportCategoryMapper {
     }
     if (category == '美妆' && subcategory.isEmpty) {
       return 'expense-shopping-beauty';
+    }
+
+    if (rootKey == 'expense-shopping') {
+      final platform = _shoppingPlatformKey(
+        subcategory.isNotEmpty ? subcategory : category,
+      );
+      if (platform != null) return platform;
+      if (subcategory.isEmpty) {
+        final merchantPlatform = _shoppingPlatformKey('$merchant $note');
+        if (merchantPlatform != null) return merchantPlatform;
+      }
     }
 
     return switch (subcategory) {
@@ -175,11 +213,6 @@ class BillImportCategoryMapper {
       '茶具' => 'expense-tobacco-tea-teaware',
       '理发' => 'expense-shopping-personal-care',
       '服饰' => 'expense-shopping-clothes',
-      '淘宝' || '天猫' => 'expense-shopping-taobao',
-      '京东' || 'JD' || 'jd' => 'expense-shopping-jd',
-      '拼多多' || 'PDD' || 'pdd' => 'expense-shopping-pinduoduo',
-      '抖音' || '抖音商城' || '抖音电商' => 'expense-shopping-douyin',
-      '红书' || '小红书' => 'expense-shopping-xiaohongshu',
       '其他购物' || '其他电商' || '其他' => 'expense-shopping-other',
       '美容仪器' => 'expense-shopping-beauty',
       '付费会员' => 'expense-entertainment-subscription',
@@ -198,6 +231,56 @@ class BillImportCategoryMapper {
       '朋友' || '同事' => 'expense-gift-social',
       _ => null,
     };
+  }
+
+  String? _shoppingPlatformKey(String value) {
+    final normalized = _normalize(value);
+    if (normalized.isEmpty) return null;
+    if (normalized.contains('淘宝') || normalized.contains('天猫')) {
+      return 'expense-shopping-taobao';
+    }
+    if (normalized.contains('京东') || normalized == 'jd') {
+      return 'expense-shopping-jd';
+    }
+    if (normalized.contains('拼多多') || normalized.contains('pdd')) {
+      return 'expense-shopping-pinduoduo';
+    }
+    if (normalized.contains('抖音商城') ||
+        normalized.contains('抖音电商') ||
+        normalized == '抖音') {
+      return 'expense-shopping-douyin';
+    }
+    if (normalized.contains('小红书') || normalized == '红书') {
+      return 'expense-shopping-xiaohongshu';
+    }
+    return null;
+  }
+
+  String _semanticSeedKey(String id) {
+    const keys = [
+      'expense-shopping',
+      'expense-food',
+      'expense-transport',
+      'expense-household',
+      'expense-tobacco-tea',
+      'expense-entertainment',
+      'expense-housing',
+      'expense-utilities',
+      'expense-medical',
+      'expense-education',
+      'expense-travel',
+      'expense-gift',
+      'expense-pet',
+      'expense-digital',
+      'expense-car',
+      'expense-other',
+    ];
+    for (final key in keys) {
+      if (id == key || id.endsWith('::$key') || id.endsWith('-$key')) {
+        return key;
+      }
+    }
+    return id;
   }
 
   String? _incomeChildKey(String category, String subcategory) {
