@@ -32,6 +32,30 @@ void main() {
     expect(await database.budgetDao.getMonth(monthKey), isNotEmpty);
   });
 
+
+  test('current seed repairs a missing default personal book', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    final seeder = DatabaseSeeder(database);
+    await seeder.seedIfNeeded();
+
+    await database.customStatement(
+      'DELETE FROM books WHERE id=?',
+      [SeedIds.personalBook],
+    );
+    expect(await database.familyDao.findBook(SeedIds.personalBook), isNull);
+
+    await seeder.seedIfNeeded();
+
+    final repaired = await database.familyDao.findBook(SeedIds.personalBook);
+    expect(repaired, isNotNull);
+    expect(repaired!.name, '个人账本');
+    expect(
+      await database.accountDao.getActive(bookId: SeedIds.personalBook),
+      isNotEmpty,
+    );
+  });
+
   test(
     'seed migration removes legacy demo data from existing local databases',
     () async {
