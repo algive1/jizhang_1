@@ -23,9 +23,11 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../auto_bookkeeping_pending.dart';
 import '../auto_bookkeeping_learning.dart';
 import '../auto_bookkeeping_refund_matcher.dart';
+import '../auto_bookkeeping_reimbursement_matcher.dart';
 import '../auto_bookkeeping_repayment_resolver.dart';
 import '../auto_bookkeeping_transfer_resolver.dart';
 import '../../transactions/data/refund_service.dart';
+import '../../reimbursements/data/reimbursement_service.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
@@ -48,6 +50,7 @@ class _AutoBookkeepingConfirmPageState
   String? _message;
   AutoBookkeepingRecommendation? _recommendation;
   TransactionRecord? _matchedRefundOriginal;
+  TransactionRecord? _matchedReimbursementOriginal;
   AutoBookkeepingTransferRecommendation? _transferRecommendation;
   AutoBookkeepingRepaymentRecommendation? _repaymentRecommendation;
   bool _internalTransfer = false;
@@ -70,6 +73,7 @@ class _AutoBookkeepingConfirmPageState
           .getPending();
       AutoBookkeepingRecommendation? recommendation;
       TransactionRecord? matchedRefundOriginal;
+      TransactionRecord? matchedReimbursementOriginal;
       AutoBookkeepingTransferRecommendation? transferRecommendation;
       AutoBookkeepingRepaymentRecommendation? repaymentRecommendation;
       String? sourceAccountId;
@@ -95,6 +99,11 @@ class _AutoBookkeepingConfirmPageState
           matchedRefundOriginal = await ref
               .read(autoBookkeepingRefundMatcherProvider)
               .findOriginal(candidate: candidate, bookId: targetBookId);
+          if (candidate.transactionType == 'REIMBURSEMENT') {
+            matchedReimbursementOriginal = await ref
+                .read(autoBookkeepingReimbursementMatcherProvider(targetBookId))
+                .findOriginal(candidate: candidate);
+          }
 
           final accounts = await ref.read(
             accountsByBookProvider(targetBookId).future,
@@ -132,6 +141,7 @@ class _AutoBookkeepingConfirmPageState
         _candidate = candidate;
         _recommendation = recommendation;
         _matchedRefundOriginal = matchedRefundOriginal;
+        _matchedReimbursementOriginal = matchedReimbursementOriginal;
         _transferRecommendation = transferRecommendation;
         _repaymentRecommendation = repaymentRecommendation;
         _bookId = resolvedBookId;
@@ -268,6 +278,11 @@ class _AutoBookkeepingConfirmPageState
               _matchedRefundOriginal?.bookId == bookId
           ? _matchedRefundOriginal
           : null;
+      final matchedReimbursement =
+          transactionType == TransactionType.reimbursement &&
+              _matchedReimbursementOriginal?.bookId == bookId
+          ? _matchedReimbursementOriginal
+          : null;
       TransactionRecord saved;
       String? committedWarning;
       if (matchedRefund != null) {
@@ -281,6 +296,23 @@ class _AutoBookkeepingConfirmPageState
           occurredAt: candidate.timestamp,
           transactionId: 'auto-${candidate.fingerprint}',
           note: candidate.note ?? '自动识别退款：${candidate.merchant}',
+          metadataJson: jsonEncode(metadata),
+          source: TransactionSource.auto,
+        );
+      } else if (matchedReimbursement != null) {
+        saved = await ReimbursementService(
+          ref.read(databaseProvider),
+          bookId: bookId,
+        ).registerDetectedPayment(
+          original: matchedReimbursement,
+          account: account,
+          category: category!,
+          amount: candidate.amountInCents / 100,
+          occurredAt: candidate.timestamp,
+          transactionId: 'auto-${candidate.fingerprint}',
+          note:
+              candidate.note ??
+              '自动识别报销：${matchedReimbursement.displayTitle}',
           metadataJson: jsonEncode(metadata),
           source: TransactionSource.auto,
         );
@@ -554,6 +586,19 @@ class _AutoBookkeepingConfirmPageState
                   style: TextStyle(color: context.appPrimary),
                 ),
               ],
+              if (candidate.transactionType == 'REIMBURSEMENT') ...[
+                const SizedBox(height: 6),
+                Text(
+                  _matchedReimbursementOriginal != null
+                      ? '已精确匹配待报销流水：${_matchedReimbursementOriginal!.displayTitle}'
+                      : '未找到唯一匹配的待报销流水，本次将作为独立报销回款保存',
+                  style: TextStyle(
+                    color: _matchedReimbursementOriginal != null
+                        ? context.appPrimary
+                        : context.appSecondaryText,
+                  ),
+                ),
+              ],
               if (candidate.screenshotPath != null) ...[
                 const SizedBox(height: 12),
                 ClipRRect(
@@ -723,6 +768,9 @@ class _AutoBookkeepingConfirmPageState
                           }
                           if (_matchedRefundOriginal?.bookId != value) {
                             _matchedRefundOriginal = null;
+                          }
+                          if (_matchedReimbursementOriginal?.bookId != value) {
+                            _matchedReimbursementOriginal = null;
                           }
                         }),
                 ),
