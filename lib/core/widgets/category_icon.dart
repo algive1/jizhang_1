@@ -29,8 +29,13 @@ class CategoryIcon extends StatelessWidget {
     final style = vivid
         ? vividStyle
         : (const Color(0xFFF1F4EA), vividStyle.$2, vividStyle.$3);
+    final scheme = Theme.of(context).colorScheme;
     final resolvedStyle = monochrome
-        ? (const Color(0xFFEAF2D9), style.$2, const Color(0xFF709A34))
+        ? (
+            scheme.primaryContainer.withValues(alpha: .72),
+            style.$2,
+            scheme.primary,
+          )
         : style;
     return Container(
       width: size,
