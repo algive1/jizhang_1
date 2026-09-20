@@ -1435,6 +1435,43 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return accounts.where((item) => item.id != sourceAccount?.id).firstOrNull;
   }
 
+  Future<void> _chooseCategory(
+    List<Category> categories,
+    Category category, {
+    String? currentSubcategoryId,
+  }) async {
+    final initial =
+        widget.initialTransaction?.categoryId == category.id
+        ? widget.initialTransaction
+        : null;
+    final children = _subcategoriesFor(categories, category, initial);
+    if (children.isEmpty) {
+      setState(() {
+        _categoryId = category.id;
+        _subcategoryId = null;
+      });
+      return;
+    }
+
+    final selection = await showModalBottomSheet<_CategorySelection>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _SubcategoryPickerSheet(
+        parent: category,
+        categories: children,
+        selectedId: currentSubcategoryId,
+      ),
+    );
+    if (selection == null || !mounted) return;
+    setState(() {
+      _categoryId = category.id;
+      _subcategoryId = selection.subcategoryId;
+    });
+  }
+
   Future<void> _chooseBook(List<LedgerBook> books) async {
     final selected = await showBookChoiceSheet(
       context,
@@ -2093,6 +2130,166 @@ String _transactionTypeLabel(TransactionType type) => switch (type) {
 };
 
 /// The prototype's four-item type switch: the active tab is a solid capsule.
+class _CategorySelection {
+  const _CategorySelection(this.subcategoryId);
+
+  final String? subcategoryId;
+}
+
+class _SubcategoryPickerSheet extends StatelessWidget {
+  const _SubcategoryPickerSheet({
+    required this.parent,
+    required this.categories,
+    required this.selectedId,
+  });
+
+  final Category parent;
+  final List<Category> categories;
+  final String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(14);
+    final columns = textScale > 19 ? 3 : 4;
+    return Material(
+      color: context.appSurface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: FractionallySizedBox(
+        heightFactor: .72,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.appDivider,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
+              child: Row(
+                children: [
+                  CategoryIcon(
+                    category: parent.name,
+                    iconKey: parent.icon,
+                    size: 42,
+                    monochrome: true,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          parent.name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '选择二级分类',
+                          style: TextStyle(color: context.appSecondaryText),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: context.appDivider),
+            Expanded(
+              child: GridView.builder(
+                key: const ValueKey('quick-subcategory-picker'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: textScale > 19 ? .88 : .94,
+                ),
+                itemCount: categories.length + 1,
+                itemBuilder: (context, index) {
+                  final useParent = index == 0;
+                  final category = useParent ? parent : categories[index - 1];
+                  final selected = useParent
+                      ? selectedId == null
+                      : selectedId == category.id;
+                  return Semantics(
+                    button: true,
+                    selected: selected,
+                    label: useParent ? '不细分，使用${parent.name}' : category.name,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(
+                        context,
+                        _CategorySelection(useParent ? null : category.id),
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      child: AnimatedContainer(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? context.appPrimarySoft
+                              : context.appSurfaceSoft,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selected
+                                ? context.appPrimary
+                                : context.appDivider,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CategoryIcon(
+                              category: category.name,
+                              iconKey: category.icon,
+                              size: 38,
+                              monochrome: true,
+                            ),
+                            const SizedBox(height: 7),
+                            Text(
+                              useParent ? '不细分' : category.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: selected
+                                    ? context.appPrimary
+                                    : context.appPrimaryText,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EntryTabs extends StatelessWidget {
   const _EntryTabs({required this.selected, required this.onChanged});
 
