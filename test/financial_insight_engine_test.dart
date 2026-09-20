@@ -27,7 +27,7 @@ void main() {
           200,
         ).copyWith(
           reimbursementStatus: ReimbursementStatus.pending,
-          reimbursementAmount: 150,
+          reimbursementAmount: 200,
         ),
     ];
     const engine = FinancialInsightEngine();
@@ -76,7 +76,7 @@ void main() {
         ).copyWith(isOneTime: false),
       _tx(
         'special',
-        DateTime(2026, 9, 18),
+        DateTime(2026, 9, 9),
         900,
         categoryId: 'shopping',
         categoryName: '购物',

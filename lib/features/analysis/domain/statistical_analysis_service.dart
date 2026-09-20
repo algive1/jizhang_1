@@ -521,10 +521,10 @@ class StatisticalAnalysisService {
   }
 
   String _categoryKey(TransactionRecord item) {
-    final id = item.categoryId?.trim();
-    if (id != null && id.isNotEmpty) return id;
     final name = item.categoryName?.trim();
     if (name != null && name.isNotEmpty) return 'name:$name';
+    final id = item.categoryId?.trim();
+    if (id != null && id.isNotEmpty) return 'id:${item.bookId}:$id';
     return 'uncategorized';
   }
 

@@ -86,7 +86,7 @@ class FinancialInsightEngine {
           clock,
         );
         candidates.add(
-          special ?? _fromAnalysis(source, preferences, quality),
+          special ?? _fromAnalysis(source, expenses, preferences, quality),
         );
       }
       final positive = _positiveChange(
@@ -324,8 +324,9 @@ class FinancialInsightEngine {
             .map((item) => item.categoryName?.trim())
             .whereType<String>()
             .firstWhere((value) => value.isNotEmpty, orElse: () => '这类消费');
+    final stableCategoryId = _stableCategoryId(source, currentRows);
     return _item(
-      id: 'category:${source.categoryId}:one-time',
+      id: 'category:${stableCategoryId ?? source.categoryId}:one-time',
       kind: FinancialInsightKind.discovery,
       priority: InsightPriority.attention,
       title: '$categoryName增加主要来自一次性支出',
@@ -342,7 +343,7 @@ class FinancialInsightEngine {
           : null,
       actionLabel: '查看相关流水',
       actionRoute: '/transactions',
-      categoryId: source.categoryId,
+      categoryId: stableCategoryId,
       amount: source.amount,
       changePercent: source.deltaPercent,
       evidence: [
@@ -368,18 +369,34 @@ class FinancialInsightEngine {
   }
 
   String _analysisCategoryKey(TransactionRecord item) {
-    final id = item.categoryId?.trim();
-    if (id != null && id.isNotEmpty) return id;
     final name = item.categoryName?.trim();
     if (name != null && name.isNotEmpty) return 'name:$name';
+    final id = item.categoryId?.trim();
+    if (id != null && id.isNotEmpty) return 'id:${item.bookId}:$id';
     return 'uncategorized';
+  }
+
+  String? _stableCategoryId(
+    AnalysisInsight source,
+    List<TransactionRecord> expenses,
+  ) {
+    final sourceKey = source.categoryId;
+    if (sourceKey == null) return null;
+    for (final item in expenses) {
+      if (_analysisCategoryKey(item) != sourceKey) continue;
+      final id = item.categoryId?.trim();
+      if (id != null && id.isNotEmpty) return id;
+    }
+    return sourceKey;
   }
 
   FinancialInsightItem _fromAnalysis(
     AnalysisInsight source,
+    List<TransactionRecord> expenses,
     InsightPreferences preferences,
     InsightConfidence quality,
   ) {
+    final stableCategoryId = _stableCategoryId(source, expenses);
     final priority = switch (source.severity) {
       AnalysisInsightSeverity.info => InsightPriority.info,
       AnalysisInsightSeverity.attention => InsightPriority.attention,
@@ -388,7 +405,9 @@ class FinancialInsightEngine {
     final currentCount = (source.metadata['currentCount'] as num?)?.toDouble();
     final previousCount = (source.metadata['previousCount'] as num?)?.toDouble();
     return _item(
-      id: 'analysis:${source.id}',
+      id: source.id.startsWith('category:') && stableCategoryId != null
+          ? 'analysis:category:$stableCategoryId'
+          : 'analysis:${source.id}',
       kind: FinancialInsightKind.behavior,
       priority: priority,
       title: source.title,
@@ -408,7 +427,7 @@ class FinancialInsightEngine {
       },
       actionLabel: '查看趋势',
       actionRoute: '/analysis',
-      categoryId: source.categoryId,
+      categoryId: stableCategoryId ?? source.categoryId,
       amount: source.amount,
       changePercent: source.deltaPercent,
       evidence: [
