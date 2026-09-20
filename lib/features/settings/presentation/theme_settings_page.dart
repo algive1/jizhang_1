@@ -16,7 +16,9 @@ class ThemeSettingsPage extends ConsumerWidget {
     final catalog = ref.watch(themeCatalogProvider);
     final preferred = ref.watch(preferredThemeProvider).value ?? BuiltInThemes.freshGreen.id;
     final member = ref.watch(membershipProvider).value;
-    final premium = member != null && member.has(EntitlementKey.customTheme);
+    final premium =
+        kAllFeaturesFreeForTesting ||
+        (member != null && member.has(EntitlementKey.customTheme));
     return Scaffold(
       appBar: AppBar(title: const Text('主题外观')),
       body: catalog.when(
