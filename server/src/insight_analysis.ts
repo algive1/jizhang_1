@@ -1521,10 +1521,12 @@ export function analyzeInsightContext(
         amount: upcomingExpense,
         evidence: [
           { label: '未来14天周期支出', value: upcomingExpense, unit: currency },
-          if (upcomingIncome > 0)
-            { label: '未来14天周期收入', value: upcomingIncome, unit: currency },
-          if (liquid > 0)
-            { label: '当前记录的流动资产', value: liquid, unit: currency },
+          ...(upcomingIncome > 0
+            ? [{ label: '未来14天周期收入', value: upcomingIncome, unit: currency }]
+            : []),
+          ...(liquid > 0
+            ? [{ label: '当前记录的流动资产', value: liquid, unit: currency }]
+            : []),
         ],
         relatedTransactionIds: [],
         baseScore: risk ? 82 : 61,
