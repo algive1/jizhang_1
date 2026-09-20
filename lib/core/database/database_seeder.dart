@@ -199,6 +199,7 @@ class DatabaseSeeder {
       BookType.personal => const <String, String>{
           'expense-shopping-daily': '日用百货',
           'expense-shopping-furniture': '家居用品',
+          'expense-shopping-online': '网购',
         },
       BookType.family => const <String, String>{
           'expense-shopping-daily': '家庭日用品',
