@@ -8,6 +8,7 @@ import { ApiError, requireCondition as check } from './contract.js';
 import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
 import { hasMembership } from './membership_state.js';
+import { entitlementValue } from './entitlement_usage.js';
 
 const feature = z.enum(['export', 'summary', 'voice', 'ocr']);
 const voiceParseRequestSchema = z.strictObject({
@@ -81,6 +82,7 @@ export function registerAssistantPolicy(
   store.db.prepare('INSERT OR IGNORE INTO assistant_policy VALUES(1,?)').run(JSON.stringify(defaults));
   const policy = (): AssistantPolicy => assistantPolicySchema.parse(JSON.parse((store.db.prepare('SELECT data_json FROM assistant_policy WHERE id=1').get() as { data_json: string }).data_json));
   const hasActiveMembership = (userId: string, _now: number): boolean => hasMembership(store,userId);
+  const hasFeature=(userId:string,key:string)=>entitlementValue(store,userId,key)===true || typeof entitlementValue(store,userId,key)==='number';
 
   const authorize = (userId: string, body: AssistantRequest): AuthorizationResult => {
     const bodyHash = createHash('sha256').update(JSON.stringify(body)).digest('hex');
@@ -155,9 +157,7 @@ export function registerAssistantPolicy(
 
     const p = policy();
     const member = hasActiveMembership(user.id, store.now());
-    if (p.memberFeatures.includes('voice')) {
-      check(member, 'AI语音解析需要有效会员', 403);
-    }
+    if (p.memberFeatures.includes('voice')) check(member || hasFeature(user.id,'voice_bookkeeping'),'AI语音解析需要有效会员或对应权益',403);
     const authorization = authorize(user.id, {
       requestId: body.requestId,
       text: body.text,
