@@ -113,7 +113,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.get('/api/v1/admin/support-tickets', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const tickets = store.db.prepare(
       'SELECT id,user_id AS userId,installation_id AS installationId,subject,message,'
         + 'contact,app_version AS appVersion,status,created_at AS createdAt,'
@@ -124,7 +124,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.patch('/api/v1/admin/support-tickets/:id', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'support.write');
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { status } = z.strictObject({
       status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
@@ -193,7 +193,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/announcements', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'messages.write');
     const input = z.strictObject({
       title: z.string().trim().min(2).max(80),
       body: z.string().trim().min(2).max(2000),
@@ -214,14 +214,14 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/push/dispatch', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'messages.write');
     const result = await dispatchPushOutbox(store, 200);
     audit(store, 'push_dispatch', result);
     return result;
   });
 
   app.post('/api/v1/admin/maintenance/run', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token']);
+    requireAdminPrincipal(request.headers['x-admin-token'],'logs.read');
     const result = runRetention(store);
     audit(store, 'maintenance_run', {
       deleted: result.deleted,
