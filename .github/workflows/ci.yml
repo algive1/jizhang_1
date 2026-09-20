@@ -78,7 +78,10 @@ jobs:
           test/autobookkeeping_page_test.dart
           test/autobookkeeping_learning_test.dart
           test/autobookkeeping_refund_matcher_test.dart
+          test/autobookkeeping_reimbursement_matcher_test.dart
+          test/autobookkeeping_repayment_resolver_test.dart
           test/autobookkeeping_transfer_resolver_test.dart
+          test/reimbursement_service_test.dart
 
       - name: Run Android auto-bookkeeping unit tests
         run: |
