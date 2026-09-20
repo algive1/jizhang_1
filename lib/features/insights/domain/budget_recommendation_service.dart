@@ -66,7 +66,9 @@ class BudgetRecommendationService {
             !matches(item)) {
           continue;
         }
-        cents += (_personalExpense(item) * 100).round();
+        final personal = _personalExpense(item);
+        if (personal <= .005) continue;
+        cents += (personal * 100).round();
         count++;
       }
       if (count >= 2 && cents > 0) {

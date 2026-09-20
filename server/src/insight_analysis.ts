@@ -1252,7 +1252,8 @@ export function analyzeInsightContext(
     tx =>
       tx.occurredAt >= ninetyDaysAgo &&
       tx.semanticHints.family &&
-      ['expense', 'lend'].includes(tx.type),
+      ['expense', 'lend'].includes(tx.type) &&
+      netExpense(tx) > 0,
   );
   const familyAmount = familyRows.reduce((sum, tx) => sum + netExpense(tx), 0);
   if (familyRows.length >= 2 && familyAmount >= 100) {

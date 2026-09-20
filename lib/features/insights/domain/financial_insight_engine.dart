@@ -59,8 +59,11 @@ class FinancialInsightEngine {
               item.currency.toUpperCase() == analysis.currency.toUpperCase(),
         )
         .toList(growable: false);
-    final expenses = eligible
+    final consumptionRows = eligible
         .where((item) => item.isConsumptionExpense)
+        .toList(growable: false);
+    final expenses = consumptionRows
+        .where((item) => _personalExpense(item) > .005)
         .toList(growable: false);
     final quality = _quality(expenses, clock);
     final candidates = <FinancialInsightItem>[];
@@ -177,7 +180,7 @@ class FinancialInsightEngine {
     if (recurringCashflow != null) candidates.add(recurringCashflow);
 
     final family = _familyInsight(
-      eligible,
+      expenses,
       preferences,
       quality,
       clock,
@@ -193,7 +196,7 @@ class FinancialInsightEngine {
     if (beauty != null) candidates.add(beauty);
 
     final reimbursement = _reimbursementInsight(
-      expenses,
+      consumptionRows,
       preferences,
       quality,
       clock,
