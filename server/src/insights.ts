@@ -128,7 +128,7 @@ export function ensureInsightSchema(store: Store) {
       insight_id TEXT NOT NULL,
       body_hash TEXT NOT NULL,
       confirmed_at INTEGER NOT NULL,
-      PRIMARY KEY(user_id,insight_id)
+      PRIMARY KEY(user_id,insight_id,body_hash)
     );
     CREATE INDEX IF NOT EXISTS idx_insight_confirmed_user_time
       ON insight_confirmed_items(user_id,confirmed_at DESC);
@@ -339,8 +339,8 @@ export function registerInsightRoutes(
         'INSERT INTO insight_confirmed_items('
           + 'user_id,insight_id,body_hash,confirmed_at'
           + ') VALUES(?,?,?,?) '
-          + 'ON CONFLICT(user_id,insight_id) DO UPDATE SET '
-          + 'body_hash=excluded.body_hash,confirmed_at=excluded.confirmed_at',
+          + 'ON CONFLICT(user_id,insight_id,body_hash) DO UPDATE SET '
+          + 'confirmed_at=excluded.confirmed_at',
       );
       store.db.transaction(() => {
         for (const item of result.items) {
