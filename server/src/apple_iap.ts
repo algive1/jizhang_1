@@ -166,6 +166,7 @@ export function registerAppleIapRoutes(app:FastifyInstance,store:Store,authentic
       }
       const owner=store.db.prepare('SELECT user_id FROM apple_transactions WHERE original_transaction_id=? LIMIT 1').get(original) as {user_id:string}|undefined;
       if(owner) bindTransaction(store,owner.user_id,payload,signed);
+      if(owner && ['REFUND','REVOKE'].includes(type)) store.db.prepare('UPDATE apple_transactions SET revoked_at=?,updated_at=? WHERE original_transaction_id=?').run(signedAt,store.now(),original);
       if(uuid) store.db.prepare('INSERT INTO apple_notifications(notification_uuid,notification_type,subtype,signed_at,original_transaction_id,received_at) VALUES(?,?,?,?,?,?)').run(uuid,type,String(envelope.subtype??''),signedAt,original,store.now());
       return {ok:true};
     }
