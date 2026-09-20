@@ -2138,159 +2138,448 @@ class _CategorySelection {
   final String? subcategoryId;
 }
 
-class _SubcategoryPickerSheet extends StatelessWidget {
-  const _SubcategoryPickerSheet({
+Future<_CategorySelection?> _showSubcategoryPopover(
+  BuildContext context, {
+  required Rect anchorRect,
+  required Category parent,
+  required List<Category> categories,
+  required String? selectedId,
+}) {
+  return Navigator.of(context, rootNavigator: true).push<_CategorySelection>(
+    _SubcategoryPopoverRoute(
+      anchorRect: anchorRect,
+      parent: parent,
+      categories: categories,
+      selectedId: selectedId,
+    ),
+  );
+}
+
+class _SubcategoryPopoverRoute extends PopupRoute<_CategorySelection> {
+  _SubcategoryPopoverRoute({
+    required this.anchorRect,
     required this.parent,
     required this.categories,
     required this.selectedId,
   });
 
+  final Rect anchorRect;
   final Category parent;
   final List<Category> categories;
   final String? selectedId;
 
   @override
+  Color? get barrierColor => Colors.transparent;
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String? get barrierLabel => '关闭二级分类';
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 180);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 120);
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    return _AnchoredSubcategoryPopover(
+      anchorRect: anchorRect,
+      parent: parent,
+      categories: categories,
+      selectedId: selectedId,
+      onSelected: (selection) => Navigator.of(context).pop(selection),
+      onDismiss: () => Navigator.of(context).pop(),
+    );
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: .96, end: 1).animate(curved),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _AnchoredSubcategoryPopover extends StatelessWidget {
+  const _AnchoredSubcategoryPopover({
+    required this.anchorRect,
+    required this.parent,
+    required this.categories,
+    required this.selectedId,
+    required this.onSelected,
+    required this.onDismiss,
+  });
+
+  final Rect anchorRect;
+  final Category parent;
+  final List<Category> categories;
+  final String? selectedId;
+  final ValueChanged<_CategorySelection> onSelected;
+  final VoidCallback onDismiss;
+
+  @override
   Widget build(BuildContext context) {
-    final textScale = MediaQuery.textScalerOf(context).scale(14);
-    final columns = textScale > 19 ? 3 : 4;
+    final media = MediaQuery.of(context);
+    final screen = media.size;
+    final safeTop = media.padding.top + 8;
+    final safeBottom = screen.height - media.padding.bottom - 8;
+    final textScale = media.textScaler.scale(14);
+    final width = (screen.width - 24).clamp(280.0, 500.0).toDouble();
+    final columns = textScale > 19 ? 4 : (width >= 430 ? 6 : 5);
+    final rows = ((categories.length + 1 + columns - 1) / columns).floor();
+    final rowHeight = textScale > 19 ? 92.0 : 80.0;
+    final desiredHeight = 74 + rows * rowHeight + 18;
+    final maxHeight = (safeBottom - safeTop).clamp(180.0, screen.height).toDouble();
+    final height = desiredHeight.clamp(170.0, maxHeight).toDouble();
+    final left = (anchorRect.center.dx - width / 2)
+        .clamp(12.0, screen.width - width - 12)
+        .toDouble();
+    final below = anchorRect.bottom + 10;
+    final above = anchorRect.top - height - 10;
+    final top = below + height <= safeBottom
+        ? below
+        : above >= safeTop
+        ? above
+        : (safeBottom - height).clamp(safeTop, safeBottom).toDouble();
+
     return Material(
-      color: context.appSurface,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      clipBehavior: Clip.antiAlias,
-      child: FractionallySizedBox(
-        heightFactor: .72,
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.appDivider,
-                borderRadius: BorderRadius.circular(99),
-              ),
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: onDismiss,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 12, 10),
-              child: Row(
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: width,
+            height: height,
+            child: AppGlassSurface(
+              borderRadius: 24,
+              tint: context.appPopoverSurface,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
                 children: [
-                  CategoryIcon(
-                    category: parent.name,
-                    iconKey: parent.icon,
-                    size: 42,
-                    monochrome: true,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          parent.name,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '选择二级分类',
-                          style: TextStyle(color: context.appSecondaryText),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '关闭',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: context.appDivider),
-            Expanded(
-              child: GridView.builder(
-                key: const ValueKey('quick-subcategory-picker'),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  mainAxisExtent: textScale > 19 ? 122 : 104,
-                ),
-                itemCount: categories.length + 1,
-                itemBuilder: (context, index) {
-                  final useParent = index == 0;
-                  final category = useParent ? parent : categories[index - 1];
-                  final selected = useParent
-                      ? selectedId == null
-                      : selectedId == category.id;
-                  return Semantics(
-                    button: true,
-                    selected: selected,
-                    label: useParent ? '不细分，使用${parent.name}' : category.name,
-                    child: InkWell(
-                      key: ValueKey(
-                        useParent
-                            ? 'quick-subcategory-parent'
-                            : 'quick-subcategory-${category.id}',
+                  Row(
+                    children: [
+                      CategoryIcon(
+                        category: parent.name,
+                        iconKey: parent.icon,
+                        size: 36,
+                        monochrome: true,
                       ),
-                      onTap: () => Navigator.pop(
-                        context,
-                        _CategorySelection(useParent ? null : category.id),
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                      child: AnimatedContainer(
-                        duration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? context.appPrimarySoft
-                              : context.appSurfaceSoft,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: selected
-                                ? context.appPrimary
-                                : context.appDivider,
-                          ),
-                        ),
+                      const SizedBox(width: 9),
+                      Expanded(
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CategoryIcon(
-                              category: category.name,
-                              iconKey: category.icon,
-                              size: 38,
-                              monochrome: true,
-                            ),
-                            const SizedBox(height: 7),
                             Text(
-                              useParent ? '不细分' : category.name,
-                              maxLines: 2,
+                              parent.name,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: selected
-                                    ? context.appPrimary
-                                    : context.appPrimaryText,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                fontSize: 12,
+                                color: context.appPrimaryText,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              '按住滑动选择，松手确认',
+                              style: TextStyle(
+                                color: context.appSecondaryText,
+                                fontSize: 10,
                               ),
                             ),
                           ],
                         ),
                       ),
+                      IconButton(
+                        tooltip: '关闭',
+                        constraints: const BoxConstraints.tightFor(
+                          width: 38,
+                          height: 38,
+                        ),
+                        onPressed: onDismiss,
+                        icon: const Icon(Icons.close_rounded, size: 19),
+                      ),
+                    ],
+                  ),
+                  Divider(height: 1, color: context.appDivider),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: _MagneticSubcategoryPicker(
+                        parent: parent,
+                        categories: categories,
+                        selectedId: selectedId,
+                        columns: columns,
+                        rowHeight: rowHeight,
+                        onSelected: onSelected,
+                      ),
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MagneticSubcategoryPicker extends StatefulWidget {
+  const _MagneticSubcategoryPicker({
+    required this.parent,
+    required this.categories,
+    required this.selectedId,
+    required this.columns,
+    required this.rowHeight,
+    required this.onSelected,
+  });
+
+  final Category parent;
+  final List<Category> categories;
+  final String? selectedId;
+  final int columns;
+  final double rowHeight;
+  final ValueChanged<_CategorySelection> onSelected;
+
+  @override
+  State<_MagneticSubcategoryPicker> createState() =>
+      _MagneticSubcategoryPickerState();
+}
+
+class _MagneticSubcategoryPickerState
+    extends State<_MagneticSubcategoryPicker> {
+  Offset? _pointer;
+  int? _focusedIndex;
+
+  int _nearestIndex(
+    Offset position,
+    double cellWidth,
+    double spacing,
+    int count,
+  ) {
+    var nearest = 0;
+    var nearestDistance = double.infinity;
+    for (var index = 0; index < count; index++) {
+      final row = index ~/ widget.columns;
+      final column = index % widget.columns;
+      final center = Offset(
+        column * (cellWidth + spacing) + cellWidth / 2,
+        row * widget.rowHeight + widget.rowHeight / 2,
+      );
+      final distance = (center - position).distance;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = index;
+      }
+    }
+    return nearest;
+  }
+
+  void _selectIndex(int index) {
+    HapticFeedback.selectionClick();
+    widget.onSelected(
+      _CategorySelection(
+        index == 0 ? null : widget.categories[index - 1].id,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.categories.length + 1;
+    final rows = ((count + widget.columns - 1) / widget.columns).floor();
+    const spacing = 6.0;
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cellWidth =
+            (constraints.maxWidth - spacing * (widget.columns - 1)) /
+            widget.columns;
+        final totalHeight = rows * widget.rowHeight;
+
+        void updatePointer(Offset position) {
+          final nearest = _nearestIndex(position, cellWidth, spacing, count);
+          setState(() {
+            _pointer = position;
+            _focusedIndex = nearest;
+          });
+        }
+
+        return Listener(
+          key: const ValueKey('quick-subcategory-picker'),
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (event) => updatePointer(event.localPosition),
+          onPointerMove: (event) => updatePointer(event.localPosition),
+          onPointerCancel: (_) => setState(() {
+            _pointer = null;
+            _focusedIndex = null;
+          }),
+          onPointerUp: (event) {
+            final index = _nearestIndex(
+              event.localPosition,
+              cellWidth,
+              spacing,
+              count,
+            );
+            _selectIndex(index);
+          },
+          child: SizedBox(
+            height: totalHeight,
+            width: constraints.maxWidth,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (var index = 0; index < count; index++)
+                  _magneticItem(
+                    context,
+                    index: index,
+                    cellWidth: cellWidth,
+                    spacing: spacing,
+                    animationsDisabled: animationsDisabled,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _magneticItem(
+    BuildContext context, {
+    required int index,
+    required double cellWidth,
+    required double spacing,
+    required bool animationsDisabled,
+  }) {
+    final useParent = index == 0;
+    final category = useParent ? widget.parent : widget.categories[index - 1];
+    final selected = useParent
+        ? widget.selectedId == null
+        : widget.selectedId == category.id;
+    final focused = _focusedIndex == index;
+    final row = index ~/ widget.columns;
+    final column = index % widget.columns;
+    final center = Offset(
+      column * (cellWidth + spacing) + cellWidth / 2,
+      row * widget.rowHeight + widget.rowHeight / 2,
+    );
+
+    var scale = 1.0;
+    var translation = Offset.zero;
+    final pointer = _pointer;
+    if (pointer != null && !animationsDisabled) {
+      final vector = center - pointer;
+      final distance = vector.distance;
+      final proximity = (1 - distance / 108).clamp(0.0, 1.0).toDouble();
+      final strength = proximity * proximity;
+      scale = 1 + .32 * strength;
+      if (distance > .5) {
+        translation = Offset(
+          vector.dx / distance,
+          vector.dy / distance,
+        ) * (9 * proximity * (1 - strength * .45));
+      }
+    }
+
+    return Positioned(
+      left: column * (cellWidth + spacing),
+      top: row * widget.rowHeight,
+      width: cellWidth,
+      height: widget.rowHeight,
+      child: Transform.translate(
+        offset: translation,
+        child: Transform.scale(
+          scale: scale,
+          child: Semantics(
+            button: true,
+            selected: selected,
+            label: useParent
+                ? '不细分，使用${widget.parent.name}'
+                : category.name,
+            onTap: () => _selectIndex(index),
+            child: Container(
+              key: ValueKey(
+                useParent
+                    ? 'quick-subcategory-parent'
+                    : 'quick-subcategory-${category.id}',
+              ),
+              margin: const EdgeInsets.all(3),
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+              decoration: BoxDecoration(
+                color: focused
+                    ? context.appPrimarySoft.withValues(alpha: .86)
+                    : selected
+                    ? context.appPrimarySoft.withValues(alpha: .68)
+                    : context.appSurfaceSoft.withValues(
+                        alpha: context.appUsesLiquidGlass ? .54 : 1,
+                      ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: focused || selected
+                      ? context.appPrimary.withValues(alpha: .72)
+                      : context.appDivider.withValues(alpha: .74),
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CategoryIcon(
+                    category: category.name,
+                    iconKey: category.icon,
+                    size: 34,
+                    monochrome: true,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    useParent ? '不细分' : category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: focused || selected
+                          ? context.appPrimary
+                          : context.appPrimaryText,
+                      fontWeight:
+                          focused || selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
