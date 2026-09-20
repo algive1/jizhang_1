@@ -413,6 +413,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('二级分类支持按住滑动并在松手位置选中', (tester) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftCategoryRepository(database);
+    final categories = await repository.getActive();
+    final food = categories.firstWhere((item) => item.name == '餐饮');
+    final children = categories
+        .where((item) => item.parentId == food.id)
+        .take(2)
+        .toList(growable: false);
+    expect(children, hasLength(2));
+
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpSheet(tester, database);
+
+    await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+    await tester.pumpAndSettle();
+
+    final first = find.byKey(
+      ValueKey('quick-subcategory-${children.first.id}'),
+    );
+    final second = find.byKey(
+      ValueKey('quick-subcategory-${children.last.id}'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(first));
+    await tester.pump(const Duration(milliseconds: 16));
+    await gesture.moveTo(tester.getCenter(second));
+    await tester.pump(const Duration(milliseconds: 16));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-picker')),
+      findsNothing,
+    );
+    await _tapKeys(tester, ['1']);
+    await tester.tap(find.byKey(const ValueKey('quick-done')));
+    await tester.pumpAndSettle();
+
+    final saved = await _saved(database);
+    expect(saved.single.subcategoryId, children.last.id);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final scale in [1.0, 1.6]) {
     testWidgets('320dp + 字号 $scale 下记一笔不溢出', (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 700));
