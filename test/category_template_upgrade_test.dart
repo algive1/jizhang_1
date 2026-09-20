@@ -14,9 +14,16 @@ void main() {
     await seeder.seedIfNeeded();
 
     final active = await db.categoryDao.getActive(bookId: SeedIds.personalBook);
+    final shopping = active.firstWhere((item) => item.name == '购物');
     final household = active.firstWhere((item) => item.name == '家居日用');
     final tobaccoTea = active.firstWhere((item) => item.name == '烟酒茶');
 
+    expect(
+      active
+          .where((item) => item.parentId == shopping.id)
+          .map((item) => item.name),
+      containsAll(['淘宝', '京东', '拼多多', '抖音电商', '小红书', '其他']),
+    );
     expect(
       active
           .where((item) => item.parentId == household.id)
@@ -55,6 +62,18 @@ void main() {
     );
     await db.categoryDao.insertOne(
       CategoryEntriesCompanion.insert(
+        id: 'expense-shopping-online',
+        bookId: const Value(SeedIds.personalBook),
+        parentId: Value(shopping.id),
+        name: '网购',
+        icon: shopping.icon,
+        type: 'expense',
+        sortOrder: const Value(102),
+        isDefault: const Value(true),
+      ),
+    );
+    await db.categoryDao.insertOne(
+      CategoryEntriesCompanion.insert(
         id: 'expense-shopping-furniture',
         bookId: const Value(SeedIds.personalBook),
         parentId: Value(shopping.id),
@@ -74,10 +93,13 @@ void main() {
     final all = await db.categoryDao.getAll(bookId: SeedIds.personalBook);
     final deprecated =
         all.firstWhere((item) => item.id == 'expense-shopping-daily');
+    final online =
+        all.firstWhere((item) => item.id == 'expense-shopping-online');
     final customized =
         all.firstWhere((item) => item.id == 'expense-shopping-furniture');
 
     expect(deprecated.isArchived, isTrue);
+    expect(online.isArchived, isTrue);
     expect(customized.isArchived, isFalse);
   });
 }
