@@ -307,6 +307,14 @@ test('member AI interpretation is cached and grounded behind server policy', asy
     },
     payload: { ...policy, aiEnabled: true },
   });
+  const userPolicy = await app.inject({
+    method: 'GET',
+    url: '/api/v1/insights/policy',
+    headers: auth,
+  });
+  assert.equal(userPolicy.statusCode, 200);
+  assert.equal(userPolicy.json().aiAvailable, true);
+  assert.equal(userPolicy.json().historyDays, 90);
 
   const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
   const rows = [];
@@ -379,6 +387,10 @@ test('member AI interpretation is cached and grounded behind server policy', asy
     assert.match(response.json().message, /历史变化/);
   }
   assert.equal(model.calls, 1);
+  const usage = store.db.prepare(
+    'SELECT used FROM assistant_usage WHERE user_id=?',
+  ).get(userId) as { used: number };
+  assert.equal(usage.used, 1);
 });
 
 

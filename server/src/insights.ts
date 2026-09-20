@@ -228,7 +228,7 @@ function readFeedbackProfile(
   return { dismissedIds, kindAdjustments };
 }
 
-function hasActiveInsightMembership(
+function hasActivePaidInsightMembership(
   store: Store,
   userId: string,
 ): boolean {
@@ -241,13 +241,76 @@ function hasActiveInsightMembership(
       'SELECT 1 FROM apple_transactions WHERE user_id=? '
         + 'AND revoked_at IS NULL AND expires_at>?',
     ).get(userId, now)) return true;
-    if (store.db.prepare(
-      'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
-    ).get(userId, now)) return true;
   } catch {
-    // Isolated tests may not initialize every membership table.
+    // Isolated tests may not initialize every payment table.
   }
   return false;
+}
+
+function hasActiveAssistantGrant(
+  store: Store,
+  userId: string,
+): boolean {
+  try {
+    return Boolean(store.db.prepare(
+      'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
+    ).get(userId, store.now()));
+  } catch {
+    return false;
+  }
+}
+
+function hasInsightAiAccess(store: Store, userId: string): boolean {
+  return (
+    hasActivePaidInsightMembership(store, userId) ||
+    hasActiveAssistantGrant(store, userId)
+  );
+}
+
+function readSharedAiQuota(
+  store: Store,
+  userId: string,
+): { limit: number; used: number; remaining: number; day: string } | null {
+  try {
+    const row = store.db.prepare(
+      'SELECT data_json FROM assistant_policy WHERE id=1',
+    ).get() as { data_json: string } | undefined;
+    if (!row) return null;
+    const policy = JSON.parse(row.data_json) as {
+      memberDailyLimit?: number;
+    };
+    const limit = Number(policy.memberDailyLimit ?? 0);
+    if (!Number.isInteger(limit) || limit < 0) return null;
+    const now = store.now();
+    const day = new Date((now + 8 * 3600) * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const used =
+      (store.db.prepare(
+        'SELECT used FROM assistant_usage WHERE user_id=? AND day=?',
+      ).get(userId, day) as { used: number } | undefined)?.used ?? 0;
+    return {
+      limit,
+      used,
+      remaining: Math.max(0, limit - used),
+      day,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function consumeSharedAiQuota(store: Store, userId: string) {
+  return store.db.transaction(() => {
+    const quota = readSharedAiQuota(store, userId);
+    if (!quota) return null;
+    check(quota.used < quota.limit, '今日 AI 分析次数已用完', 429);
+    store.db.prepare(
+      'INSERT INTO assistant_usage(user_id,day,used) VALUES(?,?,1) '
+        + 'ON CONFLICT(user_id,day) DO UPDATE SET used=used+1',
+    ).run(userId, quota.day);
+    return { ...quota, used: quota.used + 1, remaining: quota.remaining - 1 };
+  })();
 }
 
 function interpretationBodyHash(input: {
@@ -325,8 +388,8 @@ export function registerInsightRoutes(
       const policy = readInsightPolicy(store);
       const profile = context.preferences ?? readProfile(store, user.id);
       const feedback = readFeedbackProfile(store, user.id);
-      const member = hasActiveInsightMembership(store, user.id);
-      const historyDays = member
+      const paidMember = hasActivePaidInsightMembership(store, user.id);
+      const historyDays = paidMember
         ? policy.proHistoryDays
         : policy.freeHistoryDays;
       const result = analyzeInsightContext(
@@ -470,14 +533,17 @@ export function registerInsightRoutes(
   app.get('/api/v1/insights/policy', async request => {
     const user = authenticate(request.headers.authorization);
     const policy = readInsightPolicy(store);
-    const member = hasActiveInsightMembership(store, user.id);
+    const paidMember = hasActivePaidInsightMembership(store, user.id);
+    const aiAccess = hasInsightAiAccess(store, user.id);
+    const aiQuota = aiAccess ? readSharedAiQuota(store, user.id) : null;
     return {
       homeMinScore: policy.homeMinScore,
       minConfidence: policy.minConfidence,
       cooldownDays: policy.cooldownDays,
       aiEnabled: policy.aiEnabled,
-      aiAvailable: policy.aiEnabled && member,
-      historyDays: member ? policy.proHistoryDays : policy.freeHistoryDays,
+      aiAvailable: policy.aiEnabled && aiAccess,
+      aiRemaining: aiQuota?.remaining ?? null,
+      historyDays: paidMember ? policy.proHistoryDays : policy.freeHistoryDays,
       promptVersion: policy.promptVersion,
     };
   });
@@ -490,8 +556,8 @@ export function registerInsightRoutes(
       const policy = readInsightPolicy(store);
       check(policy.aiEnabled, 'AI 深度解读暂未开启', 503);
       check(
-        hasActiveInsightMembership(store, user.id),
-        'AI 深度解读需要有效会员',
+        hasInsightAiAccess(store, user.id),
+        'AI 深度解读需要有效会员或 AI 权限',
         403,
       );
       const body = interpretationSchema.parse(request.body);
@@ -536,6 +602,8 @@ export function registerInsightRoutes(
           promptVersion: policy.promptVersion,
         };
       }
+
+      consumeSharedAiQuota(store, user.id);
 
       const systemPrompt = [
         '你是“好好记账”的财务洞察解释器。',

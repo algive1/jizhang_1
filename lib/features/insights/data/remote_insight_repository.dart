@@ -14,11 +14,13 @@ class InsightRemotePolicy {
     required this.historyDays,
     required this.aiEnabled,
     required this.aiAvailable,
+    this.aiRemaining,
   });
 
   final int historyDays;
   final bool aiEnabled;
   final bool aiAvailable;
+  final int? aiRemaining;
 }
 
 class RemoteInsightRepository {
@@ -45,6 +47,7 @@ class RemoteInsightRepository {
         historyDays: (response['historyDays'] as num?)?.toInt() ?? 90,
         aiEnabled: response['aiEnabled'] == true,
         aiAvailable: response['aiAvailable'] == true,
+        aiRemaining: (response['aiRemaining'] as num?)?.toInt(),
       );
       _cachedPolicy = value;
       _policyLoadedAt = now;

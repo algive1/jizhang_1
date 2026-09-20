@@ -7,8 +7,6 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/insight_feed_provider.dart';
 import '../data/remote_insight_repository.dart';
-import '../../membership/data/membership_repository.dart';
-import '../../../core/models/membership.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
 
@@ -141,11 +139,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
           ],
           const SizedBox(height: 18),
           if (feed.isServerConfirmed &&
-              remotePolicy?.aiAvailable == true &&
-              (ref.watch(membershipProvider).value?.has(
-                    EntitlementKey.aiAnalysis,
-                  ) ??
-                  false)) ...[
+              remotePolicy?.aiAvailable == true) ...[
             if (_aiText != null)
               _Section(
                 title: 'AI 深度解读',
@@ -153,7 +147,9 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
               )
             else
               OutlinedButton.icon(
-                onPressed: _loadingAi ? null : () => _loadAi(item),
+                onPressed: _loadingAi || remotePolicy?.aiRemaining == 0
+                    ? null
+                    : () => _loadAi(item),
                 icon: _loadingAi
                     ? const SizedBox(
                         width: 16,
@@ -163,6 +159,16 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
                     : const Icon(Icons.auto_awesome_outlined, size: 18),
                 label: Text(_loadingAi ? '正在解读…' : 'AI 深度解读'),
               ),
+            if (remotePolicy?.aiRemaining == 0 && _aiText == null) ...[
+              const SizedBox(height: 6),
+              Text(
+                '今日 AI 深度解读次数已用完',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 11,
+                ),
+              ),
+            ],
             if (_aiError != null) ...[
               const SizedBox(height: 6),
               Text(
