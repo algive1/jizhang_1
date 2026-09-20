@@ -225,6 +225,74 @@ void main() {
     expect(insight.title, contains('餐饮'));
   });
 
+  test('control-spending intent ranks category budget risk above lifestyle discovery', () {
+    final transactions = <TransactionRecord>[
+      ..._history(now),
+      for (var index = 0; index < 6; index++)
+        _tx(
+          'beauty-$index',
+          now.subtract(Duration(days: 2 + index)),
+          80,
+          categoryId: 'beauty',
+          categoryName: '美妆护理',
+        ).copyWith(merchant: '护肤'),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final dining = Category(
+      id: 'food',
+      name: '餐饮',
+      icon: 'food',
+      type: CategoryType.expense,
+      sortOrder: 0,
+      isDefault: true,
+      isArchived: false,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: BudgetOverview(
+        categories: [
+          BudgetProgress(
+            budget: Budget(
+              id: 'food-budget',
+              monthKey: '2026-09',
+              categoryId: 'food',
+              amount: 400,
+              createdAt: now,
+              updatedAt: now,
+            ),
+            category: dining,
+            used: 260,
+            remaining: 140,
+            percentage: .65,
+            remainingDays: 21,
+            dailyAvailable: 6.67,
+            status: BudgetAlertStatus.normal,
+          ),
+        ],
+      ),
+      accounts: const [],
+      categories: [dining],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.controlSpending},
+        focus: {InsightFocus.dining, InsightFocus.healthHabits},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    expect(feed.homeCandidate, isNotNull);
+    expect(feed.homeCandidate!.id, 'budget:2026-09:category:food');
+    expect(
+      feed.items.any((item) => item.id == 'life:beauty-care'),
+      isTrue,
+    );
+  });
+
   test('budget velocity becomes a high-value risk insight', () {
     final transactions = _history(now);
     final analysis = const StatisticalAnalysisService().analyze(
