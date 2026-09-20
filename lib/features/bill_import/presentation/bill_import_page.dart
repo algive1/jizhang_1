@@ -174,25 +174,95 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
   Widget _mapping(List<Account> accounts, List<Category> categories) {
     final expense = _rootCategories(categories, CategoryType.expense);
     final income = _rootCategories(categories, CategoryType.income);
+    final result = _result;
+    final isMumu = result?.provider == BillImportProvider.mumu;
+    final accountNames = isMumu && result != null
+        ? _mumuAccountNames(result)
+        : const <String>[];
+    final unmappedAccounts = accountNames
+        .where((name) => _accountMappings[name] == null)
+        .length;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('导入映射', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue:
-                accounts.any((item) => item.id == _accountId) ? _accountId : null,
-            decoration: const InputDecoration(labelText: '默认账户'),
-            items: [
-              for (final account in accounts.where((item) => !item.isArchived))
-                DropdownMenuItem(
-                  value: account.id,
-                  child: Text(account.displayName),
-                ),
-            ],
-            onChanged: (value) => setState(() => _accountId = value),
+          const SizedBox(height: 6),
+          Text(
+            isMumu
+                ? '木木账户按名称逐项映射；分类会自动匹配到当前分类树，无法识别的记录使用下方兜底分类。'
+                : '微信/支付宝账单使用默认账户，并按收支类型落入下方默认分类。',
+            style: TextStyle(
+              color: context.appSecondaryText,
+              fontSize: 12,
+              height: 1.4,
+            ),
           ),
+          const SizedBox(height: 10),
+          if (!isMumu)
+            DropdownButtonFormField<String>(
+              initialValue: accounts.any((item) => item.id == _accountId)
+                  ? _accountId
+                  : null,
+              decoration: const InputDecoration(labelText: '默认账户'),
+              items: [
+                for (final account in accounts.where((item) => !item.isArchived))
+                  DropdownMenuItem(
+                    value: account.id,
+                    child: Text(account.displayName),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _accountId = value),
+            )
+          else ...[
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              initiallyExpanded: unmappedAccounts > 0,
+              title: Text('木木账户映射 · ${accountNames.length} 个'),
+              subtitle: Text(
+                unmappedAccounts == 0
+                    ? '已全部映射'
+                    : '还有 $unmappedAccounts 个账户需要选择',
+                style: TextStyle(
+                  color: unmappedAccounts == 0
+                      ? context.appSecondaryText
+                      : AppColors.warning,
+                  fontSize: 12,
+                ),
+              ),
+              children: [
+                for (final name in accountNames)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: DropdownButtonFormField<String>(
+                      initialValue: accounts.any(
+                        (item) => item.id == _accountMappings[name],
+                      )
+                          ? _accountMappings[name]
+                          : null,
+                      isExpanded: true,
+                      decoration: InputDecoration(labelText: name),
+                      items: [
+                        for (final account
+                            in accounts.where((item) => !item.isArchived))
+                          DropdownMenuItem(
+                            value: account.id,
+                            child: Text(
+                              account.displayName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => setState(
+                        () => _accountMappings[name] = value,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -201,7 +271,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   initialValue: expense.any((c) => c.id == _expenseCategoryId)
                       ? _expenseCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '支出默认分类'),
+                  decoration: InputDecoration(
+                    labelText: isMumu ? '未识别支出兜底' : '支出默认分类',
+                  ),
                   items: [
                     for (final category in expense)
                       DropdownMenuItem(
@@ -219,7 +291,9 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   initialValue: income.any((c) => c.id == _incomeCategoryId)
                       ? _incomeCategoryId
                       : null,
-                  decoration: const InputDecoration(labelText: '收入默认分类'),
+                  decoration: InputDecoration(
+                    labelText: isMumu ? '未识别收入兜底' : '收入默认分类',
+                  ),
                   items: [
                     for (final category in income)
                       DropdownMenuItem(
@@ -236,6 +310,18 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         ],
       ),
     );
+  }
+
+  List<String> _mumuAccountNames(BillImportResult result) {
+    final values = <String>{};
+    for (final row in result.rows) {
+      final source = row.sourceAccount?.trim();
+      final destination = row.destinationAccount?.trim();
+      if (source != null && source.isNotEmpty) values.add(source);
+      if (destination != null && destination.isNotEmpty) values.add(destination);
+    }
+    final sorted = values.toList(growable: false)..sort();
+    return sorted;
   }
 
   Widget _preview(BillImportResult result) => AppCard(
