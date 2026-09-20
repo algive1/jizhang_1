@@ -643,6 +643,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
           merchant: row.merchant.isEmpty ? null : row.merchant,
           note: row.note.isEmpty ? null : row.note,
           reimbursementStatus: row.reimbursementStatus,
+          reimbursementAmount:
+              row.reimbursementStatus == ReimbursementStatus.reimbursed
+              ? row.amount
+              : null,
           tags: row.tags,
           source: TransactionSource.import,
           metadata: {
@@ -660,6 +664,14 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
               'sourceAccount': row.sourceAccount!,
             if (row.destinationAccount != null)
               'destinationAccount': row.destinationAccount!,
+            if (row.raw['报销']?.trim().isNotEmpty == true)
+              'sourceReimbursementStatus': row.raw['报销']!.trim(),
+            if (row.raw['优惠']?.trim().isNotEmpty == true)
+              'sourceDiscount': row.raw['优惠']!.trim(),
+            if (row.raw['成员']?.trim().isNotEmpty == true)
+              'sourceMember': row.raw['成员']!.trim(),
+            if (row.raw['账单图片']?.trim().isNotEmpty == true)
+              'sourceBillImage': row.raw['账单图片']!.trim(),
             'fileName': _fileName ?? '',
           },
         ),
