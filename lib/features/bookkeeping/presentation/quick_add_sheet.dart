@@ -2210,7 +2210,7 @@ class _SubcategoryPickerSheet extends StatelessWidget {
                   crossAxisCount: columns,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: textScale > 19 ? .88 : .94,
+                  mainAxisExtent: textScale > 19 ? 122 : 104,
                 ),
                 itemCount: categories.length + 1,
                 itemBuilder: (context, index) {
