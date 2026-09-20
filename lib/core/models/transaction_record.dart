@@ -190,11 +190,19 @@ class TransactionRecord {
   /// the next fallback for records created through the expanded bookkeeping
   /// options; when both are empty, the selected category is the useful label.
   String get displayTitle {
-    final noteValue = note?.trim();
-    if (noteValue != null && noteValue.isNotEmpty) return noteValue;
-    final merchantValue = merchant?.trim();
-    if (merchantValue != null && merchantValue.isNotEmpty) return merchantValue;
+    final noteValue = _displayValue(note);
+    if (noteValue != null) return noteValue;
+    final merchantValue = _displayValue(merchant);
+    if (merchantValue != null) return merchantValue;
     return displayCategoryLabel;
+  }
+
+  String? _displayValue(String? value) {
+    final cleaned = value?.trim();
+    if (cleaned == null || cleaned.isEmpty || cleaned == '/' || cleaned == '／') {
+      return null;
+    }
+    return cleaned;
   }
 
   TransactionRecord copyWith({
