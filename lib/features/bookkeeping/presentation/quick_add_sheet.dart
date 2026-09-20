@@ -370,10 +370,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         bottom: false,
         minimum: const EdgeInsets.only(top: 8),
         child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: FractionallySizedBox(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: FractionallySizedBox(
           heightFactor: 1,
           child: Material(
             key: const ValueKey('quick-sheet-surface'),
@@ -521,6 +521,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
