@@ -7,6 +7,7 @@ import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
 import { activeMembershipProduct, resolvedEntitlements } from './entitlements.js';
 import { applePlanForProduct } from './apple_iap.js';
+import { membershipState } from './membership_state.js';
 import type { Store } from './store.js';
 
 export type PaymentChannel = 'wechat' | 'alipay';
@@ -223,27 +224,7 @@ function assistantQuotas(store: Store, userId: string) {
   }
 }
 
-function membershipCurrent(store: Store, userId: string) {
-  const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY expires_at DESC LIMIT 1").get(userId, store.now()) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
-  if (apple) {
-    return {
-      membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
-      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProduct(store,apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
-      entitlements: memberEntitlementKeys.map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
-      quotas: assistantQuotas(store, userId),
-    };
-  }
-  const subscription = store.db.prepare('SELECT * FROM membership_subscriptions WHERE user_id=?').get(userId) as { user_id: string; product_id: string; provider: PaymentChannel; order_id: string; started_at: number; expires_at: number; updated_at: number } | undefined;
-  if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], quotas: [] };
-  const now = store.now();
-  const status = subscription.expires_at > now ? 'active' : 'expired';
-  return {
-    membership: { userId, plan: 'pro', status, updatedAt: subscription.updated_at },
-    subscription: { id: subscription.order_id, userId, provider: subscription.provider, productId: subscription.product_id, startedAt: subscription.started_at, expiresAt: subscription.expires_at, autoRenew: false, externalSubscriptionId: subscription.order_id },
-    entitlements: status === 'active' ? (()=>{const configured=resolvedEntitlements(store,userId,subscription.product_id);return configured.length?configured.map(e=>({...e,source:`${subscription.provider}_payment`,grantedAt:subscription.started_at,expiresAt:subscription.expires_at})):memberEntitlementKeys.map((key)=>({key,source:`${subscription.provider}_payment`,grantedAt:subscription.started_at,expiresAt:subscription.expires_at}))})() : [],
-    quotas: status === 'active' ? assistantQuotas(store, userId) : [],
-  };
-}
+function membershipCurrent(store:Store,userId:string){return membershipState(store,userId);}
 
 async function wechatAppOrder(row: OrderRow): Promise<Record<string, unknown>> {
   const appId = env('WECHAT_APP_ID');
