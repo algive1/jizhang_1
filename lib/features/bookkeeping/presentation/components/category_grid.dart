@@ -24,6 +24,13 @@ class CategoryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Category? selectedSubcategory;
+    for (final category in subcategories) {
+      if (category.id == selectedSubcategoryId) {
+        selectedSubcategory = category;
+        break;
+      }
+    }
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
@@ -57,6 +64,9 @@ class CategoryGrid extends StatelessWidget {
                           name: category.name,
                           iconKey: category.icon,
                           selected: selected?.id == category.id,
+                          subtitle: selected?.id == category.id
+                              ? selectedSubcategory?.name
+                              : null,
                           onTap: () => onSelected(category),
                         ),
                     ],
@@ -84,12 +94,14 @@ class _CategoryTile extends StatelessWidget {
     required this.iconKey,
     required this.selected,
     required this.onTap,
+    this.subtitle,
   });
 
   final double width;
   final String name;
   final String iconKey;
   final bool selected;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -146,6 +158,20 @@ class _CategoryTile extends StatelessWidget {
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: context.appSecondaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
