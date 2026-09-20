@@ -221,7 +221,7 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   });
 
   app.post('/api/v1/admin/maintenance/run', async (request) => {
-    requireAdminPrincipal(request.headers['x-admin-token'],'logs.read');
+    requireAdminPrincipal(request.headers['x-admin-token'],'maintenance.write');
     const result = runRetention(store);
     audit(store, 'maintenance_run', {
       deleted: result.deleted,
