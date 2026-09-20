@@ -343,10 +343,15 @@ class QuickBookkeepingService {
     if (request.isOneTime && request.isRecurring) {
       throw ArgumentError('A transaction cannot be one-time and recurring');
     }
-    if (request.type == TransactionType.transfer) {
+    if (request.type == TransactionType.transfer ||
+        request.type == TransactionType.repayment) {
       final destination = request.destinationAccountId;
       if (destination == null || destination == request.accountId) {
-        throw ArgumentError('内部转账需要两个不同的转出/转入账户');
+        throw ArgumentError(
+          request.type == TransactionType.repayment
+              ? '还款需要两个不同的还款/债务账户'
+              : '内部转账需要两个不同的转出/转入账户',
+        );
       }
     }
     if (request.reimbursementAmount != null &&
