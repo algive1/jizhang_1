@@ -274,8 +274,9 @@ void main() {
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(.92, .001));
 
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 90));
+    await tester.pump();
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(1.04, .001));
+    await tester.pump(const Duration(milliseconds: 90));
     await tester.pump(const Duration(milliseconds: 80));
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(1, .001));
   });
