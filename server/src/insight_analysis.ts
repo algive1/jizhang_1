@@ -487,9 +487,11 @@ function categoryChanges(
     previousCount: number;
     currentIds: string[];
     familyAmount: number;
-    oneTimeAmount: number;
-    oneTimeIds: string[];
+    largeOneTimeAmount: number;
+    largeOneTimeIds: string[];
     largestAmount: number;
+    largestId?: string;
+    largestIsOneTime: boolean;
   };
   const buckets = new Map<string, Bucket>();
   const familyPattern = /爸爸|妈妈|父母|爸妈|家人|家里/;
@@ -509,9 +511,10 @@ function categoryChanges(
         previousCount: 0,
         currentIds: [],
         familyAmount: 0,
-        oneTimeAmount: 0,
-        oneTimeIds: [],
+        largeOneTimeAmount: 0,
+        largeOneTimeIds: [],
         largestAmount: 0,
+        largestIsOneTime: false,
       };
     if (
       tx.occurredAt >= range.currentStart &&
@@ -520,10 +523,14 @@ function categoryChanges(
       bucket.currentAmount += value;
       bucket.currentCount++;
       bucket.currentIds.push(tx.id);
-      bucket.largestAmount = Math.max(bucket.largestAmount, value);
-      if (tx.isOneTime || tx.isLargeTransaction) {
-        bucket.oneTimeAmount += value;
-        bucket.oneTimeIds.push(tx.id);
+      if (value > bucket.largestAmount) {
+        bucket.largestAmount = value;
+        bucket.largestId = tx.id;
+        bucket.largestIsOneTime = tx.isOneTime;
+      }
+      if (tx.isLargeTransaction) {
+        bucket.largeOneTimeAmount += value;
+        bucket.largeOneTimeIds.push(tx.id);
       }
       if (familyPattern.test(`${tx.note ?? ''} ${tx.merchant ?? ''}`)) {
         bucket.familyAmount += value;
@@ -550,12 +557,27 @@ function categoryChanges(
     ) {
       continue;
     }
+    const inferredOneTime =
+      bucket.largestIsOneTime &&
+      bucket.largestAmount >= 500 &&
+      bucket.largestAmount >=
+        Math.max(delta * 0.6, bucket.previousAmount * 0.5);
+    const specialAmount = bucket.largeOneTimeAmount > 0
+      ? bucket.largeOneTimeAmount
+      : inferredOneTime
+        ? bucket.largestAmount
+        : 0;
+    const specialIds = bucket.largeOneTimeIds.length > 0
+      ? bucket.largeOneTimeIds
+      : inferredOneTime && bucket.largestId
+        ? [bucket.largestId]
+        : [];
     if (
       delta >= 100 &&
       percent >= 0.3 &&
-      bucket.oneTimeAmount > 0 &&
-      (bucket.oneTimeAmount >= delta * 0.6 ||
-        bucket.oneTimeAmount >= bucket.currentAmount * 0.5)
+      specialAmount > 0 &&
+      (specialAmount >= delta * 0.6 ||
+        specialAmount >= bucket.currentAmount * 0.5)
     ) {
       results.push(
         item({
@@ -565,7 +587,7 @@ function categoryChanges(
           title: `${bucket.name}增加主要来自一次性支出`,
           summary:
             `本期 ${bucket.name} 比上一可比周期多 ¥${delta.toFixed(0)}，` +
-            `其中一次性/大额记录约 ¥${bucket.oneTimeAmount.toFixed(0)}。`,
+            `其中一次性/大额记录约 ¥${specialAmount.toFixed(0)}。`,
           analysis: '这次变化不适合直接解释为消费习惯持续变差，系统会把一次性支出和常规消费分开看。',
           meaning: '特殊支出会影响当月总额，但不应该自动被当作长期消费趋势。',
           response: 'notice',
@@ -586,12 +608,12 @@ function categoryChanges(
             },
             {
               label: '一次性/大额支出',
-              value: bucket.oneTimeAmount,
+              value: specialAmount,
               unit: 'CNY',
-              transactionIds: bucket.oneTimeIds,
+              transactionIds: specialIds,
             },
           ],
-          relatedTransactionIds: bucket.oneTimeIds,
+          relatedTransactionIds: specialIds,
           baseScore: 59,
           confidence,
           profile,

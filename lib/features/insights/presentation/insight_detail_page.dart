@@ -13,9 +13,14 @@ import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
 
 class InsightDetailPage extends ConsumerStatefulWidget {
-  const InsightDetailPage({required this.insightId, super.key});
+  const InsightDetailPage({
+    required this.insightId,
+    this.fallback,
+    super.key,
+  });
 
   final String insightId;
+  final FinancialInsightItem? fallback;
 
   @override
   ConsumerState<InsightDetailPage> createState() => _InsightDetailPageState();
@@ -36,6 +41,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
         break;
       }
     }
+    insight ??= widget.fallback;
     if (insight == null) {
       return SafeArea(
         child: ListView(

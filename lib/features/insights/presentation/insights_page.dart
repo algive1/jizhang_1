@@ -166,6 +166,7 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                     item: item,
                     onTap: () => context.push(
                       '/insights/${Uri.encodeComponent(item.id)}',
+                      extra: item,
                     ),
                     onDismiss: () => _dismiss(item),
                   ),

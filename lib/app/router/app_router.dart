@@ -9,6 +9,7 @@ import '../../features/analysis/presentation/analysis_page.dart';
 import '../../features/analysis/presentation/annual_report_page.dart';
 import '../../features/insights/presentation/insights_page.dart';
 import '../../features/insights/presentation/insight_detail_page.dart';
+import '../../features/insights/domain/insight_models.dart';
 import '../../features/account/presentation/account_center_page.dart';
 import '../../features/account/presentation/account_login_page.dart';
 import '../../features/account/presentation/account_recovery_page.dart';
@@ -139,7 +140,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ':insightId',
                 builder: (context, state) => InsightDetailPage(
-                  insightId: Uri.decodeComponent(state.pathParameters['insightId']!),
+                  insightId: Uri.decodeComponent(
+                    state.pathParameters['insightId']!,
+                  ),
+                  fallback: state.extra is FinancialInsightItem
+                      ? state.extra! as FinancialInsightItem
+                      : null,
                 ),
               ),
             ],

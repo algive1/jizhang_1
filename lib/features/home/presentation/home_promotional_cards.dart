@@ -61,14 +61,14 @@ class HomeInsightCard extends StatelessWidget {
                       Container(
                         width: 52,
                         height: 52,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFE4D8),
+                        decoration: BoxDecoration(
+                          color: context.appPrimarySoft,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.nightlight_round,
-                          color: Color(0xFFEE673A),
-                          size: 30,
+                        child: Icon(
+                          _insightIcon(insight.kind),
+                          color: context.appPrimary,
+                          size: 28,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -115,6 +115,16 @@ class HomeInsightCard extends StatelessWidget {
       ),
     ),
   );
+
+  IconData _insightIcon(FinancialInsightKind kind) => switch (kind) {
+    FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,
+    FinancialInsightKind.behavior => Icons.timeline_rounded,
+    FinancialInsightKind.risk => Icons.notifications_active_outlined,
+    FinancialInsightKind.goal => Icons.flag_outlined,
+    FinancialInsightKind.discovery => Icons.search_rounded,
+    FinancialInsightKind.positive => Icons.emoji_events_outlined,
+    FinancialInsightKind.life => Icons.favorite_border_rounded,
+  };
 }
 
 class HomeProCard extends StatelessWidget {

@@ -178,7 +178,10 @@ class _HomePageState extends ConsumerState<HomePage>
               onTap: () {
                 final item = insight;
                 if (item == null) return;
-                context.push('/insights/${Uri.encodeComponent(item.id)}');
+                context.push(
+                  '/insights/${Uri.encodeComponent(item.id)}',
+                  extra: item,
+                );
               },
             ),
             if (book?.isShared == true)
