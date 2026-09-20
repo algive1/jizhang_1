@@ -39,6 +39,8 @@ class CategoryGrid extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       borderRadius: 24,
       tint: context.appSurface,
+      blurSigma: 12,
+      chromaticEdge: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = MediaQuery.textScalerOf(context).scale(14) > 19
