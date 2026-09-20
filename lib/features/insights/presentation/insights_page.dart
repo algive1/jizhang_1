@@ -7,6 +7,7 @@ import '../../../core/widgets/app_card.dart';
 import '../application/insight_feed_provider.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
+import 'insight_preferences_sheet.dart';
 
 enum _InsightFilter { all, important, changes, discovery }
 
@@ -219,120 +220,12 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
   }
 
   Future<void> _showPreferences(InsightPreferences current) async {
-    var intents = {...current.intents};
-    var focus = {...current.focus};
-    var tone = current.tone;
-    final saved = await showModalBottomSheet<InsightPreferences>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setModalState) => SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              0,
-              20,
-              20 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '你希望好好记账主要帮你什么？',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '可以多选。它会改变哪些洞察优先出现，不会改变财务事实。',
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final intent in BookkeepingIntent.values)
-                      FilterChip(
-                        label: Text(intent.label),
-                        selected: intents.contains(intent),
-                        onSelected: (selected) => setModalState(() {
-                          selected ? intents.add(intent) : intents.remove(intent);
-                        }),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  '最近特别想关注',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final item in InsightFocus.values)
-                      FilterChip(
-                        label: Text(item.label),
-                        selected: focus.contains(item),
-                        onSelected: (selected) => setModalState(() {
-                          selected ? focus.add(item) : focus.remove(item);
-                        }),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  '提醒风格',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 9),
-                SegmentedButton<InsightTone>(
-                  segments: [
-                    for (final item in InsightTone.values)
-                      ButtonSegment(value: item, label: Text(item.label)),
-                  ],
-                  selected: {tone},
-                  onSelectionChanged: (value) =>
-                      setModalState(() => tone = value.first),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: () => Navigator.pop(
-                    sheetContext,
-                    InsightPreferences(
-                      intents: intents,
-                      focus: focus,
-                      tone: tone,
-                      configured: true,
-                      dismissedIds: current.dismissedIds,
-                      kindAdjustments: current.kindAdjustments,
-                    ),
-                  ),
-                  child: const Text('保存'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(
-                    sheetContext,
-                    current.copyWith(configured: true),
-                  ),
-                  child: const Text('暂时不设置'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    final saved = await showInsightPreferencesSheet(context, current);
     if (saved == null) return;
     await ref.read(insightPreferencesRepositoryProvider).save(saved);
     ref.invalidate(insightPreferencesProvider);
   }
+
 }
 
 class _QualityCard extends StatelessWidget {

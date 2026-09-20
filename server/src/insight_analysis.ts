@@ -1259,6 +1259,7 @@ export function analyzeInsightContext(
     homeMinScore: policy.homeMinScore,
     homeMinConfidence: policy.minConfidence,
     historyDays,
+    cooldownDays: policy.cooldownDays,
     items,
   };
 }

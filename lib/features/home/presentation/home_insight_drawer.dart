@@ -12,6 +12,7 @@ class HomeInsightDrawer extends ConsumerStatefulWidget {
     required this.day,
     required this.insight,
     required this.available,
+    this.cooldownDays = 7,
     this.amountHidden = false,
     required this.onTap,
     super.key,
@@ -21,6 +22,7 @@ class HomeInsightDrawer extends ConsumerStatefulWidget {
   final DateTime day;
   final FinancialInsightItem? insight;
   final bool available;
+  final int cooldownDays;
   final bool amountHidden;
   final VoidCallback onTap;
 
@@ -54,15 +56,24 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
     }
     _checked = true;
     final settings = ref.read(appSettingsRepositoryProvider);
-    final key = 'home.insight.lastShown.${widget.bookId}';
-    final day = widget.day.toIso8601String();
+    final insight = widget.insight!;
+    final key =
+        'home.insight.lastShown.${widget.bookId}.${insight.id}';
     try {
-      if (await settings.get(key) == day || !mounted) return;
+      final raw = await settings.get(key);
+      final lastShown = raw == null ? null : DateTime.tryParse(raw);
+      final now = widget.day;
+      if (lastShown != null &&
+          now.difference(DateUtils.dateOnly(lastShown)).inDays <
+              widget.cooldownDays) {
+        return;
+      }
+      if (!mounted) return;
       if (!widget.available || widget.insight == null) {
         _checked = false;
         return;
       }
-      await settings.set(key, day);
+      await settings.set(key, widget.day.toIso8601String());
       if (mounted) setState(() => _expanded = true);
     } catch (error, stack) {
       debugPrint('Home insight display state failed: $error\n$stack');

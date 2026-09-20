@@ -265,6 +265,7 @@ class InsightFeed {
     this.homeMinScore = 70,
     this.homeMinConfidence = .55,
     this.historyDays,
+    this.cooldownDays = 7,
   });
 
   final List<FinancialInsightItem> items;
@@ -277,6 +278,7 @@ class InsightFeed {
   final double homeMinScore;
   final double homeMinConfidence;
   final int? historyDays;
+  final int cooldownDays;
 
   bool get isServerConfirmed => origin == InsightOrigin.serverConfirmed;
 
@@ -317,6 +319,7 @@ class InsightFeed {
       homeMinConfidence:
           (json['homeMinConfidence'] as num?)?.toDouble() ?? .55,
       historyDays: (json['historyDays'] as num?)?.toInt(),
+      cooldownDays: (json['cooldownDays'] as num?)?.toInt() ?? 7,
     );
   }
 }
