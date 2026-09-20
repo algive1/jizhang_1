@@ -48,19 +48,21 @@ export type AdminPrincipal = {
   permissions: readonly AdminPermission[];
 };
 
+let cachedKey='';let cachedPrincipals:Array<{id:string;role:AdminRole;token:string}>|null=null;
 function configuredPrincipals(): Array<{id:string;role:AdminRole;token:string}> {
+  const key=`${process.env.ADMIN_TOKEN??''}\0${process.env.ADMIN_PRINCIPALS_JSON??''}`;if(cachedPrincipals&&key===cachedKey)return cachedPrincipals;
   const result: Array<{id:string;role:AdminRole;token:string}> = [];
   const superToken = (process.env.ADMIN_TOKEN ?? '').trim();
   if (superToken.length >= 24) result.push({id:'env:super-admin',role:'super_admin',token:superToken});
   const raw = (process.env.ADMIN_PRINCIPALS_JSON ?? '').trim();
-  if (!raw) return result;
+  if (!raw){cachedKey=key;cachedPrincipals=result;return result;}
   const parsed = z.array(z.strictObject({
     id:z.string().trim().min(2).max(80),
     role:z.enum(['super_admin','operator','support','developer','finance']),
     token:z.string().min(24).max(512),
   })).max(50).parse(JSON.parse(raw));
   for (const item of parsed) result.push(item);
-  return result;
+  cachedKey=key;cachedPrincipals=result;return result;
 }
 
 export function requireAdminPrincipal(
