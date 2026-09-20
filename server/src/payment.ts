@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ApiError, requireCondition as check } from './contract.js';
 import { getMembershipCatalog } from './membership_catalog.js';
 import { activeMembershipProduct, resolvedEntitlements } from './entitlements.js';
-import { applePlanForProductId } from './apple_iap.js';
+import { applePlanForProduct } from './apple_iap.js';
 import type { Store } from './store.js';
 
 export type PaymentChannel = 'wechat' | 'alipay';
@@ -228,7 +228,7 @@ function membershipCurrent(store: Store, userId: string) {
   if (apple) {
     return {
       membership: { userId, plan: 'pro', status: 'active', updatedAt: apple.updated_at },
-      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProductId(apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
+      subscription: { id: apple.transaction_id, userId, provider: 'apple', productId: applePlanForProduct(store,apple.product_id) ?? apple.product_id, startedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at, autoRenew: false, externalSubscriptionId: apple.transaction_id },
       entitlements: memberEntitlementKeys.map((key) => ({ key, source: 'apple_payment', grantedAt: apple.purchased_at ?? store.now(), expiresAt: apple.expires_at })),
       quotas: assistantQuotas(store, userId),
     };
