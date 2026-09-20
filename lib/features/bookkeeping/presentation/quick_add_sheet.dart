@@ -39,6 +39,7 @@ import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/category_icon.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
@@ -458,11 +459,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 selected: selectedCategory,
                                 subcategories: subcategories,
                                 selectedSubcategoryId: effectiveSubcategoryId,
-                                onSelected: (category) => _chooseCategory(
-                                  categories,
-                                  category,
-                                  currentSubcategoryId: effectiveSubcategoryId,
-                                ),
+                                onSelected: (category, anchorRect) =>
+                                    _chooseCategory(
+                                      categories,
+                                      category,
+                                      anchorRect: anchorRect,
+                                      currentSubcategoryId:
+                                          effectiveSubcategoryId,
+                                    ),
                               ),
                             )
                           else
@@ -1440,6 +1444,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Future<void> _chooseCategory(
     List<Category> categories,
     Category category, {
+    required Rect anchorRect,
     String? currentSubcategoryId,
   }) async {
     final initial =
@@ -1455,17 +1460,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       return;
     }
 
-    final selection = await showModalBottomSheet<_CategorySelection>(
-      context: context,
-      useRootNavigator: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _SubcategoryPickerSheet(
-        parent: category,
-        categories: children,
-        selectedId: currentSubcategoryId,
-      ),
+    final selection = await _showSubcategoryPopover(
+      context,
+      anchorRect: anchorRect,
+      parent: category,
+      categories: children,
+      selectedId: currentSubcategoryId,
     );
     if (selection == null || !mounted) return;
     setState(() {
