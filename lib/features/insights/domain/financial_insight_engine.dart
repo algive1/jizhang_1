@@ -300,7 +300,7 @@ class FinancialInsightEngine {
     final inferred =
         explicitAmount <= 0 &&
         largest != null &&
-        largest!.isOneTime &&
+        largest.isOneTime &&
         largestAmount >= 500 &&
         largestAmount >= math.max(delta * .6, source.baselineAmount * .5);
     final specialAmount = explicitAmount > 0
@@ -310,8 +310,8 @@ class FinancialInsightEngine {
         : 0.0;
     final ids = explicitIds.isNotEmpty
         ? explicitIds
-        : inferred && largest != null
-        ? <String>[largest!.id]
+        : inferred
+        ? <String>[largest.id]
         : const <String>[];
     if (specialAmount <= 0 ||
         (specialAmount < delta * .6 &&

@@ -46,11 +46,12 @@ void main() {
       expect(snapshot.insights, isNotEmpty);
       final insight = container.read(homeInsightProvider);
 
-      expect(insight.amount, 240);
-      expect(insight.timeLabel, '餐饮支出增加');
-      expect(insight.increasePercent, 100);
-      expect(insight.description, contains('建议'));
-      expect(insight.description, contains('查看该分类明细'));
+      expect(insight, isNotNull);
+      expect(insight!.amount, 240);
+      expect(insight.title, '餐饮支出增加');
+      expect(insight.changePercent, 100);
+      expect(insight.suggestion, isNotEmpty);
+      expect(insight.actionLabel, isNotEmpty);
     },
   );
 
@@ -77,8 +78,7 @@ void main() {
 
     final insight = container.read(homeInsightProvider);
 
-    expect(insight.amount, 0);
-    expect(insight.description, isEmpty);
+    expect(insight, isNull);
   });
 }
 

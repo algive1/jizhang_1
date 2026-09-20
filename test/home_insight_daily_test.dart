@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
-import 'package:jizhang_app/core/models/dashboard_snapshot.dart';
+import 'package:jizhang_app/features/insights/domain/insight_models.dart';
 import 'package:jizhang_app/features/home/presentation/home_insight_drawer.dart';
 import 'package:jizhang_app/features/home/presentation/home_promotional_cards.dart';
 import 'package:jizhang_app/features/settings/data/app_settings_repository.dart';
@@ -32,12 +32,27 @@ void main() {
                   bookId: 'daily-book',
                   day: day,
                   available: available,
-                  insight: FinancialInsight(
-                    timeLabel: '22:00后消费',
-                    amount: amount,
-                    increasePercent: null,
-                    description: '消费提醒',
-                  ),
+                  insight: amount <= 0
+                      ? null
+                      : FinancialInsightItem(
+                          id: 'daily-insight',
+                          kind: FinancialInsightKind.behavior,
+                          priority: InsightPriority.attention,
+                          title: '22:00后消费',
+                          summary: '消费提醒',
+                          analysis: '消费提醒',
+                          meaning: '用于每日展示测试。',
+                          response: InsightResponse.notice,
+                          score: 80,
+                          confidence: const InsightConfidence(
+                            data: 1,
+                            completeness: 1,
+                            classification: 1,
+                            baseline: 1,
+                          ),
+                          generatedAt: day,
+                          amount: amount,
+                        ),
                   onTap: () {},
                 ),
               ),
