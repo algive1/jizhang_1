@@ -259,7 +259,7 @@ function percentile(values: number[], ratio: number) {
 }
 
 function netExpense(tx: Tx) {
-  if (tx.type !== 'expense' && tx.type !== 'lend') return 0;
+  if (tx.type !== 'expense') return 0;
   const afterRefund = Math.max(0, tx.amount - (tx.refundAmount ?? 0));
   const reimbursable =
     tx.reimbursementStatus === 'none'

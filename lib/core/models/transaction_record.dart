@@ -145,7 +145,7 @@ class TransactionRecord {
   ///
   /// Asset conversions are excluded so an investment purchase never inflates
   /// the monthly spending figure.
-  bool get isConsumptionExpense => isExpense && !isAssetTransfer;
+  bool get isConsumptionExpense => type == TransactionType.expense;
 
   /// Debt repayments reduce cash or a liability but do not represent a new
   /// consumption. They remain transaction rows for auditability.

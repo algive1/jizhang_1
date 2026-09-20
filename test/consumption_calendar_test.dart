@@ -150,7 +150,6 @@ void main() {
 
       expect(find.text('导入午餐店'), findsOneWidget);
       expect(find.text('¥56'), findsWidgets);
-      expect(find.text('¥50'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

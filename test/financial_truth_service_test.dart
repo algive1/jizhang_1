@@ -22,6 +22,7 @@ void main() {
       _row('reimbursement', TransactionType.reimbursement, 400, now),
       _row('borrow', TransactionType.borrow, 1000, now),
       _row('repayment', TransactionType.repayment, 300, now),
+      _row('lend', TransactionType.lend, 700, now),
       _row('asset-buy', TransactionType.assetPurchase, 1500, now),
       _row('asset-sell', TransactionType.assetSale, 600, now),
       _row('transfer', TransactionType.transfer, 800, now),
@@ -47,8 +48,8 @@ void main() {
     expect(summary.incomeCount, 1);
     expect(summary.consumptionCount, 3);
     expect(summary.externalCashIn, 12200);
-    expect(summary.externalCashOut, 2900);
-    expect(summary.externalCashflow, 9300);
+    expect(summary.externalCashOut, 3600);
+    expect(summary.externalCashflow, 8600);
     expect(summary.disposableDelta, 9500);
   });
 

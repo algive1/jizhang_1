@@ -240,6 +240,66 @@ test('server analysis honors local feedback state before background sync catches
   );
 });
 
+test('server excludes lending and repayments from consumer spending', async t => {
+  const { app } = await createApp(':memory:');
+  t.after(() => app.close());
+  const token = await register(app);
+  const auth = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  };
+  const generatedAt = Date.parse('2026-09-20T12:00:00+08:00');
+  const rows = [
+    tx('meal', Date.parse('2026-09-05T12:00:00+08:00'), 100),
+    tx('lend', Date.parse('2026-09-06T12:00:00+08:00'), 800, {
+      type: 'lend',
+      categoryId: null,
+      categoryName: null,
+    }),
+    tx('repayment', Date.parse('2026-09-07T12:00:00+08:00'), 1200, {
+      type: 'repayment',
+      categoryId: null,
+      categoryName: null,
+    }),
+  ];
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/v1/insights/analyze',
+    headers: auth,
+    payload: {
+      bookId: 'book-personal',
+      currency: 'CNY',
+      generatedAt,
+      timezoneOffsetMinutes: 480,
+      preferences: {
+        intents: ['controlSpending'],
+        focus: ['dining'],
+        tone: 'balanced',
+      },
+      transactions: rows,
+      accounts: [],
+      categories: [],
+      budgets: [
+        {
+          id: 'total-budget',
+          monthKey: '2026-09',
+          categoryId: null,
+          amount: 500,
+        },
+      ],
+      goals: [],
+      recurringBills: [],
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const budgetRisk = response.json().items.find(
+    (item: { id: string }) => item.id === 'budget:2026-09:total',
+  );
+  assert.equal(budgetRisk, undefined);
+});
+
 test('server recommends a dining budget from stable three-month history', async t => {
   const { app } = await createApp(':memory:');
   t.after(() => app.close());
