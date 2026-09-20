@@ -461,7 +461,7 @@ class PaymentEngineTest {
         assertEquals(100L, candidate?.amountInCents)
         assertEquals("TRANSFER", candidate?.transactionType)
         assertEquals("WECHAT_TRANSFER_SUCCESS", candidate?.scene?.scene)
-        assertEquals("待陆勤老师-专注职工社保", candidate?.merchantRaw)
+        assertEquals("陆勤老师-专注职工社保", candidate?.merchantRaw)
     }
 
     @Test fun explicitTransferPageExtractsOwnAccountTargetHint() {
