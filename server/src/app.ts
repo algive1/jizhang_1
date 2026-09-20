@@ -72,6 +72,8 @@ export async function createApp(
   let stopPushWorker = () => {};
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, body));
+  app.addContentTypeParser(/^audio\//, { parseAs:'buffer', bodyLimit:20*1024*1024 }, (_request,body,done)=>done(null,body));
+  app.addContentTypeParser(/^image\//, { parseAs:'buffer', bodyLimit:12*1024*1024 }, (_request,body,done)=>done(null,body));
   await app.register(rateLimit,{max:300,timeWindow:'1 minute'});
   app.addHook('onClose',async()=>{stopPushWorker();store.db.close();});
   app.setErrorHandler((error,_req,reply)=>{
