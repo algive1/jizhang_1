@@ -1,11 +1,13 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from './store.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { AssistantModelUnavailable, DeepSeekCompatibleProvider, type AssistantModelProvider } from './assistant_ai.js';
+import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
+import { recordAiUsage } from './ai_usage.js';
 
 const feature = z.enum(['export', 'summary', 'voice', 'ocr']);
 const voiceParseRequestSchema = z.strictObject({
@@ -78,13 +80,6 @@ export function registerAssistantPolicy(
   const defaults = assistantPolicySchema.parse(JSON.parse(readFileSync(source!, 'utf8')));
   store.db.prepare('INSERT OR IGNORE INTO assistant_policy VALUES(1,?)').run(JSON.stringify(defaults));
   const policy = (): AssistantPolicy => assistantPolicySchema.parse(JSON.parse((store.db.prepare('SELECT data_json FROM assistant_policy WHERE id=1').get() as { data_json: string }).data_json));
-  const admin = (authorization: string | undefined) => {
-    const secret = process.env.ASSISTANT_ADMIN_TOKEN;
-    check(secret && secret.length >= 32, '助手配置管理尚未启用', 503);
-    const expected = Buffer.from(`Bearer ${secret}`), supplied = Buffer.from(authorization ?? '');
-    check(expected.length === supplied.length && timingSafeEqual(expected, supplied), '无助手配置管理权限', 403);
-  };
-
   const hasActiveMembership = (userId: string, now: number): boolean => {
     if (store.db.prepare(
       'SELECT 1 FROM assistant_memberships WHERE user_id=? AND expires_at>?',
@@ -138,21 +133,23 @@ export function registerAssistantPolicy(
   };
 
   app.get('/api/v1/assistant/config', async () => { const { systemPrompt: _, ...publicPolicy } = policy(); return publicPolicy; });
-  app.get('/api/v1/admin/assistant/config', async req => { admin(req.headers.authorization); return policy(); });
+  app.get('/api/v1/admin/assistant/config', async req => { requireAdminPrincipal(req.headers['x-admin-token'],'ai.read'); return policy(); });
   app.put('/api/v1/admin/assistant/config', async req => {
-    admin(req.headers.authorization);
+    const principal=requireAdminPrincipal(req.headers['x-admin-token'],'ai.write');
     const value = assistantPolicySchema.parse(req.body);
     store.db.prepare('UPDATE assistant_policy SET data_json=? WHERE id=1').run(JSON.stringify(value));
+    auditAdmin(store,principal,'assistant_policy_update',{permission:'ai.write'});
     return value;
   });
   // A trusted operational/verified-payment integration may grant or revoke
   // assistant access. No client payment-success flag is accepted.
   app.put('/api/v1/admin/assistant/memberships/:userId', async req => {
-    admin(req.headers.authorization);
+    const principal=requireAdminPrincipal(req.headers['x-admin-token'],'ai.write');
     const { userId } = z.object({ userId: z.string().min(1).max(100) }).parse(req.params);
     const { expiresAt } = z.strictObject({ expiresAt: z.number().int().nonnegative().max(4102444800) }).parse(req.body);
     check(store.db.prepare('SELECT 1 FROM users WHERE id=?').get(userId), '用户不存在', 404);
     store.db.prepare('INSERT INTO assistant_memberships VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET expires_at=excluded.expires_at').run(userId, expiresAt);
+    auditAdmin(store,principal,'assistant_membership_update',{permission:'ai.write',targetType:'user',targetId:userId});
     return { userId, expiresAt };
   });
   app.post('/api/v1/assistant/authorize', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async req => {
