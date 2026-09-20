@@ -27,16 +27,18 @@ class TransactionStatusParser(
 
         val hasRefund = labels.any(::isRefundStatus)
         val hasIncome = labels.any(::isIncomeStatus)
+        val hasRepayment = labels.any(::isRepaymentStatus)
         val hasTransfer =
             labels.any(::isTransferStatus) ||
                 isWeChatTransferConfirmation(sourceApp, labels)
-        if (listOf(hasRefund, hasIncome, hasTransfer).count { it } != 1) {
+        if (listOf(hasRefund, hasIncome, hasRepayment, hasTransfer).count { it } != 1) {
             return null
         }
 
         val transactionType = when {
             hasRefund -> "REFUND"
             hasIncome -> "INCOME"
+            hasRepayment -> "REPAYMENT"
             else -> "TRANSFER"
         }
         val counterparty = when (transactionType) {
@@ -50,18 +52,28 @@ class TransactionStatusParser(
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            "REPAYMENT" ->
+                CandidateFieldExtractor.repaymentTargetAccountHint(labels)
+                    ?: explicitValue(
+                        labels,
+                        setOf("还款对象", "债务账户", "账单账户"),
+                        setOf("还款至", "还款对象"),
+                    )
+                    ?: "信用卡还款"
             else -> transferCounterparty(labels)
         } ?: return null
 
         val amountKeys = when (transactionType) {
             "REFUND" -> setOf("退款金额", "到账金额", "退款")
             "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+            "REPAYMENT" -> setOf("还款金额", "本次还款", "还款")
             else -> setOf("转账金额", "转出金额", "付款金额", "金额")
         }
         val amount = uniqueAmount(labels, amountKeys) ?: return null
 
         val methodKeys = when (transactionType) {
             "TRANSFER" -> setOf("转出方式", "付款方式", "支付方式", "转出账户")
+            "REPAYMENT" -> setOf("扣款账户", "还款资金来源", "付款方式", "支付方式")
             "REFUND" -> setOf("退款方式", "支付方式", "付款方式")
             else -> setOf("收款方式", "支付方式", "付款方式")
         }
@@ -70,20 +82,18 @@ class TransactionStatusParser(
             ?.takeIf { it.isNotBlank() }
             ?: "UNKNOWN"
 
-        val targetAccountHint =
-            if (transactionType == "TRANSFER") {
-                CandidateFieldExtractor.targetAccountHint(labels)
-            } else {
-                null
-            }
-        val targetIdentifierSuffix =
-            if (transactionType == "TRANSFER") {
-                CandidateFieldExtractor.targetIdentifierSuffix(labels)
-            } else {
-                null
-            }
+        val targetAccountHint = when (transactionType) {
+            "TRANSFER" -> CandidateFieldExtractor.targetAccountHint(labels)
+            "REPAYMENT" -> CandidateFieldExtractor.repaymentTargetAccountHint(labels)
+            else -> null
+        }
+        val targetIdentifierSuffix = when (transactionType) {
+            "TRANSFER" -> CandidateFieldExtractor.targetIdentifierSuffix(labels)
+            "REPAYMENT" -> CandidateFieldExtractor.repaymentTargetIdentifierSuffix(labels)
+            else -> null
+        }
         val sourceIdentifierSuffix =
-            if (transactionType == "TRANSFER") {
+            if (transactionType == "TRANSFER" || transactionType == "REPAYMENT") {
                 CandidateFieldExtractor.identifierSuffix(method, emptyList())
             } else {
                 CandidateFieldExtractor.identifierSuffix(method, labels)
@@ -100,6 +110,7 @@ class TransactionStatusParser(
                 scene = when (transactionType) {
                     "REFUND" -> "${sourceApp}_REFUND_SUCCESS"
                     "INCOME" -> "${sourceApp}_INCOME_SUCCESS"
+                    "REPAYMENT" -> "${sourceApp}_REPAYMENT_SUCCESS"
                     else -> "${sourceApp}_TRANSFER_SUCCESS"
                 },
                 confidence = if (method == "UNKNOWN") .92 else .96,
@@ -124,16 +135,18 @@ class TransactionStatusParser(
         val labels = nodes.map { it.label.trim() }.filter { it.isNotBlank() }
         val hasRefund = labels.any(::isRefundStatus)
         val hasIncome = labels.any(::isIncomeStatus)
+        val hasRepayment = labels.any(::isRepaymentStatus)
         val hasTransfer =
             labels.any(::isTransferStatus) ||
                 isWeChatTransferConfirmation(sourceApp, labels)
-        val matchCount = listOf(hasRefund, hasIncome, hasTransfer).count { it }
+        val matchCount = listOf(hasRefund, hasIncome, hasRepayment, hasTransfer).count { it }
         if (matchCount == 0) return null
         if (matchCount != 1) return "AMBIGUOUS_TRANSACTION_STATUS"
 
         val type = when {
             hasRefund -> "REFUND"
             hasIncome -> "INCOME"
+            hasRepayment -> "REPAYMENT"
             else -> "TRANSFER"
         }
         val counterparty = when (type) {
@@ -147,6 +160,9 @@ class TransactionStatusParser(
                 setOf("付款方", "付款人", "对方"),
                 setOf("来自", "付款方", "付款人", "对方"),
             )
+            "REPAYMENT" ->
+                CandidateFieldExtractor.repaymentTargetAccountHint(labels)
+                    ?: "信用卡还款"
             else -> transferCounterparty(labels)
         }
         if (counterparty == null) return "NO_COUNTERPARTY"
@@ -156,6 +172,7 @@ class TransactionStatusParser(
             when (type) {
                 "REFUND" -> setOf("退款金额", "到账金额", "退款")
                 "INCOME" -> setOf("收款金额", "到账金额", "收入金额", "收款")
+                "REPAYMENT" -> setOf("还款金额", "本次还款", "还款")
                 else -> setOf("转账金额", "转出金额", "付款金额", "金额")
             },
         )
@@ -168,6 +185,9 @@ class TransactionStatusParser(
 
     private fun isIncomeStatus(label: String): Boolean =
         INCOME_STATUSES.any { label == it || label.startsWith(it) }
+
+    private fun isRepaymentStatus(label: String): Boolean =
+        REPAYMENT_STATUSES.any { label == it || label.startsWith(it) }
 
     private fun isTransferStatus(label: String): Boolean =
         TRANSFER_STATUSES.any { label == it || label.startsWith(it) }
@@ -276,6 +296,15 @@ class TransactionStatusParser(
             "收款成功",
             "收款已到账",
             "收入到账",
+        )
+        val REPAYMENT_STATUSES = setOf(
+            "信用卡还款成功",
+            "还款成功",
+            "还款已成功",
+            "还款完成",
+            "已还款",
+            "账单已还清",
+            "本期账单已还清",
         )
         val TRANSFER_STATUSES = setOf(
             "转账成功",
