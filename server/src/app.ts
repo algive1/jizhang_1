@@ -31,6 +31,7 @@ import { registerAiControlRoutes } from './ai_control.js';
 import { registerCommercialDashboardRoutes } from './commercial_dashboard.js';
 import { registerCampaignRoutes } from './campaigns.js';
 import { registerAiUsageAdminRoutes } from './ai_usage.js';
+import { registerAdminHealthRoutes } from './admin_health.js';
 import { startPushWorker } from './push_delivery.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
@@ -112,6 +113,7 @@ export async function createApp(
   registerCommercialDashboardRoutes(app,store);
   registerCampaignRoutes(app,store);
   registerAiUsageAdminRoutes(app,store);
+  registerAdminHealthRoutes(app,store);
   registerOperationalRoutes(app,store);
   registerMarketDataRoutes(app, marketProvider);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
