@@ -471,14 +471,16 @@ TransactionRecord _tx(
   DateTime date,
   double amount, {
   String? note,
+  String categoryId = 'food',
+  String categoryName = '餐饮',
 }) {
   return TransactionRecord(
     id: id,
     bookId: 'book-personal',
     type: TransactionType.expense,
     amount: amount,
-    categoryId: 'food',
-    categoryName: '餐饮',
+    categoryId: categoryId,
+    categoryName: categoryName,
     accountId: 'cash',
     note: note,
     occurredAt: date,
