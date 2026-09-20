@@ -32,8 +32,8 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1));
       });
       final now = DateTime.now();
-      final firstDay = DateTime(now.year, now.month, 1, 12);
-      final secondDay = DateTime(now.year, now.month, 2, 12);
+      final firstDay = DateTime(now.year, now.month, 1);
+      final secondDay = DateTime(now.year, now.month, now.day == 1 ? 1 : 2);
 
       await repository.create(
         _record(
@@ -110,7 +110,7 @@ void main() {
         id: 'calendar-imported-expense',
         type: TransactionType.expense,
         amount: 27.30,
-        occurredAt: DateTime(now.year, now.month, now.day, 10, 7),
+        occurredAt: DateTime(now.year, now.month, now.day),
         source: TransactionSource.import,
       ),
     );
@@ -152,6 +152,7 @@ void main() {
     final family = await container
         .read(bookRepositoryProvider)
         .create(name: '测试家庭账本', type: BookType.family);
+    final familyDay = now.day == 1 ? 1 : 2;
     final repository = DriftTransactionRepository(database);
     await repository.create(
       _record(
@@ -168,7 +169,7 @@ void main() {
         accountId: scopedSeedId(family.id, SeedIds.cashAccount),
         type: TransactionType.expense,
         amount: 35,
-        occurredAt: DateTime(now.year, now.month, 3, 12),
+        occurredAt: DateTime(now.year, now.month, familyDay),
       ),
     );
 
@@ -184,7 +185,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('全部账本'), findsOneWidget);
     expect(find.text('¥115'), findsOneWidget);
-    expect(find.text('2天'), findsOneWidget);
+    expect(find.text(now.day == 1 ? '1天' : '2天'), findsOneWidget);
 
     await tester.tap(find.text('全部账本'));
     await tester.pumpAndSettle();
