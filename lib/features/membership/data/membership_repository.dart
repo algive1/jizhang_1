@@ -70,6 +70,7 @@ class LocalOnlyMembershipRepository implements MembershipRepository {
           : baseline,
       quotas: const [],
     );
+    return snapshot;
   }
 
   @override
@@ -112,7 +113,7 @@ class RemoteMembershipRepository implements MembershipRepository {
     );
     final updatedAt = _date(membership['updatedAt']);
     final subscriptionJson = json['subscription'];
-    return MembershipSnapshot(
+    final snapshot = MembershipSnapshot(
       membership: Membership(
         userId: membership['userId'] as String? ?? session.user!.id,
         plan: plan,
