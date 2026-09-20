@@ -70,6 +70,7 @@ class _AutoBookkeepingConfirmPageState
       TransactionRecord? matchedRefundOriginal;
       AutoBookkeepingTransferRecommendation? transferRecommendation;
       String? sourceAccountId;
+      String? resolvedBookId;
       if (candidate != null) {
         final fallbackBookId = ref.read(activeBookIdProvider);
         recommendation = await ref
@@ -79,30 +80,39 @@ class _AutoBookkeepingConfirmPageState
               fallbackBookId: fallbackBookId,
               transactionType: _transactionTypeFor(candidate.transactionType),
             );
-        final targetBookId = recommendation.bookId ?? fallbackBookId;
-        matchedRefundOriginal = await ref
-            .read(autoBookkeepingRefundMatcherProvider)
-            .findOriginal(candidate: candidate, bookId: targetBookId);
+        final books = await ref.read(booksProvider.future);
+        final requestedBookId = recommendation.bookId ?? fallbackBookId;
+        final targetBookId = books.any((book) => book.id == requestedBookId)
+            ? requestedBookId
+            : books.any((book) => book.id == fallbackBookId)
+            ? fallbackBookId
+            : books.firstOrNull?.id;
+        resolvedBookId = targetBookId;
+        if (targetBookId != null) {
+          matchedRefundOriginal = await ref
+              .read(autoBookkeepingRefundMatcherProvider)
+              .findOriginal(candidate: candidate, bookId: targetBookId);
 
-        final accounts = await ref.read(
-          accountsByBookProvider(targetBookId).future,
-        );
-        sourceAccountId =
-            matchedRefundOriginal?.accountId ??
-            _bestAccountId(
-              accounts,
-              candidate: candidate,
-              preferredId: recommendation.accountId,
-            );
-        if (candidate.transactionType == 'TRANSFER') {
-          transferRecommendation = await ref
-              .read(autoBookkeepingTransferResolverProvider)
-              .recommend(
+          final accounts = await ref.read(
+            accountsByBookProvider(targetBookId).future,
+          );
+          sourceAccountId =
+              matchedRefundOriginal?.accountId ??
+              _bestAccountId(
+                accounts,
                 candidate: candidate,
-                bookId: targetBookId,
-                accounts: accounts,
-                sourceAccountId: sourceAccountId,
+                preferredId: recommendation.accountId,
               );
+          if (candidate.transactionType == 'TRANSFER') {
+            transferRecommendation = await ref
+                .read(autoBookkeepingTransferResolverProvider)
+                .recommend(
+                  candidate: candidate,
+                  bookId: targetBookId,
+                  accounts: accounts,
+                  sourceAccountId: sourceAccountId,
+                );
+          }
         }
       }
       if (!mounted) return;
@@ -111,7 +121,7 @@ class _AutoBookkeepingConfirmPageState
         _recommendation = recommendation;
         _matchedRefundOriginal = matchedRefundOriginal;
         _transferRecommendation = transferRecommendation;
-        _bookId = recommendation?.bookId;
+        _bookId = resolvedBookId;
         _accountId = sourceAccountId;
         _categoryId = recommendation?.categoryId;
         _internalTransfer =
