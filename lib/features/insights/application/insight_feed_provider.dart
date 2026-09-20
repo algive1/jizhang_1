@@ -21,9 +21,9 @@ final financialInsightEngineProvider = Provider<FinancialInsightEngine>(
 final localInsightFeedProvider = Provider<InsightFeed>((ref) {
   final transactions =
       ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
-  final analysis = ref
-      .watch(analysisRepositoryProvider)
-      .analyze(
+  final engine = ref.watch(financialInsightEngineProvider);
+  final analysis = ref.watch(statisticalAnalysisServiceProvider).analyze(
+        engine.normalizeAnalysisTransactions(transactions),
         period: AnalysisPeriod.currentMonth,
         currency: 'CNY',
       );
@@ -35,17 +35,15 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
   final preferences =
       ref.watch(insightPreferencesProvider).value ??
       const InsightPreferences();
-  return ref
-      .watch(financialInsightEngineProvider)
-      .build(
-        transactions: transactions,
-        analysis: analysis,
-        budgets: budgets,
-        accounts: accounts,
-        goals: goals,
-        recurringBills: recurringBills,
-        preferences: preferences,
-      );
+  return engine.build(
+    transactions: transactions,
+    analysis: analysis,
+    budgets: budgets,
+    accounts: accounts,
+    goals: goals,
+    recurringBills: recurringBills,
+    preferences: preferences,
+  );
 });
 
 

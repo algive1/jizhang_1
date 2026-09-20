@@ -135,7 +135,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
           if (item.actionRoute != null) ...[
             const SizedBox(height: 18),
             FilledButton(
-              onPressed: () => context.push(item.actionRoute!),
+              onPressed: () => _openAction(context, item),
               child: Text(item.actionLabel ?? '查看'),
             ),
           ],
@@ -223,6 +223,21 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
         ],
       ),
     );
+  }
+
+  void _openAction(
+    BuildContext context,
+    FinancialInsightItem item,
+  ) {
+    if (item.actionRoute == '/transactions' &&
+        item.relatedTransactionIds.isNotEmpty) {
+      context.push(
+        '/transactions/search',
+        extra: item.relatedTransactionIds,
+      );
+      return;
+    }
+    context.push(item.actionRoute!);
   }
 
   Future<void> _loadAi(FinancialInsightItem item) async {

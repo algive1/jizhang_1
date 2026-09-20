@@ -96,8 +96,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'search',
-                builder: (context, state) =>
-                    TransactionSearchPage(month: _queryMonth(state.uri)),
+                builder: (context, state) => TransactionSearchPage(
+                  month: _queryMonth(state.uri),
+                  transactionIds: state.extra is List<String>
+                      ? (state.extra! as List<String>).toSet()
+                      : const {},
+                ),
               ),
               GoRoute(
                 path: 'inbox',

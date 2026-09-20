@@ -12,6 +12,23 @@ import 'insight_models.dart';
 class FinancialInsightEngine {
   const FinancialInsightEngine();
 
+  List<TransactionRecord> normalizeAnalysisTransactions(
+    List<TransactionRecord> transactions,
+  ) {
+    return transactions.map((item) {
+      if (!item.isConsumptionExpense) return item;
+      final personal = _personalExpense(item);
+      if ((personal - item.netExpenseAmount).abs() < .005) return item;
+      return item.copyWith(
+        amount: personal,
+        reimbursementStatus: ReimbursementStatus.none,
+        reimbursementAmount: null,
+        refundStatus: RefundStatus.none,
+        clearRefundAmount: true,
+      );
+    }).toList(growable: false);
+  }
+
   InsightFeed build({
     required List<TransactionRecord> transactions,
     required AnalysisSnapshot analysis,

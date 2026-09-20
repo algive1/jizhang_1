@@ -12,6 +12,45 @@ import 'package:jizhang_app/features/insights/domain/insight_models.dart';
 void main() {
   final now = DateTime(2026, 9, 10, 12);
 
+  test('local trend analysis removes expected reimbursements', () {
+    final raw = <TransactionRecord>[
+      for (var index = 0; index < 4; index++)
+        _tx(
+          'previous-$index',
+          DateTime(2026, 8, 3 + index),
+          50,
+        ),
+      for (var index = 0; index < 4; index++)
+        _tx(
+          'current-$index',
+          DateTime(2026, 9, 3 + index),
+          200,
+        ).copyWith(
+          reimbursementStatus: ReimbursementStatus.pending,
+          reimbursementAmount: 150,
+        ),
+    ];
+    const engine = FinancialInsightEngine();
+    final analysis = const StatisticalAnalysisService().analyze(
+      engine.normalizeAnalysisTransactions(raw),
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = engine.build(
+      transactions: raw,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(configured: true),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'analysis:category:food'),
+      isFalse,
+    );
+  });
+
   test('budget velocity becomes a high-value risk insight', () {
     final transactions = _history(now);
     final analysis = const StatisticalAnalysisService().analyze(
