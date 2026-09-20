@@ -447,9 +447,6 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     List<Account> accounts,
     List<Category> categories,
   ) {
-    if (_result?.provider.needsAccountMapping != true) {
-      _accountId ??= accounts.where((item) => !item.isArchived).firstOrNull?.id;
-    }
     _expenseCategoryId ??=
         _preferred(_rootCategories(categories, CategoryType.expense))?.id;
     _incomeCategoryId ??=
@@ -545,7 +542,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         _rowSourceAccountOverrides.clear();
         _rowDestinationAccountOverrides.clear();
         _preserveCurrentBalances = true;
-        if (result.provider.needsAccountMapping) _accountId = null;
+        _accountId = null;
         _selected = Set<int>.from(
           List<int>.generate(result.rows.length, (index) => index),
         );
