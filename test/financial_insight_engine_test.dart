@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/models/account.dart';
 import 'package:jizhang_app/core/models/analysis.dart';
@@ -432,6 +434,78 @@ void main() {
     expect(insight.kind, FinancialInsightKind.life);
     expect(insight.analysis, contains('家庭支持'));
     expect(insight.summary, isNot(contains('超支')));
+  });
+
+  test('MuMu import metadata drives family and beauty life insights', () {
+    final transactions = <TransactionRecord>[
+      ..._history(now),
+      _tx(
+        'family-meta-1',
+        now.subtract(const Duration(days: 12)),
+        600,
+        categoryId: 'gift',
+        categoryName: '社交',
+      ).copyWith(
+        metadataJson: jsonEncode({
+          'importProvider': 'mumu',
+          'sourceCategory': '社交',
+          'sourceSubcategory': '父母',
+        }),
+      ),
+      _tx(
+        'family-meta-2',
+        now.subtract(const Duration(days: 45)),
+        500,
+        categoryId: 'gift',
+        categoryName: '社交',
+      ).copyWith(
+        metadataJson: jsonEncode({
+          'importProvider': 'mumu',
+          'sourceCategory': '社交',
+          'sourceSubcategory': '亲友',
+        }),
+      ),
+      for (var index = 0; index < 4; index++)
+        _tx(
+          'beauty-meta-$index',
+          now.subtract(Duration(days: 5 + index * 6)),
+          120,
+          categoryId: 'shopping',
+          categoryName: '购物',
+        ).copyWith(
+          metadataJson: jsonEncode({
+            'importProvider': 'mumu',
+            'sourceCategory': '美妆',
+            'sourceSubcategory': index.isEven ? '护肤' : '美容仪器',
+          }),
+        ),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(
+        intents: {BookkeepingIntent.recordLife},
+        focus: {InsightFocus.family, InsightFocus.healthHabits},
+        configured: true,
+      ),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'life:family-support'),
+      isTrue,
+    );
+    expect(
+      feed.items.any((item) => item.id == 'life:beauty-care'),
+      isTrue,
+    );
   });
 
   test('ambiguous family transfers do not become family-support insights', () {

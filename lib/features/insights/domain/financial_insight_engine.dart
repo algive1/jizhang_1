@@ -8,6 +8,7 @@ import '../../../core/models/goal.dart';
 import '../../../core/models/recurring_bill.dart';
 import 'budget_recommendation_service.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/utils/transaction_semantic_text.dart';
 import 'insight_models.dart';
 
 class FinancialInsightEngine {
@@ -1024,9 +1025,8 @@ class FinancialInsightEngine {
           item.type != TransactionType.lend) {
         return false;
       }
-      final text =
-          '${item.note ?? ''} ${item.merchant ?? ''} ${item.categoryName ?? ''}';
-      return RegExp(r'爸爸|妈妈|父母|家人|家里|爸妈').hasMatch(text);
+      final text = transactionSemanticText(item);
+      return RegExp(r'爸爸|妈妈|父母|家人|家里|爸妈|亲友').hasMatch(text);
     }).toList();
     if (family.length < 2) return null;
     final amount = family.fold<double>(
@@ -1074,9 +1074,8 @@ class FinancialInsightEngine {
     final items = expenses.where((item) {
       if (item.occurredAt.isBefore(cutoff)) return false;
       if (item.personalExpenseAmount <= .005) return false;
-      final text =
-          '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
-      return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text);
+      final text = transactionSemanticText(item);
+      return RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水|美容仪器').hasMatch(text);
     }).toList();
     if (items.length < 4) return null;
     final amount = items.fold<double>(

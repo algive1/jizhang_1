@@ -6,6 +6,7 @@ import '../../../core/models/category.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/utils/transaction_semantic_text.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import '../domain/insight_models.dart';
@@ -198,13 +199,12 @@ class RemoteInsightRepository {
   }
 
   Map<String, bool> _semanticHints(TransactionRecord item) {
-    final text =
-        '${item.categoryName ?? ''} ${item.merchant ?? ''} ${item.note ?? ''}';
+    final text = transactionSemanticText(item);
     return {
       'delivery': RegExp(r'美团|饿了么|外卖|delivery', caseSensitive: false)
           .hasMatch(text),
-      'family': RegExp(r'爸爸|妈妈|父母|爸妈|家人|家里').hasMatch(text),
-      'beauty': RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水').hasMatch(text),
+      'family': RegExp(r'爸爸|妈妈|父母|爸妈|家人|家里|亲友').hasMatch(text),
+      'beauty': RegExp(r'美妆|护肤|彩妆|口红|面膜|美容|香水|美容仪器').hasMatch(text),
     };
   }
 
