@@ -411,9 +411,12 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
                     children: [
                       const Icon(Icons.storage_rounded, size: 42),
                       const SizedBox(height: 14),
-                      Text(
+                      const Text(
                         '本地账本初始化失败',
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       const Text(
