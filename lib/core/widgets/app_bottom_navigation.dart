@@ -44,9 +44,10 @@ class AppBottomNavigation extends StatelessWidget {
                 : context.appSurface,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final tabWidth =
-                    ((constraints.maxWidth - _centerGap) / 4).clamp(1.0, double.infinity);
-                final bubbleWidth = (tabWidth - 6).clamp(42.0, 58.0);
+                final tabWidth = ((constraints.maxWidth - _centerGap) / 4)
+                    .clamp(1.0, double.infinity)
+                    .toDouble();
+                final bubbleWidth = (tabWidth - 6).clamp(42.0, 58.0).toDouble();
                 final indicatorLeft = _slotStart(selectedIndex, tabWidth) +
                     (tabWidth - bubbleWidth) / 2;
 
