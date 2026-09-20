@@ -203,6 +203,46 @@ void main() {
     );
   });
 
+  test('specific suspicious-record insight suppresses generic classification noise', () {
+    final transactions = [
+      for (var index = 0; index < 14; index++)
+        TransactionRecord(
+          id: 'import-$index',
+          bookId: 'book-personal',
+          type: TransactionType.expense,
+          amount: 20,
+          accountId: 'cash',
+          occurredAt: now.subtract(Duration(days: index)),
+          createdAt: now,
+          updatedAt: now,
+          source: TransactionSource.import,
+          aiConfidence: .3,
+        ),
+    ];
+    final analysis = const StatisticalAnalysisService().analyze(
+      transactions,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(configured: true),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'data:review-needed'),
+      isTrue,
+    );
+    expect(
+      feed.items.any((item) => item.id == 'data:classification'),
+      isFalse,
+    );
+  });
+
   test('goal context can produce progress insight', () {
     final transactions = _history(now);
     final analysis = const StatisticalAnalysisService().analyze(

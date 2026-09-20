@@ -171,7 +171,9 @@ class FinancialInsightEngine {
     );
     if (anomaly != null) candidates.add(anomaly);
 
-    if (quality.classification < .68 && expenses.length >= 12) {
+    if (anomaly == null &&
+        quality.classification < .68 &&
+        expenses.length >= 12) {
       candidates.add(
         _item(
           id: 'data:classification',

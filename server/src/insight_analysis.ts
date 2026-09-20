@@ -1514,7 +1514,11 @@ export function analyzeInsightContext(
     );
   }
 
-  if (confidence.classification < 0.68 && expenses.length >= 12) {
+  if (
+    !anomaly &&
+    confidence.classification < 0.68 &&
+    expenses.length >= 12
+  ) {
     results.push(
       item({
         id: 'data:classification',
