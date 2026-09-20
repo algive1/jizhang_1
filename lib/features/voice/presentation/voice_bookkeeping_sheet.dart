@@ -140,7 +140,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
       child: FractionallySizedBox(
         heightFactor: .92,
         child: Material(
-          color: context.appBackground,
+          color: context.appSheetSurface,
           clipBehavior: Clip.antiAlias,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
