@@ -173,6 +173,9 @@ class PaymentNotificationParser {
         r'收款到账|收款成功|收款已到账|收入到账',
       ).hasMatch(value) => 'INCOME',
       final value when RegExp(
+        r'信用卡还款成功|还款成功|还款已成功|还款完成|已还款|账单已还清|本期账单已还清',
+      ).hasMatch(value) => 'REPAYMENT',
+      final value when RegExp(
         r'转账成功|转账已成功|转出成功|转账完成|转出完成|已转账',
       ).hasMatch(value) => 'TRANSFER',
       _ => 'EXPENSE',
@@ -212,7 +215,12 @@ class PaymentNotificationParser {
 
     final amount = _amountFor(content);
     if (amount == null || amount <= 0) return null;
-    final merchant = _merchantFor(content) ?? _counterpartyFor(content);
+    final merchant =
+        _merchantFor(content) ??
+        _counterpartyFor(content) ??
+        (transactionType == 'REPAYMENT'
+            ? _targetAccountHintFor(content) ?? '信用卡还款'
+            : null);
     if (merchant == null) return null;
     final breakdown = _amountBreakdownFor(content, amount);
     return ParsedPaymentNotification(
@@ -226,14 +234,16 @@ class PaymentNotificationParser {
       paymentMethod:
           _paymentMethodFor(content) ?? _displayPaymentMethod(channel),
       identifierSuffix: _identifierSuffixFor(
-        transactionType == 'TRANSFER'
+        transactionType == 'TRANSFER' || transactionType == 'REPAYMENT'
             ? (_paymentMethodFor(content) ?? '')
             : content,
       ),
-      targetIdentifierSuffix: transactionType == 'TRANSFER'
+      targetIdentifierSuffix:
+          transactionType == 'TRANSFER' || transactionType == 'REPAYMENT'
           ? _identifierSuffixFor(_targetAccountHintFor(content) ?? '')
           : null,
-      targetAccountHint: transactionType == 'TRANSFER'
+      targetAccountHint:
+          transactionType == 'TRANSFER' || transactionType == 'REPAYMENT'
           ? _targetAccountHintFor(content)
           : null,
       note: _noteFor(content),
@@ -272,13 +282,13 @@ class PaymentNotificationParser {
 
   double? _amountFor(String content) {
     final explicit = RegExp(
-      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|退款金额|收款金额|到账金额|收入金额|转账金额|转出金额)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:实付金额?|实际支付|付款金额|支付金额|消费金额|扣款金额|退款金额|收款金额|到账金额|收入金额|转账金额|转出金额|还款金额|本次还款)[^0-9]{0,10}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (explicit.length == 1) return explicit.single;
     if (explicit.length > 1) return null;
 
     final status = RegExp(
-      r'(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成|转账成功|转出成功|转账完成|转出完成|已转账|消费|扣款|支出)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
+      r'(?:支付成功|付款成功|交易成功|扣款成功|消费成功|已支付|已付款|支付完成|付款完成|订单支付成功|订单已支付|订单支付完成|支付已完成|付款已完成|交易已完成|转账成功|转出成功|转账完成|转出完成|已转账|信用卡还款成功|还款成功|还款完成|已还款|消费|扣款|支出)[^0-9]{0,12}(?:¥|￥)?\s*([0-9]{1,9}(?:[.,][0-9]{1,2})?)',
     ).allMatches(content).map(_parseAmount).whereType<double>().toSet();
     if (status.length == 1) return status.single;
     if (status.length > 1) return null;
@@ -343,14 +353,14 @@ class PaymentNotificationParser {
 
   String? _paymentMethodFor(String content) {
     final explicit = RegExp(
-      r'(?:支付方式|付款方式|支付渠道)[：:\s]*([^，。；;\n]{2,40})',
+      r'(?:支付方式|付款方式|支付渠道|扣款账户|还款资金来源)[：:\s]*([^，。；;\n]{2,40})',
     ).firstMatch(content)?.group(1)?.trim();
     return explicit == null || explicit.isEmpty ? null : explicit;
   }
 
   String? _counterpartyFor(String content) {
     final match = RegExp(
-      r'(?:来自|付款方|付款人|退款方|收款人|收款方|对方)[：:\s]*([^，。；;\n]{2,32})',
+      r'(?:来自|付款方|付款人|退款方|收款人|收款方|对方|还款对象)[：:\s]*([^，。；;\n]{2,32})',
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     if (value == null || value.isEmpty) return null;
@@ -395,7 +405,7 @@ class PaymentNotificationParser {
 
   String? _targetAccountHintFor(String content) {
     final match = RegExp(
-      r'(?:转入账户|收款账户|到账账户|收款银行卡|转入银行卡)[：:\s]*([^，。；;\n]{2,120})',
+      r'(?:转入账户|收款账户|到账账户|收款银行卡|转入银行卡|还款至|还款信用卡|信用卡|债务账户|账单账户|还款对象)[：:\s]*([^，。；;\n]{2,120})',
     ).firstMatch(content);
     final value = match?.group(1)?.trim();
     return value == null || value.isEmpty ? null : value;
@@ -515,6 +525,7 @@ class PaymentNotificationAutoBookkeepingService {
               'REFUND' => 'PAYMENT_NOTIFICATION_REFUND',
               'INCOME' => 'PAYMENT_NOTIFICATION_INCOME',
               'TRANSFER' => 'PAYMENT_NOTIFICATION_TRANSFER',
+              'REPAYMENT' => 'PAYMENT_NOTIFICATION_REPAYMENT',
               _ => 'PAYMENT_NOTIFICATION',
             },
             transactionType: parsed.transactionType,
@@ -544,6 +555,14 @@ class PaymentNotificationAutoBookkeepingService {
             waiting++;
             break;
         }
+        continue;
+      }
+
+      if (parsed.transactionType == 'REPAYMENT') {
+        // Repayment requires a separately confirmed debt account. The normal
+        // app path always uses pendingBridge; a legacy direct-save caller must
+        // wait rather than turning debt repayment into consumption.
+        waiting++;
         continue;
       }
 
