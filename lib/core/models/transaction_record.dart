@@ -42,6 +42,8 @@ class TransactionRecord {
     this.categoryName,
     this.categoryIcon,
     this.subcategoryId,
+    this.subcategoryName,
+    this.subcategoryIcon,
     this.destinationAccountId,
     this.merchant,
     this.note,
@@ -85,6 +87,8 @@ class TransactionRecord {
   /// table so category renames still follow the category ID.
   final String? categoryIcon;
   final String? subcategoryId;
+  final String? subcategoryName;
+  final String? subcategoryIcon;
   final String accountId;
   final String? destinationAccountId;
   final String? merchant;
@@ -184,6 +188,11 @@ class TransactionRecord {
     _ => categoryName?.trim().isNotEmpty == true ? categoryName!.trim() : '未分类',
   };
 
+  String get displayCategoryPath {
+    final child = _displayValue(subcategoryName);
+    return child == null ? displayCategoryLabel : '$displayCategoryLabel · $child';
+  }
+
   /// The primary text for a transaction row.
   ///
   /// Manual bookkeeping keeps a user-entered note as the most specific label.
@@ -262,6 +271,14 @@ class TransactionRecord {
           ? null
           : categoryIcon,
       subcategoryId: subcategoryId ?? this.subcategoryId,
+      subcategoryName:
+          (subcategoryId != null && subcategoryId != this.subcategoryId)
+          ? null
+          : this.subcategoryName,
+      subcategoryIcon:
+          (subcategoryId != null && subcategoryId != this.subcategoryId)
+          ? null
+          : this.subcategoryIcon,
       accountId: accountId ?? this.accountId,
       destinationAccountId: destinationAccountId ?? this.destinationAccountId,
       merchant: merchant ?? this.merchant,
