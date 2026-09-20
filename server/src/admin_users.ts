@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 import type { Store } from './store.js';
 import { auditAdmin, requireAdminPrincipal } from './admin_auth.js';
+import { issueSensitiveGrant, requireSensitiveGrant } from './sensitive_access.js';
 
 export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
+  app.post('/api/v1/admin/sensitive-access',async request=>{const principal=requireAdminPrincipal(request.headers['x-admin-token'],'users.sensitive.read');const {reason}=z.strictObject({reason:z.string().trim().min(8).max(500)}).parse(request.body);const grant=issueSensitiveGrant(store,principal,reason);auditAdmin(store,principal,'sensitive_access_grant',{permission:'users.sensitive.read',reason});return grant;});
   app.get('/api/v1/admin/users',async request=>{
     const principal=requireAdminPrincipal(request.headers['x-admin-token'],'users.read');
     const q=z.object({q:z.string().trim().max(80).default(''),limit:z.coerce.number().int().min(1).max(200).default(50),offset:z.coerce.number().int().min(0).max(1000000).default(0)}).parse(request.query);
@@ -37,12 +39,12 @@ export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
   app.get('/api/v1/admin/users/:userId/sensitive-ledger',async request=>{
     const principal=requireAdminPrincipal(request.headers['x-admin-token'],'users.sensitive.read');
     const {userId}=z.object({userId:z.string().min(1).max(100)}).parse(request.params);
-    const {reason}=z.object({reason:z.string().trim().min(8).max(500)}).parse(request.query);
+    const grant=requireSensitiveGrant(store,principal,request.headers['x-sensitive-access-token']);const reason=grant.reason;
     const books=store.db.prepare('SELECT b.id,b.name,b.type,m.role FROM members m JOIN books b ON b.id=m.book_id WHERE m.user_id=? ORDER BY b.updated_at DESC').all(userId) as Array<{id:string;name:string;type:string;role:string}>;
     const transactions=[];
     for(const book of books){
       const rows=store.db.prepare(`SELECT id,data_json AS dataJson,version FROM entities
-        WHERE book_id=? AND kind='transactions' AND deleted=0 ORDER BY CAST(json_extract(data_json,'$.occurred_at') AS INTEGER) DESC,version DESC LIMIT 500`).all(book.id) as any[];
+        WHERE book_id=? AND kind='transactions' AND deleted=0 ORDER BY version DESC LIMIT 500`).all(book.id) as any[];
       transactions.push({book,...{transactions:rows.map(r=>({id:r.id,version:r.version,data:JSON.parse(r.dataJson)}))}});
     }
     auditAdmin(store,principal,'sensitive_ledger_read',{permission:'users.sensitive.read',targetType:'user',targetId:userId,reason,details:{bookCount:books.length}});
@@ -52,7 +54,7 @@ export function registerAdminUserRoutes(app:FastifyInstance,store:Store){
   app.get('/api/v1/admin/users/:userId/sensitive-investments',async request=>{
     const principal=requireAdminPrincipal(request.headers['x-admin-token'],'investments.sensitive.read');
     const {userId}=z.object({userId:z.string().min(1).max(100)}).parse(request.params);
-    const {reason}=z.object({reason:z.string().trim().min(8).max(500)}).parse(request.query);
+    const grant=requireSensitiveGrant(store,principal,request.headers['x-sensitive-access-token']);const reason=grant.reason;
     const books=store.db.prepare('SELECT book_id FROM members WHERE user_id=?').all(userId) as Array<{book_id:string}>;
     const result=[];
     for(const {book_id} of books){
