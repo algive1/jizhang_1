@@ -195,11 +195,14 @@ class DriftTransactionRepository implements TransactionRepository {
             : _toCents(transaction.amount) <= 0)) {
       throw ArgumentError.value(transaction.amount, 'amount', 'must be > 0');
     }
-    if (transaction.type == TransactionType.transfer) {
+    if (transaction.type == TransactionType.transfer ||
+        transaction.type == TransactionType.repayment) {
       final destination = transaction.destinationAccountId;
       if (destination == null || destination == transaction.accountId) {
         throw ArgumentError(
-          'A transfer requires two different source/destination accounts',
+          transaction.type == TransactionType.repayment
+              ? 'A repayment requires two different payment/debt accounts'
+              : 'A transfer requires two different source/destination accounts',
         );
       }
     }
