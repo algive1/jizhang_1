@@ -9,6 +9,7 @@ import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/privacy_amount.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 import '../../goals/domain/goal_milestone_service.dart';
 import '../../../core/constants/app_assets.dart';
 
@@ -21,20 +22,10 @@ class HomeSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => AppGlassSurface(
     padding: padding,
-    decoration: BoxDecoration(
-      color: context.appSurface,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: context.appDivider),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x07000000),
-          blurRadius: 10,
-          offset: Offset(0, 3),
-        ),
-      ],
-    ),
+    borderRadius: 20,
+    tint: context.appSurface,
     child: child,
   );
 }
