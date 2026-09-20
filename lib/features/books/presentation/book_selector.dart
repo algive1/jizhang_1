@@ -93,7 +93,7 @@ Future<LedgerBook?> showBookChoiceSheet(
     useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: context.appBackground,
+    backgroundColor: context.appSheetSurface,
     builder: (_) => _BookChoiceSheet(books: books, selectedId: selectedId),
   );
 }
@@ -1192,7 +1192,7 @@ class _AllBooksSheetState extends ConsumerState<_AllBooksSheet> {
               .where((book) => book.name.toLowerCase().contains(query))
               .toList();
     return Material(
-      color: context.appBackground,
+      color: context.appSheetSurface,
       child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
