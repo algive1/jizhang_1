@@ -362,10 +362,8 @@ const _commonChildren = <String, List<(String, String)>>{
     ('rental', '租车'),
   ],
   'expense-shopping': [
-    ('daily', '日用百货'),
     ('clothes', '服饰鞋包'),
     ('beauty', '美妆护肤'),
-    ('furniture', '家居用品'),
     ('online', '网购'),
     ('accessory', '饰品'),
     ('personal-care', '个人护理'),
@@ -515,11 +513,8 @@ const _familyChildren = <String, List<(String, String)>>{
     ('delivery', '外卖'),
   ],
   'expense-shopping': [
-    ('daily', '家庭日用品'),
     ('child', '母婴用品'),
     ('clothes', '家人衣物'),
-    ('furniture', '家具'),
-    ('cleaning', '清洁用品'),
   ],
   'expense-education': [
     ('tuition', '子女学费'),
