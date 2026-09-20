@@ -1,7 +1,9 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({required this.location, super.key});
@@ -14,6 +16,11 @@ class AppBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final glass = context.appUsesLiquidGlass;
+    final material = context.appMaterial;
+    final highContrast = MediaQuery.of(context).highContrast;
+    final blur = highContrast ? material.blurSigma * .55 : material.blurSigma;
+
     return SafeArea(
       top: false,
       child: SizedBox(
@@ -26,8 +33,18 @@ class AppBottomNavigation extends StatelessWidget {
             _horizontalInset + 8,
             _bottomInset + 4,
           ),
-          color: const Color(0xFFFFFEFB),
-          elevation: 0,
+          // BottomAppBar applies [padding] inside its Material. Keep a
+          // translucent tint on the Material itself so the entire notched
+          // pill stays glass-like, including the padded edge around the
+          // BackdropFilter content.
+          color: glass
+              ? material.glassTint.withValues(alpha: highContrast ? .94 : .72)
+              : context.appSurface,
+          surfaceTintColor: Colors.transparent,
+          elevation: glass ? 7 : 0,
+          shadowColor: glass
+              ? context.appPrimary.withValues(alpha: .16)
+              : Colors.transparent,
           clipBehavior: Clip.antiAlias,
           shape: const _InsetRoundedCircularNotchedShape(
             horizontalInset: _horizontalInset,
@@ -35,48 +52,79 @@ class AppBottomNavigation extends StatelessWidget {
             cornerRadius: _cornerRadius,
           ),
           notchMargin: 8,
-          child: Row(
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: _item(
-                  context,
-                  0,
-                  Icons.home_outlined,
-                  Icons.home,
-                  '首页',
-                  '/',
+              if (glass)
+                RepaintBoundary(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: blur,
+                      sigmaY: blur,
+                      tileMode: TileMode.decal,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            material.glassHighlight.withValues(
+                              alpha: highContrast ? .96 : .70,
+                            ),
+                            material.glassTint.withValues(
+                              alpha: highContrast ? .96 : .84,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _item(
-                  context,
-                  1,
-                  Icons.receipt_long_outlined,
-                  Icons.receipt_long,
-                  '流水',
-                  '/transactions',
-                ),
-              ),
-              const SizedBox(width: 72),
-              Expanded(
-                child: _item(
-                  context,
-                  2,
-                  Icons.auto_graph_outlined,
-                  Icons.auto_graph,
-                  '洞察',
-                  '/insights',
-                ),
-              ),
-              Expanded(
-                child: _item(
-                  context,
-                  3,
-                  Icons.person_outline,
-                  Icons.person,
-                  '我的',
-                  '/profile',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _item(
+                      context,
+                      0,
+                      Icons.home_outlined,
+                      Icons.home,
+                      '首页',
+                      '/',
+                    ),
+                  ),
+                  Expanded(
+                    child: _item(
+                      context,
+                      1,
+                      Icons.receipt_long_outlined,
+                      Icons.receipt_long,
+                      '流水',
+                      '/transactions',
+                    ),
+                  ),
+                  const SizedBox(width: 72),
+                  Expanded(
+                    child: _item(
+                      context,
+                      2,
+                      Icons.auto_graph_outlined,
+                      Icons.auto_graph,
+                      '洞察',
+                      '/insights',
+                    ),
+                  ),
+                  Expanded(
+                    child: _item(
+                      context,
+                      3,
+                      Icons.person_outline,
+                      Icons.person,
+                      '我的',
+                      '/profile',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -107,7 +155,7 @@ class AppBottomNavigation extends StatelessWidget {
     String route,
   ) {
     final selected = index == _selectedIndex;
-    final color = selected ? AppColors.primary : AppColors.textSecondary;
+    final color = selected ? context.appPrimary : context.appSecondaryText;
     return InkWell(
       onTap: () => context.go(route),
       borderRadius: BorderRadius.circular(18),

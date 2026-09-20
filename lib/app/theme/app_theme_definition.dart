@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+enum AppThemeStyle { solid, liquidGlass }
+
 @immutable
 class AppThemeDefinition {
   const AppThemeDefinition({
@@ -16,6 +18,7 @@ class AppThemeDefinition {
     required this.textPrimary,
     required this.textSecondary,
     required this.divider,
+    this.style = AppThemeStyle.solid,
   });
 
   final String id;
@@ -31,6 +34,7 @@ class AppThemeDefinition {
   final Color textPrimary;
   final Color textSecondary;
   final Color divider;
+  final AppThemeStyle style;
 
   factory AppThemeDefinition.fromJson(Map<String, dynamic> json) {
     Color color(String key) {
@@ -40,6 +44,14 @@ class AppThemeDefinition {
       }
       return Color(0xFF000000 | int.parse(raw, radix: 16));
     }
+
+    final styleValue = json['style'] as String? ?? 'solid';
+    final style = switch (styleValue) {
+      'solid' => AppThemeStyle.solid,
+      'liquidGlass' || 'liquid_glass' => AppThemeStyle.liquidGlass,
+      _ => throw FormatException('Invalid theme style: $styleValue'),
+    };
+
     return AppThemeDefinition(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -54,6 +66,59 @@ class AppThemeDefinition {
       textPrimary: color('textPrimary'),
       textSecondary: color('textSecondary'),
       divider: color('divider'),
+      style: style,
+    );
+  }
+}
+
+@immutable
+class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
+  const AppThemeMaterial({
+    required this.style,
+    required this.glassTint,
+    required this.glassBorder,
+    required this.glassHighlight,
+    required this.blurSigma,
+  });
+
+  final AppThemeStyle style;
+  final Color glassTint;
+  final Color glassBorder;
+  final Color glassHighlight;
+  final double blurSigma;
+
+  bool get usesLiquidGlass => style == AppThemeStyle.liquidGlass;
+
+  @override
+  AppThemeMaterial copyWith({
+    AppThemeStyle? style,
+    Color? glassTint,
+    Color? glassBorder,
+    Color? glassHighlight,
+    double? blurSigma,
+  }) {
+    return AppThemeMaterial(
+      style: style ?? this.style,
+      glassTint: glassTint ?? this.glassTint,
+      glassBorder: glassBorder ?? this.glassBorder,
+      glassHighlight: glassHighlight ?? this.glassHighlight,
+      blurSigma: blurSigma ?? this.blurSigma,
+    );
+  }
+
+  @override
+  AppThemeMaterial lerp(
+    covariant AppThemeMaterial? other,
+    double t,
+  ) {
+    if (other == null) return this;
+    return AppThemeMaterial(
+      style: t < .5 ? style : other.style,
+      glassTint: Color.lerp(glassTint, other.glassTint, t) ?? glassTint,
+      glassBorder: Color.lerp(glassBorder, other.glassBorder, t) ?? glassBorder,
+      glassHighlight:
+          Color.lerp(glassHighlight, other.glassHighlight, t) ?? glassHighlight,
+      blurSigma: blurSigma + (other.blurSigma - blurSigma) * t,
     );
   }
 }
@@ -107,5 +172,22 @@ abstract final class BuiltInThemes {
     divider: Color(0xFFEDE5DA),
   );
 
-  static const all = [freshGreen, mistBlue, almond];
+  static const liquidGlass = AppThemeDefinition(
+    id: 'liquid_glass',
+    name: '液态玻璃',
+    description: '通透玻璃控制层，轻盈而有层次',
+    premium: true,
+    style: AppThemeStyle.liquidGlass,
+    background: Color(0xFFF1F6FF),
+    surface: Color(0xFFFBFCFF),
+    surfaceSoft: Color(0xFFF0F4FB),
+    primary: Color(0xFF5577B8),
+    primaryDark: Color(0xFF385995),
+    primarySoft: Color(0xFFE1E9FA),
+    textPrimary: Color(0xFF18243A),
+    textSecondary: Color(0xFF66748B),
+    divider: Color(0xFFD9E2F0),
+  );
+
+  static const all = [freshGreen, mistBlue, almond, liquidGlass];
 }

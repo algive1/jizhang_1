@@ -10,9 +10,21 @@ abstract final class AppTheme {
       brightness: Brightness.light,
       surface: theme.surface,
     );
+    final liquidGlass = theme.style == AppThemeStyle.liquidGlass;
+    final material = AppThemeMaterial(
+      style: theme.style,
+      glassTint: Color.alphaBlend(
+        theme.primary.withValues(alpha: .07),
+        theme.surface.withValues(alpha: .76),
+      ),
+      glassBorder: Colors.white.withValues(alpha: .74),
+      glassHighlight: Colors.white.withValues(alpha: .90),
+      blurSigma: liquidGlass ? 18 : 0,
+    );
 
     return ThemeData(
       useMaterial3: true,
+      extensions: [material],
       colorScheme: colorScheme.copyWith(
         primary: theme.primary,
         onPrimary: Colors.white,
@@ -27,7 +39,8 @@ abstract final class AppTheme {
         outlineVariant: theme.divider,
         error: AppColors.warning,
       ),
-      scaffoldBackgroundColor: theme.background,
+      scaffoldBackgroundColor: liquidGlass ? Colors.transparent : theme.background,
+      canvasColor: theme.background,
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: theme.textPrimary,
@@ -82,11 +95,23 @@ abstract final class AppTheme {
         space: 1,
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: theme.surface,
-        shape: RoundedRectangleBorder(
+        backgroundColor: liquidGlass
+            ? theme.surface.withValues(alpha: .96)
+            : theme.surface,
+        modalBackgroundColor: liquidGlass
+            ? theme.surface.withValues(alpha: .96)
+            : theme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         clipBehavior: Clip.antiAlias,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: liquidGlass
+            ? theme.surface.withValues(alpha: .97)
+            : theme.surface,
+        surfaceTintColor: Colors.transparent,
       ),
       listTileTheme: const ListTileThemeData(minTileHeight: 56),
       inputDecorationTheme: InputDecorationTheme(
@@ -98,7 +123,9 @@ abstract final class AppTheme {
         constraints: const BoxConstraints(minHeight: 52),
         labelStyle: const TextStyle(fontSize: 14),
         errorMaxLines: 3,
-        fillColor: theme.surfaceSoft,
+        fillColor: liquidGlass
+            ? theme.surfaceSoft.withValues(alpha: .88)
+            : theme.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: theme.divider),

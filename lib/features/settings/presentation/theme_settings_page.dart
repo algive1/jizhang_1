@@ -83,20 +83,7 @@ class _ThemeCard extends StatelessWidget {
         border: Border.all(color: selected ? theme.primary : theme.divider, width: selected ? 2 : 1),
       ),
       child: Row(children: [
-        Container(
-          width: 74, height: 74,
-          decoration: BoxDecoration(color: theme.background, borderRadius: BorderRadius.circular(18)),
-          padding: const EdgeInsets.all(10),
-          child: Column(children: [
-            Container(height: 12, decoration: BoxDecoration(color: theme.primarySoft, borderRadius: BorderRadius.circular(8))),
-            const SizedBox(height: 7),
-            Expanded(child: Row(children: [
-              Expanded(child: Container(decoration: BoxDecoration(color: theme.primary, borderRadius: BorderRadius.circular(8)))),
-              const SizedBox(width: 6),
-              Expanded(child: Container(decoration: BoxDecoration(color: theme.surfaceSoft, borderRadius: BorderRadius.circular(8)))),
-            ])),
-          ]),
-        ),
+        _ThemePreview(theme: theme),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [Flexible(child: Text(theme.name, style: Theme.of(context).textTheme.titleMedium)), if (theme.premium) ...[const SizedBox(width: 6), const Icon(Icons.workspace_premium_outlined, size: 18)]]),
@@ -107,4 +94,124 @@ class _ThemeCard extends StatelessWidget {
       ]),
     ),
   );
+}
+
+
+class _ThemePreview extends StatelessWidget {
+  const _ThemePreview({required this.theme});
+
+  final AppThemeDefinition theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final glass = theme.style == AppThemeStyle.liquidGlass;
+    return Container(
+      width: 74,
+      height: 74,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: theme.background,
+        gradient: glass
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [theme.background, theme.primarySoft, theme.surface],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: glass
+          ? Stack(
+              children: [
+                Positioned(
+                  left: 2,
+                  right: 2,
+                  top: 2,
+                  height: 15,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .62),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .82),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 3,
+                  right: 3,
+                  bottom: 2,
+                  height: 20,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .68),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .90),
+                      ),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 12,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.primary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Container(
+                    width: 28,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: theme.surface.withValues(alpha: .88),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.divider),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Container(
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: theme.primarySoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: theme.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: theme.surfaceSoft,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
 }

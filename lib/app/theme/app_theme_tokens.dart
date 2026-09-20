@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme_definition.dart';
+
 /// Semantic appearance tokens. Feature UI should prefer these tokens over
 /// hard-coded brand colors so every screen can participate in theme changes.
 extension AppThemeTokens on BuildContext {
@@ -15,4 +17,16 @@ extension AppThemeTokens on BuildContext {
   Color get appPrimaryText => appColors.onSurface;
   Color get appSecondaryText => appColors.onSurfaceVariant;
   Color get appDivider => appColors.outlineVariant;
+
+  AppThemeMaterial get appMaterial =>
+      Theme.of(this).extension<AppThemeMaterial>() ??
+      const AppThemeMaterial(
+        style: AppThemeStyle.solid,
+        glassTint: Colors.white,
+        glassBorder: Colors.transparent,
+        glassHighlight: Colors.white,
+        blurSigma: 0,
+      );
+
+  bool get appUsesLiquidGlass => appMaterial.usesLiquidGlass;
 }
