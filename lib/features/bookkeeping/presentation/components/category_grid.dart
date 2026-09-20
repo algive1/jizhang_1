@@ -1,36 +1,37 @@
-import 'sub_category_bar.dart';
-
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/app_theme_tokens.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/widgets/category_icon.dart';
-import '../../../../../app/theme/app_theme_tokens.dart';
 
 class CategoryGrid extends StatelessWidget {
   const CategoryGrid({
     super.key,
     required this.categories,
     required this.selected,
-    required this.subcategories,
-    required this.selectedSubcategoryId,
+    required this.selectedSubcategoryName,
     required this.onSelected,
-    required this.onSubcategorySelected,
   });
 
   final List<Category> categories;
   final Category? selected;
-  final List<Category> subcategories;
-  final String? selectedSubcategoryId;
+  final String? selectedSubcategoryName;
   final ValueChanged<Category> onSelected;
-  final ValueChanged<Category> onSubcategorySelected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appUsesLiquidGlass
+            ? context.appSurface.withValues(alpha: .82)
+            : context.appSurface,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: context.appDivider.withValues(
+            alpha: context.appUsesLiquidGlass ? .72 : .42,
+          ),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
@@ -46,7 +47,7 @@ class CategoryGrid extends StatelessWidget {
                   var start = 0;
                   start < categories.length;
                   start += columns
-                ) ...[
+                )
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -58,28 +59,14 @@ class CategoryGrid extends StatelessWidget {
                           name: category.name,
                           iconKey: category.icon,
                           selected: selected?.id == category.id,
+                          selectedSubcategoryName:
+                              selected?.id == category.id
+                              ? selectedSubcategoryName
+                              : null,
                           onTap: () => onSelected(category),
                         ),
                     ],
                   ),
-                  if (subcategories.isNotEmpty &&
-                      categories
-                          .skip(start)
-                          .take(columns)
-                          .any((item) => item.id == selected?.id))
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: context.appPrimarySoft.withValues(alpha: .5),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SubCategoryBar(
-                        categories: subcategories,
-                        selectedId: selectedSubcategoryId,
-                        onSelected: onSubcategorySelected,
-                      ),
-                    ),
-                ],
                 if (categories.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(12),
@@ -101,6 +88,7 @@ class _CategoryTile extends StatelessWidget {
     required this.name,
     required this.iconKey,
     required this.selected,
+    required this.selectedSubcategoryName,
     required this.onTap,
   });
 
@@ -108,6 +96,7 @@ class _CategoryTile extends StatelessWidget {
   final String name;
   final String iconKey;
   final bool selected;
+  final String? selectedSubcategoryName;
   final VoidCallback onTap;
 
   @override
@@ -121,33 +110,32 @@ class _CategoryTile extends StatelessWidget {
       child: Semantics(
         selected: selected,
         button: true,
+        label: selectedSubcategoryName == null
+            ? name
+            : '$name，二级分类 $selectedSubcategoryName',
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          child: Container(
+          child: AnimatedContainer(
+            duration: duration,
             decoration: BoxDecoration(
-              color: selected ? context.appPrimarySoft : Colors.transparent,
+              color: selected
+                  ? context.appPrimarySoft
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
             child: Column(
               children: [
                 AnimatedScale(
                   scale: selected ? 1.06 : 1,
                   duration: duration,
                   curve: Curves.easeOutCubic,
-                  child: AnimatedContainer(
-                    duration: duration,
-                    padding: EdgeInsets.zero,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: CategoryIcon(
-                      category: name,
-                      iconKey: iconKey,
-                      size: 42,
-                      monochrome: true,
-                    ),
+                  child: CategoryIcon(
+                    category: name,
+                    iconKey: iconKey,
+                    size: 42,
+                    monochrome: true,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -164,6 +152,20 @@ class _CategoryTile extends StatelessWidget {
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
+                if (selectedSubcategoryName != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    selectedSubcategoryName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      color: context.appSecondaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
