@@ -85,6 +85,89 @@ class ReimbursementService {
     return transaction;
   }
 
+  Future<TransactionRecord> registerDetectedPayment({
+    required TransactionRecord original,
+    required Account account,
+    required Category category,
+    required double amount,
+    DateTime? occurredAt,
+    String? transactionId,
+    String? note,
+    String? metadataJson,
+    TransactionSource source = TransactionSource.auto,
+  }) async {
+    if (original.bookId != bookId) throw ArgumentError('流水不属于当前账本');
+    if (!original.isExpense) throw ArgumentError('只有消费流水可以登记报销');
+    if (original.reimbursementStatus == ReimbursementStatus.reimbursed) {
+      throw StateError('该流水已经完成报销');
+    }
+    if (category.type != CategoryType.income) {
+      throw ArgumentError('报销回款必须使用收入分类');
+    }
+    if (account.isArchived ||
+        account.currency.toUpperCase() != original.currency.toUpperCase()) {
+      throw ArgumentError('报销到账账户不可用或币种不一致');
+    }
+    if (!amount.isFinite || amount <= 0) {
+      throw ArgumentError('报销到账金额必须大于 0');
+    }
+
+    final repository = await _repository(bookId);
+    final linkedPaidCents = (await repository.getAll())
+        .where(
+          (item) =>
+              item.type == TransactionType.reimbursement &&
+              item.relatedTransactionId == original.id,
+        )
+        .fold<int>(0, (sum, item) => sum + _toCents(item.amount));
+    final originalCents = _toCents(original.amount);
+    final incomingCents = _toCents(amount);
+    if (linkedPaidCents + incomingCents > originalCents) {
+      throw ArgumentError('报销到账金额不能超过原消费剩余可报金额');
+    }
+
+    final now = occurredAt ?? DateTime.now();
+    final cumulativeCents = linkedPaidCents + incomingCents;
+    final transaction = TransactionRecord(
+      id:
+          transactionId ??
+          'reimbursement-${original.id}-${newEntityId()}',
+      bookId: bookId,
+      userId: _database.currentActor,
+      type: TransactionType.reimbursement,
+      amount: incomingCents / 100,
+      currency: account.currency,
+      accountId: account.id,
+      categoryId: category.id,
+      categoryName: category.name,
+      merchant: original.merchant,
+      note: note ?? '报销：${original.displayTitle}',
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+      relatedTransactionId: original.id,
+      source: source,
+      metadataJson: metadataJson,
+      createdBy: _database.currentActor,
+      updatedBy: _database.currentActor,
+    );
+    final updatedOriginal = _withReimbursementState(
+      original,
+      cumulativeCents: cumulativeCents,
+      updatedAt: now,
+    );
+    await _database.transaction(() async {
+      final writeRepository = DriftTransactionRepository(
+        _database,
+        bookId: bookId,
+        accountBookId: account.bookId,
+      );
+      await writeRepository.create(transaction);
+      await writeRepository.update(updatedOriginal);
+    });
+    return transaction;
+  }
+
   /// Edits a reimbursement receipt and recalculates the source status in the
   /// same transaction. The source expense remains the canonical record.
   Future<TransactionRecord> updatePayment({
