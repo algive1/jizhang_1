@@ -1,5 +1,3 @@
-import 'sub_category_bar.dart';
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/category.dart';
@@ -62,23 +60,6 @@ class CategoryGrid extends StatelessWidget {
                         ),
                     ],
                   ),
-                  if (subcategories.isNotEmpty &&
-                      categories
-                          .skip(start)
-                          .take(columns)
-                          .any((item) => item.id == selected?.id))
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: context.appPrimarySoft.withValues(alpha: .5),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SubCategoryBar(
-                        categories: subcategories,
-                        selectedId: selectedSubcategoryId,
-                        onSelected: onSubcategorySelected,
-                      ),
-                    ),
                 ],
                 if (categories.isEmpty)
                   const Padding(
