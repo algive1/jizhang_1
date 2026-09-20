@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_theme_definition.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../../core/models/membership.dart';
+import '../../../core/config/testing_access.dart';
 import '../application/theme_controller.dart';
 
 class ThemeSettingsPage extends ConsumerWidget {
@@ -26,7 +27,12 @@ class ThemeSettingsPage extends ConsumerWidget {
           children: [
             Text('选择你喜欢的界面气质', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 6),
-            Text('默认主题永久免费。会员可使用更多主题；会员到期后会暂时恢复默认主题，但会保留你的选择。', style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              kAllFeaturesFreeForTesting
+                  ? '测试阶段全部主题免费开放；上线前会重新启用正式会员权益规则。'
+                  : '默认主题永久免费。会员可使用更多主题；会员到期后会暂时恢复默认主题，但会保留你的选择。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 22),
             for (final theme in value.themes) ...[
               _ThemeCard(
