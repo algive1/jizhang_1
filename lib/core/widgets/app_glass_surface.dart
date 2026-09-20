@@ -162,7 +162,7 @@ class _ChromaticGlassBorderPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(
       rect.deflate(1.2),
-      Radius.circular((radius - 1.2).clamp(0, radius)),
+      Radius.circular((radius - 1.2).clamp(0, radius).toDouble()),
     );
 
     final cyan = Paint()
