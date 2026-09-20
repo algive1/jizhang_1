@@ -293,6 +293,12 @@ const foodSubcategoryTemplates = [
     'expense',
   ),
   SeedCategoryTemplate(
+    'expense-food-meals',
+    '正餐',
+    'restaurant_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
     'expense-food-drinks',
     '饮料',
     'local_drink_outlined',
