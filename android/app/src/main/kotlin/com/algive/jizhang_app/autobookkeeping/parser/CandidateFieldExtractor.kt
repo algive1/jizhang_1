@@ -93,15 +93,28 @@ internal object CandidateFieldExtractor {
             maxLength = 120,
         )
 
+    fun repaymentTargetAccountHint(labels: List<String>): String? =
+        field(
+            labels,
+            setOf(
+                "还款至",
+                "还款信用卡",
+                "信用卡",
+                "债务账户",
+                "账单账户",
+                "还款对象",
+            ),
+            maxLength = 120,
+        )
+
+    fun repaymentTargetIdentifierSuffix(labels: List<String>): String? {
+        val hint = repaymentTargetAccountHint(labels) ?: return null
+        return accountSuffix(hint)
+    }
+
     fun targetIdentifierSuffix(labels: List<String>): String? {
         val hint = targetAccountHint(labels) ?: return null
-        return Regex(
-            "(?:尾号|后四位|卡号后四位)[^0-9]{0,8}([0-9]{4})(?![0-9])|" +
-                "(?:银行卡|信用卡|储蓄卡)[^0-9]{0,8}([0-9]{4})(?![0-9])",
-        ).find(hint)?.let { match ->
-            match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
-                ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
-        }
+        return accountSuffix(hint)
     }
 
     fun identifierSuffix(paymentMethod: String, labels: List<String>): String? {
@@ -153,6 +166,15 @@ internal object CandidateFieldExtractor {
         }
         return original to discount
     }
+
+    private fun accountSuffix(value: String): String? =
+        Regex(
+            "(?:尾号|后四位|卡号后四位)[^0-9]{0,8}([0-9]{4})(?![0-9])|" +
+                "(?:银行卡|信用卡|储蓄卡)[^0-9]{0,8}([0-9]{4})(?![0-9])",
+        ).find(value)?.let { match ->
+            match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
+                ?: match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+        }
 
     private fun toCents(value: String): Long? =
         value.toBigDecimalOrNull()
