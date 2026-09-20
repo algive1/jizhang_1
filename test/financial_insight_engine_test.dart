@@ -56,6 +56,60 @@ void main() {
     );
   });
 
+  test('one-time local category spike is not labeled as a persistent habit', () {
+    final transactions = <TransactionRecord>[
+      for (var index = 0; index < 8; index++)
+        _tx(
+          'previous-$index',
+          DateTime(2026, 8, 2 + index),
+          30,
+          categoryId: 'shopping',
+          categoryName: '购物',
+        ).copyWith(isOneTime: false),
+      for (var index = 0; index < 5; index++)
+        _tx(
+          'current-$index',
+          DateTime(2026, 9, 2 + index),
+          30,
+          categoryId: 'shopping',
+          categoryName: '购物',
+        ).copyWith(isOneTime: false),
+      _tx(
+        'special',
+        DateTime(2026, 9, 18),
+        900,
+        categoryId: 'shopping',
+        categoryName: '购物',
+      ).copyWith(isOneTime: true, isLargeTransaction: true),
+    ];
+    final normalized =
+        const FinancialInsightEngine().normalizeAnalysisTransactions(
+      transactions,
+    );
+    final analysis = const StatisticalAnalysisService().analyze(
+      normalized,
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+    );
+    final feed = const FinancialInsightEngine().build(
+      transactions: transactions,
+      analysis: analysis,
+      budgets: const BudgetOverview(categories: []),
+      accounts: const [],
+      preferences: const InsightPreferences(configured: true),
+      now: now,
+    );
+
+    expect(
+      feed.items.any((item) => item.id == 'category:shopping:one-time'),
+      isTrue,
+    );
+    expect(
+      feed.items.any((item) => item.id == 'analysis:category:shopping'),
+      isFalse,
+    );
+  });
+
   test('budget velocity becomes a high-value risk insight', () {
     final transactions = _history(now);
     final analysis = const StatisticalAnalysisService().analyze(

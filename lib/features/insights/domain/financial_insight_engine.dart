@@ -75,7 +75,16 @@ class FinancialInsightEngine {
 
     if (quality.baseline >= .35) {
       for (final source in analysis.insights) {
-        candidates.add(_fromAnalysis(source, preferences, quality));
+        final special = _oneTimeCategoryInsight(
+          source,
+          expenses,
+          preferences,
+          quality,
+          clock,
+        );
+        candidates.add(
+          special ?? _fromAnalysis(source, preferences, quality),
+        );
       }
       final positive = _positiveChange(
         analysis,
@@ -243,6 +252,124 @@ class FinancialInsightEngine {
       classificationConfidence: quality.classification,
       baselineConfidence: quality.baseline,
     );
+  }
+
+  FinancialInsightItem? _oneTimeCategoryInsight(
+    AnalysisInsight source,
+    List<TransactionRecord> expenses,
+    InsightPreferences preferences,
+    InsightConfidence quality,
+    DateTime now,
+  ) {
+    if (source.categoryId == null ||
+        (source.type != AnalysisInsightType.categoryIncrease &&
+            source.type != AnalysisInsightType.deliveryIncrease)) {
+      return null;
+    }
+
+    final currentRows = expenses.where((item) {
+      if (item.occurredAt.year != now.year ||
+          item.occurredAt.month != now.month) {
+        return false;
+      }
+      return _analysisCategoryKey(item) == source.categoryId;
+    }).toList(growable: false);
+    if (currentRows.isEmpty) return null;
+
+    var explicitAmount = 0.0;
+    final explicitIds = <String>[];
+    TransactionRecord? largest;
+    var largestAmount = 0.0;
+    for (final item in currentRows) {
+      final amount = _personalExpense(item);
+      if (amount <= 0) continue;
+      if (amount > largestAmount) {
+        largest = item;
+        largestAmount = amount;
+      }
+      if (item.isLargeTransaction) {
+        explicitAmount += amount;
+        explicitIds.add(item.id);
+      }
+    }
+
+    final delta = source.deltaAmount;
+    final inferred =
+        explicitAmount <= 0 &&
+        largest != null &&
+        largest!.isOneTime &&
+        largestAmount >= 500 &&
+        largestAmount >= math.max(delta * .6, source.baselineAmount * .5);
+    final specialAmount = explicitAmount > 0
+        ? explicitAmount
+        : inferred
+        ? largestAmount
+        : 0.0;
+    final ids = explicitIds.isNotEmpty
+        ? explicitIds
+        : inferred && largest != null
+        ? <String>[largest!.id]
+        : const <String>[];
+    if (specialAmount <= 0 ||
+        (specialAmount < delta * .6 &&
+            specialAmount < source.amount * .5)) {
+      return null;
+    }
+
+    final categoryName =
+        currentRows
+            .map((item) => item.categoryName?.trim())
+            .whereType<String>()
+            .firstWhere((value) => value.isNotEmpty, orElse: () => '这类消费');
+    return _item(
+      id: 'category:${source.categoryId}:one-time',
+      kind: FinancialInsightKind.discovery,
+      priority: InsightPriority.attention,
+      title: '$categoryName增加主要来自一次性支出',
+      summary:
+          '本期 $categoryName 比上一可比周期多 '
+          '¥${delta.toStringAsFixed(0)}，其中一次性/大额记录约 '
+          '¥${specialAmount.toStringAsFixed(0)}。',
+      analysis: '这次变化不适合直接解释为消费习惯持续变差，系统会把一次性支出和常规消费分开看。',
+      meaning: '特殊支出会影响当月总额，但不应该自动被当作长期消费趋势。',
+      response: InsightResponse.notice,
+      suggestion:
+          preferences.intents.contains(BookkeepingIntent.controlSpending)
+          ? '可以先确认这笔支出是否确实是一次性的，再决定要不要调整日常预算。'
+          : null,
+      actionLabel: '查看相关流水',
+      actionRoute: '/transactions',
+      categoryId: source.categoryId,
+      amount: source.amount,
+      changePercent: source.deltaPercent,
+      evidence: [
+        InsightEvidence(
+          label: categoryName,
+          value: source.amount,
+          baselineValue: source.baselineAmount,
+          unit: 'CNY',
+        ),
+        InsightEvidence(
+          label: '一次性/大额支出',
+          value: specialAmount,
+          unit: 'CNY',
+          transactionIds: ids,
+        ),
+      ],
+      relatedTransactionIds: ids,
+      baseScore: 59,
+      preferences: preferences,
+      confidence: quality,
+      generatedAt: now,
+    );
+  }
+
+  String _analysisCategoryKey(TransactionRecord item) {
+    final id = item.categoryId?.trim();
+    if (id != null && id.isNotEmpty) return id;
+    final name = item.categoryName?.trim();
+    if (name != null && name.isNotEmpty) return 'name:$name';
+    return 'uncategorized';
   }
 
   FinancialInsightItem _fromAnalysis(
