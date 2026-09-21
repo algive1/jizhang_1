@@ -279,7 +279,7 @@ class _ReimbursementCard extends StatelessWidget {
             ),
             const SizedBox(height: 7),
             Text(
-              '${transaction.occurredAt.month}月${transaction.occurredAt.day}日 · ${transaction.displayCategoryLabel}',
+              '${transaction.occurredAt.month}月${transaction.occurredAt.day}日 · ${transaction.displayCategoryPath}',
               style: TextStyle(
                 fontSize: 12,
                 color: context.appSecondaryText,
