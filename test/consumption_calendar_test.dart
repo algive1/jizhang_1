@@ -227,7 +227,14 @@ void main() {
     expect(sheet.backgroundColor, isNot(Colors.transparent));
     expect(sheet.backgroundColor?.a, greaterThan(.9));
     expect(find.text('统计范围'), findsOneWidget);
-    expect(find.text('个人账本'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('个人账本'),
+      ),
+      findsOneWidget,
+      reason: 'The sheet should expose one readable personal-ledger option.',
+    );
     expect(tester.takeException(), isNull);
   });
 
