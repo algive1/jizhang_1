@@ -134,7 +134,7 @@ void main() {
   });
 
   testWidgets(
-    'bottom app bar keeps full scaffold width so FAB and notch share X coordinates',
+    'bottom navigation keeps full scaffold width while the visual glass container stays inset',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(432, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -164,13 +164,13 @@ void main() {
         barRect.left,
         closeTo(0, .1),
         reason:
-            'BottomAppBar must stay in the Scaffold coordinate system; visual horizontal inset belongs to its shape, not an outer Padding.',
+            'The navigation host stays in Scaffold coordinates while its visual glass surface owns the inset.',
       );
       expect(barRect.right, closeTo(432, .1));
       expect(
         barRect.center.dx,
         closeTo(fabRect.center.dx, .1),
-        reason: 'FAB and notch host must use the same horizontal center.',
+        reason: 'FAB and navigation host must use the same horizontal center.',
       );
     },
   );
