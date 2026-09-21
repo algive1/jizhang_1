@@ -88,11 +88,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/assistant',
             builder: (context, state) => const AssistantPage(),
           ),
-          GoRoute(path: '/', builder: (context, state) => const HomePage()),
+          GoRoute(
+            path: '/',
+            pageBuilder: (context, state) =>
+                NoTransitionPage(key: state.pageKey, child: const HomePage()),
+          ),
           GoRoute(
             path: '/transactions',
-            builder: (context, state) =>
-                TransactionsPage(month: _queryMonth(state.uri)),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: TransactionsPage(month: _queryMonth(state.uri)),
+            ),
             routes: [
               GoRoute(
                 path: 'search',
@@ -139,7 +145,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/insights',
-            builder: (context, state) => const InsightsPage(),
+            pageBuilder: (context, state) =>
+                NoTransitionPage(key: state.pageKey, child: const InsightsPage()),
             routes: [
               GoRoute(
                 path: ':insightId',
@@ -167,7 +174,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/profile',
-            builder: (context, state) => const ProfilePage(),
+            pageBuilder: (context, state) =>
+                NoTransitionPage(key: state.pageKey, child: const ProfilePage()),
             routes: [
               GoRoute(
                 path: 'account',

@@ -1,4 +1,5 @@
 import '../../../core/widgets/app_action_sheet.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,9 +21,6 @@ import '../application/assistant_conversation.dart';
 import '../application/assistant_engine.dart';
 import '../application/assistant_policy.dart';
 import 'assistant_entry_button.dart';
-
-const _green = Color(0xFF567B27);
-const _cream = Color(0xFFFAFAF4);
 
 class AssistantPage extends ConsumerStatefulWidget {
   const AssistantPage({super.key});
@@ -169,13 +167,18 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final pending = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final processingError = ref.watch(notificationProcessingErrorProvider);
     return Scaffold(
-      backgroundColor: _cream,
+      backgroundColor: context.appBackground,
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(-.8, -.3),
+            center: const Alignment(-.8, -.3),
             radius: 1.5,
-            colors: [Color(0xFFF0F5E6), _cream],
+            colors: [
+              context.appPrimarySoft.withValues(alpha: .74),
+              context.appSurface.withValues(
+                alpha: context.appUsesLiquidGlass ? .36 : 1,
+              ),
+            ],
           ),
         ),
         child: Stack(
@@ -196,7 +199,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               ),
             ),
             DefaultTextStyle.merge(
-              style: const TextStyle(color: Color(0xFF151B22)),
+              style: TextStyle(color: context.appPrimaryText),
               child: SafeArea(
                 child: Column(
                   children: [
@@ -205,8 +208,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 46),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 46),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -223,13 +226,13 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                     SizedBox(width: 8),
                                     DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Color(0xFFE4EED3),
-                                        borderRadius: BorderRadius.all(
+                                        color: context.appPrimarySoft,
+                                        borderRadius: const BorderRadius.all(
                                           Radius.circular(5),
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                           horizontal: 6,
                                           vertical: 2,
                                         ),
@@ -237,7 +240,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                           '官方',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: _green,
+                                            color: context.appPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -251,7 +254,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Color(0xFF80827E),
+                                    color: context.appSecondaryText,
                                   ),
                                 ),
                               ],
@@ -400,8 +403,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                     DateFormat('M月d日 HH:mm')
                                         .format(items[i].time),
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Color(0xFF868882),
+                                    style: TextStyle(
+                                      color: context.appSecondaryText,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -480,7 +483,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         child: Container(
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .94),
+            color: context.appSurface.withValues(
+              alpha: context.appUsesLiquidGlass ? .76 : 1,
+            ),
             borderRadius: BorderRadius.circular(16),
           ),
           child: child,
@@ -497,9 +502,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       Flexible(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFFE3EFD2),
-            borderRadius: BorderRadius.only(
+          decoration: BoxDecoration(
+            color: context.appPrimarySoft,
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
               bottomLeft: Radius.circular(16),
@@ -518,10 +523,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     bool outline = false,
     IconData? icon,
   }) => Material(
-    color: outline ? Colors.transparent : Colors.white,
+    color: outline ? Colors.transparent : context.appSurface,
     shape: StadiumBorder(
       side: outline
-          ? const BorderSide(color: Color(0xFFD7E5C3))
+          ? BorderSide(color: context.appDivider)
           : BorderSide.none,
     ),
     child: InkWell(
@@ -536,14 +541,14 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 17, color: _green),
+              Icon(icon, size: 17, color: context.appPrimary),
               const SizedBox(width: 5),
             ],
             Text(
               text,
               style: TextStyle(
                 fontSize: 12,
-                color: outline ? _green : const Color(0xFF202720),
+                color: outline ? context.appPrimary : context.appPrimaryText,
               ),
             ),
           ],
@@ -553,7 +558,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   );
   Widget _composer() => Container(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-    color: _cream.withValues(alpha: .96),
+    color: context.appSurface.withValues(
+      alpha: context.appUsesLiquidGlass ? .88 : .96,
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -589,8 +596,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _green,
-                border: Border.all(color: const Color(0xFFE2EBCE), width: 4),
+                color: context.appPrimary,
+                border: Border.all(color: context.appPrimarySoft, width: 4),
               ),
               child: IconButton(
                 tooltip: '语音记账',
@@ -607,8 +614,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               child: Container(
                 padding: const EdgeInsets.only(left: 13, right: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.appSurfaceRaised,
                   borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: context.appDivider),
                 ),
                 child: Row(
                   children: [
@@ -621,11 +629,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                         onSubmitted: (_) => _send(),
                         textInputAction: TextInputAction.send,
                         style: const TextStyle(fontSize: 14),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: '输入消息，试试“帮我记一笔…”',
                           hintMaxLines: 1,
                           hintStyle: TextStyle(
-                            color: Color(0xFFB4B7B1),
+                            color: context.appSecondaryText.withValues(alpha: .72),
                             fontSize: 13,
                           ),
                           border: InputBorder.none,
@@ -667,8 +675,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     IconButton.filled(
                       tooltip: '发送',
                       style: IconButton.styleFrom(
-                        backgroundColor: _green,
-                        disabledBackgroundColor: const Color(0xFFCEDBB9),
+                        backgroundColor: context.appPrimary,
+                        disabledBackgroundColor: context.appPrimarySoft,
                       ),
                       onPressed: _sending || _input.text.trim().isEmpty
                           ? null
@@ -708,29 +716,47 @@ class AssistantRecordCard extends ConsumerWidget {
                 padding: EdgeInsets.only(top: 12),
                 child: Text('这笔账单已删除或不可访问'),
               );
+            final accounts =
+                ref.watch(assetDashboardAccountsProvider).value ?? const [];
+            final source = accounts
+                .where((a) => a.id == record.accountId)
+                .firstOrNull
+                ?.displayName;
+            final destination = record.destinationAccountId == null
+                ? null
+                : accounts
+                      .where((a) => a.id == record.destinationAccountId)
+                      .firstOrNull
+                      ?.displayName;
+            final accountLabel = source == null
+                ? '账户已归档或不可用'
+                : destination == null
+                ? source
+                : '$source → $destination';
             return Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Column(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF3F6EE),
-                      borderRadius: BorderRadius.vertical(
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceSoft,
+                      borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(12),
                       ),
                     ),
                     child: Row(
                       children: [
                         CategoryIcon(
-                          category: record.categoryName ?? '其他',
+                          category: record.displayLeafCategoryLabel,
+                          iconKey: record.displayCategoryIconKey,
                           size: 34,
                           vivid: true,
                         ),
                         const SizedBox(width: 9),
                         Expanded(
                           child: Text(
-                            record.categoryName ?? '其他',
+                            record.displayCategoryPath,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -753,28 +779,22 @@ class AssistantRecordCard extends ConsumerWidget {
                     ),
                   ),
                   _line(
+                    context,
                     Icons.access_time,
                     DateFormat('yyyy年M月d日 HH:mm').format(record.occurredAt),
                   ),
+                  _line(context, Icons.credit_card, accountLabel),
                   _line(
-                    Icons.credit_card,
-                    ref
-                            .watch(allAccountsProvider)
-                            .value
-                            ?.where((a) => a.id == record.accountId)
-                            .firstOrNull
-                            ?.name ??
-                        '账户已归档或不可用',
-                  ),
-                  _line(
+                    context,
                     Icons.description_outlined,
-                    record.note ?? record.merchant ?? '无备注',
+                    record.displayTitle,
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: _button(
+                          context,
                           '修改',
                           () => showQuickAddSheet(
                             context,
@@ -785,6 +805,7 @@ class AssistantRecordCard extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: _button(
+                          context,
                           '查看详情',
                           () => context.push(
                             '/transactions/$transactionId',
@@ -801,30 +822,34 @@ class AssistantRecordCard extends ConsumerWidget {
         );
   }
 
-  Widget _line(IconData icon, String text) => Padding(
+  Widget _line(BuildContext context, IconData icon, String text) => Padding(
     padding: const EdgeInsets.only(top: 7, left: 7),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF81847E)),
+        Icon(icon, size: 16, color: context.appSecondaryText),
         const SizedBox(width: 9),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.3,
-              color: Color(0xFF777B75),
+              color: context.appSecondaryText,
             ),
           ),
         ),
       ],
     ),
   );
-  Widget _button(String text, VoidCallback action) => TextButton(
+  Widget _button(
+    BuildContext context,
+    String text,
+    VoidCallback action,
+  ) => TextButton(
     style: TextButton.styleFrom(
-      backgroundColor: const Color(0xFFF0F4E7),
-      foregroundColor: _green,
+      backgroundColor: context.appPrimarySoft,
+      foregroundColor: context.appPrimary,
       minimumSize: const Size(0, 28),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,

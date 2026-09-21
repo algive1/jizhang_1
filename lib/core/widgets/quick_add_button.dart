@@ -1,8 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
+import 'app_glass_surface.dart';
 
 class QuickAddButton extends StatelessWidget {
   const QuickAddButton({
@@ -17,9 +16,6 @@ class QuickAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final glass = context.appUsesLiquidGlass;
-    final material = context.appMaterial;
-    final highContrast = MediaQuery.of(context).highContrast;
-    final blur = highContrast ? material.blurSigma * .55 : material.blurSigma;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -44,43 +40,18 @@ class QuickAddButton extends StatelessWidget {
           foregroundColor: glass ? context.appPrimary : Colors.white,
           shape: const CircleBorder(),
           child: glass
-              ? ClipOval(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: blur,
-                      sigmaY: blur,
-                      tileMode: TileMode.decal,
-                    ),
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            material.glassHighlight.withValues(
-                              alpha: highContrast ? .98 : .82,
-                            ),
-                            material.glassTint.withValues(
-                              alpha: highContrast ? .98 : .80,
-                            ),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: highContrast
-                              ? context.appPrimary.withValues(alpha: .48)
-                              : material.glassBorder,
-                          width: highContrast ? 1.4 : 1,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.add,
-                        size: 36,
-                        weight: 400,
-                        color: context.appPrimary,
-                      ),
+              ? AppGlassSurface(
+                  borderRadius: 28,
+                  shadow: false,
+                  tint: context.appPrimarySoft.withValues(alpha: .72),
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Icon(
+                      Icons.add,
+                      size: 36,
+                      weight: 400,
+                      color: context.appPrimary,
                     ),
                   ),
                 )

@@ -17,9 +17,9 @@ abstract final class AppBottomSheet {
     useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: context.appSurface,
+    backgroundColor: context.appSheetSurface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     clipBehavior: Clip.antiAlias,
     sheetAnimationStyle: const AnimationStyle(

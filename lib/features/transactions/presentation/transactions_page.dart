@@ -54,7 +54,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     final transactions = typedTransactions
         .where(
           (item) =>
-              _categoryFilter == null || item.categoryName == _categoryFilter,
+              _categoryFilter == null ||
+              item.categoryName == _categoryFilter ||
+              item.subcategoryName == _categoryFilter,
         )
         .toList();
 
@@ -194,7 +196,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         child: FractionallySizedBox(
           heightFactor: .68,
           child: Material(
-            color: context.appSurface,
+            color: context.appSheetSurface,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),

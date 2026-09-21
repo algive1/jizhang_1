@@ -92,6 +92,16 @@ class DatabaseSeeder {
     final books = await _database
         .customSelect('SELECT id,type FROM books WHERE is_archived=0')
         .get();
+    if (books.isEmpty) {
+      await _database.transaction(() async {
+        await _seedPersonalBook();
+        await seedBookDefaults(
+          SeedIds.personalBook,
+          type: BookType.personal,
+        );
+      });
+      return;
+    }
     await _database.transaction(() async {
       for (final row in books) {
         await ensureBookDefaults(

@@ -27,12 +27,12 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
   @override
   Widget build(BuildContext context) {
     final allAccounts =
-        ref.watch(allAccountsProvider).value ?? const <Account>[];
+        ref.watch(assetDashboardAccountsProvider).value ?? const <Account>[];
     final account = allAccounts
         .where((item) => item.id == widget.accountId)
         .firstOrNull;
     final all =
-        ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+        ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
     if (account == null) {
       return const SafeArea(child: Center(child: Text('账户不存在')));
     }

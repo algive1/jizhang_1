@@ -7,6 +7,7 @@ import '../../../core/models/category.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_date_picker.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
@@ -115,7 +116,7 @@ class _RecurringBillCreateSheetState
 
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFFAFBF6),
+    color: context.appSheetSurface,
     borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
     clipBehavior: Clip.antiAlias,
     child: ConstrainedBox(
@@ -166,7 +167,7 @@ class _RecurringBillCreateSheetState
     height: 5,
     margin: const EdgeInsets.only(top: 10, bottom: 4),
     decoration: BoxDecoration(
-      color: const Color(0xFFD7D9D1),
+      color: context.appDivider,
       borderRadius: BorderRadius.circular(999),
     ),
   );
@@ -205,8 +206,8 @@ class _RecurringBillCreateSheetState
           key: const ValueKey('recurring-create-close'),
           onPressed: () => Navigator.pop(context),
           style: IconButton.styleFrom(
-            backgroundColor: const Color(0xFFEFF0EB),
-            foregroundColor: const Color(0xFF676B64),
+            backgroundColor: context.appSurfaceSoft,
+            foregroundColor: context.appSecondaryText,
             fixedSize: const Size(36, 36),
           ),
           icon: const Icon(Icons.close, size: 20),
@@ -252,7 +253,7 @@ class _RecurringBillCreateSheetState
     key: const ValueKey('recurring-create-type'),
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
-      color: const Color(0xFFF0F1EC),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(15),
     ),
     child: Row(
@@ -357,19 +358,20 @@ class _RecurringBillCreateSheetState
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Color(0xFFEFF5E5), Color(0xFFF8FAF4)],
+      gradient: LinearGradient(
+        colors: [context.appPrimarySoft, context.appSurfaceSoft],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: context.appDivider),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '当前规则',
-          style: TextStyle(fontSize: 12, color: Color(0xFF77806D)),
+          style: TextStyle(fontSize: 12, color: context.appSecondaryText),
         ),
         const SizedBox(height: 5),
         Text(
@@ -461,10 +463,8 @@ class _RecurringBillCreateSheetState
   Widget _actions(BuildContext context) => Container(
     padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
     decoration: BoxDecoration(
-      color: const Color(0xF2FAFBF6),
-      border: Border(
-        top: BorderSide(color: Colors.black.withValues(alpha: .035)),
-      ),
+      color: context.appSheetSurface,
+      border: Border(top: BorderSide(color: context.appDivider)),
     ),
     child: Row(
       children: [
@@ -475,8 +475,8 @@ class _RecurringBillCreateSheetState
               key: const ValueKey('recurring-create-cancel'),
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFFF0F1EC),
-                foregroundColor: const Color(0xFF686D64),
+                backgroundColor: context.appSurfaceSoft,
+                foregroundColor: context.appSecondaryText,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(17),
                 ),
@@ -518,7 +518,7 @@ class _RecurringBillCreateSheetState
   InputDecoration _inputDecoration(String hint) => InputDecoration(
     hintText: hint,
     filled: true,
-    fillColor: const Color(0xFFF7F8F3),
+    fillColor: context.appSurfaceSoft,
     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
@@ -530,7 +530,7 @@ class _RecurringBillCreateSheetState
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: Color(0xFF9FBD72)),
+      borderSide: BorderSide(color: context.appPrimary),
     ),
   );
 
@@ -909,20 +909,10 @@ class _SectionCard extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
+  Widget build(BuildContext context) => AppGlassSurface(
+    borderRadius: 22,
     padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0928321E),
-          blurRadius: 20,
-          offset: Offset(0, 5),
-        ),
-      ],
-    ),
+    tint: context.appSurface,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -958,7 +948,7 @@ class _SegmentButton extends StatelessWidget {
         height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? context.appSurfaceRaised : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           boxShadow: selected
               ? const [
@@ -1004,9 +994,9 @@ class _CycleButton extends StatelessWidget {
       height: 44,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected ? context.appPrimarySoft : const Color(0xFFF8F9F5),
+        color: selected ? context.appPrimarySoft : context.appSurfaceSoft,
         border: Border.all(
-          color: selected ? const Color(0xFF91AF63) : const Color(0xFFE7E9E0),
+          color: selected ? context.appPrimary : context.appDivider,
         ),
         borderRadius: BorderRadius.circular(14),
       ),
@@ -1043,8 +1033,8 @@ class _SelectionRow extends StatelessWidget {
     onTap: onTap,
     child: Container(
       constraints: const BoxConstraints(minHeight: 56),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEAEBE5))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.appDivider)),
       ),
       child: Row(
         children: [
@@ -1082,15 +1072,15 @@ class _SelectionRow extends StatelessWidget {
                       fontSize: 14,
                       color: value.isEmpty
                           ? context.appSecondaryText
-                          : const Color(0xFF5D635B),
+                          : context.appPrimaryText,
                     ),
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 20,
-                  color: Color(0xFFA3A69F),
+                  color: context.appSecondaryText,
                 ),
               ],
             ),
@@ -1119,7 +1109,7 @@ class _SwitchRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 58),
     decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: Color(0xFFEAEBE5))),
+      border: Border(bottom: BorderSide(color: context.appDivider)),
     ),
     child: Row(
       children: [

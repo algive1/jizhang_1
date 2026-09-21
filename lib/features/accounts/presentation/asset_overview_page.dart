@@ -13,6 +13,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../transactions/presentation/transaction_actions.dart';
 import '../data/account_repository.dart';
 import '../domain/asset_history.dart';
 import '../domain/asset_overview.dart';
@@ -43,6 +44,9 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     final transactionState = ref.watch(allTransactionsProvider);
     final activeBook = ref.watch(activeBookProvider);
     final allAccounts = accountState.value ?? const <Account>[];
+    final accountNames = {
+      for (final account in allAccounts) account.id: account.displayName,
+    };
     final groups = AssetOverview.group(
       allAccounts,
       investmentByCurrency: ref.watch(investmentValueByCurrencyProvider),
@@ -151,7 +155,9 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
               _RecentChanges(
                 records: records,
                 accountIds: selected.accounts.map((a) => a.id).toSet(),
+                accountNames: accountNames,
                 onViewAll: () => context.push('/transactions'),
+                onOpen: (record) => openTransactionDetail(context, record),
               ),
               if (activeBook?.usesPrimaryAssets == true)
                 Padding(
@@ -405,7 +411,7 @@ class _AccountAssetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final material = Material(
-      color: context.appBackground,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
@@ -577,11 +583,15 @@ class _RecentChanges extends StatefulWidget {
   const _RecentChanges({
     required this.records,
     required this.accountIds,
+    required this.accountNames,
     required this.onViewAll,
+    required this.onOpen,
   });
   final List<TransactionRecord> records;
   final Set<String> accountIds;
+  final Map<String, String> accountNames;
   final VoidCallback onViewAll;
+  final ValueChanged<TransactionRecord> onOpen;
   @override
   State<_RecentChanges> createState() => _RecentChangesState();
 }
@@ -660,7 +670,12 @@ class _RecentChangesState extends State<_RecentChanges> {
             )
           else
             for (var index = 0; index < visible.length; index++) ...[
-              _RecentRow(record: visible[index], accountIds: accountIds),
+              _RecentRow(
+                record: visible[index],
+                accountIds: accountIds,
+                accountNames: widget.accountNames,
+                onTap: () => widget.onOpen(visible[index]),
+              ),
               if (index < visible.length - 1)
                 Divider(height: 1, indent: 44, color: context.appDivider),
             ],
@@ -722,9 +737,17 @@ class _RecentChangesState extends State<_RecentChanges> {
 }
 
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.record, required this.accountIds});
+  const _RecentRow({
+    required this.record,
+    required this.accountIds,
+    required this.accountNames,
+    required this.onTap,
+  });
   final TransactionRecord record;
   final Set<String> accountIds;
+  final Map<String, String> accountNames;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final effects = accountBalanceEffect(record);
@@ -732,60 +755,82 @@ class _RecentRow extends StatelessWidget {
         .where((e) => accountIds.contains(e.key))
         .fold(0, (sum, e) => sum + e.value);
     final amount = cents / 100;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: context.appSurfaceSoft,
-              shape: BoxShape.circle,
+    final source = accountNames[record.accountId];
+    final destination = record.destinationAccountId == null
+        ? null
+        : accountNames[record.destinationAccountId!];
+    final accountLabel = source == null
+        ? null
+        : destination == null
+        ? source
+        : '$source → $destination';
+    final subtitle = [
+      '${record.occurredAt.month}/${record.occurredAt.day} ${TransactionDateFormatter.time(record.occurredAt)}',
+      record.displayCategoryPath,
+      ?accountLabel,
+    ].join(' · ');
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: context.appSurfaceSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                record.type == TransactionType.transfer
+                    ? Icons.sync_alt
+                    : record.isIncome
+                    ? Icons.arrow_downward
+                    : Icons.arrow_upward,
+                size: 17,
+                color: amount >= 0 ? assetGreen : assetCoral,
+              ),
             ),
-            child: Icon(
-              record.type == TransactionType.transfer
-                  ? Icons.sync_alt
-                  : record.isIncome
-                  ? Icons.arrow_downward
-                  : Icons.arrow_upward,
-              size: 17,
-              color: amount >= 0 ? assetGreen : assetCoral,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.displayTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: context.appPrimaryText,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.appPrimaryText,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${record.occurredAt.month}/${record.occurredAt.day} ${TransactionDateFormatter.time(record.occurredAt)} · ${record.displayCategoryLabel}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: context.appSecondaryText),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.appSecondaryText,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          AssetAmount(
-            amount,
-            currency: record.currency,
-            signed: true,
-            size: 15,
-            color: amount >= 0 ? assetGreen : context.appPrimaryText,
-          ),
-        ],
+            AssetAmount(
+              amount,
+              currency: record.currency,
+              signed: true,
+              size: 15,
+              color: amount >= 0 ? assetGreen : context.appPrimaryText,
+            ),
+          ],
+        ),
       ),
     );
   }

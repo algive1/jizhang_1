@@ -31,7 +31,14 @@ class TransactionSummaryCard extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [context.appSurface, Color(0xFFF6F4E8)],
+                      colors: [
+                        context.appSurface.withValues(
+                          alpha: context.appUsesLiquidGlass ? .42 : 1,
+                        ),
+                        context.appPrimarySoft.withValues(
+                          alpha: context.appUsesLiquidGlass ? .58 : .72,
+                        ),
+                      ],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),

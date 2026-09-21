@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
+import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/family.dart';
@@ -194,6 +195,49 @@ void main() {
     expect(find.text('测试家庭账本'), findsOneWidget);
     expect(find.text('¥35.00'), findsNWidgets(2));
   });
+
+  testWidgets('liquid glass keeps the ledger filter sheet readable', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(BuiltInThemes.liquidGlass),
+          home: const Scaffold(body: ConsumptionCalendarPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('全部账本'));
+    await tester.pumpAndSettle();
+
+    final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+    expect(sheet.backgroundColor, isNot(Colors.transparent));
+    expect(sheet.backgroundColor?.a, greaterThan(.9));
+    expect(find.text('统计范围'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('个人账本'),
+      ),
+      findsAtLeastNWidgets(1),
+      reason: 'The sheet should expose a readable personal-ledger option.',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
 }
 
 TransactionRecord _record({

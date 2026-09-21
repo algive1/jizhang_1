@@ -12,6 +12,18 @@ extension AppThemeTokens on BuildContext {
   Color get appSurface => appColors.surface;
   Color get appSurfaceSoft => appColors.surfaceContainerLow;
   Color get appSurfaceRaised => appColors.surfaceContainerLowest;
+  Color get appSheetSurface => appUsesLiquidGlass
+      ? appColors.surface.withValues(alpha: .96)
+      : appColors.surface;
+  Color get appDialogSurface => appUsesLiquidGlass
+      ? appColors.surface.withValues(alpha: .97)
+      : appColors.surface;
+  Color get appPopoverSurface => appUsesLiquidGlass
+      ? Color.alphaBlend(
+          appColors.primary.withValues(alpha: .055),
+          appColors.surface.withValues(alpha: .95),
+        )
+      : appColors.surface;
   Color get appPrimary => appColors.primary;
   Color get appPrimarySoft => appColors.primaryContainer;
   Color get appPrimaryText => appColors.onSurface;

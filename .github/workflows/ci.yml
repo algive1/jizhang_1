@@ -63,6 +63,8 @@ jobs:
           test/ad_placement_test.dart
           test/ad_placement_readiness_test.dart
           test/app_scaffold_navigation_test.dart
+          test/database_seeder_test.dart
+          test/book_selector_ui_test.dart
           test/consumption_calendar_test.dart
           test/budget_alert_notification_service_test.dart
           test/budget_and_management_test.dart
@@ -71,13 +73,19 @@ jobs:
           test/financial_insight_engine_test.dart
           test/home_insight_drawer_test.dart
           test/home_redesign_domain_test.dart
+          test/home_recent_transactions_test.dart
           test/analysis_multibook_and_annual_report_test.dart
           test/bookkeeping_template_repository_test.dart
           test/quick_bookkeeping_service_test.dart
           test/quick_add_redesign_test.dart
+          test/recurring_bill_create_sheet_test.dart
           test/bill_screenshot_parser_test.dart
           test/membership_test.dart
           test/bill_import_service_test.dart
+          test/bill_import_deduplicator_test.dart
+          test/transaction_date_group_test.dart
+          test/transaction_layout_test.dart
+          test/transaction_detail_test.dart
           test/bill_import_category_mapper_test.dart
           test/xlsx_bill_import_test.dart
           test/category_template_upgrade_test.dart

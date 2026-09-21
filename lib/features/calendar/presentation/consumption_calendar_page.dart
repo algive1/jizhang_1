@@ -10,6 +10,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
+import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
@@ -57,6 +58,11 @@ class _ConsumptionCalendarPageState
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
     final booksValue = ref.watch(booksProvider).value;
     final books = booksValue ?? const <LedgerBook>[];
+    final calendarAccounts =
+        ref.watch(assetDashboardAccountsProvider).value ?? const [];
+    final accountNames = {
+      for (final account in calendarAccounts) account.id: account.displayName,
+    };
     final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
     final filtered = effectiveBookFilterId == null
         ? all
@@ -265,6 +271,7 @@ class _ConsumptionCalendarPageState
                   _SelectedDayCard(
                     date: selectedDate,
                     transactions: selected,
+                    accountNames: accountNames,
                     onAdd: _addForSelectedDate,
                   ),
                 if (selectedDate != null) const SizedBox(height: 12),
@@ -382,7 +389,7 @@ class _ConsumptionCalendarPageState
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.appBackground,
+      backgroundColor: context.appSheetSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
@@ -1310,11 +1317,13 @@ class _SelectedDayCard extends StatelessWidget {
   const _SelectedDayCard({
     required this.date,
     required this.transactions,
+    required this.accountNames,
     required this.onAdd,
   });
 
   final DateTime date;
   final List<TransactionRecord> transactions;
+  final Map<String, String> accountNames;
   final VoidCallback onAdd;
 
   @override
@@ -1401,12 +1410,24 @@ class _SelectedDayCard extends StatelessWidget {
             )
           else
             ...transactions.asMap().entries.map(
-              (entry) => TransactionTile(
-                transaction: entry.value,
-                showDate: false,
-                showDivider: entry.key != transactions.length - 1,
-                onTap: () => openTransactionDetail(context, entry.value),
-              ),
+              (entry) {
+                final record = entry.value;
+                final source = accountNames[record.accountId];
+                final destination = record.destinationAccountId == null
+                    ? null
+                    : accountNames[record.destinationAccountId!];
+                return TransactionTile(
+                  transaction: record,
+                  showDate: false,
+                  showDivider: entry.key != transactions.length - 1,
+                  accountName: source == null
+                      ? null
+                      : destination == null
+                      ? source
+                      : '$source → $destination',
+                  onTap: () => openTransactionDetail(context, record),
+                );
+              },
             ),
           const SizedBox(height: 6),
           SizedBox(

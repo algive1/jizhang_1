@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/formatters/book_title_formatter.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
 import '../../books/presentation/book_selector.dart';
@@ -105,6 +106,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   Widget build(BuildContext context) {
+    final booksState = ref.watch(booksProvider);
     final book = ref.watch(activeBookProvider);
     final insightPreferencesAsync = ref.watch(insightPreferencesProvider);
     final cardVisibility = ref.watch(homeCardVisibilityProvider);
@@ -134,8 +136,10 @@ class _HomePageState extends ConsumerState<HomePage>
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
-    final dataReady =
-        book != null && !transactions.isLoading && !transactions.hasError;
+    // Empty transaction history is a valid final state. Keep already loaded
+    // content visible while a provider refreshes so startup/import invalidation
+    // never collapses the home page back to a blank shell.
+    final dataReady = book != null && transactions.hasValue;
     final insightPreferences =
         insightPreferencesAsync.value ?? const InsightPreferences();
     if (dataReady &&
@@ -211,13 +215,40 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                 ),
               ),
-            if (transactions.hasError)
+            if (booksState.hasError ||
+                (transactions.hasError && !transactions.hasValue))
               _ReadError(
                 label: '账本',
-                onRetry: () => ref.invalidate(transactionsProvider),
+                onRetry: () {
+                  ref.invalidate(databaseBootstrapProvider);
+                  ref.invalidate(booksProvider);
+                  ref.invalidate(transactionsProvider);
+                },
               )
-            else if (transactions.isLoading || book == null)
-              const HomeSurface(child: LinearProgressIndicator()),
+            else if (!booksState.hasValue ||
+                book == null ||
+                !transactions.hasValue)
+              const HomeSurface(child: LinearProgressIndicator())
+            else if (transactions.hasError)
+              HomeSurface(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '流水刷新失败，正在继续显示上次已加载的数据',
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => ref.invalidate(transactionsProvider),
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             if (budgets.hasError || goalsState.hasError)
               _ReadError(
@@ -227,8 +258,9 @@ class _HomePageState extends ConsumerState<HomePage>
                   ref.invalidate(goalsProvider);
                 },
               )
-            else if (budgets.isLoading || goalsState.isLoading)
-              HomeSurface(child: LinearProgressIndicator())
+            else if ((budgets.isLoading && !budgets.hasValue) ||
+                (goalsState.isLoading && !goalsState.hasValue))
+              const HomeSurface(child: LinearProgressIndicator())
             else if (dataReady)
               HomeSpendingGoalCard(
                 bookType: book.type,
@@ -562,6 +594,11 @@ class _HomePageState extends ConsumerState<HomePage>
                     (item.categoryId ?? 'uncategorized') == category.id,
               )
               .toList();
+          final sheetAccounts =
+              sheetRef.watch(allAccountsProvider).value ?? const [];
+          final sheetAccountNames = {
+            for (final account in sheetAccounts) account.id: account.displayName,
+          };
           return SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * .65,
@@ -574,16 +611,25 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                   const SizedBox(height: 12),
                   if (records.isEmpty) const Text('本月该分类暂无支出'),
-                  ...records.map(
-                    (record) => TransactionTile(
+                  ...records.map((record) {
+                    final source = sheetAccountNames[record.accountId];
+                    final destination = record.destinationAccountId == null
+                        ? null
+                        : sheetAccountNames[record.destinationAccountId!];
+                    return TransactionTile(
                       transaction: record,
                       homeStyle: true,
                       showDate: true,
+                      accountName: source == null
+                          ? null
+                          : destination == null
+                          ? source
+                          : '$source → $destination',
                       onTap: () => openTransactionDetail(context, record),
                       onLongPress: () =>
                           showTransactionActions(context, ref, record),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
             ),

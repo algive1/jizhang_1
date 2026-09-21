@@ -284,6 +284,9 @@ class DriftTransactionRepository implements TransactionRepository {
             entity.categoryId == null
                 ? null
                 : categoriesByBookAndId['${entity.bookId}\u0000${entity.categoryId}'],
+            entity.subcategoryId == null
+                ? null
+                : categoriesByBookAndId['${entity.bookId}\u0000${entity.subcategoryId}'],
           ),
         )
         .toList(growable: false);
@@ -292,18 +295,23 @@ class DriftTransactionRepository implements TransactionRepository {
   Future<TransactionRecord> _mapEntity(TransactionEntity entity) async {
     final categories = await _database.categoryDao.getAll();
     CategoryEntity? category;
+    CategoryEntity? subcategory;
     for (final item in categories) {
-      if (item.id == entity.categoryId && item.bookId == entity.bookId) {
-        category = item;
+      if (item.bookId != entity.bookId) continue;
+      if (item.id == entity.categoryId) category = item;
+      if (item.id == entity.subcategoryId) subcategory = item;
+      if (category != null &&
+          (entity.subcategoryId == null || subcategory != null)) {
         break;
       }
     }
-    return _fromEntity(entity, category);
+    return _fromEntity(entity, category, subcategory);
   }
 
   TransactionRecord _fromEntity(
     TransactionEntity entity,
     CategoryEntity? category,
+    CategoryEntity? subcategory,
   ) {
     return TransactionRecord(
       id: entity.id,
@@ -316,6 +324,8 @@ class DriftTransactionRepository implements TransactionRepository {
       categoryName: category?.name,
       categoryIcon: category?.icon,
       subcategoryId: entity.subcategoryId,
+      subcategoryName: subcategory?.name,
+      subcategoryIcon: subcategory?.icon,
       accountId: entity.accountId,
       destinationAccountId: entity.destinationAccountId,
       merchant: entity.merchant,

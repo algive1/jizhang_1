@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 
 class HomeCrownIcon extends StatelessWidget {
   const HomeCrownIcon({this.color = const Color(0xFFC49A43), super.key});
@@ -23,10 +24,13 @@ class HomeInsightCard extends StatelessWidget {
   final bool amountHidden;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(20),
-    child: InkWell(
+  Widget build(BuildContext context) => AppGlassSurface(
+    borderRadius: 20,
+    padding: EdgeInsets.zero,
+    tint: context.appSurface,
+    child: Material(
+      type: MaterialType.transparency,
+      child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Padding(
@@ -114,7 +118,8 @@ class HomeInsightCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+  ),
+);
 
   IconData _insightIcon(FinancialInsightKind kind) => switch (kind) {
     FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,
@@ -132,7 +137,9 @@ class HomeProCard extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFF1F6DF),
+    color: context.appPrimarySoft.withValues(
+      alpha: context.appUsesLiquidGlass ? .72 : 1,
+    ),
     borderRadius: BorderRadius.circular(20),
     child: InkWell(
       onTap: onTap,

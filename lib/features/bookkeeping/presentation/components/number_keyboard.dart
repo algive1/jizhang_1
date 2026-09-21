@@ -189,8 +189,8 @@ class _KeypadKey extends StatelessWidget {
           color: primary
               ? context.appPrimary
               : muted
-              ? const Color(0xFFEFEDEE)
-              : Colors.white,
+              ? context.appSurfaceSoft
+              : context.appSurfaceRaised,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: onTap,
