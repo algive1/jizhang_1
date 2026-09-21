@@ -227,7 +227,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
         '${transaction.occurredAt.year}-${transaction.occurredAt.month.toString().padLeft(2, '0')}-${transaction.occurredAt.day.toString().padLeft(2, '0')}';
     final metadata = transaction.metadataJson ?? '';
     return (transaction.merchant?.contains(query) ?? false) ||
-        (transaction.categoryName?.contains(query) ?? false) ||
+        transaction.displayCategoryPath.contains(query) ||
         (transaction.note?.contains(query) ?? false) ||
         (accountNames[transaction.accountId]?.contains(query) ?? false) ||
         (transaction.destinationAccountId != null &&
