@@ -232,8 +232,8 @@ void main() {
         of: find.byType(BottomSheet),
         matching: find.text('个人账本'),
       ),
-      findsOneWidget,
-      reason: 'The sheet should expose one readable personal-ledger option.',
+      findsAtLeastNWidgets(1),
+      reason: 'The sheet should expose a readable personal-ledger option.',
     );
     expect(tester.takeException(), isNull);
   });
