@@ -136,7 +136,9 @@ class HomeProCard extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFF1F6DF),
+    color: context.appPrimarySoft.withValues(
+      alpha: context.appUsesLiquidGlass ? .72 : 1,
+    ),
     borderRadius: BorderRadius.circular(20),
     child: InkWell(
       onTap: onTap,
