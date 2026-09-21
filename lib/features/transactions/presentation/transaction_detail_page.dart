@@ -254,8 +254,8 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
             child: Column(
               children: [
                 CategoryIcon(
-                  category: category,
-                  iconKey: transaction.categoryIcon,
+                  category: transaction.displayLeafCategoryLabel,
+                  iconKey: transaction.displayCategoryIconKey,
                   vivid: true,
                   size: 48,
                 ),
