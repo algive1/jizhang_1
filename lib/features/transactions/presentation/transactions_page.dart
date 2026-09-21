@@ -54,7 +54,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     final transactions = typedTransactions
         .where(
           (item) =>
-              _categoryFilter == null || item.categoryName == _categoryFilter,
+              _categoryFilter == null ||
+              item.categoryName == _categoryFilter ||
+              item.subcategoryName == _categoryFilter,
         )
         .toList();
 
