@@ -767,7 +767,7 @@ class _RecentRow extends StatelessWidget {
     final subtitle = [
       '${record.occurredAt.month}/${record.occurredAt.day} ${TransactionDateFormatter.time(record.occurredAt)}',
       record.displayCategoryPath,
-      if (accountLabel != null) accountLabel,
+      ?accountLabel,
     ].join(' · ');
 
     return InkWell(
