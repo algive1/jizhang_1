@@ -21,8 +21,14 @@ class BillImportDeduplicator {
   ) {
     final result = BillImportDeduplicator._();
     for (final transaction in transactions) {
-      if (transaction.source != TransactionSource.import) continue;
-      result._rememberPersisted(transaction);
+      switch (transaction.source) {
+        case TransactionSource.import:
+          result._rememberPersistedImport(transaction);
+        case TransactionSource.auto:
+          result._rememberAutomatic(transaction);
+        default:
+          break;
+      }
     }
     return result;
   }
@@ -32,6 +38,8 @@ class BillImportDeduplicator {
       <String, Set<String>>{};
   final Set<String> _importFingerprints = <String>{};
   final Set<String> _naturalFingerprints = <String>{};
+  final Map<BillImportProvider, Set<String>> _automaticNaturals =
+      <BillImportProvider, Set<String>>{};
 
   bool isDuplicate(ImportedBillRow row) {
     final externalId = _clean(row.externalId);
@@ -61,7 +69,9 @@ class BillImportDeduplicator {
     }
 
     if (_importFingerprints.contains(row.importFingerprint)) return true;
-    return _naturalFingerprints.contains(row.naturalFingerprint);
+    if (_naturalFingerprints.contains(row.naturalFingerprint)) return true;
+    return _automaticNaturals[row.provider]?.contains(row.naturalFingerprint) ==
+        true;
   }
 
   void remember(ImportedBillRow row) {
@@ -85,7 +95,7 @@ class BillImportDeduplicator {
     _naturalFingerprints.add(row.naturalFingerprint);
   }
 
-  void _rememberPersisted(TransactionRecord transaction) {
+  void _rememberPersistedImport(TransactionRecord transaction) {
     final natural = _naturalFingerprint(transaction);
     _naturalFingerprints.add(natural);
 
@@ -145,6 +155,58 @@ class BillImportDeduplicator {
       // Malformed historical metadata must never block new imports.
     }
   }
+
+
+  void _rememberAutomatic(TransactionRecord transaction) {
+    final raw = transaction.metadataJson;
+    if (raw == null || raw.trim().isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final metadata = decoded.cast<Object?, Object?>();
+
+      BillImportProvider? provider;
+      final packageName = _clean(metadata['paymentPackageName']?.toString());
+      provider ??= _providerForPackage(packageName);
+
+      final nested = metadata['autobookkeeping'];
+      if (nested is Map) {
+        final sourceApp = _clean(nested['sourceApp']?.toString());
+        provider ??= _providerForSourceApp(sourceApp);
+      }
+      provider ??= _providerForSourceApp(
+        _clean(metadata['sourceApp']?.toString()),
+      );
+      if (provider == null) return;
+
+      final externalId =
+          _clean(metadata['notificationOrderId']?.toString()) ??
+          _clean(metadata['orderId']?.toString()) ??
+          (nested is Map ? _clean(nested['orderId']?.toString()) : null);
+      if (externalId != null) {
+        _externalKeys.add(_externalKey(provider, externalId));
+      }
+      _automaticNaturals
+          .putIfAbsent(provider, () => <String>{})
+          .add(_naturalFingerprint(transaction));
+    } on Object {
+      // Automatic-bookkeeping metadata is best-effort compatibility context.
+    }
+  }
+
+  static BillImportProvider? _providerForPackage(String? packageName) =>
+      switch (packageName) {
+        'com.tencent.mm' => BillImportProvider.wechat,
+        'com.eg.android.AlipayGphone' => BillImportProvider.alipay,
+        _ => null,
+      };
+
+  static BillImportProvider? _providerForSourceApp(String? sourceApp) =>
+      switch (sourceApp?.toUpperCase()) {
+        'WECHAT' => BillImportProvider.wechat,
+        'ALIPAY' => BillImportProvider.alipay,
+        _ => null,
+      };
 
   static BillImportProvider? _provider(String? name) {
     if (name == null) return null;
