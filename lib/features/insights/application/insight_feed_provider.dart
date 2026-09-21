@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/analysis.dart';
@@ -63,9 +65,19 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
       ref.watch(insightPreferencesProvider).value ??
       const InsightPreferences();
   final bookId = ref.watch(activeBookIdProvider);
-  // Debounce bursts from automatic/import bookkeeping. Riverpod discards stale
-  // results when dependencies change while this request is waiting.
-  await Future<void>.delayed(const Duration(milliseconds: 650));
+  // Debounce bursts from automatic/import bookkeeping. Keep the delay
+  // cancellable so disposing the provider never leaves a timer alive in tests
+  // or after navigating away from Home.
+  var disposed = false;
+  final delay = Completer<void>();
+  final timer = Timer(const Duration(milliseconds: 650), delay.complete);
+  ref.onDispose(() {
+    disposed = true;
+    timer.cancel();
+    if (!delay.isCompleted) delay.complete();
+  });
+  await delay.future;
+  if (disposed) return null;
   return ref.read(remoteInsightRepositoryProvider).analyze(
         bookId: bookId,
         transactions: transactions,
