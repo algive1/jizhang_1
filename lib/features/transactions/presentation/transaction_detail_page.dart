@@ -224,7 +224,6 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     final attachments = _attachments.isNotEmpty
         ? _attachments
         : legacyMetadata.attachments;
-    final category = transaction.displayCategoryLabel;
     final categoryPath = transaction.displayCategoryPath;
 
     return Scaffold(
