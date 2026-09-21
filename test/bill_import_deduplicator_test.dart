@@ -164,6 +164,72 @@ void main() {
     expect(index.isDuplicate(current), isTrue);
   });
 
+
+  test('official import recognizes an existing automatic payment by order id', () {
+    final candidate = row(
+      provider: BillImportProvider.wechat,
+      externalId: 'wx-auto-1',
+      merchant: '早餐店',
+    );
+    final now = DateTime(2026, 9, 21);
+    final automatic = TransactionRecord(
+      id: 'auto-1',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: candidate.amount,
+      accountId: 'wechat',
+      occurredAt: candidate.occurredAt,
+      createdAt: now,
+      updatedAt: now,
+      merchant: candidate.merchant,
+      source: TransactionSource.auto,
+      metadataJson: jsonEncode({
+        'notificationOrderId': 'wx-auto-1',
+        'paymentPackageName': 'com.tencent.mm',
+      }),
+    );
+
+    final index = BillImportDeduplicator.fromTransactions([automatic]);
+    expect(index.isDuplicate(candidate), isTrue);
+  });
+
+  test('automatic payment fallback is provider scoped when there is no order id', () {
+    final candidate = row(
+      provider: BillImportProvider.alipay,
+      externalId: null,
+      merchant: '便利店',
+      amount: 22.5,
+    );
+    final now = DateTime(2026, 9, 21);
+    final automatic = TransactionRecord(
+      id: 'auto-2',
+      bookId: 'book-personal',
+      type: TransactionType.expense,
+      amount: candidate.amount,
+      accountId: 'alipay',
+      occurredAt: candidate.occurredAt,
+      createdAt: now,
+      updatedAt: now,
+      merchant: candidate.merchant,
+      source: TransactionSource.auto,
+      metadataJson: jsonEncode({
+        'autobookkeeping': {'sourceApp': 'ALIPAY'},
+      }),
+    );
+
+    final index = BillImportDeduplicator.fromTransactions([automatic]);
+    expect(index.isDuplicate(candidate), isTrue);
+
+    final sameShapeWechat = row(
+      provider: BillImportProvider.wechat,
+      externalId: null,
+      merchant: candidate.merchant,
+      amount: candidate.amount,
+      occurredAt: candidate.occurredAt,
+    );
+    expect(index.isDuplicate(sameShapeWechat), isFalse);
+  });
+
   test('malformed historical metadata never blocks a fresh import', () {
     final candidate = row(externalId: 'wx-new');
     final broken = persisted(
