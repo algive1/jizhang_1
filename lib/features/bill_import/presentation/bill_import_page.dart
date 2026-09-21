@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +14,7 @@ import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../application/bill_import_category_mapper.dart';
+import '../application/bill_import_deduplicator.dart';
 import '../application/bill_import_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -613,48 +612,23 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       return;
     }
 
-    final importedIds = <String>{};
-    final importedFingerprints = <String>{};
-    final importedNaturalFingerprints = <String>{};
     // Read persisted rows directly. A StreamProvider may not have emitted yet
     // when the user re-imports immediately, which previously made duplicate
     // detection race with provider startup.
     final transactions = await ref.read(transactionRepositoryProvider).getAll();
     if (!mounted) return;
-    for (final transaction in transactions) {
-      if (transaction.source != TransactionSource.import) continue;
-      importedNaturalFingerprints.add(_naturalFingerprint(transaction));
-      if (transaction.metadataJson == null) continue;
-      try {
-        final metadata = jsonDecode(transaction.metadataJson!);
-        if (metadata is! Map) continue;
-        final externalId = metadata['externalId'];
-        if (externalId is String && externalId.trim().isNotEmpty) {
-          importedIds.add(externalId);
-        }
-        final fingerprint = metadata['importFingerprint'];
-        if (fingerprint is String && fingerprint.trim().isNotEmpty) {
-          importedFingerprints.add(fingerprint);
-        }
-      } on Object {
-        // Historical malformed metadata must not block a new import.
-      }
-    }
+    final deduplicator = BillImportDeduplicator.fromTransactions(transactions);
 
     final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
     var duplicates = 0;
     for (final index in _selected.toList()..sort()) {
       final row = result.rows[index];
-      if ((row.externalId != null && importedIds.contains(row.externalId)) ||
-          importedFingerprints.contains(row.importFingerprint) ||
-          importedNaturalFingerprints.contains(row.naturalFingerprint)) {
+      if (deduplicator.isDuplicate(row)) {
         duplicates++;
         continue;
       }
-      if (row.externalId != null) importedIds.add(row.externalId!);
-      importedFingerprints.add(row.importFingerprint);
-      importedNaturalFingerprints.add(row.naturalFingerprint);
+      deduplicator.remember(row);
 
       final accountId = result.provider.needsAccountMapping
           ? _resolvedAccountId(index, row.sourceAccount, destination: false)
@@ -1012,14 +986,3 @@ String _providerLabel(BillImportProvider provider) => switch (provider) {
   BillImportProvider.generic => '第三方账单',
 };
 
-String _naturalFingerprint(TransactionRecord transaction) => [
-  transaction.occurredAt.toIso8601String(),
-  transaction.type.name,
-  transaction.amount.toStringAsFixed(2),
-  ((transaction.merchant?.trim().isNotEmpty == true
-              ? transaction.merchant
-              : transaction.note) ??
-          '')
-      .trim()
-      .toLowerCase(),
-].join('|');
