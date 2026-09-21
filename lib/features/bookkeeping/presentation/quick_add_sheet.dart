@@ -1878,6 +1878,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         currency: sourceAccount.currency,
         categoryId: _usesAccountPair ? null : selectedCategory!.id,
         subcategoryId: _usesAccountPair ? null : subcategoryId,
+        clearSubcategory:
+            widget.initialTransaction?.subcategoryId != null &&
+            (_usesAccountPair || subcategoryId == null),
         categoryName: _usesAccountPair ? null : selectedCategory!.name,
         accountId: sourceAccount.id,
         destinationAccountId: _usesAccountPair ? destinationAccount!.id : null,
