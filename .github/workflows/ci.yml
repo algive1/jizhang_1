@@ -78,6 +78,7 @@ jobs:
           test/bill_screenshot_parser_test.dart
           test/membership_test.dart
           test/bill_import_service_test.dart
+          test/bill_import_deduplicator_test.dart
           test/bill_import_category_mapper_test.dart
           test/xlsx_bill_import_test.dart
           test/category_template_upgrade_test.dart
