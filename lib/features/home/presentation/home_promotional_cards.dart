@@ -118,7 +118,8 @@ class HomeInsightCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+  ),
+);
 
   IconData _insightIcon(FinancialInsightKind kind) => switch (kind) {
     FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,
