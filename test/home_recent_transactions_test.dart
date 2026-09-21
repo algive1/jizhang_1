@@ -11,6 +11,7 @@ import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/home/presentation/home_page.dart';
+import 'package:jizhang_app/features/insights/application/insight_feed_provider.dart';
 import 'package:jizhang_app/features/membership/data/membership_repository.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 
@@ -183,7 +184,10 @@ void main() {
     );
 
     final container = ProviderContainer(
-      overrides: [databaseProvider.overrideWithValue(database)],
+      overrides: [
+        databaseProvider.overrideWithValue(database),
+        confirmedInsightFeedProvider.overrideWith((ref) async => null),
+      ],
     );
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox.shrink());
@@ -241,7 +245,10 @@ void main() {
     ]);
 
     final container = ProviderContainer(
-      overrides: [databaseProvider.overrideWithValue(database)],
+      overrides: [
+        databaseProvider.overrideWithValue(database),
+        confirmedInsightFeedProvider.overrideWith((ref) async => null),
+      ],
     );
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox.shrink());
