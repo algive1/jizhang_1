@@ -147,7 +147,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          allAccountsProvider.overrideWith((ref) => Stream.value([account])),
+          assetDashboardAccountsProvider.overrideWith((ref) => Stream.value([account])),
           transactionAttachmentRepositoryProvider.overrideWithValue(
             _EmptyAttachmentRepository(),
           ),
@@ -222,7 +222,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            allAccountsProvider.overrideWith((ref) => Stream.value([account])),
+            assetDashboardAccountsProvider.overrideWith((ref) => Stream.value([account])),
             transactionAttachmentRepositoryProvider.overrideWithValue(
               _EmptyAttachmentRepository(),
             ),
