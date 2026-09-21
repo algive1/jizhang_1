@@ -164,6 +164,72 @@ void main() {
     );
   });
 
+  test('editing can clear or replace a persisted child category', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final transactions = DriftTransactionRepository(database);
+    final service = QuickBookkeepingService(
+      transactions,
+      DriftAppSettingsRepository(database),
+    );
+    final categories = await database.categoryDao.getAll();
+    final food = categories.firstWhere(
+      (item) => item.name == '餐饮' && item.parentId == null,
+    );
+    final breakfast = categories.firstWhere(
+      (item) => item.parentId == food.id,
+    );
+    final transport = categories.firstWhere(
+      (item) => item.name == '交通' && item.parentId == null,
+    );
+
+    final created = await service.save(
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: SeedIds.cashAccount,
+        categoryId: food.id,
+        subcategoryId: breakfast.id,
+        categoryName: food.name,
+        occurredAt: DateTime(2026, 9, 21, 8),
+      ),
+    );
+    expect(created.subcategoryId, breakfast.id);
+
+    final cleared = await service.update(
+      created,
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: SeedIds.cashAccount,
+        categoryId: food.id,
+        categoryName: food.name,
+        clearSubcategory: true,
+        occurredAt: created.occurredAt,
+      ),
+    );
+    expect(cleared.subcategoryId, isNull);
+    expect((await transactions.getById(created.id))?.subcategoryId, isNull);
+
+    final changedCategory = await service.update(
+      created,
+      QuickBookkeepingRequest(
+        type: TransactionType.expense,
+        amount: 18,
+        accountId: SeedIds.cashAccount,
+        categoryId: transport.id,
+        categoryName: transport.name,
+        occurredAt: created.occurredAt,
+      ),
+    );
+    expect(
+      changedCategory.subcategoryId,
+      isNull,
+      reason: 'Changing the parent category must not retain a child from the old parent.',
+    );
+  });
+
   test('family payer attribution is explicit and stable across edits', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
