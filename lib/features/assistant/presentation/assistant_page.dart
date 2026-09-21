@@ -628,11 +628,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                         onSubmitted: (_) => _send(),
                         textInputAction: TextInputAction.send,
                         style: const TextStyle(fontSize: 14),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: '输入消息，试试“帮我记一笔…”',
                           hintMaxLines: 1,
                           hintStyle: TextStyle(
-                            color: Color(0xFFB4B7B1),
+                            color: context.appSecondaryText.withValues(alpha: .72),
                             fontSize: 13,
                           ),
                           border: InputBorder.none,
