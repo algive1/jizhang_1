@@ -1836,7 +1836,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           .toSet()
           .toList();
       final persisted = widget.initialTransaction;
-      final categoryUnchanged = persisted?.categoryId == selectedCategory?.id;
       final request = QuickBookkeepingRequest(
         bookId: bookId,
         payerUserId:
@@ -1878,10 +1877,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         },
         currency: sourceAccount.currency,
         categoryId: _usesAccountPair ? null : selectedCategory!.id,
-        subcategoryId: _usesAccountPair
-            ? null
-            : (subcategoryId ??
-                  (categoryUnchanged ? persisted?.subcategoryId : null)),
+        subcategoryId: _usesAccountPair ? null : subcategoryId,
         categoryName: _usesAccountPair ? null : selectedCategory!.name,
         accountId: sourceAccount.id,
         destinationAccountId: _usesAccountPair ? destinationAccount!.id : null,
