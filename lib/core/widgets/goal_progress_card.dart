@@ -118,7 +118,7 @@ class GoalProgressCard extends StatelessWidget {
                                     border: Border.all(
                                       color: done || current
                                           ? context.appPrimary
-                                          : const Color(0xFFD8DCCB),
+                                          : context.appDivider,
                                       width: current ? 3 : 2,
                                     ),
                                   ),
