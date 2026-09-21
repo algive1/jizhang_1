@@ -93,8 +93,10 @@ class _TransactionRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         CategoryIcon(
-          category: category,
-          iconKey: transaction.categoryIcon,
+          category: transaction.subcategoryName?.trim().isNotEmpty == true
+              ? transaction.subcategoryName!.trim()
+              : category,
+          iconKey: transaction.subcategoryIcon ?? transaction.categoryIcon,
           monochrome: true,
           size: 40,
         ),
