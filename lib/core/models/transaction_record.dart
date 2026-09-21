@@ -215,7 +215,7 @@ class TransactionRecord {
       if (noteValue != null) return noteValue;
       if (merchantValue != null) return merchantValue;
     }
-    return displayCategoryLabel;
+    return displayLeafCategoryLabel;
   }
 
   String? _displayValue(String? value) {
