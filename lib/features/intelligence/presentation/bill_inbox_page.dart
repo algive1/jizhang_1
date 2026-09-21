@@ -202,7 +202,7 @@ class _InboxItemCard extends ConsumerWidget {
     final result = await showModalBottomSheet<(String, bool)>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.appSurface,
+      backgroundColor: context.appSheetSurface,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setState) => SafeArea(
           child: Padding(
