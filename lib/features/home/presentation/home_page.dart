@@ -594,6 +594,11 @@ class _HomePageState extends ConsumerState<HomePage>
                     (item.categoryId ?? 'uncategorized') == category.id,
               )
               .toList();
+          final sheetAccounts =
+              sheetRef.watch(allAccountsProvider).value ?? const [];
+          final sheetAccountNames = {
+            for (final account in sheetAccounts) account.id: account.displayName,
+          };
           return SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * .65,
@@ -606,16 +611,25 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                   const SizedBox(height: 12),
                   if (records.isEmpty) const Text('本月该分类暂无支出'),
-                  ...records.map(
-                    (record) => TransactionTile(
+                  ...records.map((record) {
+                    final source = sheetAccountNames[record.accountId];
+                    final destination = record.destinationAccountId == null
+                        ? null
+                        : sheetAccountNames[record.destinationAccountId!];
+                    return TransactionTile(
                       transaction: record,
                       homeStyle: true,
                       showDate: true,
+                      accountName: source == null
+                          ? null
+                          : destination == null
+                          ? source
+                          : '$source → $destination',
                       onTap: () => openTransactionDetail(context, record),
                       onLongPress: () =>
                           showTransactionActions(context, ref, record),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
             ),
