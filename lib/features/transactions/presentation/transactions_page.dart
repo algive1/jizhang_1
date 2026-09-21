@@ -196,7 +196,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         child: FractionallySizedBox(
           heightFactor: .68,
           child: Material(
-            color: context.appSurface,
+            color: context.appSheetSurface,
             clipBehavior: Clip.antiAlias,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
