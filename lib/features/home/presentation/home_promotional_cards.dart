@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 
 class HomeCrownIcon extends StatelessWidget {
   const HomeCrownIcon({this.color = const Color(0xFFC49A43), super.key});
@@ -23,10 +24,13 @@ class HomeInsightCard extends StatelessWidget {
   final bool amountHidden;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(20),
-    child: InkWell(
+  Widget build(BuildContext context) => AppGlassSurface(
+    borderRadius: 20,
+    padding: EdgeInsets.zero,
+    tint: context.appSurface,
+    child: Material(
+      type: MaterialType.transparency,
+      child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Padding(
