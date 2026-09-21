@@ -280,11 +280,11 @@ class TransactionRecord {
       subcategoryName:
           (subcategoryId != null && subcategoryId != this.subcategoryId)
           ? null
-          : this.subcategoryName,
+          : subcategoryName,
       subcategoryIcon:
           (subcategoryId != null && subcategoryId != this.subcategoryId)
           ? null
-          : this.subcategoryIcon,
+          : subcategoryIcon,
       accountId: accountId ?? this.accountId,
       destinationAccountId: destinationAccountId ?? this.destinationAccountId,
       merchant: merchant ?? this.merchant,
