@@ -21,9 +21,6 @@ import '../application/assistant_engine.dart';
 import '../application/assistant_policy.dart';
 import 'assistant_entry_button.dart';
 
-const _green = Color(0xFF567B27);
-const _cream = Color(0xFFFAFAF4);
-
 class AssistantPage extends ConsumerStatefulWidget {
   const AssistantPage({super.key});
   @override
@@ -169,13 +166,18 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final pending = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final processingError = ref.watch(notificationProcessingErrorProvider);
     return Scaffold(
-      backgroundColor: _cream,
+      backgroundColor: context.appBackground,
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(-.8, -.3),
+            center: const Alignment(-.8, -.3),
             radius: 1.5,
-            colors: [Color(0xFFF0F5E6), _cream],
+            colors: [
+              context.appPrimarySoft.withValues(alpha: .74),
+              context.appSurface.withValues(
+                alpha: context.appUsesLiquidGlass ? .36 : 1,
+              ),
+            ],
           ),
         ),
         child: Stack(
@@ -196,7 +198,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               ),
             ),
             DefaultTextStyle.merge(
-              style: const TextStyle(color: Color(0xFF151B22)),
+              style: TextStyle(color: context.appPrimaryText),
               child: SafeArea(
                 child: Column(
                   children: [
@@ -205,8 +207,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 46),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 46),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -223,13 +225,13 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                     SizedBox(width: 8),
                                     DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Color(0xFFE4EED3),
-                                        borderRadius: BorderRadius.all(
+                                        color: context.appPrimarySoft,
+                                        borderRadius: const BorderRadius.all(
                                           Radius.circular(5),
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                           horizontal: 6,
                                           vertical: 2,
                                         ),
@@ -237,7 +239,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                           '官方',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: _green,
+                                            color: context.appPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -251,7 +253,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Color(0xFF80827E),
+                                    color: context.appSecondaryText,
                                   ),
                                 ),
                               ],
@@ -400,8 +402,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                     DateFormat('M月d日 HH:mm')
                                         .format(items[i].time),
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Color(0xFF868882),
+                                    style: TextStyle(
+                                      color: context.appSecondaryText,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -480,7 +482,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         child: Container(
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .94),
+            color: context.appSurface.withValues(
+              alpha: context.appUsesLiquidGlass ? .76 : 1,
+            ),
             borderRadius: BorderRadius.circular(16),
           ),
           child: child,
@@ -497,9 +501,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       Flexible(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFFE3EFD2),
-            borderRadius: BorderRadius.only(
+          decoration: BoxDecoration(
+            color: context.appPrimarySoft,
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
               bottomLeft: Radius.circular(16),
@@ -518,10 +522,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     bool outline = false,
     IconData? icon,
   }) => Material(
-    color: outline ? Colors.transparent : Colors.white,
+    color: outline ? Colors.transparent : context.appSurface,
     shape: StadiumBorder(
       side: outline
-          ? const BorderSide(color: Color(0xFFD7E5C3))
+          ? BorderSide(color: context.appDivider)
           : BorderSide.none,
     ),
     child: InkWell(
@@ -536,14 +540,14 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 17, color: _green),
+              Icon(icon, size: 17, color: context.appPrimary),
               const SizedBox(width: 5),
             ],
             Text(
               text,
               style: TextStyle(
                 fontSize: 12,
-                color: outline ? _green : const Color(0xFF202720),
+                color: outline ? context.appPrimary : context.appPrimaryText,
               ),
             ),
           ],
@@ -553,7 +557,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   );
   Widget _composer() => Container(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-    color: _cream.withValues(alpha: .96),
+    color: context.appSurface.withValues(
+      alpha: context.appUsesLiquidGlass ? .88 : .96,
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -589,8 +595,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _green,
-                border: Border.all(color: const Color(0xFFE2EBCE), width: 4),
+                color: context.appPrimary,
+                border: Border.all(color: context.appPrimarySoft, width: 4),
               ),
               child: IconButton(
                 tooltip: '语音记账',
@@ -607,8 +613,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               child: Container(
                 padding: const EdgeInsets.only(left: 13, right: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.appSurfaceRaised,
                   borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: context.appDivider),
                 ),
                 child: Row(
                   children: [
@@ -667,8 +674,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     IconButton.filled(
                       tooltip: '发送',
                       style: IconButton.styleFrom(
-                        backgroundColor: _green,
-                        disabledBackgroundColor: const Color(0xFFCEDBB9),
+                        backgroundColor: context.appPrimary,
+                        disabledBackgroundColor: context.appPrimarySoft,
                       ),
                       onPressed: _sending || _input.text.trim().isEmpty
                           ? null
