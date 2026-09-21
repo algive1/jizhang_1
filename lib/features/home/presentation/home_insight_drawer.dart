@@ -136,39 +136,44 @@ class _HomeInsightDrawerState extends ConsumerState<HomeInsightDrawer> {
           ),
         ),
       ),
-      child: IgnorePointer(
-        ignoring: !visible,
-        child: ExcludeSemantics(
-          excluding: !visible,
-          child: GestureDetector(
-            onVerticalDragStart: (_) => _dragDistance = 0,
-            onVerticalDragUpdate: (details) {
-              _dragDistance += details.delta.dy;
-              if (_dragDistance < -24) _dismiss();
-            },
-            onVerticalDragEnd: (details) {
-              if ((details.primaryVelocity ?? 0) < -100) _dismiss();
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                children: [
-                  HomeInsightCard(
-                    insight: widget.insight!,
-                    amountHidden: widget.amountHidden,
-                    onTap: widget.onTap,
+      child: widget.insight == null
+          ? const SizedBox.shrink()
+          : IgnorePointer(
+              ignoring: !visible,
+              child: ExcludeSemantics(
+                excluding: !visible,
+                child: GestureDetector(
+                  onVerticalDragStart: (_) => _dragDistance = 0,
+                  onVerticalDragUpdate: (details) {
+                    _dragDistance += details.delta.dy;
+                    if (_dragDistance < -24) _dismiss();
+                  },
+                  onVerticalDragEnd: (details) {
+                    if ((details.primaryVelocity ?? 0) < -100) _dismiss();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Column(
+                      children: [
+                        HomeInsightCard(
+                          insight: widget.insight!,
+                          amountHidden: widget.amountHidden,
+                          onTap: widget.onTap,
+                        ),
+                        TextButton.icon(
+                          onPressed: _dismiss,
+                          icon: const Icon(
+                            Icons.keyboard_arrow_up,
+                            size: 18,
+                          ),
+                          label: const Text('向上滑动可收起'),
+                        ),
+                      ],
+                    ),
                   ),
-                  TextButton.icon(
-                    onPressed: _dismiss,
-                    icon: const Icon(Icons.keyboard_arrow_up, size: 18),
-                    label: const Text('向上滑动可收起'),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
