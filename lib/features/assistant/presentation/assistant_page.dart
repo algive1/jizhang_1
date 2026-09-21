@@ -715,29 +715,47 @@ class AssistantRecordCard extends ConsumerWidget {
                 padding: EdgeInsets.only(top: 12),
                 child: Text('这笔账单已删除或不可访问'),
               );
+            final accounts =
+                ref.watch(assetDashboardAccountsProvider).value ?? const [];
+            final source = accounts
+                .where((a) => a.id == record.accountId)
+                .firstOrNull
+                ?.displayName;
+            final destination = record.destinationAccountId == null
+                ? null
+                : accounts
+                      .where((a) => a.id == record.destinationAccountId)
+                      .firstOrNull
+                      ?.displayName;
+            final accountLabel = source == null
+                ? '账户已归档或不可用'
+                : destination == null
+                ? source
+                : '$source → $destination';
             return Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Column(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF3F6EE),
-                      borderRadius: BorderRadius.vertical(
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceSoft,
+                      borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(12),
                       ),
                     ),
                     child: Row(
                       children: [
                         CategoryIcon(
-                          category: record.categoryName ?? '其他',
+                          category: record.displayLeafCategoryLabel,
+                          iconKey: record.displayCategoryIconKey,
                           size: 34,
                           vivid: true,
                         ),
                         const SizedBox(width: 9),
                         Expanded(
                           child: Text(
-                            record.categoryName ?? '其他',
+                            record.displayCategoryPath,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -760,28 +778,22 @@ class AssistantRecordCard extends ConsumerWidget {
                     ),
                   ),
                   _line(
+                    context,
                     Icons.access_time,
                     DateFormat('yyyy年M月d日 HH:mm').format(record.occurredAt),
                   ),
+                  _line(context, Icons.credit_card, accountLabel),
                   _line(
-                    Icons.credit_card,
-                    ref
-                            .watch(allAccountsProvider)
-                            .value
-                            ?.where((a) => a.id == record.accountId)
-                            .firstOrNull
-                            ?.name ??
-                        '账户已归档或不可用',
-                  ),
-                  _line(
+                    context,
                     Icons.description_outlined,
-                    record.note ?? record.merchant ?? '无备注',
+                    record.displayTitle,
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: _button(
+                          context,
                           '修改',
                           () => showQuickAddSheet(
                             context,
@@ -792,6 +804,7 @@ class AssistantRecordCard extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: _button(
+                          context,
                           '查看详情',
                           () => context.push(
                             '/transactions/$transactionId',
@@ -808,30 +821,34 @@ class AssistantRecordCard extends ConsumerWidget {
         );
   }
 
-  Widget _line(IconData icon, String text) => Padding(
+  Widget _line(BuildContext context, IconData icon, String text) => Padding(
     padding: const EdgeInsets.only(top: 7, left: 7),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF81847E)),
+        Icon(icon, size: 16, color: context.appSecondaryText),
         const SizedBox(width: 9),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.3,
-              color: Color(0xFF777B75),
+              color: context.appSecondaryText,
             ),
           ),
         ),
       ],
     ),
   );
-  Widget _button(String text, VoidCallback action) => TextButton(
+  Widget _button(
+    BuildContext context,
+    String text,
+    VoidCallback action,
+  ) => TextButton(
     style: TextButton.styleFrom(
-      backgroundColor: const Color(0xFFF0F4E7),
-      foregroundColor: _green,
+      backgroundColor: context.appPrimarySoft,
+      foregroundColor: context.appPrimary,
       minimumSize: const Size(0, 28),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
