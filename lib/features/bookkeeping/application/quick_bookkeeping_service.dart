@@ -32,6 +32,7 @@ class QuickBookkeepingRequest {
     this.destinationAccountId,
     this.categoryId,
     this.subcategoryId,
+    this.clearSubcategory = false,
     this.categoryName,
     this.merchant,
     this.note,
@@ -66,6 +67,7 @@ class QuickBookkeepingRequest {
   final String? destinationAccountId;
   final String? categoryId;
   final String? subcategoryId;
+  final bool clearSubcategory;
   final String? categoryName;
   final String? merchant;
   final String? note;
@@ -410,7 +412,12 @@ class QuickBookkeepingService {
       amount: request.amount,
       currency: request.currency,
       categoryId: request.categoryId,
-      subcategoryId: request.subcategoryId ?? existing?.subcategoryId,
+      subcategoryId: request.clearSubcategory
+          ? null
+          : request.subcategoryId ??
+                (request.categoryId == existing?.categoryId
+                    ? existing?.subcategoryId
+                    : null),
       categoryName: request.categoryName,
       accountId: request.accountId,
       destinationAccountId: request.destinationAccountId,
