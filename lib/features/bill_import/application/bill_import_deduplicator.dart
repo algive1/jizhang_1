@@ -21,13 +21,10 @@ class BillImportDeduplicator {
   ) {
     final result = BillImportDeduplicator._();
     for (final transaction in transactions) {
-      switch (transaction.source) {
-        case TransactionSource.import:
-          result._rememberPersistedImport(transaction);
-        case TransactionSource.auto:
-          result._rememberAutomatic(transaction);
-        default:
-          break;
+      if (transaction.source == TransactionSource.import) {
+        result._rememberPersistedImport(transaction);
+      } else if (transaction.source == TransactionSource.auto) {
+        result._rememberAutomatic(transaction);
       }
     }
     return result;
