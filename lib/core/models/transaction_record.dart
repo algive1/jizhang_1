@@ -193,6 +193,12 @@ class TransactionRecord {
     return child == null ? displayCategoryLabel : '$displayCategoryLabel · $child';
   }
 
+  String get displayLeafCategoryLabel =>
+      _displayValue(subcategoryName) ?? displayCategoryLabel;
+
+  String? get displayCategoryIconKey =>
+      _displayValue(subcategoryIcon) ?? _displayValue(categoryIcon);
+
   /// The primary text for a transaction row.
   ///
   /// Manual bookkeeping keeps a user-entered note as the most specific label.
