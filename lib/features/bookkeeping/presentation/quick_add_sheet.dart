@@ -1835,7 +1835,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           .where((item) => item.isNotEmpty)
           .toSet()
           .toList();
-      final persisted = widget.initialTransaction;
       final request = QuickBookkeepingRequest(
         bookId: bookId,
         payerUserId:
