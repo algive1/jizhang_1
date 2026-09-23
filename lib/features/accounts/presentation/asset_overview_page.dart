@@ -15,6 +15,7 @@ import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../data/account_repository.dart';
+import '../data/account_management_repository.dart';
 import '../domain/asset_history.dart';
 import '../domain/asset_overview.dart';
 import '../../investments/data/investment_repository.dart';
@@ -44,12 +45,15 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     final transactionState = ref.watch(allTransactionsProvider);
     final activeBook = ref.watch(activeBookProvider);
     final allAccounts = accountState.value ?? const <Account>[];
+    final excludedAssetAccountIds =
+        ref.watch(excludedAssetAccountIdsProvider).value ?? const <String>{};
     final accountNames = {
       for (final account in allAccounts) account.id: account.displayName,
     };
     final groups = AssetOverview.group(
       allAccounts,
       investmentByCurrency: ref.watch(investmentValueByCurrencyProvider),
+      excludedAccountIds: excludedAssetAccountIds,
     );
     final selected =
         groups.where((g) => g.currency == _currency).firstOrNull ??
@@ -62,7 +66,16 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     final records = transactionState.value ?? const <TransactionRecord>[];
     final history = selected == null
         ? null
-        : AssetHistory(selected.accounts, records, DateTime.now());
+        : AssetHistory(
+            selected.accounts
+                .where(
+                  (account) =>
+                      !excludedAssetAccountIds.contains(account.id),
+                )
+                .toList(growable: false),
+            records,
+            DateTime.now(),
+          );
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -92,7 +105,12 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
               _EmptyCard(onAdd: () => showAccountEditor(context))
             else ...[
               HomeAssetCard(
-                accounts: selected.accounts,
+                accounts: selected.accounts
+                    .where(
+                      (account) =>
+                          !excludedAssetAccountIds.contains(account.id),
+                    )
+                    .toList(growable: false),
                 investmentByCurrency: {
                   selected.currency: selected.investmentValue,
                 },
