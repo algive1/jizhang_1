@@ -369,6 +369,9 @@ class ReceivableDetailPage extends ConsumerWidget {
       text: item.totalAmount.toStringAsFixed(2),
     );
     final remark = TextEditingController(text: item.remark ?? '');
+    final businessStatusController = TextEditingController(
+      text: item.businessStatus,
+    );
     var type = item.type;
     var occurredAt = item.occurredAt;
     var expectedAt = item.expectedAt;
@@ -419,7 +422,7 @@ class ReceivableDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: TextEditingController(text: businessStatus),
+                  controller: businessStatusController,
                   decoration: const InputDecoration(labelText: '业务状态'),
                   onChanged: (value) => businessStatus = value,
                 ),
@@ -486,6 +489,7 @@ class ReceivableDetailPage extends ConsumerWidget {
       counterparty.dispose();
       amount.dispose();
       remark.dispose();
+      businessStatusController.dispose();
       return;
     }
 
@@ -496,6 +500,7 @@ class ReceivableDetailPage extends ConsumerWidget {
       counterparty.dispose();
       amount.dispose();
       remark.dispose();
+      businessStatusController.dispose();
       return;
     }
 
@@ -528,6 +533,7 @@ class ReceivableDetailPage extends ConsumerWidget {
       counterparty.dispose();
       amount.dispose();
       remark.dispose();
+      businessStatusController.dispose();
     }
   }
 
