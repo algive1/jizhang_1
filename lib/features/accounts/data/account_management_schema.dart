@@ -46,9 +46,18 @@ Future<void> ensureAccountManagementSchema(AppDatabase database) async {
     'event_type TEXT NOT NULL,'
     'title TEXT NOT NULL,'
     'description TEXT,'
+    'amount_in_cents INTEGER,'
     'created_at INTEGER NOT NULL'
     ')',
   );
+  final eventColumns = await database
+      .customSelect('PRAGMA table_info(receivable_events)')
+      .get();
+  if (!eventColumns.any((row) => row.read<String>('name') == 'amount_in_cents')) {
+    await database.customStatement(
+      'ALTER TABLE receivable_events ADD COLUMN amount_in_cents INTEGER',
+    );
+  }
   await database.customStatement(
     'CREATE INDEX IF NOT EXISTS idx_receivable_events_receivable '
     'ON receivable_events(receivable_id, created_at DESC)',
