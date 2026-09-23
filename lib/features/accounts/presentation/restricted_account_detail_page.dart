@@ -52,6 +52,8 @@ class _RestrictedAccountDetailPageState
         .where((record) => _matches(record, item.account.id))
         .toList()
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final showOpening =
+        item.account.openingBalance != 0 && _filter != 2;
 
     return SafeArea(
       child: ListView(
@@ -176,7 +178,7 @@ class _RestrictedAccountDetailPageState
             onSelectionChanged: (value) => setState(() => _filter = value.first),
           ),
           const SizedBox(height: 10),
-          if (transactions.isEmpty)
+          if (transactions.isEmpty && !showOpening)
             AppCard(
               child: Text(
                 '暂无资金变动记录',
@@ -193,9 +195,11 @@ class _RestrictedAccountDetailPageState
                       record: transactions[index],
                       accountId: item.account.id,
                     ),
-                    if (index != transactions.length - 1)
+                    if (index != transactions.length - 1 || showOpening)
                       Divider(height: 1, color: context.appDivider),
                   ],
+                  if (showOpening)
+                    _OpeningBalanceRow(account: item.account),
                 ],
               ),
             ),
@@ -696,6 +700,43 @@ class _TransactionRow extends StatelessWidget {
       ),
     );
   }
+
+  String _date(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+}
+
+class _OpeningBalanceRow extends StatelessWidget {
+  const _OpeningBalanceRow({required this.account});
+
+  final Account account;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(
+            _date(account.createdAt),
+            style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+          ),
+        ),
+        const Expanded(
+          child: Text('初始存入', style: TextStyle(fontSize: 13)),
+        ),
+        Text(
+          '+¥${MoneyFormatter.decimal(account.openingBalance.abs())}',
+          style: const TextStyle(
+            color: Color(0xff3D9B5C),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 
   String _date(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'
