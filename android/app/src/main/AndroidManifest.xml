@@ -62,6 +62,21 @@
                 android:value="payment confirmation overlay for automatic bookkeeping" />
         </service>
         <receiver android:name=".autobookkeeping.AutoBookkeepingNotificationReceiver" android:exported="false" />
+        <!--
+          Quick Settings tile: one tap scans the screen for a payment result, so
+          the user has a manual entry point that works even when the automatic
+          triggers miss (no results notification, or a screen no rule matches).
+        -->
+        <service
+            android:name=".autobookkeeping.BookkeepingTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_autobook_tile"
+            android:label="记账"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <receiver
             android:name=".FinanceSchedulerReceiver"
             android:exported="false">
@@ -94,6 +109,13 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Lets the custom-app picker list installable apps via
+             ACTION_MAIN/CATEGORY_LAUNCHER without the restricted
+             QUERY_ALL_PACKAGES permission. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
         <intent>
             <action android:name="android.speech.RecognitionService"/>
         </intent>

@@ -9,7 +9,7 @@ import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/privacy_amount.dart';
-import '../../../core/widgets/app_glass_surface.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../goals/domain/goal_milestone_service.dart';
 import '../../../core/constants/app_assets.dart';
 
@@ -22,12 +22,11 @@ class HomeSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   @override
-  Widget build(BuildContext context) => AppGlassSurface(
+  Widget build(BuildContext context) => AppCard(
+    material: AppCardMaterial.frosted,
     padding: padding,
     borderRadius: 20,
-    tint: context.appSurface,
-    blurSigma: 12,
-    chromaticEdge: false,
+    color: context.appSurface,
     child: child,
   );
 }
@@ -145,10 +144,7 @@ class HomeMonthlySummary extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(
-              color: color.withValues(alpha: .72),
-              fontSize: 11,
-            ),
+            style: TextStyle(color: color.withValues(alpha: .72), fontSize: 11),
           ),
           const SizedBox(height: 3),
           FittedBox(
@@ -227,12 +223,17 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [context.appSurface, context.appPrimarySoft.withValues(alpha: .58)],
+              colors: [
+                context.appSurface,
+                context.appPrimarySoft.withValues(alpha: .58),
+              ],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: context.appDivider.withValues(alpha: .72)),
+            border: Border.all(
+              color: context.appDivider.withValues(alpha: .72),
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0C65713F),
@@ -504,7 +505,9 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: context.appSurface.withValues(alpha: .8)),
+                  border: Border.all(
+                    color: context.appSurface.withValues(alpha: .8),
+                  ),
                 ),
                 padding: const EdgeInsets.fromLTRB(15, 6, 15, 5),
                 child: goal == null
@@ -614,11 +617,7 @@ class _HomeGoalTimeline extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              _goalIconForHome(goal),
-              color: context.appPrimary,
-              size: 19,
-            ),
+            Icon(_goalIconForHome(goal), color: context.appPrimary, size: 19),
             SizedBox(width: 6),
             Expanded(
               child: Row(
@@ -669,10 +668,7 @@ class _HomeGoalTimeline extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 child: Text(
                   '${goal.progressPercent}%',
-                  style: TextStyle(
-                    color: context.appPrimary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: context.appPrimary, fontSize: 12),
                 ),
               ),
             ),

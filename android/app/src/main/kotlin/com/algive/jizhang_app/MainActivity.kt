@@ -20,7 +20,9 @@ import com.google.mlkit.vision.common.InputImage
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingCustomApps
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
+import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
@@ -255,27 +257,80 @@ class MainActivity : FlutterFragmentActivity() {
                         )
                         result.success(AutoBookkeepingSettings.screenshotEnabled(this))
                     }
+                    // --- Custom apps -------------------------------------------------
+                    // User-added package names. They extend both the rule set (via
+                    // the generic template) and the accessibility service's runtime
+                    // whitelist, which is what lets auto bookkeeping cover an app
+                    // without shipping a new build.
+                    "listCustomApps" -> result.success(
+                        AutoBookkeepingCustomApps.all(this).sorted(),
+                    )
+                    "searchInstalledApps" -> result.success(
+                        searchLaunchableApps((call.arguments as? String).orEmpty()),
+                    )
+                    "addCustomApp" -> {
+                        val pkg = (call.arguments as? String).orEmpty().trim()
+                        if (!AutoBookkeepingCustomApps.isValidPackage(pkg) ||
+                            pkg == packageName
+                        ) {
+                            result.error("INVALID_PACKAGE", "不是有效的应用包名", null)
+                            return@setMethodCallHandler
+                        }
+                        val added = AutoBookkeepingCustomApps.add(this, pkg)
+                        if (added) {
+                            AutoBookkeepingLogStore.record(
+                                this,
+                                "custom_app_added",
+                                "custom app list changed size=" +
+                                    "${AutoBookkeepingCustomApps.all(this).size}",
+                            )
+                            // The framework only delivers events for packages named in
+                            // serviceInfo.packageNames, so the running service has to
+                            // re-apply it before the new app can be watched.
+                            AutoBookkeepingAccessibilityService.instance
+                                ?.applyRulesAndWhitelist()
+                            PaymentNotificationListenerService.instance
+                                ?.refreshRules()
+                        }
+                        result.success(added)
+                    }
+                    "removeCustomApp" -> {
+                        val pkg = (call.arguments as? String).orEmpty().trim()
+                        AutoBookkeepingCustomApps.remove(this, pkg)
+                        AutoBookkeepingLogStore.record(
+                            this,
+                            "custom_app_removed",
+                            "custom app list changed size=" +
+                                "${AutoBookkeepingCustomApps.all(this).size}",
+                        )
+                        AutoBookkeepingAccessibilityService.instance
+                            ?.applyRulesAndWhitelist()
+                        PaymentNotificationListenerService.instance?.refreshRules()
+                        result.success(true)
+                    }
                     "setEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
                         if (enabled && !isAccessibilityGranted()) {
                             result.error("ACCESSIBILITY_REQUIRED", "请先允许无障碍服务", null)
                             return@setMethodCallHandler
                         }
-                        if (enabled && !AutoBookkeepingOverlayPermission.isGranted(this)) {
-                            result.error("OVERLAY_REQUIRED", "请先允许悬浮窗权限", null)
-                            return@setMethodCallHandler
-                        }
-                        if (enabled &&
-                            !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
-                        ) {
-                            result.error(
-                                "NOTIFICATION_REQUIRED",
-                                "请先允许通知并确保「自动记账状态」通知渠道未被关闭",
-                                null,
-                            )
-                            return@setMethodCallHandler
-                        }
+                        // The overlay and the status notification are optional now:
+                        // without them detection still runs and the candidate is
+                        // persisted, then surfaced through a normal notification or
+                        // the in-app pending list. Requiring all three here meant a
+                        // single refusal silently disabled auto bookkeeping, so they
+                        // are surfaced as a warning instead (see `runtimeStatus`).
+                        val overlayGranted =
+                            AutoBookkeepingOverlayPermission.isGranted(this)
+                        val notificationsAvailable =
+                            AutoBookkeepingNotificationController
+                                .statusNotificationsAvailable(this)
                         AutoBookkeepingSettings.setEnabled(this, enabled)
+                        if (enabled && !overlayGranted) {
+                            AutoBookkeepingDiagnostics.error = "未授予悬浮窗权限，将改用通知提醒"
+                        } else if (enabled && !notificationsAvailable) {
+                            AutoBookkeepingDiagnostics.error = "通知不可用，识别结果将在打开应用时提示"
+                        }
                         AutoBookkeepingLogStore.record(this, "setting_changed", "enabled=$enabled")
                         if (!enabled) {
                             AutoBookkeepingPendingStore.complete(this, remember = false)
@@ -851,6 +906,43 @@ class MainActivity : FlutterFragmentActivity() {
             FirebaseApp.initializeApp(this, options)
         }
         return FirebaseMessaging.getInstance()
+    }
+
+    /**
+     * Apps the user can add to auto bookkeeping, for the custom-app picker.
+     *
+     * Deliberately `ACTION_MAIN` / `CATEGORY_LAUNCHER` rather than
+     * `getInstalledApplications`: the manifest declares a matching `<queries>`
+     * entry, so this needs no `QUERY_ALL_PACKAGES` permission (which Google Play
+     * restricts), while still listing every app that has a launcher icon.
+     */
+    private fun searchLaunchableApps(query: String): List<Map<String, Any>> {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val custom = AutoBookkeepingCustomApps.all(this)
+        return packageManager.queryIntentActivities(intent, 0)
+            .asSequence()
+            .mapNotNull { it.activityInfo?.applicationInfo }
+            .distinctBy { it.packageName }
+            .filter { it.packageName != packageName }
+            .filter { AutoBookkeepingCustomApps.isValidPackage(it.packageName) }
+            .map { info ->
+                val label = runCatching {
+                    packageManager.getApplicationLabel(info).toString()
+                }.getOrDefault(info.packageName)
+                mapOf<String, Any>(
+                    "packageName" to info.packageName,
+                    "label" to label,
+                    "added" to (info.packageName in custom),
+                )
+            }
+            .filter { app ->
+                query.isEmpty() ||
+                    (app["label"] as String).contains(query, ignoreCase = true) ||
+                    (app["packageName"] as String).contains(query, ignoreCase = true)
+            }
+            .sortedBy { it["label"] as String }
+            .take(200)
+            .toList()
     }
 
     companion object {

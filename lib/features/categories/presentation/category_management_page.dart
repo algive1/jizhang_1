@@ -395,7 +395,7 @@ class _CategoryRow extends StatelessWidget {
             leading: CategoryIcon(
               category: category.name,
               iconKey: category.icon,
-              vivid: true,
+              monochrome: true,
               size: 36,
             ),
             title: Row(

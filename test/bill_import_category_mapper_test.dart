@@ -7,25 +7,89 @@ import 'package:jizhang_app/features/bill_import/application/bill_import_service
 void main() {
   const mapper = BillImportCategoryMapper();
 
+  test(
+    'default appliances move to household while custom exact children win',
+    () {
+      final categories = [
+        _category('expense-digital', '数码'),
+        _category('expense-household', '家居日用'),
+        _category(
+          'expense-household-appliance',
+          '家用电器',
+          parentId: 'expense-household',
+        ),
+      ];
+      final row = _row(category: '数码', subcategory: '家用电器');
+      expect(
+        mapper.resolve(row, categories).subcategory?.id,
+        'expense-household-appliance',
+      );
+      categories.add(
+        _category('custom-appliances', '家用电器', parentId: 'expense-digital'),
+      );
+      expect(
+        mapper.resolve(row, categories).subcategory?.id,
+        'custom-appliances',
+      );
+    },
+  );
+
+  test('legacy transport fuel maps to vehicle cost in the new defaults', () {
+    final categories = [
+      _category('expense-transport', '交通'),
+      _category('expense-car', '汽车'),
+      _category('expense-car-fuel', '车辆加油', parentId: 'expense-car'),
+    ];
+    final selection = mapper.resolve(
+      _row(category: '交通', subcategory: '加油'),
+      categories,
+    );
+    expect(selection.category?.id, 'expense-car');
+    expect(selection.subcategory?.id, 'expense-car-fuel');
+  });
+
+  test(
+    'new defaults map drinks and retain platform-only purchases at root',
+    () {
+      final categories = [
+        _category('expense-food', '餐饮'),
+        _category('expense-food-milk-tea', '奶茶', parentId: 'expense-food'),
+        _category('expense-food-coffee-only', '咖啡', parentId: 'expense-food'),
+        _category('expense-shopping', '购物'),
+        _category(
+          'expense-shopping-clothes',
+          '服饰鞋包',
+          parentId: 'expense-shopping',
+        ),
+      ];
+      expect(
+        mapper
+            .resolve(_row(category: '餐饮', subcategory: '奶茶'), categories)
+            .subcategory
+            ?.id,
+        'expense-food-milk-tea',
+      );
+      expect(
+        mapper
+            .resolve(_row(category: '餐饮', subcategory: '咖啡'), categories)
+            .subcategory
+            ?.id,
+        'expense-food-coffee-only',
+      );
+      final platform = mapper.resolve(_row(category: '淘宝'), categories);
+      expect(platform.category?.id, 'expense-shopping');
+      expect(platform.subcategory, isNull);
+    },
+  );
+
   test('maps MuMu food aliases into existing food children', () {
     final categories = [
       _category('expense-food', '餐饮'),
-      _category(
-        'expense-food-snacks',
-        '零食',
-        parentId: 'expense-food',
-      ),
-      _category(
-        'expense-food-meals',
-        '正餐',
-        parentId: 'expense-food',
-      ),
+      _category('expense-food-snacks', '零食', parentId: 'expense-food'),
+      _category('expense-food-meals', '正餐', parentId: 'expense-food'),
     ];
 
-    final snacks = mapper.resolve(
-      _row(category: '零食'),
-      categories,
-    );
+    final snacks = mapper.resolve(_row(category: '零食'), categories);
     final meals = mapper.resolve(
       _row(category: '餐饮', subcategory: '三餐'),
       categories,
@@ -41,11 +105,7 @@ void main() {
     final categories = [
       _category('expense-other', '其他'),
       _category('expense-housing', '住房'),
-      _category(
-        'expense-housing-rent',
-        '房租',
-        parentId: 'expense-housing',
-      ),
+      _category('expense-housing-rent', '房租', parentId: 'expense-housing'),
       _category('expense-shopping', '购物'),
       _category(
         'expense-shopping-personal-care',
@@ -71,22 +131,14 @@ void main() {
 
   test('maps investment income and living support', () {
     final categories = [
-      _category(
-        'income-investment',
-        '投资收益',
-        type: CategoryType.income,
-      ),
+      _category('income-investment', '投资收益', type: CategoryType.income),
       _category(
         'income-investment-interest',
         '利息',
         type: CategoryType.income,
         parentId: 'income-investment',
       ),
-      _category(
-        'income-other',
-        '其他收入',
-        type: CategoryType.income,
-      ),
+      _category('income-other', '其他收入', type: CategoryType.income),
       _category(
         'income-other-support',
         '生活费/补助',
@@ -96,17 +148,11 @@ void main() {
     ];
 
     final investment = mapper.resolve(
-      _row(
-        type: TransactionType.income,
-        category: '理财',
-      ),
+      _row(type: TransactionType.income, category: '理财'),
       categories,
     );
     final support = mapper.resolve(
-      _row(
-        type: TransactionType.income,
-        category: '生活费',
-      ),
+      _row(type: TransactionType.income, category: '生活费'),
       categories,
     );
 
@@ -122,10 +168,7 @@ void main() {
       _category('expense-other', '其他'),
     ];
 
-    final result = mapper.resolve(
-      _row(category: '日常'),
-      categories,
-    );
+    final result = mapper.resolve(_row(category: '日常'), categories);
 
     expect(result.category?.id, 'custom-daily');
   });
@@ -161,85 +204,76 @@ void main() {
     expect(tea.subcategory?.id, 'expense-tobacco-tea-tea');
   });
 
-  test('maps shopping platforms from subcategory root and merchant context', () {
-    final categories = [
-      _category('expense-shopping', '购物'),
-      _category(
+  test(
+    'maps shopping platforms from subcategory root and merchant context',
+    () {
+      final categories = [
+        _category('expense-shopping', '购物'),
+        _category(
+          'expense-shopping-taobao',
+          '淘宝',
+          parentId: 'expense-shopping',
+        ),
+        _category('expense-shopping-jd', '京东', parentId: 'expense-shopping'),
+        _category(
+          'expense-shopping-pinduoduo',
+          '拼多多',
+          parentId: 'expense-shopping',
+        ),
+        _category(
+          'expense-shopping-douyin',
+          '抖音电商',
+          parentId: 'expense-shopping',
+        ),
+        _category(
+          'expense-shopping-xiaohongshu',
+          '小红书',
+          parentId: 'expense-shopping',
+        ),
+        _category('expense-shopping-other', '其他', parentId: 'expense-shopping'),
+      ];
+
+      expect(
+        mapper
+            .resolve(_row(category: '购物', subcategory: '淘宝'), categories)
+            .subcategory
+            ?.id,
         'expense-shopping-taobao',
-        '淘宝',
-        parentId: 'expense-shopping',
-      ),
-      _category(
+      );
+      expect(
+        mapper.resolve(_row(category: '京东'), categories).subcategory?.id,
         'expense-shopping-jd',
-        '京东',
-        parentId: 'expense-shopping',
-      ),
-      _category(
+      );
+      expect(
+        mapper
+            .resolve(_row(category: '购物', merchant: '拼多多官方旗舰店'), categories)
+            .subcategory
+            ?.id,
         'expense-shopping-pinduoduo',
-        '拼多多',
-        parentId: 'expense-shopping',
-      ),
-      _category(
+      );
+      expect(
+        mapper
+            .resolve(_row(category: '购物', merchant: '抖音商城'), categories)
+            .subcategory
+            ?.id,
         'expense-shopping-douyin',
-        '抖音电商',
-        parentId: 'expense-shopping',
-      ),
-      _category(
+      );
+      expect(
+        mapper
+            .resolve(_row(category: '购物', subcategory: '红书'), categories)
+            .subcategory
+            ?.id,
         'expense-shopping-xiaohongshu',
-        '小红书',
-        parentId: 'expense-shopping',
-      ),
-      _category(
+      );
+      expect(
+        mapper
+            .resolve(_row(category: '购物', subcategory: '其他'), categories)
+            .subcategory
+            ?.id,
         'expense-shopping-other',
-        '其他',
-        parentId: 'expense-shopping',
-      ),
-    ];
-
-    expect(
-      mapper.resolve(
-        _row(category: '购物', subcategory: '淘宝'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-taobao',
-    );
-    expect(
-      mapper.resolve(
-        _row(category: '京东'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-jd',
-    );
-    expect(
-      mapper.resolve(
-        _row(category: '购物', merchant: '拼多多官方旗舰店'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-pinduoduo',
-    );
-    expect(
-      mapper.resolve(
-        _row(category: '购物', merchant: '抖音商城'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-douyin',
-    );
-    expect(
-      mapper.resolve(
-        _row(category: '购物', subcategory: '红书'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-xiaohongshu',
-    );
-    expect(
-      mapper.resolve(
-        _row(category: '购物', subcategory: '其他'),
-        categories,
-      ).subcategory?.id,
-      'expense-shopping-other',
-    );
-  });
-
+      );
+    },
+  );
 }
 
 Category _category(

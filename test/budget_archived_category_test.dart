@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:jizhang_app/core/widgets/app_action_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +40,15 @@ void main() {
         }
         final all = await categories.getAll();
         final active = await categories.getActive();
+        final router = GoRouter(
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) => const Scaffold(body: BudgetPage()),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
@@ -48,9 +58,9 @@ void main() {
               transactionsProvider.overrideWithValue(const AsyncData([])),
               goalsProvider.overrideWithValue(const AsyncData([])),
             ],
-            child: MaterialApp(
+            child: MaterialApp.router(
               theme: AppTheme.light(),
-              home: const Scaffold(body: BudgetPage()),
+              routerConfig: router,
             ),
           ),
         );

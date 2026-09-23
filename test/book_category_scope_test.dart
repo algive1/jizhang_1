@@ -58,6 +58,10 @@ void main() {
       ).create(name: '企业缺分类', type: BookType.enterprise);
       final payrollId = '${book.id}::enterprise-expense-payroll';
       expect(await database.categoryDao.findById(payrollId), isNotNull);
+      await database.customStatement(
+        'DELETE FROM categories WHERE parent_id = ?',
+        [payrollId],
+      );
       await database.customStatement('DELETE FROM categories WHERE id = ?', [
         payrollId,
       ]);

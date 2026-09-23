@@ -88,8 +88,11 @@ class RuleBasedTransactionParser implements TransactionParser {
       return ('income-other', '其他收入', null);
     }
     const rules = [
+      (r'加油', 'expense-car', '汽车', '车辆加油'),
+      (r'停车', 'expense-car', '汽车', '停车费'),
+      (r'过路费', 'expense-car', '汽车', '过路费'),
       (r'午饭|午餐|早餐|早饭|晚饭|晚餐|吃饭|咖啡|奶茶|外卖|餐厅|面馆', 'expense-food', '餐饮', null),
-      (r'滴滴|打车|出租|地铁|公交|加油', 'expense-transport', '交通', '打车'),
+      (r'滴滴|打车|出租|地铁|公交', 'expense-transport', '交通', '打车'),
       (r'唱歌|KTV|电影|游戏', 'expense-entertainment', '娱乐', '休闲娱乐'),
       (r'房租|物业', 'expense-housing', '住房', null),
       (r'药|医院|挂号', 'expense-medical', '医疗', null),
@@ -105,8 +108,10 @@ class RuleBasedTransactionParser implements TransactionParser {
               ? '午餐'
               : RegExp(r'晚饭|晚餐').hasMatch(clause)
               ? '晚餐'
-              : RegExp(r'咖啡|奶茶').hasMatch(clause)
-              ? '奶茶咖啡'
+              : clause.contains('咖啡')
+              ? '咖啡'
+              : clause.contains('奶茶')
+              ? '奶茶'
               : clause.contains('外卖')
               ? '外卖'
               : null;

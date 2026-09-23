@@ -22,12 +22,19 @@ import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val reader = AccessibilityTreeReader()
-    private val ruleRegistry by lazy {
-        AutoBookkeepingRuleRegistry.load(this)
-    }
-    private val detector by lazy {
-        PaymentSceneDetector(ruleRegistry)
-    }
+
+    // Rebuilt by [applyRulesAndWhitelist] whenever the user edits the custom app
+    // list, so these cannot be `by lazy` caches.
+    private var ruleRegistry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn()
+    private var detector: PaymentSceneDetector = PaymentSceneDetector(ruleRegistry)
+
+    /**
+     * The whitelist declared in `autobookkeeping_accessibility_service.xml`,
+     * captured on the first connect *before* any merge. Everything afterwards is
+     * this set plus the user's own apps.
+     */
+    private var basePackages: Set<String> = emptySet()
     private var scheduled = false
     private var lastPage: String? = null
     private var lastWindow = -1
@@ -36,20 +43,51 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var lastPaymentActivityAt = 0L
     private var rootRetryCount = 0
     private var visibleWindowCount = 0
+    private var overlayWaits = 0
     override fun onServiceConnected() {
         Diagnostics.accessibilityConnected = true
+        instance = this
+        if (basePackages.isEmpty()) {
+            basePackages = serviceInfo?.packageNames?.toSet().orEmpty()
+        }
+        applyRulesAndWhitelist()
         Diagnostics.ruleSchemaVersion = ruleRegistry.schemaVersion
-        Diagnostics.ruleVersions = ruleRegistry.versionsSummary()
-        Diagnostics.ruleSource =
-            if (ruleRegistry.loadedFromAsset) "asset" else "built_in"
         AutoBookkeepingPendingStore.cleanupOrphanedScreenshots(this)
         ensureOverlayService()
         AutoBookkeepingLogStore.record(
             this,
             "service_connected",
             "accessibility service connected rules=" +
-                "${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource}",
+                "${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource} " +
+                "packages=${basePackages.size + ruleRegistry.customPackages.size}",
         )
+    }
+
+    /**
+     * Reload the packaged rules, fold in the user's custom apps, and hand the
+     * merged package whitelist to the accessibility framework.
+     *
+     * The whitelist matters because the system only delivers events for packages
+     * named in `serviceInfo.packageNames`: without this call a user-added app is
+     * never watched, no matter what the rule registry says. Call it on connect
+     * and after every edit of the custom list.
+     */
+    fun applyRulesAndWhitelist() {
+        ruleRegistry = AutoBookkeepingRuleRegistry.load(this)
+        detector = PaymentSceneDetector(ruleRegistry)
+
+        val merged = basePackages + ruleRegistry.customPackages
+        serviceInfo?.let { info ->
+            if (merged.isNotEmpty()) {
+                info.packageNames = merged.toTypedArray()
+                serviceInfo = info
+            }
+        }
+
+        Diagnostics.ruleVersions = ruleRegistry.versionsSummary()
+        Diagnostics.ruleSource =
+            (if (ruleRegistry.loadedFromAsset) "asset" else "built_in") +
+                if (ruleRegistry.customPackages.isEmpty()) "" else "+custom"
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val actualEvent = event ?: return
@@ -98,11 +136,29 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     @Suppress("DEPRECATION")
     private fun scanPage() {
         if (!AutoBookkeepingSettings.enabled(this)) { lastPage = null; return }
+        // The overlay is only the *presentation* channel. When it cannot run
+        // (overlay permission refused, or the foreground status notification
+        // suppressed) we still detect and persist the candidate and fall back to
+        // a normal notification — previously the whole scan was skipped, so a
+        // single missing permission silently disabled auto bookkeeping.
         if (AutoBillOverlayService.instance == null) {
             ensureOverlayService()
-            debug("overlay instance missing")
-            handler.postDelayed(scan, 200)
-            return
+            val overlayCanStillStart =
+                AutoBookkeepingOverlayPermission.isGranted(this) &&
+                    AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+            if (AutoBillOverlayService.instance == null && overlayCanStillStart) {
+                // The foreground service is starting asynchronously; give it a
+                // bounded number of frames before falling back.
+                if (overlayWaits < MAX_OVERLAY_WAITS) {
+                    overlayWaits += 1
+                    debug("waiting for overlay instance ($overlayWaits)")
+                    handler.postDelayed(scan, 200)
+                    return
+                }
+            }
+            debug("overlay unavailable, using notification fallback")
+        } else {
+            overlayWaits = 0
         }
         if (!paymentActivity) {
             debug("scan blocked paymentActivity=false")
@@ -137,6 +193,9 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             AutoBookkeepingScreenshotCapture.capture(
                 service = this,
                 candidate = candidate,
+                // On API 34+ capture only the paying app's window so the status
+                // bar, our own overlay and the IME stay out of the evidence PNG.
+                preferredWindowId = windowId,
                 onCaptured = {
                     offerCandidate(candidate, identity, windowId)
                 },
@@ -173,11 +232,16 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
 
         if (AutoBillOverlayService.instance?.offer(current) != true) {
+            // Keep the candidate. The overlay is only the prompt; dropping it
+            // here threw away a correctly parsed bill whenever the overlay
+            // permission was missing. Flutter's confirmation page reads the
+            // pending store, so a notification still gets the user there.
             Log.e(TAG, "overlay offer failed")
             AutoBookkeepingLogStore.record(this, "overlay_failed", "offer returned false")
-            AutoBookkeepingPendingStore.complete(this, remember = false)
-            Diagnostics.error = "请返回自动记账设置开启后台运行和悬浮窗"
-            return
+            AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
+            Diagnostics.error = "悬浮窗不可用，已改为通知提醒"
+        } else {
+            Diagnostics.error = ""
         }
         lastPage = identity
         lastWindow = windowId
@@ -187,6 +251,29 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 "merchantConfidence=${current.merchantConfidence}"
         Log.i(TAG, "payment candidate offered")
         AutoBookkeepingLogStore.record(this, "overlay_offered", "payment candidate offered")
+    }
+
+    /**
+     * Manual trigger used by the Quick Settings tile and any in-app button.
+     *
+     * Unlike [onAccessibilityEvent] this deliberately ignores the payment-activity
+     * gate: the user explicitly asked for a scan of whatever is on screen now.
+     * It still goes through the same detector, so a non-payment screen simply
+     * yields no candidate rather than a bogus one.
+     */
+    fun triggerManualCapture() {
+        if (!AutoBookkeepingSettings.enabled(this)) {
+            Diagnostics.error = "自动记账未开启"
+            return
+        }
+        paymentActivity = true
+        lastPaymentActivityAt = System.currentTimeMillis()
+        lastPage = null
+        overlayWaits = 0
+        handler.removeCallbacks(scan)
+        scheduled = true
+        AutoBookkeepingLogStore.record(this, "manual_capture", "quick settings tile requested a scan")
+        handler.post(scan)
     }
 
     private var paymentActivity = false
@@ -283,12 +370,23 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             "accessibility service interrupted",
         )
     }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); Diagnostics.accessibilityConnected = false; super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacksAndMessages(null); Diagnostics.accessibilityConnected = false; instance = null; super.onDestroy() }
 
-    private companion object {
-        const val TAG = "AutoBookkeeping"
-        const val PAYMENT_ACTIVITY_GRACE_MS = 5000L
-        const val ROOT_RETRY_DELAY_MS = 200L
-        const val MAX_ROOT_RETRIES = 10
+    companion object {
+        private const val TAG = "AutoBookkeeping"
+        private const val PAYMENT_ACTIVITY_GRACE_MS = 5000L
+        private const val ROOT_RETRY_DELAY_MS = 200L
+        private const val MAX_ROOT_RETRIES = 10
+
+        /** How many 200 ms frames to wait for the overlay before falling back. */
+        private const val MAX_OVERLAY_WAITS = 10
+
+        /** The live service, or `null` while the user has it switched off. */
+        @Volatile
+        var instance: AutoBookkeepingAccessibilityService? = null
+            private set
+
+        /** Whether auto bookkeeping is actually able to run right now. */
+        val isRunning: Boolean get() = instance != null
     }
 }

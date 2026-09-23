@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
-import 'theme/app_theme_definition.dart';
 import '../core/database/database_provider.dart';
 import '../core/widgets/startup_poster.dart';
 import '../features/sharing/application/shared_book_sync_service.dart';
@@ -471,7 +470,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         final content = AppLockGate(
           child: child ?? const SizedBox.shrink(),
         );
-        if (appearance.style != AppThemeStyle.liquidGlass) return content;
+        // Every theme gets a translucent wash behind the app, so pages that
+        // do not draw their own background still sit on something with a
+        // little variation. `AppScaffold` layers its mesh gradient on top of
+        // this for the shell routes.
         return DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

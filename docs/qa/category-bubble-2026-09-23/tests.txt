@@ -1,0 +1,84 @@
+00:00 +0: loading E:/jizhang_1/repo/test/quick_add_redesign_test.dart
+Package alipay_kit:ios references alipay_kit_ios:ios as the default plugin, but the package does not exist, or is not a plugin package.
+Ask the maintainers of alipay_kit to either avoid referencing a default implementation via `platforms: ios: default_package: alipay_kit_ios` or create a plugin named alipay_kit_ios.
+
+00:00 +0: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +1: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +2: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +3: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +4: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +5: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +6: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +7: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +8: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:00 +9: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:01 +10: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:01 +11: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:01 +12: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +13: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +14: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +15: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +16: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +17: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +18: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +19: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: many subcategories scroll without selecting and last item saves
+00:02 +20: E:/jizhang_1/repo/test/book_category_scope_test.dart: bootstrap fills a missing category in an already seeded ledger
+00:02 +21: E:/jizhang_1/repo/test/book_category_scope_test.dart: bootstrap fills a missing category in an already seeded ledger
+00:03 +22: E:/jizhang_1/repo/test/book_category_scope_test.dart: bootstrap fills a missing category in an already seeded ledger
+00:03 +23: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +24: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +25: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +26: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +27: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +28: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +29: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +30: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +31: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +32: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +33: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme fresh_green
+00:03 +34: E:/jizhang_1/repo/test/book_category_scope_test.dart: bootstrap preserves user archived defaults and type switching scopes
+00:03 +35: E:/jizhang_1/repo/test/book_category_scope_test.dart: bootstrap preserves user archived defaults and type switching scopes
+00:03 +36: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme mist_blue
+00:04 +37: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme mist_blue
+00:04 +38: E:/jizhang_1/repo/test/book_category_scope_test.dart: category watcher refreshes when existing templates are restored
+00:04 +39: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: category bubble follows theme liquid_glass
+00:05 +40: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +41: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +42: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +43: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +44: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +45: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +46: E:/jizhang_1/repo/test/budget_archived_category_test.dart: edit archived budget preserves scope, all archived=false
+00:06 +47: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:06 +48: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:06 +49: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:06 +50: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +51: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +52: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +53: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +54: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +55: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +56: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +57: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +58: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +59: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +60: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +61: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +62: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +63: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:07 +64: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:08 +65: E:/jizhang_1/repo/test/quick_add_book_scope_test.dart: manual bookkeeping can target another ledger without switching browsing ledger
+00:08 +66: E:/jizhang_1/repo/test/quick_bookkeeping_service_test.dart: batch bookkeeping rolls back every item when one item fails
+00:08 +67: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 未完成的表达式会被拒绝保存
+00:08 +68: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 未完成的表达式会被拒绝保存
+00:08 +69: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 「再记」只清空输入并保留当前页，不创建流水
+00:08 +70: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 债务页签的借入使用收入分类入账
+00:09 +71: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 债务页签的还款走双账户且不带分类
+00:09 +72: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 点击一级分类后弹出二级分类窗并写入 subcategoryId
+00:09 +73: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 二级分类滑动不会误选，点击才确认
+00:10 +74: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 320dp + 字号 1.0 下记一笔不溢出
+00:10 +75: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 320dp + 字号 1.6 下记一笔不溢出
+00:11 +76: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 账户/报销/账本 chip 默认呈选中态，定期付命名正确
+00:11 +77: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 定期付确认规则后创建当前流水和周期规则
+00:11 +78: E:/jizhang_1/repo/test/quick_add_redesign_test.dart: 100*200 完成即按计算结果 20000 入账
+00:12 +79: All tests passed!

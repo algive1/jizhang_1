@@ -1,3 +1,9 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:jizhang_app/app/theme/app_theme_definition.dart';
+import 'package:jizhang_app/core/widgets/category_icon.dart';
+import 'package:jizhang_app/core/widgets/app_glass_surface.dart';
 import 'package:flutter/material.dart';
 
 import 'support/reference_capture.dart';
@@ -17,7 +23,11 @@ import 'package:jizhang_app/features/categories/data/category_repository.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 
 /// 在真实内存数据库上打开「记一笔」，用于校验新布局的真实写入结果。
-Future<void> _pumpSheet(WidgetTester tester, AppDatabase database) async {
+Future<void> _pumpSheet(
+  WidgetTester tester,
+  AppDatabase database, {
+  ThemeData? theme,
+}) async {
   final container = ProviderContainer(
     overrides: [databaseProvider.overrideWithValue(database)],
   );
@@ -29,7 +39,7 @@ Future<void> _pumpSheet(WidgetTester tester, AppDatabase database) async {
         key: const ValueKey('quick-capture'),
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
+          theme: theme ?? AppTheme.light(),
           home: Scaffold(
             body: Builder(
               builder: (context) => Center(
@@ -59,6 +69,18 @@ Future<AppDatabase> _openSheet(WidgetTester tester) async {
   return database;
 }
 
+Future<void> _openCategoryPopover(
+  WidgetTester tester,
+  AppDatabase database, {
+  ThemeData? theme,
+}) async {
+  await _pumpSheet(tester, database, theme: theme);
+  await tester.tap(
+    find.byKey(const ValueKey('quick-category-expense-food')),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> _tapKeys(WidgetTester tester, List<String> keys) async {
   for (final key in keys) {
     await tester.tap(find.byKey(ValueKey('amount-key-$key')));
@@ -71,6 +93,207 @@ Future<List<TransactionEntity>> _saved(AppDatabase database) =>
     database.transactionDao.getActive(bookId: SeedIds.personalBook);
 
 void main() {
+  testWidgets('二级分类浮层使用更深的页面遮罩', (tester) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    await _openCategoryPopover(tester, database);
+
+    final barrier = tester
+        .widgetList<AnimatedModalBarrier>(find.byType(AnimatedModalBarrier))
+        .firstWhere((item) => item.semanticsLabel == '关闭二级分类');
+    expect(barrier.color.value?.a, greaterThanOrEqualTo(.55));
+  });
+
+  testWidgets('二级分类浮层在普通主题下使用不透明背景', (tester) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final theme = AppTheme.light(BuiltInThemes.freshGreen);
+    await _openCategoryPopover(tester, database, theme: theme);
+
+    final surface = tester.widget<AppGlassSurface>(
+      find.byKey(const ValueKey('quick-subcategory-bubble')),
+    );
+    expect(surface.tint?.a, 1);
+  });
+
+  testWidgets('二级分类液态玻璃浮层使用更强的背景模糊', (tester) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final theme = AppTheme.light(BuiltInThemes.liquidGlass);
+    await _openCategoryPopover(tester, database, theme: theme);
+
+    final surface = tester.widget<AppGlassSurface>(
+      find.byKey(const ValueKey('quick-subcategory-bubble')),
+    );
+    expect(surface.blurSigma, 32);
+  });
+
+  testWidgets('二级分类玻璃覆盖所有渐变色标以遮住背景内容', (tester) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final theme = AppTheme.light(BuiltInThemes.liquidGlass);
+    await _openCategoryPopover(tester, database, theme: theme);
+
+    final bubble = find.byKey(const ValueKey('quick-subcategory-bubble'));
+    final glassDecoration = tester
+        .widgetList<DecoratedBox>(
+          find.descendant(of: bubble, matching: find.byType(DecoratedBox)),
+        )
+        .map((box) => box.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((decoration) => decoration.gradient != null);
+    expect(
+      glassDecoration.gradient!.colors.every((color) => color.a >= .94),
+      isTrue,
+      reason: '玻璃的每个渐变色标都必须遮住底下分类内容',
+    );
+  });
+
+  testWidgets(
+    'many subcategories scroll without selecting and last item saves',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 600));
+      tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+      addTearDown(() {
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+        tester.binding.setSurfaceSize(null);
+      });
+      final db = createMemoryDatabase();
+      addTearDown(db.close);
+      await DatabaseSeeder(db).seedIfNeeded();
+      final repository = DriftCategoryRepository(db);
+      for (var i = 0; i < 40; i++) {
+        await repository.create(
+          Category(
+            id: 'extra-$i',
+            parentId: 'expense-food',
+            name: '分类$i',
+            icon: 'restaurant_outlined',
+            type: CategoryType.expense,
+            sortOrder: 100 + i,
+            isDefault: false,
+            isArchived: false,
+          ),
+        );
+      }
+      await _pumpSheet(tester, db);
+      await tester.tap(
+        find.byKey(const ValueKey('quick-category-expense-food')),
+      );
+      await tester.pumpAndSettle();
+      final last = find.byKey(const ValueKey('quick-subcategory-extra-39'));
+      final scroll = find.descendant(
+        of: find.byKey(const ValueKey('quick-subcategory-picker')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(last, 220, scrollable: scroll);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-bubble')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(last);
+      await tester.pumpAndSettle();
+      await _tapKeys(tester, ['8']);
+      await tester.tap(find.byKey(const ValueKey('quick-done')));
+      await tester.pumpAndSettle();
+      expect((await _saved(db)).single.subcategoryId, 'extra-39');
+    },
+  );
+
+  for (final theme in [
+    BuiltInThemes.freshGreen,
+    BuiltInThemes.mistBlue,
+    BuiltInThemes.liquidGlass,
+  ]) {
+    testWidgets('category bubble follows theme ${theme.id}', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(() async {
+        final iconFont = File(
+          'E:/jizhang_1/tools/flutter_sdk/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+        );
+        if (await iconFont.exists()) {
+          final bytes = await iconFont.readAsBytes();
+          await (FontLoader(
+            'MaterialIcons',
+          )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+        }
+        final font = File('C:/Windows/Fonts/msyh.ttc');
+        if (await font.exists()) {
+          final bytes = await font.readAsBytes();
+          await (FontLoader(
+            'Category QA',
+          )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+        }
+      });
+      final db = createMemoryDatabase();
+      addTearDown(db.close);
+      await DatabaseSeeder(db).seedIfNeeded();
+      final themed = AppTheme.light(theme);
+      await _pumpSheet(
+        tester,
+        db,
+        theme: themed.copyWith(
+          textTheme: themed.textTheme.apply(fontFamily: 'Category QA'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('quick-category-expense-food')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('按住滑动选择，松手确认'), findsNothing);
+      final icons = tester.widgetList<CategoryIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('quick-subcategory-bubble')),
+          matching: find.byType(CategoryIcon),
+        ),
+      );
+      expect(
+        icons.every(
+          (icon) =>
+              icon.monochrome &&
+              icon.bare &&
+              icon.size == 28 &&
+              !icon.illustrated,
+        ),
+        isTrue,
+      );
+      expect(find.text('不细分'), findsNothing);
+      if (theme.style == AppThemeStyle.liquidGlass) {
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('quick-subcategory-bubble')),
+            matching: find.byType(BackdropFilter),
+          ),
+          findsWidgets,
+        );
+      }
+      expect(tester.takeException(), isNull);
+      final bounds = tester.getRect(
+        find.byKey(const ValueKey('quick-subcategory-bubble')),
+      );
+      expect(bounds.right, lessThanOrEqualTo(393));
+      expect(bounds.bottom, lessThanOrEqualTo(844));
+      await captureReference(
+        tester,
+        find.byKey(const ValueKey('quick-capture')),
+        '../category-compact-2026-09-23/${theme.id}',
+      );
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-bubble')),
+        findsNothing,
+      );
+    });
+  }
+
   testWidgets('safe area, full page and dedicated child picker visual check', (
     tester,
   ) async {
@@ -100,8 +323,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('按住滑动选择，松手确认'), findsOneWidget);
-    await tester.tap(find.byTooltip('关闭'));
+    expect(find.text('按住滑动选择，松手确认'), findsNothing);
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
     expect(
       tester.getBottomRight(find.byKey(const ValueKey('quick-done'))).dy,
@@ -170,10 +393,7 @@ void main() {
     expect(find.byKey(const ValueKey('quick-done')), findsOneWidget);
 
     // 二级分类只在点击一级分类后出现，不占用默认记账页面空间。
-    expect(
-      find.byKey(const ValueKey('quick-subcategory-strip')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('quick-subcategory-strip')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -225,10 +445,7 @@ void main() {
     expect(detail.top, lessThanOrEqualTo(note.top));
     expect(detail.bottom, greaterThanOrEqualTo(amount.bottom));
     expect(decoration.isDense, isTrue);
-    expect(
-      decoration.contentPadding,
-      const EdgeInsets.symmetric(vertical: 10),
-    );
+    expect(decoration.contentPadding, const EdgeInsets.symmetric(vertical: 10));
     expect(decoration.enabledBorder, InputBorder.none);
     expect(decoration.focusedBorder, InputBorder.none);
     expect(tester.takeException(), isNull);
@@ -413,7 +630,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('二级分类支持按住滑动并在松手位置选中', (tester) async {
+  testWidgets('二级分类图标跟随手指放大并在松手时选中', (tester) async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -439,13 +656,28 @@ void main() {
     final second = find.byKey(
       ValueKey('quick-subcategory-${children.last.id}'),
     );
+    final firstFocus = find.byKey(
+      ValueKey('quick-subcategory-focus-${children.first.id}'),
+    );
+    final secondFocus = find.byKey(
+      ValueKey('quick-subcategory-focus-${children.last.id}'),
+    );
     final gesture = await tester.startGesture(tester.getCenter(first));
     await tester.pump(const Duration(milliseconds: 16));
+    final firstScale = tester
+        .widget<Transform>(firstFocus)
+        .transform
+        .getMaxScaleOnAxis();
+    expect(firstScale, greaterThan(1));
     await gesture.moveTo(tester.getCenter(second));
     await tester.pump(const Duration(milliseconds: 16));
+    final secondScale = tester
+        .widget<Transform>(secondFocus)
+        .transform
+        .getMaxScaleOnAxis();
+    expect(secondScale, greaterThan(1));
     await gesture.up();
     await tester.pumpAndSettle();
-
     expect(
       find.byKey(const ValueKey('quick-subcategory-picker')),
       findsNothing,
@@ -456,6 +688,53 @@ void main() {
 
     final saved = await _saved(database);
     expect(saved.single.subcategoryId, children.last.id);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('记一笔转场完成，系统返回依次关闭分类浮层和记一笔', (
+    tester,
+  ) async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpSheet(tester, database);
+    final launchButton = find.byKey(const ValueKey('quick-capture'));
+    await tester.tap(launchButton);
+    await tester.pump();
+
+    final sheet = find.byType(QuickAddSheet);
+    expect(sheet, findsOneWidget);
+    final route = ModalRoute.of(tester.element(sheet))!;
+    await tester.pumpAndSettle();
+    expect(route.animation!.status, AnimationStatus.completed);
+
+    final food = (await DriftCategoryRepository(
+      database,
+    ).getActive()).firstWhere((category) => category.name == '餐饮');
+    await tester.tap(find.byKey(ValueKey('quick-category-${food.id}')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-bubble')),
+      findsOneWidget,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('quick-subcategory-bubble')),
+      findsNothing,
+    );
+    expect(sheet, findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(route.animation!.status, AnimationStatus.reverse);
+    await tester.pumpAndSettle();
+    expect(sheet, findsNothing);
+    expect(launchButton, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -500,7 +779,7 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tapAt(const Offset(8, 8));
       await tester.pumpAndSettle();
 
       // 长表达式 + 大结果是最容易横向溢出的组合。
@@ -537,12 +816,7 @@ void main() {
     ]) {
       final finder = find.byKey(ValueKey(key));
       final chip = tester.widget<Material>(
-        find
-            .descendant(
-              of: finder,
-              matching: find.byType(Material),
-            )
-            .first,
+        find.descendant(of: finder, matching: find.byType(Material)).first,
       );
       expect(
         chip.color,

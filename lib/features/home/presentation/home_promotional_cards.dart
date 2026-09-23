@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../insights/domain/insight_models.dart';
 import '../../../app/theme/app_theme_tokens.dart';
-import '../../../core/widgets/app_glass_surface.dart';
+import '../../../core/widgets/app_card.dart';
 
 class HomeCrownIcon extends StatelessWidget {
   const HomeCrownIcon({this.color = const Color(0xFFC49A43), super.key});
@@ -24,102 +24,103 @@ class HomeInsightCard extends StatelessWidget {
   final bool amountHidden;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => AppGlassSurface(
+  Widget build(BuildContext context) => AppCard(
+    material: AppCardMaterial.frosted,
     borderRadius: 20,
     padding: EdgeInsets.zero,
-    tint: context.appSurface,
+    color: context.appSurface,
     child: Material(
       type: MaterialType.transparency,
       child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.eco_outlined,
-                        color: context.appPrimary,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '值得关注',
-                        style: TextStyle(
-                          color: context.appSecondaryText,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: context.appPrimarySoft,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _insightIcon(insight.kind),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.eco_outlined,
                           color: context.appPrimary,
-                          size: 28,
+                          size: 22,
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              insight.title,
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: context.appPrimaryText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              amountHidden
-                                  ? '金额已隐藏，点开后查看这条洞察的依据。'
-                                  : insight.summary,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.appSecondaryText,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 8),
+                        Text(
+                          '值得关注',
+                          style: TextStyle(
+                            color: context.appSecondaryText,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: context.appPrimarySoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _insightIcon(insight.kind),
+                            color: context.appPrimary,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                insight.title,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: context.appPrimaryText,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                amountHidden
+                                    ? '金额已隐藏，点开后查看这条洞察的依据。'
+                                    : insight.summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.appSecondaryText,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: context.appSecondaryText,
-              size: 26,
-            ),
-          ],
+              Icon(
+                Icons.chevron_right,
+                color: context.appSecondaryText,
+                size: 26,
+              ),
+            ],
+          ),
         ),
       ),
     ),
-  ),
-);
+  );
 
   IconData _insightIcon(FinancialInsightKind kind) => switch (kind) {
     FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,

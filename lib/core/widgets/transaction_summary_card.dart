@@ -20,6 +20,7 @@ class TransactionSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      material: AppCardMaterial.frosted,
       padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(23),
@@ -122,10 +123,7 @@ class _SummaryItem extends StatelessWidget {
           Text(
             label,
             maxLines: 1,
-            style: TextStyle(
-              color: context.appSecondaryText,
-              fontSize: 15,
-            ),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 15),
           ),
           const SizedBox(height: 6),
           FittedBox(

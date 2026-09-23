@@ -1,0 +1,44 @@
+name: liquid_glass_easy
+description: "Apple iOS Liquid Glass for Flutter: a shader lens that refracts what is behind it, with blending, morph, adaptive chrome, controls, batching and lite glass."
+# Vendored fork of liquid_glass_easy 4.3.1 (MIT, Copyright (c) 2025 Ahmed
+# Gamil). Only `lib/` is carried; upstream's `example/`, `test/` and
+# `showcases/` directories are omitted. The one behavioural change is the
+# optional `centerGap` on the bottom-nav layout, which reserves a
+# slot-free span in the middle of the bar for our docked action button.
+# See lib/src/widgets/components/bottom_nav_bar/liquid_glass_nav_bar_layout.dart.
+version: 4.3.1
+
+homepage: https://github.com/AhmeedGamil/liquid_glass_easy
+repository: https://github.com/AhmeedGamil/liquid_glass_easy
+issue_tracker: https://github.com/AhmeedGamil/liquid_glass_easy/issues
+documentation: https://github.com/AhmeedGamil/liquid_glass_easy#readme
+
+topics:
+  - liquid-glass
+  - glass
+  - shaders
+  - effects
+  - flutter
+
+environment:
+  sdk: ">=3.6.2 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  shaders:
+    - lib/assets/shaders/liquid_glass.frag
+    - lib/assets/shaders/liquid_glass_skia.frag
+    - lib/assets/shaders/liquid_glass_border.frag
+    - lib/assets/shaders/liquid_glass_border_skia.frag
+    - lib/assets/shaders/metaball_glass.frag
+    - lib/assets/shaders/metaball_glass_skia.frag

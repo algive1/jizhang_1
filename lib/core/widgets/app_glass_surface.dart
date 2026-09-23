@@ -20,6 +20,7 @@ class AppGlassSurface extends StatelessWidget {
     this.tint,
     this.border,
     this.blurSigma,
+    this.glassOpacity,
     this.shadow = true,
     this.chromaticEdge = true,
     this.clipBehavior = Clip.antiAlias,
@@ -32,6 +33,10 @@ class AppGlassSurface extends StatelessWidget {
   final Color? tint;
   final Border? border;
   final double? blurSigma;
+
+  /// Overrides the opacity of every glass gradient stop. Null preserves the
+  /// surface's standard liquid-glass translucency.
+  final double? glassOpacity;
   final bool shadow;
   final bool chromaticEdge;
   final Clip clipBehavior;
@@ -74,6 +79,10 @@ class AppGlassSurface extends StatelessWidget {
       effectiveTint.withValues(alpha: highContrast ? .82 : .62),
       material.glassTint.withValues(alpha: highContrast ? .90 : .72),
     );
+    final glassFillOpacity = glassOpacity?.clamp(0.0, 1.0).toDouble();
+    Color withGlassOpacity(Color color) => glassFillOpacity == null
+        ? color
+        : color.withValues(alpha: glassFillOpacity);
 
     return Container(
       margin: margin,
@@ -116,12 +125,16 @@ class AppGlassSurface extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    material.glassHighlight.withValues(
-                      alpha: highContrast ? .94 : .62,
+                    withGlassOpacity(
+                      material.glassHighlight.withValues(
+                        alpha: highContrast ? .94 : .62,
+                      ),
                     ),
-                    baseTint,
-                    effectiveTint.withValues(
-                      alpha: highContrast ? .76 : .48,
+                    withGlassOpacity(baseTint),
+                    withGlassOpacity(
+                      effectiveTint.withValues(
+                        alpha: highContrast ? .76 : .48,
+                      ),
                     ),
                   ],
                   stops: const [0, .48, 1],

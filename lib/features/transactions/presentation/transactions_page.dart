@@ -7,6 +7,7 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/formatters/transaction_date_formatter.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/transaction_date_group.dart';
 import '../../../core/widgets/transaction_summary_card.dart';
 import '../../../core/widgets/user_avatar.dart';
@@ -64,7 +65,14 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+            // Leaves the floating glass bar's whole footprint clear so the
+            // last transaction can scroll out from under it.
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              AppScaffold.reservedBottomInset(context),
+            ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _TransactionsHeader(

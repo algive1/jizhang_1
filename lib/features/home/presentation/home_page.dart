@@ -18,6 +18,7 @@ import '../../../core/models/analysis.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/membership_button.dart';
 import '../../../core/widgets/transaction_tile.dart';
@@ -159,12 +160,19 @@ class _HomePageState extends ConsumerState<HomePage>
         ref.invalidate(insightPreferencesProvider);
       });
     }
-    return DecoratedBox(
-      decoration: BoxDecoration(color: context.appBackground),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
-          children: [
+    return SafeArea(
+      child: ListView(
+        // The liquid-glass navigation bar floats over the page, so the body
+        // has to leave its whole footprint free — capsule, raised action
+        // button and safe area. The value comes from the bar's own geometry
+        // rather than a hand-tuned constant.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          10,
+          16,
+          AppScaffold.reservedBottomInset(context),
+        ),
+        children: [
             _HomeHeader(
               onSearch: () => context.push('/transactions/search'),
               onProfile: () => context.go('/profile'),
@@ -408,7 +416,6 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
           ],
         ),
-      ),
     );
   }
 

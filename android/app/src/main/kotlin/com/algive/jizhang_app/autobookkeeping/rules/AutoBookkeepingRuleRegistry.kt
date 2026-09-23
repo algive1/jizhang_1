@@ -1,6 +1,7 @@
 package com.algive.jizhang_app.autobookkeeping.rules
 
 import android.content.Context
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingCustomApps
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -56,6 +57,12 @@ class AutoBookkeepingRuleRegistry private constructor(
     val schemaVersion: Int,
     private val rules: List<AppPaymentRule>,
     val loadedFromAsset: Boolean,
+    /**
+     * Package names the user added themselves. They are not part of [rules]; they
+     * resolve to the generic template instead, which is how an app the packaged
+     * rule set does not know about can still be recognised.
+     */
+    val customPackages: Set<String> = emptySet(),
 ) {
     private val byPackage: Map<String, AppPaymentRule> = buildMap {
         rules.forEach { rule ->
@@ -63,19 +70,55 @@ class AutoBookkeepingRuleRegistry private constructor(
         }
     }
 
-    val supportedPackages: Set<String> get() = byPackage.keys
+    val supportedPackages: Set<String> get() = byPackage.keys + customPackages
 
-    fun ruleFor(packageName: String): AppPaymentRule? = byPackage[packageName]
+    fun ruleFor(packageName: String): AppPaymentRule? =
+        byPackage[packageName] ?: customRuleFor(packageName)
+
+    /** True when the package is user-added rather than covered by a shipped rule. */
+    fun isCustom(packageName: String): Boolean =
+        packageName !in byPackage && packageName in customPackages
+
+    /**
+     * The generic template, re-stamped with the user's package. Reusing a shipped
+     * GENERIC rule verbatim means custom apps inherit the same success/reject
+     * markers, amount labels and exclusion list that the audited rules use —
+     * there is no second, weaker rule dialect to keep correct.
+     */
+    private fun customRuleFor(packageName: String): AppPaymentRule? {
+        if (packageName !in customPackages) return null
+        val template = rules.firstOrNull { it.parserKind == PaymentParserKind.GENERIC }
+            ?: return null
+        return template.copy(
+            packageNames = setOf(packageName),
+            sourceApp = CUSTOM_SOURCE,
+            scene = CUSTOM_SCENE,
+        )
+    }
+
+    /** The same rule set with a different user-added package list. */
+    fun withCustomPackages(packages: Set<String>): AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry(
+            schemaVersion = schemaVersion,
+            rules = rules,
+            loadedFromAsset = loadedFromAsset,
+            customPackages = packages,
+        )
 
     fun ruleForKind(kind: PaymentParserKind): AppPaymentRule? =
         rules.firstOrNull { it.parserKind == kind }
 
     fun versionsSummary(): String =
-        rules.joinToString(",") { "${it.sourceApp}:v${it.version}" }
+        rules.joinToString(",") { "${it.sourceApp}:v${it.version}" } +
+            if (customPackages.isEmpty()) "" else ",custom:${customPackages.size}"
 
     companion object {
         private const val ASSET_PATH = "autobookkeeping_rules_v1.json"
         private const val SUPPORTED_SCHEMA = 1
+
+        /** Reported for user-added packages so diagnostics never claim a real app. */
+        const val CUSTOM_SOURCE = "CUSTOM"
+        private const val CUSTOM_SCENE = "CUSTOM_PAYMENT_SUCCESS"
 
         private val ALLOWED_PACKAGES = setOf(
             "com.tencent.mm",
@@ -87,6 +130,11 @@ class AutoBookkeepingRuleRegistry private constructor(
             "com.xunmeng.pinduoduo",
             "com.ss.android.ugc.aweme",
             "com.ss.android.ugc.aweme.mobile",
+            // 抖音极速版 — a separate app with its own package id.
+            "com.ss.android.ugc.aweme.lite",
+            "com.taobao.taobao",
+            // 1号会员店
+            "com.thestore.main",
         )
 
         private val ALLOWED_SOURCES = setOf(
@@ -97,6 +145,8 @@ class AutoBookkeepingRuleRegistry private constructor(
             "JD",
             "PINDUODUO",
             "DOUYIN",
+            "TAOBAO",
+            "ONESTORE",
         )
 
         fun load(context: Context): AutoBookkeepingRuleRegistry =
@@ -104,19 +154,25 @@ class AutoBookkeepingRuleRegistry private constructor(
                 val raw = context.assets.open(ASSET_PATH)
                     .bufferedReader()
                     .use { it.readText() }
-                parse(raw)
+                parse(raw, AutoBookkeepingCustomApps.all(context))
             }.getOrElse {
-                builtIn()
+                builtIn(AutoBookkeepingCustomApps.all(context))
             }
 
-        fun builtIn(): AutoBookkeepingRuleRegistry =
+        fun builtIn(
+            customPackages: Set<String> = emptySet(),
+        ): AutoBookkeepingRuleRegistry =
             AutoBookkeepingRuleRegistry(
                 schemaVersion = SUPPORTED_SCHEMA,
                 rules = builtInRules(),
                 loadedFromAsset = false,
+                customPackages = customPackages,
             )
 
-        private fun parse(raw: String): AutoBookkeepingRuleRegistry {
+        private fun parse(
+            raw: String,
+            customPackages: Set<String>,
+        ): AutoBookkeepingRuleRegistry {
             val root = JSONObject(raw)
             val schemaVersion = root.optInt("schemaVersion", -1)
             require(schemaVersion == SUPPORTED_SCHEMA) {
@@ -136,6 +192,7 @@ class AutoBookkeepingRuleRegistry private constructor(
                 schemaVersion = schemaVersion,
                 rules = parsedRules,
                 loadedFromAsset = true,
+                customPackages = customPackages,
             )
         }
 

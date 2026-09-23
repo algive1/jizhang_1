@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../application/insight_feed_provider.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
@@ -49,12 +50,17 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
       };
     }).toList();
 
-    return DecoratedBox(
-      decoration: BoxDecoration(color: context.appBackground),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
-          children: [
+    return SafeArea(
+      child: ListView(
+        // The glass navigation bar floats over the page; leave its whole
+        // footprint free so the last card can scroll clear of it.
+        padding: EdgeInsets.fromLTRB(
+          18,
+          12,
+          18,
+          AppScaffold.reservedBottomInset(context),
+        ),
+        children: [
             Row(
               children: [
                 Expanded(
@@ -211,7 +217,6 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
             ),
           ],
         ),
-      ),
     );
   }
 

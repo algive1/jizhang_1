@@ -1,9 +1,28 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_theme_definition.dart';
 
 abstract final class AppTheme {
+  /// Page transitions, with Android promoted to the Cupertino builder.
+  ///
+  /// [CupertinoPageTransitionsBuilder] is not only a visual: its
+  /// `buildPageTransitions` wraps the page in the Cupertino back-gesture
+  /// detector, so switching Android onto it also buys the finger-tracking
+  /// left-edge swipe-back the iOS build already has — on every non-first,
+  /// non-`fullscreenDialog` [PageRoute], which is exactly what the reference
+  /// app ships on Android.
+  ///
+  /// Every other platform keeps Flutter's own default builder for that
+  /// platform (iOS/macOS stay Cupertino, desktop stays Zoom).
+  static final PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
+    builders: {
+      ...const PageTransitionsTheme().builders,
+      TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+    },
+  );
+
   static ThemeData light([AppThemeDefinition theme = BuiltInThemes.freshGreen]) {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: theme.primary,
@@ -39,8 +58,13 @@ abstract final class AppTheme {
         outlineVariant: theme.divider,
         error: AppColors.warning,
       ),
-      scaffoldBackgroundColor: liquidGlass ? Colors.transparent : theme.background,
+      // Always transparent: `AppScaffold` paints the themed backdrop as the
+      // bottom layer of its stack, and the liquid-glass navigation bar
+      // refracts whatever is behind it. An opaque scaffold would sit between
+      // the two and the glass would sample a flat colour.
+      scaffoldBackgroundColor: Colors.transparent,
       canvasColor: theme.background,
+      pageTransitionsTheme: _pageTransitions,
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: theme.textPrimary,

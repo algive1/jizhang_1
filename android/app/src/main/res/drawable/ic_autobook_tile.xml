@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick Settings tile glyph for auto bookkeeping: a receipt with two ruled
+  lines. The system uses the drawable as an alpha mask and tints it, so the
+  paths only carry alpha — a lower-alpha fill reads as a lighter line.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Receipt body with a torn bottom edge. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,2h10a1,1 0 0 1 1,1v18.2a0.6,0.6 0 0 1 -0.94,0.5L14.5,20l-2.5,1.7a0.6,0.6 0 0 1 -0.72,0L8.5,20l-2.56,1.7A0.6,0.6 0 0 1 5,21.2V3a1,1 0 0 1 1,-1z" />
+    <!-- Ruled lines, punched back out at lower alpha. -->
+    <path
+        android:fillColor="#66000000"
+        android:pathData="M9,7.5h6v1.6h-6z M9,11h6v1.6h-6z" />
+</vector>

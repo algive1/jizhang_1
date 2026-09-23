@@ -7,6 +7,18 @@ void main() {
   const rules = RuleBasedTransactionParser();
   final now = DateTime(2026, 8, 31, 14, 30);
 
+  test('drink and vehicle rules follow the revised classification', () async {
+    for (final item in [
+      ('奶茶18微信', 'expense-food', '奶茶'),
+      ('咖啡22微信', 'expense-food', '咖啡'),
+      ('加油300微信', 'expense-car', '车辆加油'),
+    ]) {
+      final parsed = (await rules.parse(item.$1, now: now)).transactions.single;
+      expect(parsed.categoryId, item.$2);
+      expect(parsed.subcategoryName, item.$3);
+    }
+  });
+
   test(
     'complex spoken example becomes two transactions with shared context',
     () async {

@@ -39,6 +39,23 @@ class BillImportCategoryMapper {
     final sourceSubcategory = row.sourceSubcategory?.trim() ?? '';
 
     Category? root = _findByName(roots, sourceCategory);
+    // Follow revised default boundaries without overriding a custom category
+    // or an exact child that the user has retained.
+    final movedRootKey =
+        const {'加油', '停车', '停车费', '过路费'}.contains(sourceSubcategory)
+        ? 'expense-car'
+        : sourceSubcategory == '家用电器'
+        ? 'expense-household'
+        : null;
+    if (type == CategoryType.expense &&
+        root?.isDefault == true &&
+        movedRootKey != null &&
+        !active.any(
+          (child) =>
+              child.parentId == root!.id && child.name == sourceSubcategory,
+        )) {
+      root = _findBySeedKey(roots, movedRootKey) ?? root;
+    }
     root ??= _semanticRoot(
       type: type,
       sourceCategory: sourceCategory,
@@ -81,14 +98,24 @@ class BillImportCategoryMapper {
   }
 
   String? _expenseRootKey(String category, String subcategory) {
+    if (const {'加油', '停车', '停车费', '过路费'}.contains(subcategory))
+      return 'expense-car';
     if (subcategory == '房租') return 'expense-housing';
     if (const {'话费', '通讯', '电费'}.contains(subcategory)) {
       return 'expense-utilities';
     }
     if (subcategory == '数码') return 'expense-digital';
     if (subcategory == '理发') return 'expense-shopping';
-    if (const {'日用品', '清洁用品', '厨房用品', '收纳', '家纺', '家具', '小家电'}
-        .contains(subcategory)) {
+    if (const {
+      '日用品',
+      '清洁用品',
+      '厨房用品',
+      '收纳',
+      '家纺',
+      '家具',
+      '小家电',
+      '家用电器',
+    }.contains(subcategory)) {
       return 'expense-household';
     }
     if (const {'香烟', '烟', '酒', '酒类', '茶叶', '茶具'}.contains(subcategory)) {
@@ -110,8 +137,7 @@ class BillImportCategoryMapper {
       '抖音电商' ||
       '红书' ||
       '小红书' => 'expense-shopping',
-      '家居日用' || '日用' || '日用品' || '居家' || '生活用品' =>
-        'expense-household',
+      '家居日用' || '日用' || '日用品' || '居家' || '生活用品' => 'expense-household',
       '烟酒茶' || '烟酒' || '酒水' || '茶叶' => 'expense-tobacco-tea',
       '娱乐' => 'expense-entertainment',
       '医疗' => 'expense-medical',
@@ -187,7 +213,8 @@ class BillImportCategoryMapper {
       '早餐' => 'expense-food-breakfast',
       '午餐' => 'expense-food-lunch',
       '晚餐' => 'expense-food-dinner',
-      '奶茶' => 'expense-food-coffee',
+      '奶茶' => 'expense-food-milk-tea',
+      '咖啡' => 'expense-food-coffee-only',
       '三餐' => 'expense-food-meals',
       '买菜' => 'expense-food-grocery',
       '饮料' => 'expense-food-drinks',
@@ -198,6 +225,9 @@ class BillImportCategoryMapper {
       '出租车' || '汽车' => 'expense-transport-taxi',
       '火车' => 'expense-transport-rail',
       '共享单车' => 'expense-transport-bike',
+      '加油' => 'expense-car-fuel',
+      '停车' || '停车费' => 'expense-car-parking',
+      '过路费' => 'expense-car-toll',
       '日用品' => 'expense-household-daily',
       '清洁用品' => 'expense-household-cleaning',
       '厨房用品' => 'expense-household-kitchen',
@@ -205,10 +235,10 @@ class BillImportCategoryMapper {
       '家纺' || '床品' => 'expense-household-bedding',
       '家具' => 'expense-household-furniture',
       '小家电' => 'expense-household-small-appliance',
+      '家用电器' => 'expense-household-appliance',
       '卫浴用品' => 'expense-household-bathroom',
       '香烟' || '烟' => 'expense-tobacco-tea-cigarette',
-      '酒' || '酒类' || '啤酒' || '红酒' || '白酒' =>
-        'expense-tobacco-tea-alcohol',
+      '酒' || '酒类' || '啤酒' || '红酒' || '白酒' => 'expense-tobacco-tea-alcohol',
       '茶叶' => 'expense-tobacco-tea-tea',
       '茶具' => 'expense-tobacco-tea-teaware',
       '理发' => 'expense-shopping-personal-care',
@@ -323,8 +353,6 @@ class BillImportCategoryMapper {
         .firstOrNull;
   }
 
-  String _normalize(String value) => value
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[\s_\-·/]+'), '');
+  String _normalize(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-·/]+'), '');
 }

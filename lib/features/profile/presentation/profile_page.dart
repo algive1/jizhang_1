@@ -9,6 +9,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/membership.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../account/application/account_session_controller.dart';
 import '../../account/domain/account_session.dart';
 import '../../account/domain/account_session_status.dart';
@@ -74,7 +75,14 @@ class ProfilePage extends ConsumerWidget {
       child: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 130),
+          // The glass bar floats over the page, so the profile list has to
+          // clear its whole footprint rather than a hand-tuned constant.
+          padding: EdgeInsets.fromLTRB(
+            16,
+            6,
+            16,
+            AppScaffold.reservedBottomInset(context),
+          ),
           children: [
             Row(
               children: [

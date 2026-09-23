@@ -1,140 +1,164 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
-import 'app_glass_surface.dart';
 
+/// Floating bottom navigation bar, built on the package's own
+/// **navigation** component.
+///
+/// This is `LiquidGlassTabBar` — the same widget the reference app ships
+/// (`LiquidGlassTabBar` + `LiquidGlassNavBarMotionPill`, driven by a
+/// dedicated `LiquidGlassTabPillStyle`) — rather than a hand-rolled
+/// `LiquidGlassLens` capsule with a generic `LiquidGlassMotionPill` on
+/// top. That distinction matters, because the bar's look is three
+/// separately-tuned materials, and only the tab bar exposes all three:
+///
+///  1. **the capsule** ([LiquidGlassStyle]): tint, blur, refraction, shadow;
+///  2. **the moving glass pill** ([LiquidGlassTabPillStyle.glassStyle]):
+///     the raised, refracting, squash-and-stretch highlight;
+///  3. **the settled rest pill** ([LiquidGlassTabPillStyle.rest]): a
+///     **zero-refraction** fill — the pill's own `distortion`/
+///     `distortionWidth` must never be reused here, or the resting bar
+///     looks blurrier and more bent than the reference.
+///
+/// ## Why `withImpeller` and a full-screen `Stack`
+///
+/// The glass only refracts what is painted **behind** it, so the page has
+/// to be painted underneath this widget rather than beside it. The library
+/// offers two ways to get the real dual-pipeline morph pill:
+///
+///  * `LiquidGlassScaffold(bottomNavigationBar: LiquidGlassTabBar(...))`,
+///    which captures the body into an offscreen image; and
+///  * [LiquidGlassTabBar.withImpeller], a full-screen, bodyless overlay
+///    meant to be the **last child of a `Stack`** over the page.
+///
+/// We use the second. `LiquidGlassScaffold` owns the page (so the themed
+/// page background would have to be handed to it as a flat
+/// `backgroundColor`), it has no content-inset slot for the docked action,
+/// and on Skia its bar path resolves to the plain tier with no backdrop
+/// filter at all. The overlay leaves the page, the themed background and
+/// the action button in one subtree, which is exactly what the live
+/// backdrop needs.
+///
+/// Because it is an overlay it must be the last child of a full-screen
+/// `Stack`, and the content it covers must reserve room for it — see
+/// [AppNavGeometry.reservedBottomInset].
 class AppBottomNavigation extends StatelessWidget {
-  const AppBottomNavigation({required this.location, super.key});
+  const AppBottomNavigation({
+    required this.location,
+    super.key,
+    this.onNavigate,
+  });
 
-  static const double _horizontalInset = 10;
-  static const double _bottomInset = 8;
-  static const double _cornerRadius = 28;
-  static const double _centerGap = 72;
-  static const Duration _indicatorDuration = Duration(milliseconds: 280);
+  /// Screen-space geometry of the bar, the docked action and the room the
+  /// page has to leave free.
+  static const AppNavGeometry geometry = AppNavGeometry();
+
+  /// Alpha of the capsule's tonal fill.
+  ///
+  /// Low on purpose: the fill's job is to give the plate a **luminance step**
+  /// below the page (that is what makes it visible), not to cover the page.
+  /// Everything the backdrop contributes stays in the composite, so the blurred
+  /// content keeps showing through at `1 - glassTintAlpha`.
+  static const double glassTintAlpha = .38;
+
+  /// How much of the theme's accent is washed into the plate fill.
+  static const double _plateHue = .20;
+
+  /// How far the fill is pulled below the theme's own surface.
+  static const double _plateDarken = .88;
+
+  /// Glass tint of the capsule — **derived from the active theme**.
+  ///
+  /// Two properties matter, and they are what a fixed colour cannot have at
+  /// once:
+  ///
+  ///  * it must be **darker than the page**, or the plate is invisible. The
+  ///    page behind this bar is near-white, so a *white* fill has nothing to
+  ///    separate itself from: at 18 % the old white tint lifted the backdrop by
+  ///    ~3/255 — under the visibility threshold, which is why the plate read as
+  ///    "no plate at all" — while the alpha that would make white visible
+  ///    (60 %+) washed the backdrop out instead. That one-dimensional trade is
+  ///    why tuning white produced only "fully see-through" or "background
+  ///    gone".
+  ///  * it must carry the **theme's own hue**. A fixed cool grey-blue plate
+  ///    reads as *blue glass* on the green, amber and warm themes — it was
+  ///    importing another theme's colour into every page.
+  ///
+  /// So the fill is the theme's accent washed into the theme's surface, then
+  /// pulled down: `darken(blend(primary @ 20 %, surface), .88)`. Composited
+  /// over the page at [glassTintAlpha] that lands 15–22/255 *below* the page on
+  /// all four built-in themes, with the accent's hue (green theme → greenish
+  /// plate, blue theme → blue-grey, amber → warm). The ink gate in
+  /// `test/app_scaffold_navigation_test.dart` measures against that composite
+  /// per theme.
+  ///
+  /// High contrast mode replaces this tint with an opaque surface.
+  static Color plateTint(ColorScheme scheme) {
+    final toned = Color.alphaBlend(
+      scheme.primary.withValues(alpha: _plateHue),
+      scheme.surface,
+    );
+    return _darken(toned, _plateDarken).withValues(alpha: glassTintAlpha);
+  }
+
+  /// Capsule backdrop blur, in logical pixels.
+  ///
+  /// Deliberately low. Blur is what decides how much *detail* survives behind
+  /// the plate — it does **not** decide how much background shows through; that
+  /// is the tint's alpha alone ([glassTint]). A big radius therefore does not
+  /// buy "more glass", it buys "less background": at 16 the backdrop was
+  /// smeared into flat wash and the bar read as an opaque slab. At 5 the
+  /// backdrop stays legible as shapes moving under the plate, which is what
+  /// makes it read as glass at all — and it is much closer to the reference
+  /// implementation's own 2.5.
+  ///
+  /// Contrast for the tab row comes from the plate's tone, not from destroying
+  /// the backdrop; see [glassTint]. Content that *rests* near the bar is kept
+  /// out from under the glass by `AppNavGeometry.reservedBottomInset` and the
+  /// shell's viewport inset, so this radius only ever softens content
+  /// mid-scroll.
+  static const double capsuleBlurSigma = 5;
+
+  /// Height the host has to leave free for the bar overlay to be usable.
+  static double reservedBottomInset(BuildContext context) =>
+      geometry.reservedBottomInset(MediaQuery.paddingOf(context).bottom);
 
   final String location;
 
+  /// Where a selected tab goes. Defaults to `context.go`; tests inject their
+  /// own so a tap can be observed without a `GoRouter` ancestor.
+  final ValueChanged<String>? onNavigate;
+
   @override
   Widget build(BuildContext context) {
-    final selectedIndex = _selectedIndex;
-    final glass = context.appUsesLiquidGlass;
+    final selected = _selectedIndex;
+    final navigate = onNavigate ?? (route) => context.go(route);
 
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        key: const ValueKey('app-bottom-navigation-bar'),
-        height: 78,
-        width: double.infinity,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            _horizontalInset,
-            0,
-            _horizontalInset,
-            _bottomInset,
-          ),
-          child: AppGlassSurface(
-            borderRadius: _cornerRadius,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            tint: glass
-                ? Color.alphaBlend(
-                    context.appPrimary.withValues(alpha: .12),
-                    context.appSurface.withValues(alpha: .80),
-                  )
-                : context.appSurface,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final tabWidth = ((constraints.maxWidth - _centerGap) / 4)
-                    .clamp(1.0, double.infinity)
-                    .toDouble();
-                final bubbleWidth = (tabWidth - 6).clamp(42.0, 58.0).toDouble();
-                final indicatorLeft = _slotStart(selectedIndex, tabWidth) +
-                    (tabWidth - bubbleWidth) / 2;
-
-                return Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
-                  children: [
-                    AnimatedPositioned(
-                      key: const ValueKey('app-nav-glass-indicator'),
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : _indicatorDuration,
-                      curve: Curves.easeOutCubic,
-                      left: indicatorLeft,
-                      top: 2,
-                      width: bubbleWidth,
-                      height: 50,
-                      child: IgnorePointer(
-                        child: AppGlassSurface(
-                          borderRadius: 23,
-                          shadow: false,
-                          tint: glass
-                              ? context.appPrimary.withValues(alpha: .78)
-                              : context.appPrimarySoft,
-                          child: const SizedBox.expand(),
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _NavItem(
-                            key: const ValueKey('app-nav-home'),
-                            selected: selectedIndex == 0,
-                            icon: Icons.home_outlined,
-                            activeIcon: Icons.home_rounded,
-                            label: '首页',
-                            route: '/',
-                          ),
-                        ),
-                        Expanded(
-                          child: _NavItem(
-                            key: const ValueKey('app-nav-transactions'),
-                            selected: selectedIndex == 1,
-                            icon: Icons.receipt_long_outlined,
-                            activeIcon: Icons.receipt_long_rounded,
-                            label: '流水',
-                            route: '/transactions',
-                          ),
-                        ),
-                        const SizedBox(width: _centerGap),
-                        Expanded(
-                          child: _NavItem(
-                            key: const ValueKey('app-nav-insights'),
-                            selected: selectedIndex == 2,
-                            icon: Icons.auto_graph_outlined,
-                            activeIcon: Icons.auto_graph_rounded,
-                            label: '洞察',
-                            route: '/insights',
-                          ),
-                        ),
-                        Expanded(
-                          child: _NavItem(
-                            key: const ValueKey('app-nav-profile'),
-                            selected: selectedIndex == 3,
-                            icon: Icons.person_outline_rounded,
-                            activeIcon: Icons.person_rounded,
-                            label: '我的',
-                            route: '/profile',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+    return LiquidGlassTabBar.withImpeller(
+      key: const ValueKey('app-bottom-navigation-bar'),
+      items: _items,
+      selectedIndex: selected,
+      onChanged: (index) => navigate(_routes[index]),
+      width: geometry.barWidth(MediaQuery.sizeOf(context).width),
+      height: AppNavGeometry.barHeight,
+      itemPadding: AppNavGeometry.itemPadding,
+      margin: const EdgeInsets.only(bottom: AppNavGeometry.barBottomMargin),
+      centerGap: AppNavGeometry.centerGap,
+      centerGapAfter: AppNavGeometry.centerGapAfter,
+      style: _capsuleStyle(context),
+      itemStyle: _itemStyle(context),
+      pillStyle: _pillStyle(context),
     );
   }
 
-  double _slotStart(int index, double tabWidth) {
-    if (index < 2) return tabWidth * index;
-    return tabWidth * index + _centerGap;
-  }
+  static const List<String> _routes = <String>[
+    '/',
+    '/transactions',
+    '/insights',
+    '/profile',
+  ];
 
   int get _selectedIndex {
     if (location.startsWith('/transactions') || location == '/analysis') {
@@ -144,126 +168,280 @@ class AppBottomNavigation extends StatelessWidget {
     if (location.startsWith('/profile')) return 3;
     return 0;
   }
-}
 
-class _NavItem extends StatefulWidget {
-  const _NavItem({
-    required this.selected,
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.route,
-    super.key,
-  });
+  static const List<LiquidGlassTabBarItem> _items = <LiquidGlassTabBarItem>[
+    LiquidGlassTabBarItem(
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home_rounded,
+      label: '首页',
+    ),
+    LiquidGlassTabBarItem(
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long_rounded,
+      label: '流水',
+    ),
+    LiquidGlassTabBarItem(
+      icon: Icons.auto_graph_outlined,
+      selectedIcon: Icons.auto_graph_rounded,
+      label: '洞察',
+    ),
+    LiquidGlassTabBarItem(
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
+      label: '我的',
+    ),
+  ];
 
-  final bool selected;
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final String route;
-
-  @override
-  State<_NavItem> createState() => _NavItemState();
-}
-
-class _NavItemState extends State<_NavItem> {
-  double _scale = 1;
-  Duration _scaleDuration = Duration.zero;
-  int _animationTicket = 0;
-
-  void _press() {
-    _animationTicket++;
-    setState(() {
-      _scaleDuration = const Duration(milliseconds: 70);
-      _scale = .92;
-    });
-  }
-
-  void _release() {
-    final ticket = ++_animationTicket;
-    setState(() {
-      _scaleDuration = const Duration(milliseconds: 90);
-      _scale = 1.04;
-    });
-    Future<void>.delayed(const Duration(milliseconds: 90), () {
-      if (!mounted || ticket != _animationTicket) return;
-      setState(() {
-        _scaleDuration = const Duration(milliseconds: 80);
-        _scale = 1;
-      });
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final glass = context.appUsesLiquidGlass;
-    final selectedColor = glass ? Colors.white : context.appPrimary;
-    final inactiveColor = glass
-        ? context.appSecondaryText.withValues(alpha: .74)
-        : context.appSecondaryText;
-    final color = widget.selected ? selectedColor : inactiveColor;
-    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-
-    return Semantics(
-      selected: widget.selected,
-      button: true,
-      label: widget.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) {
-          if (!animationsDisabled) _press();
-        },
-        onTapUp: (_) {
-          if (!animationsDisabled) _release();
-        },
-        onTapCancel: () {
-          if (!animationsDisabled) _release();
-        },
-        onTap: () {
-          if (!widget.selected) context.go(widget.route);
-        },
-        child: AnimatedScale(
-          scale: animationsDisabled ? 1 : _scale,
-          duration: animationsDisabled ? Duration.zero : _scaleDuration,
-          curve: Curves.easeOutCubic,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedSwitcher(
-                duration: animationsDisabled
-                    ? Duration.zero
-                    : const Duration(milliseconds: 160),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                child: Icon(
-                  widget.selected ? widget.activeIcon : widget.icon,
-                  key: ValueKey(widget.selected),
-                  color: color,
-                  size: 23,
-                ),
-              ),
-              const SizedBox(height: 1),
-              AnimatedDefaultTextStyle(
-                duration: animationsDisabled
-                    ? Duration.zero
-                    : const Duration(milliseconds: 160),
-                curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight:
-                      widget.selected ? FontWeight.w600 : FontWeight.w400,
-                ),
-                child: Text(
-                  widget.label,
-                  textScaler: TextScaler.noScaling,
-                  maxLines: 1,
-                ),
-              ),
-            ],
-          ),
+  /// The **bar capsule** — layer 1.
+  ///
+  /// Params follow the reference implementation: `distortion 0.07` over a
+  /// `28` px band with `0.002` chromatic aberration, a `0.7` px rim, and the
+  /// optical border that supplies the edge highlight. Contrast comes from
+  /// refraction plus that rim, so high-contrast mode swaps the transparent
+  /// tinge for an opaque surface and drops refraction entirely instead of
+  /// only softening the blur — the project's accessibility contract.
+  static LiquidGlassStyle _capsuleStyle(BuildContext context) {
+    final highContrast = MediaQuery.highContrastOf(context);
+    return LiquidGlassTabBar.defaultStyle.copyWith(
+      shape: LiquidGlassShape.roundedRectangle(
+        cornerRadius: AppNavGeometry.barHeight / 2,
+        borderWidth: highContrast ? 1.4 : .9,
+        borderColor: highContrast
+            ? context.appPrimary.withValues(alpha: .34)
+            : Colors.white.withValues(alpha: .42),
+        lightIntensity: 1.1,
+        lightColor: const Color(0xCCFFFFFF),
+        lightDirection: 62,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.2,
+          ambientIntensity: 1.0,
+          borderSolidity: .55,
+          lightSpread: .5,
         ),
+      ),
+      appearance: LiquidGlassAppearance(
+        color: highContrast
+            ? const Color(0xFFF7FAFF)
+            : plateTint(Theme.of(context).colorScheme),
+        // Blur and tint work together; icons and labels render above both.
+        blur: LiquidGlassBlur(
+          sigmaX: highContrast ? 8 : capsuleBlurSigma,
+          sigmaY: highContrast ? 8 : capsuleBlurSigma,
+        ),
+        shadow: const LiquidGlassShadow(blur: 14, opacity: .18, inset: 0),
+      ),
+      refraction: highContrast
+          ? const LiquidGlassRefraction(
+              distortion: 0,
+              distortionWidth: 0,
+              chromaticAberration: 0,
+            )
+          : const LiquidGlassRefraction(
+              distortion: .06,
+              distortionWidth: 26,
+              chromaticAberration: .003,
+            ),
+    );
+  }
+
+  /// **Icon and label** styling.
+  ///
+  /// Colours are measured against the reference bar rather than picked by eye.
+  /// Sampling the reference's own screenshots gives it:
+  ///
+  /// | state | reference ink | vs capsule |
+  /// | --- | --- | --- |
+  /// | unselected | a warm dark grey, luminance ≈ 0.13 | **4.73 : 1** |
+  /// | selected | its accent, darkened, luminance ≈ 0.06 | **8.04 : 1** |
+  ///
+  /// Neither is white — the package's defaults (`Colors.white` /
+  /// `Colors.white70`) are invisible on a near-clear capsule over a pale
+  /// finance page, which is what this bar sits on. Two consequences:
+  ///
+  ///  * **Unselected darkens `onSurfaceVariant`** ([unselectedInkFactor]). At
+  ///    full strength it measures **3.6 : 1** on our capsule — short of both
+  ///    the reference's 4.73 : 1 and the project's 4.5 : 1 gate. The previous
+  ///    86 %-*alpha* dimming was worse still at **3.3 : 1**, which is where
+  ///    the bar started losing to the page content behind it.
+  ///  * **Selected uses a darkened `primaryDark`**, not `primary`. The
+  ///    reference's selected amber is far darker than its own pill
+  ///    (`primary` on our light accent pill measures ~2.2 : 1 — it fails
+  ///    outright). [selectedInkFactor] keeps the hue while buying the
+  ///    contrast, so the selected tab still reads as *coloured* dark, not as
+  ///    black.
+  static LiquidGlassTabItemStyle _itemStyle(BuildContext context) {
+    final highContrast = MediaQuery.highContrastOf(context);
+    return LiquidGlassTabItemStyle(
+      selectedColor: highContrast
+          ? context.appPrimaryText
+          : _darken(context.appColors.secondary, selectedInkFactor),
+      unselectedColor: highContrast
+          ? context.appPrimaryText
+          : _darken(context.appSecondaryText, unselectedInkFactor),
+      iconSize: 23,
+      labelFontSize: 11.5,
+      iconLabelGap: 1,
+      selectedFontWeight: FontWeight.w600,
+      unselectedFontWeight: FontWeight.w400,
+    );
+  }
+
+  /// How much the selected ink is darkened from the theme's dark accent.
+  ///
+  /// The binding constraint is the **worst** theme, not the average: the green
+  /// theme's accent is the lightest of the four, so its darkened secondary on
+  /// its own accent pill gates the factor. At `.80` every theme clears 4.5 : 1
+  /// on the pill (worst 4.65 : 1).
+  static const double selectedInkFactor = .80;
+
+  /// How much the unselected ink is darkened from the theme's secondary text.
+  ///
+  /// At `.84` every theme clears 4.5 : 1 on the capsule (worst 4.77 : 1),
+  /// which is the reference's own ~4.7 : 1 grey. Both factors are darker than
+  /// they were when the capsule was a white lift: a darker plate takes
+  /// contrast away from dark ink, so the ink follows the plate down and the
+  /// *ratio* — the thing that actually has to hold — comes back to where the
+  /// reference sits.
+  static const double unselectedInkFactor = .84;
+
+  static Color _darken(Color color, double factor) => Color.from(
+        alpha: color.a,
+        red: color.r * factor,
+        green: color.g * factor,
+        blue: color.b * factor,
+      );
+
+  /// The **selection pill** — layers 2 and 3.
+  ///
+  /// [LiquidGlassTabPillStyle.rest] is the settled highlight: a
+  /// **zero-refraction** fill that the moving glass lerps into as it lands.
+  /// It is a **light tint of the accent** ([restFillAlpha] over the near-white
+  /// capsule), matching the reference — whose settled pill is a pale amber
+  /// under a near-black amber glyph. The tint has to stay light: the selected
+  /// ink is a *dark* accent, so a saturated fill would eat the contrast it
+  /// needs.
+  ///
+  /// [glassStyle] is left at the tuned default so the moving pill stays pure
+  /// refraction; only the motion and shape knobs below are set, matching the
+  /// reference (`growHeight 9`, distortion `0.04` over `12` px, travel
+  /// spring `280 / 31.4`, deformation capped at ±12 %).
+  static LiquidGlassTabPillStyle _pillStyle(BuildContext context) {
+    final highContrast = MediaQuery.highContrastOf(context);
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    final restFill = highContrast
+        ? const Color(0xFFDCE8FF)
+        : context.appPrimary.withValues(alpha: restFillAlpha);
+
+    return LiquidGlassTabPillStyle(
+      // `impellerOnly`, not `both`: on Skia `both` would make the pill
+      // capture the page a second time on top of the bar's own capture.
+      mode: LiquidGlassPillMode.impellerOnly,
+      growHeight: 9,
+      distortion: .04,
+      distortionWidth: 12,
+      magnification: 1,
+      travelStiffness: 280,
+      travelDamping: 31.4,
+      animated: !animationsDisabled,
+      rest: LiquidGlassStyle(
+        shape: LiquidGlassShape.roundedRectangle(
+          cornerRadius: AppNavGeometry.barHeight / 2,
+          borderWidth: .7,
+          borderColor: Colors.white.withValues(alpha: .55),
+        ),
+        appearance: LiquidGlassAppearance(color: restFill),
+      ),
+      magnifierPill: const LiquidGlassTabMagnifierPillStyle(
+        enabled: true,
+        magnification: .87,
+      ),
+      motion: const LiquidGlassLensMotionSpec(
+        sampleWindow: .3,
+        sensitivity: .00007,
+        maxDeformation: .12,
+        responseTime: .18,
       ),
     );
   }
+
+  /// How strongly the accent tints the settled pill. Light on purpose — see
+  /// [_pillStyle].
+  static const double restFillAlpha = .26;
+}
+
+/// Screen-space geometry shared by the bar overlay, the docked centre
+/// action and the page's bottom inset.
+///
+/// One source of truth on purpose: the bar floats over the page, and the
+/// action button and the content inset both have to agree with where it
+/// actually lands. The previous implementation spread that across a host
+/// height, a separate FAB offset constant and a per-page magic number,
+/// which is how the two drift apart.
+@immutable
+class AppNavGeometry {
+  const AppNavGeometry();
+
+  /// Capsule height, matching the reference bar.
+  static const double barHeight = 60;
+
+  /// Inner padding between the capsule rim and the icon row.
+  static const double itemPadding = 3;
+
+  /// Gap above the bottom safe-area inset.
+  static const double barBottomMargin = 8;
+
+  /// Inset from the screen edge on each side. A proportional floor keeps
+  /// the capsule's corner radius from looking pinched on small screens.
+  static const double barSideMargin = 16;
+  static const double barSideMarginRatio = .045;
+
+  /// A slot-free span in the middle of the bar, in tab units, so the
+  /// docked action button sits on empty capsule rather than on a tab.
+  static const double centerGap = 1;
+
+  /// The gap goes after the second of four tabs.
+  static const int centerGapAfter = 1;
+
+  /// Diameter of the docked centre action button.
+  static const double actionDiameter = 62;
+
+  /// How far the button's centre sits above the capsule's top edge. A
+  /// positive value lifts it clear of the glass so it reads as a raised
+  /// primary action.
+  static const double actionLift = 2;
+
+  double barSideMarginFor(double screenWidth) =>
+      (screenWidth * barSideMarginRatio).clamp(barSideMargin, 24).toDouble();
+
+  double barWidth(double screenWidth) {
+    final margin = barSideMarginFor(screenWidth);
+    return (screenWidth - margin * 2).clamp(0, screenWidth).toDouble();
+  }
+
+  /// Distance from the bottom edge to the capsule's bottom, safe area
+  /// included.
+  double barBottomInset(double bottomPadding) =>
+      bottomPadding + barBottomMargin;
+
+  /// Distance from the bottom edge to the capsule's top edge.
+  double barTopInset(double bottomPadding) =>
+      barBottomInset(bottomPadding) + barHeight;
+
+  /// Centre of the docked action, measured from the bottom edge.
+  double actionCenterFromBottom(double bottomPadding) =>
+      barTopInset(bottomPadding) + actionLift;
+
+  /// Room the page must leave free below its last pixel of content.
+  ///
+  /// The bar is an overlay, so this is the only thing keeping content from
+  /// hiding behind the glass. It is measured from the **capsule's top edge**,
+  /// not from the action button: the button rises above the capsule, but the
+  /// capsule is the wider, more opaque of the two, and reserving only the
+  /// button's height leaves the bottom of the content — the last list row, or
+  /// a short page's empty state — sitting behind the bar with the action
+  /// button clear above it. Clearing the capsule clears both.
+  double reservedBottomInset(double bottomPadding) =>
+      barTopInset(bottomPadding) + _contentBreath;
+
+  static const double _contentBreath = 18;
 }

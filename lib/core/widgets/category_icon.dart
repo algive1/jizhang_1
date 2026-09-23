@@ -9,9 +9,11 @@ class CategoryIcon extends StatelessWidget {
     this.monochrome = false,
     this.iconKey,
     this.illustrated = false,
+    this.bare = false,
   });
 
   final bool illustrated;
+  final bool bare;
   final String category;
   final double size;
   final bool vivid;
@@ -30,6 +32,17 @@ class CategoryIcon extends StatelessWidget {
         ? vividStyle
         : (const Color(0xFFF1F4EA), vividStyle.$2, vividStyle.$3);
     final scheme = Theme.of(context).colorScheme;
+    if (bare) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Icon(
+          vividStyle.$2,
+          color: monochrome ? scheme.primary : vividStyle.$3,
+          size: size,
+        ),
+      );
+    }
     final resolvedStyle = monochrome
         ? (
             scheme.primaryContainer.withValues(alpha: .72),
@@ -65,6 +78,15 @@ class CategoryIcon extends StatelessWidget {
       _styleFor(category, iconKey).$3;
 
   static (Color, IconData, Color) _styleFor(String category, String? iconKey) {
+    final detailName = iconKey != null && iconKey.startsWith('detail:')
+        ? iconKey.substring(7)
+        : null;
+    final detailIcon =
+        _secondaryIcons[detailName] ?? _vividStyles[detailName]?.$2;
+    if (detailIcon != null) {
+      final palette = _vividStyles[category] ?? _vividStyles['其他']!;
+      return (palette.$1, detailIcon, palette.$3);
+    }
     final exact = _vividStyles[category];
     if (exact != null) return exact;
     final inherited =
@@ -77,6 +99,13 @@ class CategoryIcon extends StatelessWidget {
   }
 
   static const _secondaryIcons = <String, IconData>{
+    '奶茶': Icons.local_drink_rounded,
+    '咖啡': Icons.local_cafe_rounded,
+    '员工工资': Icons.payments_rounded,
+    '员工奖金': Icons.stars_rounded,
+    '单位社保': Icons.health_and_safety_rounded,
+    '单位公积金': Icons.savings_rounded,
+
     '早餐': Icons.free_breakfast_rounded,
     '午餐': Icons.lunch_dining_rounded,
     '晚餐': Icons.dinner_dining_rounded,
@@ -334,6 +363,8 @@ class CategoryIcon extends StatelessWidget {
   };
 
   static const _categoryByIconKey = <String, String>{
+    'home_work_outlined': '家居日用',
+    'local_bar_outlined': '烟酒茶',
     'restaurant_outlined': '餐饮',
     'local_cafe_outlined': '奶茶咖啡',
     'fastfood_outlined': '零食',
@@ -364,6 +395,8 @@ class CategoryIcon extends StatelessWidget {
     'category_outlined': '其他',
   };
   static const _vividStyles = <String, (Color, IconData, Color)>{
+    '家居日用': (Color(0xFFEAF2FF), Icons.home_work_rounded, Color(0xFF539AF2)),
+    '烟酒茶': (Color(0xFFFFF0DF), Icons.local_bar_rounded, Color(0xFFB78450)),
     '转账': (Color(0xFFE7F2FF), Icons.swap_horiz_rounded, Color(0xFF398FF2)),
     '余额校准': (Color(0xFFF0F3F7), Icons.tune_rounded, Color(0xFF8799B0)),
     '奶茶咖啡': (Color(0xFFFFF0DF), Icons.local_cafe_rounded, Color(0xFFB78450)),

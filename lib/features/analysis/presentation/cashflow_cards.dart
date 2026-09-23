@@ -17,6 +17,7 @@ class CashflowSummaryCard extends StatelessWidget {
     onTap: onTap,
     borderRadius: BorderRadius.circular(24),
     child: AppCard(
+      material: AppCardMaterial.frosted,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -57,10 +58,7 @@ class CashflowSummaryCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '收入 ${snapshot.incomeCount} 笔 · 支出 ${snapshot.expenseCount} 笔',
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
             ),
             Text(
               '转账、初始余额和余额校准不计入收支。',
@@ -154,10 +152,7 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
               ),
               Text(
                 '单位 ${widget.snapshot.currency}',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 10),
               ),
             ],
           ),
@@ -282,10 +277,7 @@ class _CashflowCategoriesCardState extends State<CashflowCategoriesCard> {
         Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         if (widget.items.isEmpty)
-          Text(
-            '本期暂无记录',
-            style: TextStyle(color: context.appSecondaryText),
-          ),
+          Text('本期暂无记录', style: TextStyle(color: context.appSecondaryText)),
         for (final item in widget.items.take(
           _expanded ? widget.items.length : 5,
         ))

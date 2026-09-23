@@ -23,18 +23,30 @@ import java.util.Date
 import java.util.Locale
 
 class PaymentNotificationListenerService : NotificationListenerService() {
-    private val ruleRegistry by lazy {
-        AutoBookkeepingRuleRegistry.load(this)
-    }
-    private val realtimeParser by lazy {
+    // Rebuilt by [refreshRules] when the user edits the custom app list, so these
+    // cannot be `by lazy` caches.
+    private var ruleRegistry: AutoBookkeepingRuleRegistry =
+        AutoBookkeepingRuleRegistry.builtIn()
+    private var realtimeParser: PaymentNotificationCandidateParser =
         PaymentNotificationCandidateParser(ruleRegistry)
-    }
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Re-read the packaged rules and the user's custom apps.
+     *
+     * Custom packages matter on this channel too: a user-added app's payment
+     * notification should be parsed even when its result page is never seen.
+     */
+    fun refreshRules() {
+        ruleRegistry = AutoBookkeepingRuleRegistry.load(this)
+        realtimeParser = PaymentNotificationCandidateParser(ruleRegistry)
+    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
         connected = true
+        refreshRules()
         AutoBookkeepingLogStore.record(
             this,
             "notification_listener_connected",

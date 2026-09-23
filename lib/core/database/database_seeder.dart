@@ -95,10 +95,7 @@ class DatabaseSeeder {
     if (books.isEmpty) {
       await _database.transaction(() async {
         await _seedPersonalBook();
-        await seedBookDefaults(
-          SeedIds.personalBook,
-          type: BookType.personal,
-        );
+        await seedBookDefaults(SeedIds.personalBook, type: BookType.personal);
       });
       return;
     }
@@ -207,15 +204,40 @@ class DatabaseSeeder {
   ) async {
     final deprecated = switch (type) {
       BookType.personal => const <String, String>{
-          'expense-shopping-daily': '日用百货',
-          'expense-shopping-furniture': '家居用品',
-          'expense-shopping-online': '网购',
-        },
+        'expense-shopping-taobao': '淘宝',
+        'expense-shopping-jd': '京东',
+        'expense-shopping-pinduoduo': '拼多多',
+        'expense-shopping-douyin': '抖音电商',
+        'expense-shopping-xiaohongshu': '小红书',
+        'expense-transport-fuel': '加油',
+        'expense-transport-parking': '停车',
+        'expense-transport-toll': '过路费',
+        'expense-digital-appliance': '家用电器',
+        'expense-gift-family': '家人',
+        'expense-gift-social': '朋友同事',
+        'expense-food-coffee': '奶茶咖啡',
+        'expense-shopping-gift': '礼品',
+        'expense-shopping-daily': '日用百货',
+        'expense-shopping-furniture': '家居用品',
+        'expense-shopping-online': '网购',
+      },
       BookType.family => const <String, String>{
-          'expense-shopping-daily': '家庭日用品',
-          'expense-shopping-furniture': '家具',
-          'expense-shopping-cleaning': '清洁用品',
-        },
+        'expense-shopping-taobao': '淘宝',
+        'expense-shopping-jd': '京东',
+        'expense-shopping-pinduoduo': '拼多多',
+        'expense-shopping-douyin': '抖音电商',
+        'expense-shopping-xiaohongshu': '小红书',
+        'expense-transport-fuel': '加油',
+        'expense-transport-parking': '停车',
+        'expense-transport-toll': '过路费',
+        'expense-digital-appliance': '家用电器',
+        'expense-gift-family': '家人',
+        'expense-gift-social': '朋友同事',
+
+        'expense-shopping-daily': '家庭日用品',
+        'expense-shopping-furniture': '家具',
+        'expense-shopping-cleaning': '清洁用品',
+      },
       BookType.enterprise => const <String, String>{},
     };
     for (final entry in deprecated.entries) {
@@ -227,6 +249,19 @@ class DatabaseSeeder {
           row.name != entry.value) {
         continue;
       }
+      final parent = row.parentId == null
+          ? null
+          : await _database.categoryDao.findById(row.parentId!);
+      final parentKey = categoryTemplates(type)
+          .where((template) => entry.key.startsWith('${template.key}-'));
+      if (parent == null ||
+          parentKey.isEmpty ||
+          parent.id != _categorySeedId(bookId, parentKey.first.key, type) ||
+          row.icon !=
+              (entry.key == 'expense-food-coffee'
+                  ? 'local_cafe_outlined'
+                  : parentKey.first.icon))
+        continue;
       await _database.categoryDao.upsert(
         CategoryEntriesCompanion(
           id: Value(row.id),
@@ -375,7 +410,27 @@ class DatabaseSeeder {
       for (var index = 0; index < children.length; index++) {
         final template = children[index];
         final id = _categorySeedId(bookId, template.key, type);
-        if (await _database.categoryDao.findById(id) != null) continue;
+        final existing = await _database.categoryDao.findById(id);
+        if (existing != null) {
+          // Upgrade inherited glyphs only; preserve renamed, moved, custom and hidden rows.
+          if (existing.isDefault &&
+              !existing.isArchived &&
+              existing.parentId == parentId &&
+              existing.name == template.name &&
+              (existing.icon == rootTemplate.icon ||
+                  (type == BookType.personal &&
+                      rootTemplate.key == 'expense-food' &&
+                      foodSubcategoryTemplates.any(
+                        (old) =>
+                            old.key == template.key &&
+                            old.icon == existing.icon,
+                      )))) {
+            await (_database.update(_database.categoryEntries)
+                  ..where((row) => row.id.equals(id)))
+                .write(CategoryEntriesCompanion(icon: Value(template.icon)));
+          }
+          continue;
+        }
         // A matching user-created child takes precedence over a default.
         final duplicate = await _database
             .customSelect(

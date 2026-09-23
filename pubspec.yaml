@@ -66,6 +66,17 @@ dependencies:
   xml: ^7.0.1
   share_plus: ^13.3.0
 
+  # Liquid glass navigation material (MIT, Copyright (c) 2025 Ahmed Gamil).
+  # Same package the reference app ships: real SDF-refracting lenses driven by
+  # fragment shaders on Impeller, with a frosted fallback on Skia. Its own
+  # pubspec declares the `flutter: shaders:` entries, so nothing else is needed
+  # here beyond `LiquidGlassShaders.ensureLoaded()` in main().
+  #
+  # The resolved version comes from `dependency_overrides` below, which points
+  # at our vendored fork in `third_party/` (upstream 4.3.1 plus the optional
+  # `centerGap` the docked centre action needs).
+  liquid_glass_easy: ^4.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -84,6 +95,11 @@ dependency_overrides:
   # this copy keeps the same SDK API while adding namespace/compileSdk metadata.
   alipay_kit_android:
     path: third_party/alipay_kit_android
+  # Vendored so the bottom bar can reserve a slot-free centre gap for the
+  # docked action button. Everything else is upstream 4.3.1 verbatim; see
+  # third_party/liquid_glass_easy/pubspec.yaml for the full change list.
+  liquid_glass_easy:
+    path: third_party/liquid_glass_easy
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -101,6 +117,9 @@ flutter:
     - 微信图片_20260919140237_156_240.png
     - assets/images/membership/
     - assets/config/
+
+  shaders:
+    - shaders/liquid_glass.frag
 
 # Android WeChat/Alipay SDKs use merchant-console values at release time.
 # iOS membership purchase is StoreKit-only and intentionally does not bundle

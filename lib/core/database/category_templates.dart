@@ -280,9 +280,10 @@ const foodSubcategoryTemplates = [
     'restaurant_outlined',
     'expense',
   ),
+  SeedCategoryTemplate('expense-food-milk-tea', '奶茶', 'detail:奶茶', 'expense'),
   SeedCategoryTemplate(
-    'expense-food-coffee',
-    '奶茶咖啡',
+    'expense-food-coffee-only',
+    '咖啡',
     'local_cafe_outlined',
     'expense',
   ),
@@ -353,26 +354,17 @@ const _commonChildren = <String, List<(String, String)>>{
   'expense-transport': [
     ('taxi', '打车'),
     ('metro', '地铁公交'),
-    ('fuel', '加油'),
-    ('parking', '停车'),
     ('rail', '火车高铁'),
     ('flight', '机票'),
     ('bike', '共享单车'),
-    ('toll', '过路费'),
     ('rental', '租车'),
   ],
   'expense-shopping': [
     ('clothes', '服饰鞋包'),
     ('beauty', '美妆护肤'),
-    ('taobao', '淘宝'),
-    ('jd', '京东'),
-    ('pinduoduo', '拼多多'),
-    ('douyin', '抖音电商'),
-    ('xiaohongshu', '小红书'),
     ('accessory', '饰品'),
     ('personal-care', '个人护理'),
     ('mother-baby', '母婴用品'),
-    ('gift', '礼品'),
     ('other', '其他'),
   ],
   'expense-household': [
@@ -383,6 +375,7 @@ const _commonChildren = <String, List<(String, String)>>{
     ('bedding', '家纺寝具'),
     ('furniture', '家具'),
     ('small-appliance', '小家电'),
+    ('appliance', '家用电器'),
     ('bathroom', '卫浴用品'),
   ],
   'expense-tobacco-tea': [
@@ -447,8 +440,6 @@ const _commonChildren = <String, List<(String, String)>>{
     ('wedding', '婚庆礼金'),
     ('treat', '请客'),
     ('charity', '公益捐赠'),
-    ('family', '家人'),
-    ('social', '朋友同事'),
   ],
   'expense-pet': [
     ('food', '宠物食品'),
@@ -460,7 +451,6 @@ const _commonChildren = <String, List<(String, String)>>{
   'expense-digital': [
     ('phone', '手机'),
     ('computer', '电脑'),
-    ('appliance', '家用电器'),
     ('accessory', '配件'),
     ('software', '软件订阅'),
     ('repair', '数码维修'),
@@ -520,11 +510,9 @@ const _familyChildren = <String, List<(String, String)>>{
   'expense-shopping': [
     ('child', '母婴用品'),
     ('clothes', '家人衣物'),
-    ('taobao', '淘宝'),
-    ('jd', '京东'),
-    ('pinduoduo', '拼多多'),
-    ('douyin', '抖音电商'),
-    ('xiaohongshu', '小红书'),
+    ('beauty', '美妆护肤'),
+    ('accessory', '饰品'),
+    ('personal-care', '个人护理'),
     ('other', '其他'),
   ],
   'expense-education': [
@@ -542,6 +530,12 @@ const _familyChildren = <String, List<(String, String)>>{
 };
 
 const _businessChildren = <String, List<(String, String)>>{
+  'expense-payroll': [
+    ('salary', '员工工资'),
+    ('bonus', '员工奖金'),
+    ('social-insurance', '单位社保'),
+    ('housing-fund', '单位公积金'),
+  ],
   'expense-food': [
     ('client', '客户用餐'),
     ('team', '团队用餐'),
@@ -654,7 +648,15 @@ List<SeedCategoryTemplate> subcategoryTemplates(
   SeedCategoryTemplate parent,
 ) {
   if (type == BookType.personal && parent.key == 'expense-food')
-    return foodSubcategoryTemplates;
+    return [
+      for (final child in foodSubcategoryTemplates)
+        SeedCategoryTemplate(
+          child.key,
+          child.name,
+          'detail:${child.name}',
+          child.type,
+        ),
+    ];
   final overrides = switch (type) {
     BookType.personal => const <String, List<(String, String)>>{},
     BookType.family => _familyChildren,
@@ -668,7 +670,7 @@ List<SeedCategoryTemplate> subcategoryTemplates(
       SeedCategoryTemplate(
         '${parent.key}-${child.$1}',
         child.$2,
-        parent.icon,
+        'detail:${child.$2}',
         parent.type,
       ),
   ];

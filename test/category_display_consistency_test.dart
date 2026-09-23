@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/core/database/app_database.dart';
+import 'package:jizhang_app/core/database/category_templates.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/family.dart';
@@ -10,6 +11,75 @@ import 'package:jizhang_app/core/widgets/category_icon.dart';
 import 'package:jizhang_app/core/widgets/transaction_tile.dart';
 
 void main() {
+  testWidgets(
+    'bare monochrome category glyph has no badge and uses theme color',
+    (tester) async {
+      final theme = ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: const CategoryIcon(
+            category: '早餐',
+            iconKey: 'detail:早餐',
+            size: 28,
+            monochrome: true,
+            bare: true,
+          ),
+        ),
+      );
+      expect(find.byType(Container), findsNothing);
+      final icon = tester.widget<Icon>(find.byType(Icon));
+      expect(icon.size, 28);
+      expect(icon.color, theme.colorScheme.primary);
+    },
+  );
+
+  testWidgets('all default child glyphs survive rename and follow the theme', (
+    tester,
+  ) async {
+    for (final type in BookType.values) {
+      for (final root in categoryTemplates(type)) {
+        for (final child in [root, ...subcategoryTemplates(type, root)]) {
+          final theme = ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple),
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: theme,
+              home: Row(
+                children: [
+                  CategoryIcon(
+                    category: child.name,
+                    iconKey: child.icon,
+                    monochrome: true,
+                  ),
+                  CategoryIcon(
+                    category: '已改名',
+                    iconKey: child.icon,
+                    monochrome: true,
+                  ),
+                ],
+              ),
+            ),
+          );
+          final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
+          if (child != root)
+            expect(icons[0].icon, icons[1].icon, reason: child.name);
+          expect(icons[0].color, theme.colorScheme.primary, reason: child.name);
+          if (!child.name.contains('其他') && !child.name.contains('杂项')) {
+            expect(
+              icons[0].icon,
+              isNot(Icons.more_horiz_rounded),
+              reason: child.name,
+            );
+          }
+        }
+      }
+    }
+  });
+
   testWidgets('vivid and list category icons use the same glyph', (
     tester,
   ) async {

@@ -420,6 +420,20 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
           ),
           const SizedBox(height: 10),
           AppCard(
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.extension_outlined),
+                title: const Text('自定义应用'),
+                subtitle: const Text('内置规则以外的应用可以手动加入识别范围'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/profile/autobookkeeping/apps'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          AppCard(
             child: Text(
               '双通道说明：无障碍负责实时读取交易结果页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度交易通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
               style: TextStyle(height: 1.5, color: context.appSecondaryText),
