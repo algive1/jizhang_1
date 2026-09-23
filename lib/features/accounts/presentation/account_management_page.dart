@@ -506,6 +506,9 @@ class _AccountRow extends StatelessWidget {
     if (item.category == AccountFundCategory.restricted) {
       return Icons.lock_outline_rounded;
     }
+    if (item.category == AccountFundCategory.storedValue) {
+      return Icons.toll_outlined;
+    }
     return switch (item.account.type) {
       AccountType.cash => Icons.payments_outlined,
       AccountType.wechat => Icons.chat_bubble_outline,
