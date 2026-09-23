@@ -944,6 +944,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 20) {
           await _createScopeIndexes();
           await ensureDataBindingSchema();
+          // v21 adds sync kinds backed by raw extension tables. Create them
+          // before installing the shared triggers when upgrading older DBs.
+          await _createAccountManagementSchema();
           await installSyncSchema();
         }
         if (from < 21) {
