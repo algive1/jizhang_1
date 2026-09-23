@@ -219,3 +219,16 @@ final managedAccountsProvider = StreamProvider<List<ManagedAccount>>((ref) async
   await ref.watch(databaseBootstrapProvider.future);
   yield* ref.watch(accountManagementRepositoryProvider).watchActive();
 });
+
+/// Account IDs that remain visible but must be excluded from asset totals.
+final excludedAssetAccountIdsProvider = StreamProvider<Set<String>>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final database = ref.watch(databaseProvider);
+  await ensureAccountManagementSchema(database);
+  yield* database.accountDao.watchAll().asyncMap((_) async {
+    final rows = await database.customSelect(
+      'SELECT account_id FROM account_management_meta WHERE include_in_total=0',
+    ).get();
+    return rows.map((row) => row.read<String>('account_id')).toSet();
+  });
+});
