@@ -526,7 +526,7 @@ class _IdentityCard extends StatelessWidget {
         radius: 28,
         backgroundColor: const Color(0xffF2E8D7),
         child: Text(
-          _mark(item.platform),
+          _restrictedMark(item.platform),
           style: const TextStyle(
             color: Color(0xffD66A2C),
             fontSize: 22,
@@ -548,11 +548,10 @@ class _IdentityCard extends StatelessWidget {
   );
 }
 
-  String _mark(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty) return '限';
-    return text.substring(0, 1);
-  }
+String _restrictedMark(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return '限';
+  return text.substring(0, 1);
 }
 
 class _InfoCard extends StatelessWidget {
