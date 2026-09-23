@@ -135,6 +135,7 @@ class ReceivableEvent {
     required this.title,
     required this.createdAt,
     this.description,
+    this.amount,
   });
 
   final String id;
@@ -143,4 +144,5 @@ class ReceivableEvent {
   final String title;
   final String? description;
   final DateTime createdAt;
+  final double? amount;
 }
