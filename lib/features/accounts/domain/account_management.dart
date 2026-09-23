@@ -114,8 +114,11 @@ class Receivable {
       return status;
     }
     final due = expectedAt;
-    if (due != null &&
-        due.isBefore(DateTime.now()) &&
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDay = due == null ? null : DateTime(due.year, due.month, due.day);
+    if (dueDay != null &&
+        dueDay.isBefore(today) &&
         remainingAmount > 0) {
       return ReceivableStatus.overdue;
     }
