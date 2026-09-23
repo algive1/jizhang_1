@@ -740,7 +740,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -754,6 +754,7 @@ class AppDatabase extends _$AppDatabase {
       await _createScopeIndexes();
       await ensureDataBindingSchema();
       await installSyncSchema();
+      await _createAccountManagementSchema();
     },
     onUpgrade: (migrator, from, to) async {
       await transaction(() async {
@@ -945,6 +946,9 @@ class AppDatabase extends _$AppDatabase {
           await ensureDataBindingSchema();
           await installSyncSchema();
         }
+        if (from < 21) {
+          await _createAccountManagementSchema();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -1010,6 +1014,72 @@ class AppDatabase extends _$AppDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_book_identifier_suffix '
       'ON accounts(book_id, identifier_suffix) '
       'WHERE identifier_suffix IS NOT NULL',
+    );
+  }
+
+  Future<void> _createAccountManagementSchema() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS account_management_meta ('
+      'account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,'
+      'fund_category TEXT NOT NULL DEFAULT "available",'
+      'platform TEXT,'
+      'restricted_status TEXT,'
+      'expected_return_at INTEGER,'
+      'include_in_total INTEGER NOT NULL DEFAULT 1,'
+      'note TEXT,'
+      'updated_at INTEGER NOT NULL'
+      ')',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_account_management_meta_category '
+      'ON account_management_meta(fund_category)',
+    );
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS receivables ('
+      'id TEXT PRIMARY KEY NOT NULL,'
+      'book_id TEXT NOT NULL,'
+      'name TEXT NOT NULL,'
+      'type TEXT NOT NULL,'
+      'counterparty TEXT NOT NULL,'
+      'total_amount_in_cents INTEGER NOT NULL,'
+      'received_amount_in_cents INTEGER NOT NULL DEFAULT 0,'
+      'occurred_at INTEGER NOT NULL,'
+      'expected_at INTEGER,'
+      'status TEXT NOT NULL DEFAULT "pending",'
+      'business_status TEXT NOT NULL DEFAULT "",'
+      'remark TEXT,'
+      'created_at INTEGER NOT NULL,'
+      'updated_at INTEGER NOT NULL'
+      ')',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_receivables_book_status '
+      'ON receivables(book_id, status, expected_at)',
+    );
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS receivable_events ('
+      'id TEXT PRIMARY KEY NOT NULL,'
+      'receivable_id TEXT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,'
+      'event_type TEXT NOT NULL,'
+      'title TEXT NOT NULL,'
+      'description TEXT,'
+      'amount_in_cents INTEGER,'
+      'created_at INTEGER NOT NULL'
+      ')',
+    );
+    final eventColumns = await customSelect(
+      'PRAGMA table_info(receivable_events)',
+    ).get();
+    if (!eventColumns.any(
+      (row) => row.read<String>('name') == 'amount_in_cents',
+    )) {
+      await customStatement(
+        'ALTER TABLE receivable_events ADD COLUMN amount_in_cents INTEGER',
+      );
+    }
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_receivable_events_receivable '
+      'ON receivable_events(receivable_id, created_at DESC)',
     );
   }
 
