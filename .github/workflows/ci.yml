@@ -58,6 +58,7 @@ jobs:
           test/account_cloud_attachment_restore_test.dart
           test/local_backup_service_test.dart
           test/app_update_service_test.dart
+          test/app_lock_gate_test.dart
           test/product_analytics_test.dart
           test/push_registration_service_test.dart
           test/ad_placement_test.dart
