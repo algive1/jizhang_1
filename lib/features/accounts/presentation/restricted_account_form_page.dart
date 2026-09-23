@@ -148,10 +148,11 @@ class _RestrictedAccountFormPageState
                     labelText: '当前余额 *',
                     suffixText: '元',
                   ),
-                  validator: (value) =>
-                      MoneyFormatter.parseInput(value ?? '') == null
-                      ? '请输入有效金额'
-                      : null,
+                  validator: (value) {
+                    final amount = MoneyFormatter.parseInput(value ?? '');
+                    if (amount == null || amount < 0) return '请输入有效金额';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<RestrictedFundStatus>(
