@@ -70,7 +70,7 @@ class DriftReceivableRepository implements ReceivableRepository {
     final rows = await _database.customSelect(
       'SELECT e.* FROM receivable_events e '
       'INNER JOIN receivables r ON r.id=e.receivable_id '
-      'WHERE e.receivable_id=? AND r.book_id=? ORDER BY e.created_at DESC',
+      'WHERE e.receivable_id=? AND r.book_id=? ORDER BY e.created_at ASC',
       variables: [
         Variable<String>(receivableId),
         Variable<String>(bookId),
@@ -145,6 +145,10 @@ class DriftReceivableRepository implements ReceivableRepository {
     await ensureAccountManagementSchema(_database);
     if (receivable.bookId != bookId) {
       throw ArgumentError('应收必须属于当前资金账本');
+    }
+    if (receivable.name.trim().isEmpty) throw ArgumentError('请填写应收名称');
+    if (receivable.counterparty.trim().isEmpty) {
+      throw ArgumentError('请填写往来对象');
     }
     final current = await getById(receivable.id);
     if (current == null) throw StateError('应收记录不存在');
