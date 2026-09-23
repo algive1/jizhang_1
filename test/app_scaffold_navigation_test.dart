@@ -480,9 +480,12 @@ void main() {
         ),
         reason: '${theme.id} must dim unselected items in its own ink',
       );
-      // The glass material itself is shared, so the capsule tint does not
-      // drift per theme.
-      expect(bar.style!.appearance.color, AppBottomNavigation.glassTint);
+      // The capsule tint is derived from the active theme so the glass
+      // keeps the current palette instead of importing a fixed cool tint.
+      expect(
+        bar.style!.appearance.color,
+        AppBottomNavigation.plateTint(scheme),
+      );
       expect(
         bar.style!.refraction.distortion,
         greaterThan(0),
@@ -517,10 +520,8 @@ void main() {
         AppBottomNavigation.unselectedInkFactor,
       );
 
-      // The capsule is [AppBottomNavigation.glassTint] composited over the
-      // page — deliberately a little darker and cooler than the page rather
-      // than a white lift (see that constant); the settled pill is the accent
-      // tinted over it.
+      // The capsule is a theme-derived plate tint composited over the page;
+      // the settled pill is the accent tinted over that plate.
       const capsule = Color(0xFFE4E8F1);
       final pill = _blend(
         scheme.primary.withValues(alpha: AppBottomNavigation.restFillAlpha),
