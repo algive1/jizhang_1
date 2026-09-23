@@ -753,8 +753,8 @@ class AppDatabase extends _$AppDatabase {
       await _createIndexes();
       await _createScopeIndexes();
       await ensureDataBindingSchema();
-      await installSyncSchema();
       await _createAccountManagementSchema();
+      await installSyncSchema();
     },
     onUpgrade: (migrator, from, to) async {
       await transaction(() async {
@@ -948,6 +948,7 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 21) {
           await _createAccountManagementSchema();
+          await installSyncSchema();
         }
       });
     },
@@ -1020,7 +1021,9 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _createAccountManagementSchema() async {
     await customStatement(
       'CREATE TABLE IF NOT EXISTS account_management_meta ('
-      'account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,'
+      'id TEXT PRIMARY KEY NOT NULL,'
+      'book_id TEXT NOT NULL,'
+      'account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,'
       'fund_category TEXT NOT NULL DEFAULT "available",'
       'platform TEXT,'
       'restricted_status TEXT,'
@@ -1030,9 +1033,38 @@ class AppDatabase extends _$AppDatabase {
       'updated_at INTEGER NOT NULL'
       ')',
     );
+    final metaColumns = await customSelect(
+      'PRAGMA table_info(account_management_meta)',
+    ).get();
+    if (!metaColumns.any((row) => row.read<String>('name') == 'id')) {
+      await customStatement(
+        'ALTER TABLE account_management_meta ADD COLUMN id TEXT',
+      );
+    }
+    if (!metaColumns.any((row) => row.read<String>('name') == 'book_id')) {
+      await customStatement(
+        'ALTER TABLE account_management_meta ADD COLUMN book_id TEXT',
+      );
+    }
     await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_account_management_meta_category '
-      'ON account_management_meta(fund_category)',
+      'UPDATE account_management_meta SET id=account_id WHERE id IS NULL',
+    );
+    await customStatement(
+      'UPDATE account_management_meta '
+      'SET book_id=(SELECT book_id FROM accounts WHERE accounts.id=account_management_meta.account_id) '
+      'WHERE book_id IS NULL',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_account_management_meta_id '
+      'ON account_management_meta(id)',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_account_management_meta_account '
+      'ON account_management_meta(account_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_account_management_meta_book_category '
+      'ON account_management_meta(book_id, fund_category)',
     );
     await customStatement(
       'CREATE TABLE IF NOT EXISTS receivables ('
@@ -1059,6 +1091,7 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE TABLE IF NOT EXISTS receivable_events ('
       'id TEXT PRIMARY KEY NOT NULL,'
+      'book_id TEXT NOT NULL,'
       'receivable_id TEXT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,'
       'event_type TEXT NOT NULL,'
       'title TEXT NOT NULL,'
@@ -1071,6 +1104,13 @@ class AppDatabase extends _$AppDatabase {
       'PRAGMA table_info(receivable_events)',
     ).get();
     if (!eventColumns.any(
+      (row) => row.read<String>('name') == 'book_id',
+    )) {
+      await customStatement(
+        'ALTER TABLE receivable_events ADD COLUMN book_id TEXT',
+      );
+    }
+    if (!eventColumns.any(
       (row) => row.read<String>('name') == 'amount_in_cents',
     )) {
       await customStatement(
@@ -1078,8 +1118,13 @@ class AppDatabase extends _$AppDatabase {
       );
     }
     await customStatement(
+      'UPDATE receivable_events '
+      'SET book_id=(SELECT book_id FROM receivables WHERE receivables.id=receivable_events.receivable_id) '
+      'WHERE book_id IS NULL',
+    );
+    await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_receivable_events_receivable '
-      'ON receivable_events(receivable_id, created_at DESC)',
+      'ON receivable_events(book_id, receivable_id, created_at DESC)',
     );
   }
 
