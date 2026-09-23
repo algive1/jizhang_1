@@ -257,7 +257,8 @@ class ReceivableDetailPage extends ConsumerWidget {
               (entry) =>
                   !entry.account.type.isDebt &&
                   entry.account.assetForm != AssetForm.investment &&
-                  entry.category != AccountFundCategory.restricted,
+                  entry.category != AccountFundCategory.restricted &&
+                  entry.account.currency == 'CNY',
             )
             .toList() ??
         const <ManagedAccount>[];
