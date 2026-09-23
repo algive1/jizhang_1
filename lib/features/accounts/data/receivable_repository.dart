@@ -16,6 +16,7 @@ abstract interface class ReceivableRepository {
   Future<List<Receivable>> getAll();
   Future<Receivable?> getById(String id);
   Future<List<ReceivableEvent>> getEvents(String receivableId);
+  Future<double> getCollectedBetween(DateTime start, DateTime end);
   Future<Receivable> create(Receivable receivable);
   Future<void> collect({
     required String receivableId,
@@ -75,6 +76,24 @@ class DriftReceivableRepository implements ReceivableRepository {
       ],
     ).get();
     return rows.map(_mapEvent).toList(growable: false);
+  }
+
+  @override
+  Future<double> getCollectedBetween(DateTime start, DateTime end) async {
+    await ensureAccountManagementSchema(_database);
+    final row = await _database.customSelect(
+      'SELECT COALESCE(SUM(e.amount_in_cents),0) AS total '
+      'FROM receivable_events e '
+      'INNER JOIN receivables r ON r.id=e.receivable_id '
+      'WHERE r.book_id=? AND e.created_at>=? AND e.created_at<? '
+      'AND e.event_type IN ("collected","partial_collected")',
+      variables: [
+        Variable<String>(bookId),
+        Variable<int>(start.millisecondsSinceEpoch),
+        Variable<int>(end.millisecondsSinceEpoch),
+      ],
+    ).getSingle();
+    return row.read<int>('total') / 100;
   }
 
   @override
@@ -186,6 +205,7 @@ class DriftReceivableRepository implements ReceivableRepository {
         eventType: completed ? 'collected' : 'partial_collected',
         title: completed ? '已全部收回' : '部分收回',
         description: '到账 ¥${amount.toStringAsFixed(2)}',
+        amount: amount,
       );
     });
   }
@@ -244,16 +264,19 @@ class DriftReceivableRepository implements ReceivableRepository {
     required String eventType,
     required String title,
     String? description,
+    double? amount,
   }) {
     return _database.customStatement(
       'INSERT INTO receivable_events '
-      '(id,receivable_id,event_type,title,description,created_at) VALUES (?,?,?,?,?,?)',
+      '(id,receivable_id,event_type,title,description,amount_in_cents,created_at) '
+      'VALUES (?,?,?,?,?,?,?)',
       [
         'receivable-event-${newEntityId()}',
         receivableId,
         eventType,
         title,
         _clean(description),
+        amount == null ? null : _toCents(amount),
         DateTime.now().millisecondsSinceEpoch,
       ],
     );
@@ -299,6 +322,9 @@ class DriftReceivableRepository implements ReceivableRepository {
     eventType: row.read<String>('event_type'),
     title: row.read<String>('title'),
     description: row.readNullable<String>('description'),
+    amount: row.readNullable<int>('amount_in_cents') == null
+        ? null
+        : row.read<int>('amount_in_cents') / 100,
     createdAt: DateTime.fromMillisecondsSinceEpoch(
       row.read<int>('created_at'),
     ),
@@ -333,3 +359,13 @@ final receivableEventsProvider =
       await ref.watch(databaseBootstrapProvider.future);
       return ref.watch(receivableRepositoryProvider).getEvents(id);
     });
+
+final receivableMonthCollectedProvider = FutureProvider<double>((ref) async {
+  await ref.watch(databaseBootstrapProvider.future);
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month);
+  final end = DateTime(now.year, now.month + 1);
+  return ref
+      .watch(receivableRepositoryProvider)
+      .getCollectedBetween(start, end);
+});
