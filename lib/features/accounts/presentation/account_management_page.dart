@@ -171,10 +171,9 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
       .where((item) => item.overviewCategory == category)
       .toList(growable: false);
 
-  double _sumAccounts(List<ManagedAccount> accounts) => accounts.fold<double>(
-    0,
-    (sum, item) => sum + item.account.balance,
-  );
+  double _sumAccounts(List<ManagedAccount> accounts) => accounts
+      .where((item) => item.includeInTotal)
+      .fold<double>(0, (sum, item) => sum + item.account.balance);
 
   void _openAccount(ManagedAccount item) {
     if (item.category == AccountFundCategory.restricted) {
