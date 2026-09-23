@@ -322,10 +322,11 @@ class DriftReceivableRepository implements ReceivableRepository {
   }) {
     return _database.customStatement(
       'INSERT INTO receivable_events '
-      '(id,receivable_id,event_type,title,description,amount_in_cents,created_at) '
-      'VALUES (?,?,?,?,?,?,?)',
+      '(id,book_id,receivable_id,event_type,title,description,amount_in_cents,created_at) '
+      'VALUES (?,?,?,?,?,?,?,?)',
       [
         'receivable-event-${newEntityId()}',
+        bookId,
         receivableId,
         eventType,
         title,
