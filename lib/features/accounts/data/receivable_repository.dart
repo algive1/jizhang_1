@@ -140,6 +140,7 @@ class DriftReceivableRepository implements ReceivableRepository {
         description: '记录应收信息',
       );
     });
+    _notifyReceivablesChanged();
     return (await getById(receivable.id))!;
   }
 
@@ -193,6 +194,7 @@ class DriftReceivableRepository implements ReceivableRepository {
         description: '更新应收信息',
       );
     });
+    _notifyReceivablesChanged();
     return (await getById(receivable.id))!;
   }
 
@@ -265,6 +267,7 @@ class DriftReceivableRepository implements ReceivableRepository {
         amount: amount,
       );
     });
+    _notifyReceivablesChanged();
   }
 
   @override
@@ -296,6 +299,7 @@ class DriftReceivableRepository implements ReceivableRepository {
             : null,
       );
     });
+    _notifyReceivablesChanged();
   }
 
   @override
@@ -314,6 +318,13 @@ class DriftReceivableRepository implements ReceivableRepository {
       title: title,
       description: description,
     );
+    _notifyReceivablesChanged();
+  }
+
+  void _notifyReceivablesChanged() {
+    _database.notifyUpdates({
+      TableUpdate.onTable(_database.accountEntries),
+    });
   }
 
   Future<void> _insertEvent(
@@ -407,18 +418,30 @@ final receivableRepositoryProvider = Provider<ReceivableRepository>((ref) {
   );
 });
 
+final receivableDataSignalProvider = StreamProvider<int>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final database = ref.watch(databaseProvider);
+  var revision = 0;
+  await for (final _ in database.accountDao.watchAll()) {
+    yield revision++;
+  }
+});
+
 final receivablesProvider = FutureProvider<List<Receivable>>((ref) async {
+  ref.watch(receivableDataSignalProvider);
   await ref.watch(databaseBootstrapProvider.future);
   return ref.watch(receivableRepositoryProvider).getAll();
 });
 
 final receivableEventsProvider =
     FutureProvider.family<List<ReceivableEvent>, String>((ref, id) async {
+      ref.watch(receivableDataSignalProvider);
       await ref.watch(databaseBootstrapProvider.future);
       return ref.watch(receivableRepositoryProvider).getEvents(id);
     });
 
 final receivableMonthCollectedProvider = FutureProvider<double>((ref) async {
+  ref.watch(receivableDataSignalProvider);
   await ref.watch(databaseBootstrapProvider.future);
   final now = DateTime.now();
   final start = DateTime(now.year, now.month);
