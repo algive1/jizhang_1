@@ -364,9 +364,12 @@ export class Store {
     const goals=new Map(live('goals').map(e=>[e.id,e]));
     const receivables=new Map(live('receivables').map(e=>[e.id,e]));
     const balances=new Map([...accounts].map(([id,e])=>[id,Number(e.data.opening_balance_in_cents)]));
+    const metaAccounts=new Set<string>();
     for (const meta of live('account_management_meta')) {
-      check(meta.id===String(meta.data.account_id),'账户扩展标识必须与账户一致');
-      check(accounts.has(String(meta.data.account_id)),'账户扩展引用的账户不存在');
+      const accountId=String(meta.data.account_id);
+      check(accounts.has(accountId),'账户扩展引用的账户不存在');
+      check(!metaAccounts.has(accountId),'同一账户只能存在一份账户扩展信息');
+      metaAccounts.add(accountId);
     }
     for (const receivable of receivables.values()) {
       const total=Number(receivable.data.total_amount_in_cents);
