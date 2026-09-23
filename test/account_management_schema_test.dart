@@ -23,12 +23,25 @@ void main() {
       },
     );
 
-    final columns = await database
+    final eventColumns = await database
         .customSelect('PRAGMA table_info(receivable_events)')
         .get();
     expect(
-      columns.map((row) => row.read<String>('name')),
-      contains('amount_in_cents'),
+      eventColumns.map((row) => row.read<String>('name')),
+      containsAll(['book_id', 'amount_in_cents']),
     );
+    final metaColumns = await database
+        .customSelect('PRAGMA table_info(account_management_meta)')
+        .get();
+    expect(
+      metaColumns.map((row) => row.read<String>('name')),
+      containsAll(['id', 'book_id', 'account_id', 'include_in_total']),
+    );
+    final triggers = await database.customSelect(
+      "SELECT name FROM sqlite_master WHERE type='trigger' "
+      "AND name IN ('sync_account_management_meta_insert',"
+      "'sync_receivables_insert','sync_receivable_events_insert')",
+    ).get();
+    expect(triggers, hasLength(3));
   });
 }
