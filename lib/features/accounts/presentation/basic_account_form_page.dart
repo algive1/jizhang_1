@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/utils/entity_id.dart';
@@ -25,8 +24,11 @@ class _BasicAccountFormPageState extends ConsumerState<BasicAccountFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _suffix = TextEditingController();
+  final _platform = TextEditingController();
   final _balance = TextEditingController(text: '0.00');
-  AccountType _type = AccountType.debitCard;
+  late AccountType _type = widget.category == AccountFundCategory.storedValue
+      ? AccountType.cash
+      : AccountType.debitCard;
   String _currency = 'CNY';
   bool _saving = false;
   String? _error;
@@ -35,6 +37,7 @@ class _BasicAccountFormPageState extends ConsumerState<BasicAccountFormPage> {
   void dispose() {
     _name.dispose();
     _suffix.dispose();
+    _platform.dispose();
     _balance.dispose();
     super.dispose();
   }
@@ -68,39 +71,52 @@ class _BasicAccountFormPageState extends ConsumerState<BasicAccountFormPage> {
                       value == null || value.trim().isEmpty ? '请填写账户名称' : null,
                 ),
                 const SizedBox(height: 14),
-                DropdownButtonFormField<AccountType>(
-                  initialValue: _type,
-                  decoration: const InputDecoration(labelText: '账户渠道 / 类型'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: AccountType.cash,
-                      child: Text('现金'),
+                if (widget.category == AccountFundCategory.storedValue)
+                  TextFormField(
+                    controller: _platform,
+                    decoration: const InputDecoration(
+                      labelText: '平台 / 用途 *',
+                      hintText: '如：京东、交通卡、购物卡',
                     ),
-                    DropdownMenuItem(
-                      value: AccountType.wechat,
-                      child: Text('微信'),
-                    ),
-                    DropdownMenuItem(
-                      value: AccountType.alipay,
-                      child: Text('支付宝'),
-                    ),
-                    DropdownMenuItem(
-                      value: AccountType.debitCard,
-                      child: Text('银行卡'),
-                    ),
-                    DropdownMenuItem(
-                      value: AccountType.other,
-                      child: Text('其他'),
-                    ),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (value) => setState(() {
-                          _type = value ?? AccountType.other;
-                          if (!_type.requiresIdentifierSuffix) _suffix.clear();
-                        }),
-                ),
-                if (_type.requiresIdentifierSuffix) ...[
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? '请填写平台或用途'
+                        : null,
+                  )
+                else
+                  DropdownButtonFormField<AccountType>(
+                    initialValue: _type,
+                    decoration: const InputDecoration(labelText: '账户渠道 / 类型'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AccountType.cash,
+                        child: Text('现金'),
+                      ),
+                      DropdownMenuItem(
+                        value: AccountType.wechat,
+                        child: Text('微信'),
+                      ),
+                      DropdownMenuItem(
+                        value: AccountType.alipay,
+                        child: Text('支付宝'),
+                      ),
+                      DropdownMenuItem(
+                        value: AccountType.debitCard,
+                        child: Text('银行卡'),
+                      ),
+                      DropdownMenuItem(
+                        value: AccountType.other,
+                        child: Text('其他'),
+                      ),
+                    ],
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() {
+                            _type = value ?? AccountType.other;
+                            if (!_type.requiresIdentifierSuffix) _suffix.clear();
+                          }),
+                  ),
+                if (widget.category != AccountFundCategory.storedValue &&
+                    _type.requiresIdentifierSuffix) ...[
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _suffix,
@@ -203,6 +219,9 @@ class _BasicAccountFormPageState extends ConsumerState<BasicAccountFormPage> {
       await ref.read(accountManagementRepositoryProvider).create(
         account: account,
         category: widget.category,
+        platform: widget.category == AccountFundCategory.storedValue
+            ? _platform.text.trim()
+            : null,
         includeInTotal: true,
       );
       if (mounted) context.go('/profile/accounts');
