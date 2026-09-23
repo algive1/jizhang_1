@@ -558,14 +558,17 @@ class SharedBookSyncService {
     final entities = (snapshot['entities'] as List).cast<Json>().toList();
     const rank = {
       'accounts': 0,
-      'categories': 1,
-      'goals': 2,
-      'transactions': 3,
-      'goal_milestones': 4,
-      'goal_contributions': 5,
-      'budgets': 6,
-      'recurring_bills': 7,
-      'installment_plans': 8,
+      'account_management_meta': 1,
+      'categories': 2,
+      'goals': 3,
+      'receivables': 4,
+      'transactions': 5,
+      'receivable_events': 6,
+      'goal_milestones': 7,
+      'goal_contributions': 8,
+      'budgets': 9,
+      'recurring_bills': 10,
+      'installment_plans': 11,
     };
     entities.sort((a, b) {
       final order = rank[a['kind']]!.compareTo(rank[b['kind']]!);
@@ -630,13 +633,16 @@ class SharedBookSyncService {
     const deleteOrder = {
       'installment_plans': 0,
       'recurring_bills': 1,
-      'goal_contributions': 2,
-      'goal_milestones': 3,
-      'budgets': 4,
-      'transactions': 5,
-      'goals': 6,
-      'categories': 7,
-      'accounts': 8,
+      'receivable_events': 2,
+      'goal_contributions': 3,
+      'goal_milestones': 4,
+      'budgets': 5,
+      'transactions': 6,
+      'receivables': 7,
+      'goals': 8,
+      'categories': 9,
+      'account_management_meta': 10,
+      'accounts': 11,
     };
     localRows.sort((a, b) {
       final order = deleteOrder[a['kind']]!.compareTo(deleteOrder[b['kind']]!);
