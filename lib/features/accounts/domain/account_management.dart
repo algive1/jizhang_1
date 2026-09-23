@@ -104,8 +104,9 @@ class Receivable {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  double get remainingAmount =>
-      (totalAmount - receivedAmount).clamp(0, totalAmount).toDouble();
+  double get remainingAmount => status == ReceivableStatus.writtenOff
+      ? 0
+      : (totalAmount - receivedAmount).clamp(0, totalAmount).toDouble();
 
   ReceivableStatus get effectiveStatus {
     if (status == ReceivableStatus.completed ||
