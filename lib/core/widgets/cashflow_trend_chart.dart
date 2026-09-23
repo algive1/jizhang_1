@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 import '../formatters/money_formatter.dart';
 import '../models/analysis.dart';
 import 'monotone_smooth_path.dart';
@@ -14,6 +15,10 @@ class CashflowTrendChart extends StatelessWidget {
     required this.onSelected,
     this.showIncome = false,
     this.showExpense = true,
+    this.showTotalAssets = false,
+    this.independentSeriesScales = false,
+    this.incomeColor,
+    this.totalAssetsColor,
     this.year = false,
     this.bubbleLabel,
     this.height = 132,
@@ -25,6 +30,10 @@ class CashflowTrendChart extends StatelessWidget {
   final ValueChanged<int>? onSelected;
   final bool showIncome;
   final bool showExpense;
+  final bool showTotalAssets;
+  final bool independentSeriesScales;
+  final Color? incomeColor;
+  final Color? totalAssetsColor;
   final bool year;
   final String? bubbleLabel;
   final double height;
@@ -61,6 +70,13 @@ class CashflowTrendChart extends StatelessWidget {
                 selected: selected,
                 showIncome: showIncome,
                 showExpense: showExpense,
+                showTotalAssets: showTotalAssets,
+                independentSeriesScales: independentSeriesScales,
+                expenseColor: showTotalAssets
+                    ? context.appPrimary
+                    : (showIncome ? AppColors.warning : AppColors.primary),
+                incomeColor: incomeColor ?? AppColors.income,
+                totalAssetsColor: totalAssetsColor ?? AppColors.warning,
                 year: year,
                 bubbleLabel: bubbleLabel,
                 fontFamily: Theme.of(context).textTheme.bodySmall?.fontFamily,
@@ -79,6 +95,11 @@ class CashflowTrendPainter extends CustomPainter {
     required this.selected,
     required this.showIncome,
     required this.showExpense,
+    required this.showTotalAssets,
+    required this.independentSeriesScales,
+    required this.expenseColor,
+    required this.incomeColor,
+    required this.totalAssetsColor,
     required this.year,
     required this.bubbleLabel,
     this.fontFamily,
@@ -88,6 +109,11 @@ class CashflowTrendPainter extends CustomPainter {
   final int selected;
   final bool showIncome;
   final bool showExpense;
+  final bool showTotalAssets;
+  final bool independentSeriesScales;
+  final Color expenseColor;
+  final Color incomeColor;
+  final Color totalAssetsColor;
   final bool year;
   final String? bubbleLabel;
   final String? fontFamily;
@@ -100,6 +126,19 @@ class CashflowTrendPainter extends CustomPainter {
     final width = math.max(1.0, size.width - left - right);
     final bottom = size.height - 25;
     final height = math.max(1.0, bottom - top);
+    if (showTotalAssets && independentSeriesScales) {
+      _paintIndependentSeries(
+        canvas,
+        size,
+        left,
+        right,
+        top,
+        bottom,
+        width,
+        height,
+      );
+      return;
+    }
     final maximum = points.fold<double>(
       0,
       (value, point) => math.max(
@@ -141,7 +180,6 @@ class CashflowTrendPainter extends CustomPainter {
       );
     }
 
-    final expenseColor = showIncome ? AppColors.warning : AppColors.primary;
     if (showExpense) {
       final expenseValues = points.map((point) => point.expense).toList();
       final expenseLine = _smoothPath(expenseValues, position);
@@ -166,13 +204,14 @@ class CashflowTrendPainter extends CustomPainter {
     if (showIncome) {
       final incomeValues = points.map((point) => point.income).toList();
       final incomeLine = _smoothPath(incomeValues, position);
-      _drawSeries(canvas, incomeLine, incomeValues, AppColors.income);
+      _drawSeries(canvas, incomeLine, incomeValues, incomeColor);
     }
 
     final selectedPoint = points[selectedIndex];
     final selectedValue = showExpense
         ? selectedPoint.expense
         : selectedPoint.income;
+    final selectedColor = showTotalAssets ? totalAssetsColor : expenseColor;
     final current = position(selectedValue, selectedIndex);
     canvas.drawLine(
       Offset(current.dx, top),
@@ -184,15 +223,9 @@ class CashflowTrendPainter extends CustomPainter {
     canvas.drawCircle(
       current,
       7,
-      Paint()
-        ..color = (showIncome ? AppColors.warning : AppColors.primary)
-            .withValues(alpha: .16),
+      Paint()..color = selectedColor.withValues(alpha: .16),
     );
-    canvas.drawCircle(
-      current,
-      4,
-      Paint()..color = showIncome ? AppColors.warning : AppColors.primary,
-    );
+    canvas.drawCircle(current, 4, Paint()..color = selectedColor);
     canvas.drawCircle(
       current,
       4,
@@ -299,6 +332,125 @@ class CashflowTrendPainter extends CustomPainter {
       oldDelegate.selected != selected ||
       oldDelegate.showIncome != showIncome ||
       oldDelegate.showExpense != showExpense ||
+      oldDelegate.showTotalAssets != showTotalAssets ||
+      oldDelegate.independentSeriesScales != independentSeriesScales ||
+      oldDelegate.expenseColor != expenseColor ||
+      oldDelegate.incomeColor != incomeColor ||
+      oldDelegate.totalAssetsColor != totalAssetsColor ||
       oldDelegate.year != year ||
       oldDelegate.bubbleLabel != bubbleLabel;
+
+  void _paintIndependentSeries(
+    Canvas canvas,
+    Size size,
+    double left,
+    double right,
+    double top,
+    double bottom,
+    double width,
+    double height,
+  ) {
+    final selectedIndex = selected.clamp(0, points.length - 1).toInt();
+    final grid = Paint()
+      ..color = AppColors.divider
+      ..strokeWidth = .8;
+    for (var row = 0; row < 4; row++) {
+      final y = top + row * height / 3;
+      for (var x = left; x < size.width - right; x += 7) {
+        canvas.drawLine(
+          Offset(x, y),
+          Offset(math.min(x + 3, size.width - right), y),
+          grid,
+        );
+      }
+    }
+    double xFor(int index) =>
+        left + width * (points.length == 1 ? .5 : index / (points.length - 1));
+    void draw(List<double?> values, Color color) {
+      final known = values.whereType<double>().toList(growable: false);
+      if (known.isEmpty) return;
+      final minimum = known.reduce(math.min);
+      final maximum = known.reduce(math.max);
+      final span = maximum - minimum;
+      Offset position(double value, int index) => Offset(
+        xFor(index),
+        bottom - (span == 0 ? .5 : (value - minimum) / span) * height,
+      );
+      var segmentStart = -1;
+      var segment = <double>[];
+      void paintSegment() {
+        if (segment.isEmpty) return;
+        if (segment.length == 1) {
+          canvas.drawCircle(
+            position(segment.single, segmentStart),
+            2,
+            Paint()..color = color,
+          );
+        } else {
+          final line = _smoothPath(
+            segment,
+            (value, index) => position(value, segmentStart + index),
+          );
+          _drawSeries(canvas, line, segment, color);
+        }
+        segment = [];
+      }
+
+      for (var index = 0; index < values.length; index++) {
+        final value = values[index];
+        if (value == null) {
+          paintSegment();
+          segmentStart = -1;
+        } else {
+          if (segmentStart == -1) segmentStart = index;
+          segment.add(value);
+        }
+      }
+      paintSegment();
+      final selectedValue = values[selectedIndex];
+      if (selectedValue != null) {
+        final selectedPoint = position(selectedValue, selectedIndex);
+        canvas.drawCircle(
+          selectedPoint,
+          5.5,
+          Paint()..color = color.withValues(alpha: .18),
+        );
+        canvas.drawCircle(selectedPoint, 3, Paint()..color = color);
+        canvas.drawCircle(
+          selectedPoint,
+          3,
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2,
+        );
+      }
+    }
+
+    if (showExpense) {
+      draw(points.map<double?>((p) => p.expense).toList(), expenseColor);
+    }
+    if (showIncome) {
+      draw(points.map<double?>((p) => p.income).toList(), incomeColor);
+    }
+    draw(points.map((p) => p.totalAssets).toList(), totalAssetsColor);
+    final labels = <int>{
+      0,
+      ((points.length - 1) / 3).round(),
+      (2 * (points.length - 1) / 3).round(),
+      points.length - 1,
+    };
+    for (final index in labels) {
+      final date = points[index].date;
+      _label(
+        canvas,
+        year ? '${date.month}月' : '${date.month}/${date.day}',
+        Offset(
+          (xFor(index) - 13).clamp(left - 8, size.width - 33),
+          bottom + 10,
+        ),
+        maxWidth: 40,
+      );
+    }
+  }
 }

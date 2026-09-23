@@ -24,6 +24,7 @@ import '../../../core/widgets/membership_button.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../analysis/data/analysis_repository.dart';
+import '../../analysis/domain/statistical_analysis_service.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../investments/data/investment_repository.dart';
@@ -583,65 +584,219 @@ class _HomePageState extends ConsumerState<HomePage>
     CashflowCategory category,
     AnalysisSnapshot snapshot,
   ) {
+    var sortField = _CategoryExpenseSort.date;
+    var descending = true;
     return showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
-      showDragHandle: true,
+      showDragHandle: false,
       isScrollControlled: true,
       builder: (context) => Consumer(
         builder: (context, sheetRef, _) {
-          final records = (sheetRef.watch(transactionsProvider).value ?? [])
-              .where(
-                (item) =>
-                    item.isExpense &&
-                    item.currency.toUpperCase() == 'CNY' &&
-                    item.deletedAt == null &&
-                    !item.occurredAt.isAfter(DateTime.now()) &&
-                    snapshot.range.contains(item.occurredAt) &&
-                    (item.categoryId ?? 'uncategorized') == category.id,
-              )
-              .toList();
-          final sheetAccounts =
-              sheetRef.watch(allAccountsProvider).value ?? const [];
-          final sheetAccountNames = {
-            for (final account in sheetAccounts) account.id: account.displayName,
-          };
-          return SafeArea(
-            child: SizedBox(
-              height: MediaQuery.sizeOf(context).height * .65,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                children: [
-                  Text(
-                    '${category.name} · 本月支出',
-                    style: Theme.of(context).textTheme.titleLarge,
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              final records =
+                  (sheetRef.watch(transactionsProvider).value ?? [])
+                      .where(
+                        (item) =>
+                            item.isExpense &&
+                            item.currency.toUpperCase() == 'CNY' &&
+                            item.deletedAt == null &&
+                            !item.occurredAt.isAfter(DateTime.now()) &&
+                            snapshot.range.contains(item.occurredAt) &&
+                            cashflowCategoryKey(item) == category.id,
+                      )
+                      .toList()
+                    ..sort((a, b) {
+                      final comparison = sortField == _CategoryExpenseSort.date
+                          ? a.occurredAt.compareTo(b.occurredAt)
+                          : a.netExpenseAmount.compareTo(b.netExpenseAmount);
+                      if (comparison == 0) {
+                        return a.occurredAt.compareTo(b.occurredAt) *
+                            (descending ? -1 : 1);
+                      }
+                      return comparison * (descending ? -1 : 1);
+                    });
+              final sheetAccounts =
+                  sheetRef.watch(allAccountsProvider).value ?? const [];
+              final sheetAccountNames = {
+                for (final account in sheetAccounts)
+                  account.id: account.displayName,
+              };
+              return SizedBox(
+                height: MediaQuery.sizeOf(context).height * .5,
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 32,
+                          height: 4,
+                          margin: const EdgeInsets.only(top: 10, bottom: 12),
+                          decoration: BoxDecoration(
+                            color: context.appDivider,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 16, 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${category.name} · 本月支出',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _CategoryExpenseSortButton(
+                              label: '日期',
+                              selected:
+                                  sortField == _CategoryExpenseSort.date,
+                              descending: descending,
+                              onPressed: () => setSheetState(() {
+                                if (sortField == _CategoryExpenseSort.date) {
+                                  descending = !descending;
+                                } else {
+                                  sortField = _CategoryExpenseSort.date;
+                                  descending = true;
+                                }
+                              }),
+                            ),
+                            const SizedBox(width: 6),
+                            _CategoryExpenseSortButton(
+                              label: '金额',
+                              selected:
+                                  sortField == _CategoryExpenseSort.amount,
+                              descending: descending,
+                              onPressed: () => setSheetState(() {
+                                if (sortField == _CategoryExpenseSort.amount) {
+                                  descending = !descending;
+                                } else {
+                                  sortField = _CategoryExpenseSort.amount;
+                                  descending = true;
+                                }
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Divider(height: 1, color: context.appDivider),
+                      Expanded(
+                        child: records.isEmpty
+                            ? Center(
+                                child: Text(
+                                  '本月该分类暂无支出',
+                                  style: TextStyle(
+                                    color: context.appSecondaryText,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                                itemCount: records.length,
+                                itemBuilder: (context, index) {
+                                  final record = records[index];
+                                  final source =
+                                      sheetAccountNames[record.accountId];
+                                  final destination =
+                                      record.destinationAccountId == null
+                                      ? null
+                                      : sheetAccountNames[
+                                          record.destinationAccountId!
+                                        ];
+                                  return TransactionTile(
+                                    transaction: record,
+                                    homeStyle: true,
+                                    showDate: true,
+                                    accountName: source == null
+                                        ? null
+                                        : destination == null
+                                        ? source
+                                        : '$source → $destination',
+                                    onTap: () =>
+                                        openTransactionDetail(context, record),
+                                    onLongPress: () => showTransactionActions(
+                                      context,
+                                      ref,
+                                      record,
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  if (records.isEmpty) const Text('本月该分类暂无支出'),
-                  ...records.map((record) {
-                    final source = sheetAccountNames[record.accountId];
-                    final destination = record.destinationAccountId == null
-                        ? null
-                        : sheetAccountNames[record.destinationAccountId!];
-                    return TransactionTile(
-                      transaction: record,
-                      homeStyle: true,
-                      showDate: true,
-                      accountName: source == null
-                          ? null
-                          : destination == null
-                          ? source
-                          : '$source → $destination',
-                      onTap: () => openTransactionDetail(context, record),
-                      onLongPress: () =>
-                          showTransactionActions(context, ref, record),
-                    );
-                  }),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
+      ),
+    );
+  }
+}
+
+enum _CategoryExpenseSort { date, amount }
+
+class _CategoryExpenseSortButton extends StatelessWidget {
+  const _CategoryExpenseSortButton({
+    required this.label,
+    required this.selected,
+    required this.descending,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final bool descending;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? Colors.white : context.appSecondaryText;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '按$label排序，${selected ? (descending ? '降序' : '升序') : '未选中'}',
+      child: Material(
+        color: selected ? context.appPrimary : context.appSurfaceSoft,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  selected
+                      ? descending
+                            ? Icons.arrow_downward_rounded
+                            : Icons.arrow_upward_rounded
+                      : Icons.swap_vert_rounded,
+                  size: 13,
+                  color: foreground,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

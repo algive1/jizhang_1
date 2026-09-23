@@ -168,10 +168,11 @@ class AnalysisInsight {
 }
 
 class CashflowPoint {
-  const CashflowPoint(this.date, this.income, this.expense);
+  const CashflowPoint(this.date, this.income, this.expense, {this.totalAssets});
   final DateTime date;
   final double income;
   final double expense;
+  final double? totalAssets;
 }
 
 class CashflowCategory {

@@ -2,6 +2,14 @@ import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/utils/transaction_semantic_text.dart';
 
+String cashflowCategoryKey(TransactionRecord item) {
+  final name = item.categoryName?.trim();
+  if (name != null && name.isNotEmpty) return 'name:$name';
+  final id = item.categoryId?.trim();
+  if (id != null && id.isNotEmpty) return 'id:${item.bookId}:$id';
+  return 'uncategorized';
+}
+
 class TransactionFeatureService {
   const TransactionFeatureService();
 
@@ -262,7 +270,7 @@ class StatisticalAnalysisService {
   List<CashflowCategory> _cashflowCategories(List<TransactionRecord> records) {
     final groups = <String, List<TransactionRecord>>{};
     for (final record in records) {
-      groups.putIfAbsent(_categoryKey(record), () => []).add(record);
+      groups.putIfAbsent(cashflowCategoryKey(record), () => []).add(record);
     }
     return groups.entries
         .map(
@@ -322,15 +330,15 @@ class StatisticalAnalysisService {
     List<TransactionRecord> previous,
   ) {
     final keys = <String>{
-      ...current.map(_categoryKey),
-      ...previous.map(_categoryKey),
+      ...current.map(cashflowCategoryKey),
+      ...previous.map(cashflowCategoryKey),
     };
     final trends = keys.map((key) {
       final currentItems = current
-          .where((item) => _categoryKey(item) == key)
+          .where((item) => cashflowCategoryKey(item) == key)
           .toList();
       final previousItems = previous
-          .where((item) => _categoryKey(item) == key)
+          .where((item) => cashflowCategoryKey(item) == key)
           .toList();
       final currentAmount = _sum(currentItems);
       final previousAmount = _sum(previousItems);
@@ -401,10 +409,10 @@ class StatisticalAnalysisService {
       };
       var reasonText = '${trend.attribution.label}增加';
       final categoryCurrent = current.where(
-        (item) => _categoryKey(item) == trend.categoryId,
+        (item) => cashflowCategoryKey(item) == trend.categoryId,
       );
       final categoryPrevious = previous.where(
-        (item) => _categoryKey(item) == trend.categoryId,
+        (item) => cashflowCategoryKey(item) == trend.categoryId,
       );
       final deliveryCount = categoryCurrent.where(_isDelivery).length;
       final previousDeliveryCount = categoryPrevious.where(_isDelivery).length;
@@ -519,14 +527,6 @@ class StatisticalAnalysisService {
           : _sum(regular.where((item) => features.isWeekend(item.occurredAt))) /
                 weekendDays,
     );
-  }
-
-  String _categoryKey(TransactionRecord item) {
-    final name = item.categoryName?.trim();
-    if (name != null && name.isNotEmpty) return 'name:$name';
-    final id = item.categoryId?.trim();
-    if (id != null && id.isNotEmpty) return 'id:${item.bookId}:$id';
-    return 'uncategorized';
   }
 
   bool _isLateNight(TransactionRecord item) => item.occurredAt.hour >= 22;
