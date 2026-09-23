@@ -5,7 +5,10 @@ part of 'app_database.dart';
 extension SharedSyncSchema on AppDatabase {
   static const syncKinds = [
     'accounts',
+    'account_management_meta',
     'categories',
+    'receivables',
+    'receivable_events',
     'transactions',
     'goals',
     'goal_milestones',
