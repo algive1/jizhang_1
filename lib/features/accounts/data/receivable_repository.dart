@@ -18,6 +18,7 @@ abstract interface class ReceivableRepository {
   Future<List<ReceivableEvent>> getEvents(String receivableId);
   Future<double> getCollectedBetween(DateTime start, DateTime end);
   Future<Receivable> create(Receivable receivable);
+  Future<Receivable> update(Receivable receivable);
   Future<void> collect({
     required String receivableId,
     required double amount,
@@ -134,6 +135,55 @@ class DriftReceivableRepository implements ReceivableRepository {
         eventType: 'created',
         title: '创建应收',
         description: '记录应收信息',
+      );
+    });
+    return (await getById(receivable.id))!;
+  }
+
+  @override
+  Future<Receivable> update(Receivable receivable) async {
+    await ensureAccountManagementSchema(_database);
+    if (receivable.bookId != bookId) {
+      throw ArgumentError('应收必须属于当前资金账本');
+    }
+    final current = await getById(receivable.id);
+    if (current == null) throw StateError('应收记录不存在');
+    if (receivable.totalAmount + 0.000001 < current.receivedAmount) {
+      throw ArgumentError('应收总额不能小于已收回金额');
+    }
+    final now = DateTime.now();
+    final completed =
+        current.receivedAmount + 0.000001 >= receivable.totalAmount;
+    final nextStatus = completed
+        ? ReceivableStatus.completed
+        : current.status == ReceivableStatus.completed
+        ? ReceivableStatus.pending
+        : current.status;
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'UPDATE receivables SET name=?,type=?,counterparty=?,total_amount_in_cents=?,'
+        'occurred_at=?,expected_at=?,status=?,business_status=?,remark=?,updated_at=? '
+        'WHERE id=? AND book_id=?',
+        [
+          receivable.name.trim(),
+          receivable.type.name,
+          receivable.counterparty.trim(),
+          _toCents(receivable.totalAmount),
+          receivable.occurredAt.millisecondsSinceEpoch,
+          receivable.expectedAt?.millisecondsSinceEpoch,
+          nextStatus.name,
+          completed ? '已完成' : receivable.businessStatus.trim(),
+          _clean(receivable.remark),
+          now.millisecondsSinceEpoch,
+          receivable.id,
+          bookId,
+        ],
+      );
+      await _insertEvent(
+        receivable.id,
+        eventType: 'edited',
+        title: '编辑应收',
+        description: '更新应收信息',
       );
     });
     return (await getById(receivable.id))!;
