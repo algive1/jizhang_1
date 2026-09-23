@@ -76,17 +76,20 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
     String? note,
   }) async {
     await ensureAccountManagementSchema(_database);
-    final created = await _accounts.create(account);
-    await _writeMeta(
-      accountId: created.id,
-      category: category,
-      platform: platform,
-      restrictedStatus: restrictedStatus,
-      expectedReturnAt: expectedReturnAt,
-      includeInTotal: includeInTotal,
-      note: note,
-    );
-    await _touch(created.id);
+    late Account created;
+    await _database.transaction(() async {
+      created = await _accounts.create(account);
+      await _writeMeta(
+        accountId: created.id,
+        category: category,
+        platform: platform,
+        restrictedStatus: restrictedStatus,
+        expectedReturnAt: expectedReturnAt,
+        includeInTotal: includeInTotal,
+        note: note,
+      );
+      await _touch(created.id);
+    });
     return (await _decorate([created])).single;
   }
 
@@ -105,16 +108,18 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
     if (row == null || row.bookId != bookId) {
       throw StateError('当前账本中不存在该账户');
     }
-    await _writeMeta(
-      accountId: accountId,
-      category: category,
-      platform: platform,
-      restrictedStatus: restrictedStatus,
-      expectedReturnAt: expectedReturnAt,
-      includeInTotal: includeInTotal,
-      note: note,
-    );
-    await _touch(accountId);
+    await _database.transaction(() async {
+      await _writeMeta(
+        accountId: accountId,
+        category: category,
+        platform: platform,
+        restrictedStatus: restrictedStatus,
+        expectedReturnAt: expectedReturnAt,
+        includeInTotal: includeInTotal,
+        note: note,
+      );
+      await _touch(accountId);
+    });
   }
 
   Future<void> _writeMeta({
