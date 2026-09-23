@@ -154,6 +154,10 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
 
   Future<void> _runAuthentication() async {
     if (!mounted) return;
+    if (!_isForeground) {
+      _setPhase(_AppLockPhase.locked);
+      return;
+    }
     _setPhase(_AppLockPhase.authenticating);
 
     try {
