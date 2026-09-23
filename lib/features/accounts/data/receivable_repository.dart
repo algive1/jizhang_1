@@ -107,6 +107,9 @@ class DriftReceivableRepository implements ReceivableRepository {
       throw ArgumentError('应收金额必须大于 0');
     }
     if (receivable.name.trim().isEmpty) throw ArgumentError('请填写应收名称');
+    if (receivable.counterparty.trim().isEmpty) {
+      throw ArgumentError('请填写往来对象');
+    }
     await _database.transaction(() async {
       await _database.customStatement(
         'INSERT INTO receivables '
