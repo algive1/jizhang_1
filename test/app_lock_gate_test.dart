@@ -38,7 +38,7 @@ Future<void> _pumpGate(
   WidgetTester tester,
   _FakeAppLockService service,
 ) async {
-  await tester.binding.handleAppLifecycleStateChanged(
+  tester.binding.handleAppLifecycleStateChanged(
     AppLifecycleState.resumed,
   );
   await tester.pumpWidget(
@@ -59,8 +59,8 @@ Future<void> _pumpGate(
 }
 
 void main() {
-  tearDown(() async {
-    await TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+  tearDown(() {
+    TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
       AppLifecycleState.resumed,
     );
   });
@@ -158,12 +158,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('private-home'), findsOneWidget);
 
-    await tester.binding.handleAppLifecycleStateChanged(
+    tester.binding.handleAppLifecycleStateChanged(
       AppLifecycleState.paused,
     );
     await tester.pump();
 
-    await tester.binding.handleAppLifecycleStateChanged(
+    tester.binding.handleAppLifecycleStateChanged(
       AppLifecycleState.resumed,
     );
     await tester.pumpAndSettle();
@@ -193,10 +193,10 @@ void main() {
     expect(service.authenticateCalls, 1);
     expect(find.text('正在验证设备身份…'), findsOneWidget);
 
-    await tester.binding.handleAppLifecycleStateChanged(
+    tester.binding.handleAppLifecycleStateChanged(
       AppLifecycleState.paused,
     );
-    await tester.binding.handleAppLifecycleStateChanged(
+    tester.binding.handleAppLifecycleStateChanged(
       AppLifecycleState.resumed,
     );
     await tester.pump();
