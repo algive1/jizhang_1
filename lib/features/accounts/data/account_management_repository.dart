@@ -129,8 +129,8 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
     final now = DateTime.now().millisecondsSinceEpoch;
     await _database.customStatement(
       'INSERT INTO account_management_meta '
-      '(account_id,fund_category,platform,restricted_status,expected_return_at,include_in_total,note,updated_at) '
-      'VALUES (?,?,?,?,?,?,?,?) '
+      '(id,book_id,account_id,fund_category,platform,restricted_status,expected_return_at,include_in_total,note,updated_at) '
+      'VALUES (?,?,?,?,?,?,?,?,?,?) '
       'ON CONFLICT(account_id) DO UPDATE SET '
       'fund_category=excluded.fund_category,'
       'platform=excluded.platform,'
@@ -140,6 +140,8 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
       'note=excluded.note,'
       'updated_at=excluded.updated_at',
       [
+        accountId,
+        bookId,
         accountId,
         category.name,
         _clean(platform),
