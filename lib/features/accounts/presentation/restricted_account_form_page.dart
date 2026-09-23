@@ -252,7 +252,7 @@ class _RestrictedAccountFormPageState
     final account = Account(
       id: 'account-${newEntityId()}',
       name: _name.text.trim(),
-      type: AccountType.other,
+      type: AccountType.cash,
       balance: balance,
       openingBalance: balance,
       currency: 'CNY',
