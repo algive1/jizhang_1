@@ -43,6 +43,9 @@ jobs:
       - name: Verify lockfile is current
         run: git diff --exit-code -- pubspec.lock
 
+      - name: Run app lock startup regressions
+        run: flutter test --reporter compact test/app_lock_gate_test.dart
+
       - name: Analyze
         run: flutter analyze
 

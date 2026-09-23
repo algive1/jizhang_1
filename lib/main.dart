@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -29,15 +28,6 @@ Future<void> main() async {
   await runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     await initializeDateFormatting('zh_CN');
-    // Compile every liquid-glass fragment program up front so the first frame
-    // that shows the navigation bar is glass on its first paint instead of
-    // flashing the un-compiled fallback. Best-effort: a platform without
-    // shader support must still start.
-    try {
-      await LiquidGlassShaders.ensureLoaded();
-    } on Object {
-      // Frosted fallback path takes over; startup must not fail for glass.
-    }
     // A staged restore must be applied before runApp creates the foreground
     // database. Background FlutterEngine entrypoints deliberately skip this so
     // they can never replace a database that the foreground engine is using.

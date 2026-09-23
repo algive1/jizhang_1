@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -27,6 +28,16 @@ import '../features/security/presentation/app_lock_gate.dart';
 import '../features/budgets/application/budget_alert_notification_service.dart';
 import '../features/budgets/data/budget_repository.dart';
 import '../features/settings/application/theme_controller.dart';
+
+final startupVisualWarmupProvider = FutureProvider<void>((ref) async {
+  try {
+    await LiquidGlassShaders.ensureLoaded();
+  } on Object {
+    // Liquid glass has a frosted fallback. Shader warm-up must never prevent
+    // startup, but doing it behind the Flutter poster avoids extending the
+    // Android/iOS native launch screen while still preparing the first lens.
+  }
+});
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -386,7 +397,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   Widget build(BuildContext context) {
     final ref = this.ref;
     final databaseBootstrap = ref.watch(databaseBootstrapProvider);
-    if (databaseBootstrap.isLoading || !_startupPosterElapsed) {
+    final visualWarmup = ref.watch(startupVisualWarmupProvider);
+    if (databaseBootstrap.isLoading ||
+        visualWarmup.isLoading ||
+        !_startupPosterElapsed) {
       return const MaterialApp(
         title: '好好记账',
         debugShowCheckedModeBanner: false,
