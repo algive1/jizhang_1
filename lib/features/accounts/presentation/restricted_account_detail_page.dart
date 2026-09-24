@@ -623,13 +623,6 @@ class _IdentityCard extends StatelessWidget {
             ],
           ),
         ),
-        AccountPrototypeStatusPill(
-          label:
-              item.restrictedStatus?.label ??
-              RestrictedFundStatus.locked.label,
-          color: context.appPrimary,
-          icon: Icons.lock_outline_rounded,
-        ),
       ],
     ),
   );
