@@ -69,7 +69,7 @@ class AccountTypeSelectionPage extends StatelessWidget {
           icon: Icons.account_balance_wallet_outlined,
           title: '日常资金',
           subtitle: '用于日常收支，可随时使用的资金',
-          color: const Color(0xff54A85D),
+          color: context.appPrimary,
           onTap: () => context.push('/profile/accounts/add/basic/available'),
         ),
         _TypeCard(
