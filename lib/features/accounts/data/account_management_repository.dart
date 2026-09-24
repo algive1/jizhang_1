@@ -214,7 +214,7 @@ final accountManagementRepositoryProvider =
       final database = ref.watch(databaseProvider);
       final assetBookId =
           ref.watch(activeBookProvider)?.assetBookId ??
-          ref.watch(activeBookIdProvider);
+          (ref.watch(activeBookIdProvider) as String);
       return DriftAccountManagementRepository(
         database,
         DriftAccountRepository(database, bookId: assetBookId),
