@@ -1080,6 +1080,7 @@ class AppDatabase extends _$AppDatabase {
       'received_amount_in_cents INTEGER NOT NULL DEFAULT 0,'
       'occurred_at INTEGER NOT NULL,'
       'expected_at INTEGER,'
+      'reminder_at INTEGER,'
       'status TEXT NOT NULL DEFAULT "pending",'
       'business_status TEXT NOT NULL DEFAULT "",'
       'remark TEXT,'
@@ -1087,6 +1088,16 @@ class AppDatabase extends _$AppDatabase {
       'updated_at INTEGER NOT NULL'
       ')',
     );
+    final receivableColumns = await customSelect(
+      'PRAGMA table_info(receivables)',
+    ).get();
+    if (!receivableColumns.any(
+      (row) => row.read<String>('name') == 'reminder_at',
+    )) {
+      await customStatement(
+        'ALTER TABLE receivables ADD COLUMN reminder_at INTEGER',
+      );
+    }
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_receivables_book_status '
       'ON receivables(book_id, status, expected_at)',
