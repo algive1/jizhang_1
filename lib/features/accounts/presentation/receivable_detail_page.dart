@@ -377,7 +377,7 @@ class ReceivableDetailPage extends ConsumerWidget {
         ),
       ),
     );
-    if (choice == null) return;
+    if (choice == null || !context.mounted) return;
     try {
       if (choice == 'clear') {
         await ref.read(receivableRepositoryProvider).setReminder(item.id, null);
