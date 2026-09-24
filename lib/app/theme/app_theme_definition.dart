@@ -175,18 +175,18 @@ abstract final class BuiltInThemes {
   static const liquidGlass = AppThemeDefinition(
     id: 'liquid_glass',
     name: '液态玻璃',
-    description: '通透玻璃控制层，轻盈而有层次',
+    description: '夕阳奶油与暖金玻璃，沉浸、通透而有层次',
     premium: true,
     style: AppThemeStyle.liquidGlass,
-    background: Color(0xFFF1F6FF),
-    surface: Color(0xFFFBFCFF),
-    surfaceSoft: Color(0xFFF0F4FB),
-    primary: Color(0xFF5577B8),
-    primaryDark: Color(0xFF385995),
-    primarySoft: Color(0xFFE1E9FA),
-    textPrimary: Color(0xFF18243A),
-    textSecondary: Color(0xFF66748B),
-    divider: Color(0xFFD9E2F0),
+    background: Color(0xFFF6EBDD),
+    surface: Color(0xFFFFFAF3),
+    surfaceSoft: Color(0xFFF4E7D8),
+    primary: Color(0xFFD88A3D),
+    primaryDark: Color(0xFF8C5729),
+    primarySoft: Color(0xFFF5DDBF),
+    textPrimary: Color(0xFF2C2118),
+    textSecondary: Color(0xFF7E6D5E),
+    divider: Color(0xFFE7D5C2),
   );
 
   static const all = [freshGreen, mistBlue, almond, liquidGlass];

@@ -99,3 +99,48 @@ final effectiveThemeProvider = Provider<AppThemeDefinition>((ref) {
   // premium theme becomes effective again without silently changing preference.
   return BuiltInThemes.freshGreen;
 });
+
+
+enum AppBrightnessPreference { light, dark }
+
+const _brightnessSettingKey = 'appearance.brightness.preferred.v1';
+
+class BrightnessController
+    extends AsyncNotifier<AppBrightnessPreference> {
+  @override
+  Future<AppBrightnessPreference> build() async {
+    final raw = await ref
+        .read(appSettingsRepositoryProvider)
+        .get(_brightnessSettingKey);
+    return raw == AppBrightnessPreference.dark.name
+        ? AppBrightnessPreference.dark
+        : AppBrightnessPreference.light;
+  }
+
+  Future<void> select(AppBrightnessPreference value) async {
+    final previous = state.value ?? AppBrightnessPreference.light;
+    state = AsyncData(value);
+    try {
+      await ref
+          .read(appSettingsRepositoryProvider)
+          .set(_brightnessSettingKey, value.name);
+    } on Object {
+      state = AsyncData(previous);
+      rethrow;
+    }
+  }
+
+  Future<void> toggle() async {
+    final current = state.value ?? AppBrightnessPreference.light;
+    await select(
+      current == AppBrightnessPreference.light
+          ? AppBrightnessPreference.dark
+          : AppBrightnessPreference.light,
+    );
+  }
+}
+
+final brightnessModeProvider =
+    AsyncNotifierProvider<BrightnessController, AppBrightnessPreference>(
+      BrightnessController.new,
+    );

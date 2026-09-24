@@ -472,9 +472,16 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     }
 
     final appearance = ref.watch(effectiveThemeProvider);
+    final brightnessPreference =
+        ref.watch(brightnessModeProvider).value ??
+        AppBrightnessPreference.light;
     return MaterialApp.router(
       title: '好好记账',
       theme: AppTheme.light(appearance),
+      darkTheme: AppTheme.dark(appearance),
+      themeMode: brightnessPreference == AppBrightnessPreference.dark
+          ? ThemeMode.dark
+          : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
       locale: const Locale('zh', 'CN'),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -488,15 +495,20 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         // do not draw their own background still sit on something with a
         // little variation. `AppScaffold` layers its mesh gradient on top of
         // this for the shell routes.
+        final scheme = Theme.of(context).colorScheme;
+        final background = Theme.of(context).scaffoldBackgroundColor;
         return DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                appearance.background,
-                appearance.primarySoft,
-                appearance.surface,
+                background,
+                Color.alphaBlend(
+                  scheme.primary.withValues(alpha: .08),
+                  scheme.surface,
+                ),
+                scheme.surface,
               ],
               stops: const [0, .52, 1],
             ),

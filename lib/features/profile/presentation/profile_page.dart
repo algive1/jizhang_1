@@ -26,12 +26,17 @@ import '../../sharing/data/session_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../data/profile_stats.dart';
 import 'profile_cards.dart';
+import 'liquid_glass_profile_page.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (context.appUsesLiquidGlass) {
+      return const LiquidGlassProfilePage();
+    }
+
     final accounts = ref.watch(allAccountsProvider);
     final categories = ref.watch(categoriesProvider);
     final transactions = ref.watch(allTransactionsProvider);

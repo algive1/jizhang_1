@@ -54,6 +54,7 @@ import '../../features/membership/presentation/membership_page.dart';
 import '../../features/membership/presentation/membership_records_page.dart';
 import '../../features/legal/presentation/legal_document_page.dart';
 import '../../features/profile/presentation/profile_page.dart';
+import '../../features/profile/presentation/profile_quick_actions_page.dart';
 import '../../features/settings/presentation/theme_settings_page.dart';
 import '../../features/data_export/presentation/data_export_page.dart';
 import '../../core/models/transaction_record.dart';
@@ -288,6 +289,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'appearance',
                 builder: (context, state) => const ThemeSettingsPage(),
+              ),
+              GoRoute(
+                path: 'quick-actions',
+                builder: (context, state) =>
+                    const ProfileQuickActionsPage(),
               ),
               GoRoute(
                 path: 'privacy',
