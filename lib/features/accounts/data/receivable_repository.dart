@@ -25,6 +25,7 @@ abstract interface class ReceivableRepository {
     required String destinationAccountId,
   });
   Future<void> writeOff(String receivableId);
+  Future<void> setReminder(String receivableId, DateTime? reminderAt);
   Future<void> addEvent({
     required String receivableId,
     required String eventType,
@@ -114,8 +115,8 @@ class DriftReceivableRepository implements ReceivableRepository {
       await _database.customStatement(
         'INSERT INTO receivables '
         '(id,book_id,name,type,counterparty,total_amount_in_cents,received_amount_in_cents,'
-        'occurred_at,expected_at,status,business_status,remark,created_at,updated_at) '
-        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        'occurred_at,expected_at,reminder_at,status,business_status,remark,created_at,updated_at) '
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
         [
           receivable.id,
           receivable.bookId,
@@ -126,6 +127,7 @@ class DriftReceivableRepository implements ReceivableRepository {
           _toCents(receivable.receivedAmount),
           receivable.occurredAt.millisecondsSinceEpoch,
           receivable.expectedAt?.millisecondsSinceEpoch,
+          receivable.reminderAt?.millisecondsSinceEpoch,
           receivable.status.name,
           receivable.businessStatus.trim(),
           _clean(receivable.remark),
@@ -170,7 +172,7 @@ class DriftReceivableRepository implements ReceivableRepository {
     await _database.transaction(() async {
       await _database.customStatement(
         'UPDATE receivables SET name=?,type=?,counterparty=?,total_amount_in_cents=?,'
-        'occurred_at=?,expected_at=?,status=?,business_status=?,remark=?,updated_at=? '
+        'occurred_at=?,expected_at=?,reminder_at=?,status=?,business_status=?,remark=?,updated_at=? '
         'WHERE id=? AND book_id=?',
         [
           receivable.name.trim(),
@@ -179,6 +181,7 @@ class DriftReceivableRepository implements ReceivableRepository {
           _toCents(receivable.totalAmount),
           receivable.occurredAt.millisecondsSinceEpoch,
           receivable.expectedAt?.millisecondsSinceEpoch,
+          receivable.reminderAt?.millisecondsSinceEpoch,
           nextStatus.name,
           completed ? '已完成' : receivable.businessStatus.trim(),
           _clean(receivable.remark),
@@ -303,6 +306,38 @@ class DriftReceivableRepository implements ReceivableRepository {
   }
 
   @override
+  Future<void> setReminder(String receivableId, DateTime? reminderAt) async {
+    await ensureAccountManagementSchema(_database);
+    final current = await getById(receivableId);
+    if (current == null) throw StateError('应收记录不存在');
+    if (current.status == ReceivableStatus.completed ||
+        current.status == ReceivableStatus.writtenOff) {
+      throw StateError('已结束的应收不能设置提醒');
+    }
+    final now = DateTime.now();
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'UPDATE receivables SET reminder_at=?,updated_at=? WHERE id=? AND book_id=?',
+        [
+          reminderAt?.millisecondsSinceEpoch,
+          now.millisecondsSinceEpoch,
+          receivableId,
+          bookId,
+        ],
+      );
+      await _insertEvent(
+        receivableId,
+        eventType: 'reminder',
+        title: reminderAt == null ? '取消提醒' : '设置提醒',
+        description: reminderAt == null
+            ? '已取消提醒'
+            : '提醒日期 ${_formatDate(reminderAt)}',
+      );
+    });
+    _notifyReceivablesChanged();
+  }
+
+  @override
   Future<void> addEvent({
     required String receivableId,
     required String eventType,
@@ -371,6 +406,11 @@ class DriftReceivableRepository implements ReceivableRepository {
           : DateTime.fromMillisecondsSinceEpoch(
               row.read<int>('expected_at'),
             ),
+      reminderAt: row.readNullable<int>('reminder_at') == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              row.read<int>('reminder_at'),
+            ),
       status: ReceivableStatus.values.where(
         (item) => item.name == rawStatus,
       ).firstOrNull ?? ReceivableStatus.pending,
@@ -400,6 +440,11 @@ class DriftReceivableRepository implements ReceivableRepository {
   );
 
   int _toCents(double value) => (value * 100).round();
+
+  String _formatDate(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 
   String? _clean(String? value) {
     final cleaned = value?.trim();
