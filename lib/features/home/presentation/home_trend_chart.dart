@@ -19,7 +19,7 @@ class HomeTrendChart extends StatelessWidget {
     required this.onSelected,
     this.year = false,
     this.currency = 'CNY',
-    this.height = 112,
+    this.height = 104,
     super.key,
   });
 
@@ -55,7 +55,7 @@ class HomeTrendChart extends StatelessWidget {
           onSelected!((ratio * (points.length - 1)).round());
         }
 
-        const tooltipWidth = 92.0;
+        const tooltipWidth = 80.0;
         final tooltipLeft = (xFor(selectedIndex) - tooltipWidth / 2)
             .clamp(0.0, math.max(0.0, constraints.maxWidth - tooltipWidth))
             .toDouble();
@@ -91,7 +91,7 @@ class HomeTrendChart extends StatelessWidget {
                 ),
                 Positioned(
                   left: tooltipLeft,
-                  top: -44,
+                  top: -40,
                   width: tooltipWidth,
                   child: IgnorePointer(
                     child: _TrendTooltip(
@@ -121,7 +121,7 @@ class _TrendTooltip extends StatelessWidget {
     final title =
         '${date.month}/${date.day}（${_weekdayLabel(date.weekday)}）';
     return Container(
-      padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       decoration: BoxDecoration(
         color: context.appSurfaceRaised,
         borderRadius: BorderRadius.circular(10),
@@ -145,24 +145,24 @@ class _TrendTooltip extends StatelessWidget {
             softWrap: false,
             style: TextStyle(
               color: context.appSecondaryText,
-              fontSize: 9.5,
+              fontSize: 8.5,
               height: 1.05,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           _TooltipRow(
             color: homeTrendExpenseColor,
             label: '支出',
             amount: '¥${MoneyFormatter.whole(point.expense)}',
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           _TooltipRow(
             color: homeTrendIncomeColor,
             label: '收入',
             amount: '¥${MoneyFormatter.whole(point.income)}',
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           _TooltipRow(
             color: homeTrendAssetColor,
             label: '资产',
@@ -200,7 +200,7 @@ class _TooltipRow extends StatelessWidget {
         label,
         style: TextStyle(
           color: color,
-          fontSize: 9.5,
+          fontSize: 8.5,
           height: 1,
           fontWeight: FontWeight.w700,
         ),
@@ -214,7 +214,7 @@ class _TooltipRow extends StatelessWidget {
             amount,
             style: TextStyle(
               color: color,
-              fontSize: 9.5,
+              fontSize: 8.5,
               height: 1,
               fontWeight: FontWeight.w700,
             ),
@@ -586,7 +586,7 @@ class _HomeTrendPainter extends CustomPainter {
         text: text,
         style: TextStyle(
           color: axisTextColor,
-          fontSize: 8.5,
+          fontSize: 8,
           height: 1,
           fontWeight: FontWeight.w500,
         ),
