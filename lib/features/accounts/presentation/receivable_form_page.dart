@@ -184,9 +184,17 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
       _saving = true;
       _error = null;
     });
-    final assetBookId =
+    final String? assetBookCandidate =
         ref.read(activeBookProvider)?.assetBookId ??
-        (ref.read(activeBookIdProvider) as String);
+        ref.read(activeBookIdProvider);
+    if (assetBookCandidate == null) {
+      setState(() {
+        _saving = false;
+        _error = '当前资产账本不可用';
+      });
+      return;
+    }
+    final assetBookId = assetBookCandidate;
     final now = DateTime.now();
     final item = Receivable(
       id: 'receivable-${newEntityId()}',
