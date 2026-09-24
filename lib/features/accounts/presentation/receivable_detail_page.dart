@@ -100,13 +100,6 @@ class ReceivableDetailPage extends ConsumerWidget {
                     ],
                   ),
                 ),
-                AccountPrototypeStatusPill(
-                  label: item.visibleStatus,
-                  color:
-                      item.effectiveStatus == ReceivableStatus.overdue
-                      ? const Color(0xffE05C5C)
-                      : context.appPrimary,
-                ),
               ],
             ),
           ),
