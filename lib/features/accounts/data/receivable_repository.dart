@@ -410,7 +410,7 @@ class DriftReceivableRepository implements ReceivableRepository {
 final receivableRepositoryProvider = Provider<ReceivableRepository>((ref) {
   final assetBookId =
       ref.watch(activeBookProvider)?.assetBookId ??
-      ref.watch(activeBookIdProvider);
+      (ref.watch(activeBookIdProvider) as String);
   return DriftReceivableRepository(
     ref.watch(databaseProvider),
     bookId: assetBookId,
