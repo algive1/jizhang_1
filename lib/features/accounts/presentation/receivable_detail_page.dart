@@ -9,6 +9,7 @@ import '../../../core/widgets/app_card.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
+import 'account_management_visuals.dart';
 
 class ReceivableDetailPage extends ConsumerWidget {
   const ReceivableDetailPage({required this.receivableId, super.key});
@@ -62,55 +63,83 @@ class ReceivableDetailPage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Column(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: const Color(0xffE7F0FF),
-                child: Icon(
-                  _icon(item.type),
-                  color: const Color(0xff5B8DEF),
-                  size: 26,
+          AppCard(
+            borderRadius: 22,
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor:
+                      context.appPrimarySoft.withValues(alpha: .62),
+                  child: Icon(
+                    _icon(item.type),
+                    color: context.appPrimary,
+                    size: 26,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.counterparty,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.appSecondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                item.counterparty,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.appSecondaryText,
+                AccountPrototypeStatusPill(
+                  label: item.visibleStatus,
+                  color:
+                      item.effectiveStatus == ReceivableStatus.overdue
+                      ? const Color(0xffE05C5C)
+                      : context.appPrimary,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           AppCard(
-            color: context.appPrimarySoft.withValues(alpha: .62),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            color: context.appSurface.withValues(alpha: .92),
+            borderRadius: 22,
+            child: Stack(
               children: [
-                Text(
-                  '待收金额（元）',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.appSecondaryText,
-                  ),
+                const Positioned(
+                  right: -8,
+                  top: -10,
+                  child: AccountLeafPlaceholder(size: 104, opacity: .14),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '¥ ${MoneyFormatter.decimal(item.remainingAmount)}',
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '待收金额（元）',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.appSecondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '¥ ${MoneyFormatter.decimal(item.remainingAmount)}',
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -127,12 +156,11 @@ class ReceivableDetailPage extends ConsumerWidget {
                   '预计到账',
                   item.expectedAt == null ? '未设置' : _date(item.expectedAt!),
                 ),
-                _line(
+                _statusLine(
                   context,
                   '当前状态',
                   item.visibleStatus,
-                  valueColor:
-                      item.effectiveStatus == ReceivableStatus.overdue
+                  item.effectiveStatus == ReceivableStatus.overdue
                       ? const Color(0xffE05C5C)
                       : const Color(0xffE79B3A),
                 ),
@@ -299,25 +327,85 @@ class ReceivableDetailPage extends ConsumerWidget {
     Receivable item,
   ) async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final choice = await showModalBottomSheet<String>(
       context: context,
-      initialDate: item.expectedAt?.isAfter(now) == true
-          ? item.expectedAt!
-          : now.add(const Duration(days: 1)),
-      firstDate: now,
-      lastDate: DateTime(now.year + 5),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '应收提醒',
+                style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.reminderAt == null
+                    ? '尚未设置提醒日期'
+                    : '当前提醒：${_date(item.reminderAt!)}',
+                style: TextStyle(
+                  color: sheetContext.appSecondaryText,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext, 'set'),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: Text(item.reminderAt == null ? '设置提醒日期' : '修改提醒日期'),
+                ),
+              ),
+              if (item.reminderAt != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(sheetContext, 'clear'),
+                    child: const Text('取消提醒'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Text(
+                '当前先保存提醒日期；系统级通知统一接入后可直接使用该数据。',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: sheetContext.appSecondaryText,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    if (picked == null) return;
+    if (choice == null) return;
     try {
-      await ref.read(receivableRepositoryProvider).addEvent(
-        receivableId: item.id,
-        eventType: 'reminder',
-        title: '设置提醒',
-        description: '提醒日期 ${_date(picked)}',
-      );
+      if (choice == 'clear') {
+        await ref.read(receivableRepositoryProvider).setReminder(item.id, null);
+      } else {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate:
+              item.reminderAt ??
+              (item.expectedAt?.isAfter(now) == true
+                  ? item.expectedAt!
+                  : now.add(const Duration(days: 1))),
+          firstDate: DateTime(now.year, now.month, now.day),
+          lastDate: DateTime(now.year + 5),
+        );
+        if (picked == null) return;
+        await ref.read(receivableRepositoryProvider).setReminder(item.id, picked);
+      }
+      ref.invalidate(receivablesProvider);
       ref.invalidate(receivableEventsProvider(item.id));
       if (context.mounted) {
-        _message(context, '提醒日期已记录');
+        _message(context, choice == 'clear' ? '已取消提醒' : '提醒日期已保存');
       }
     } on Object catch (error) {
       if (context.mounted) _message(context, '设置失败：$error');
@@ -517,6 +605,7 @@ class ReceivableDetailPage extends ConsumerWidget {
           receivedAmount: item.receivedAmount,
           occurredAt: occurredAt,
           expectedAt: expectedAt,
+          reminderAt: item.reminderAt,
           status: item.status,
           businessStatus: businessStatus,
           remark: remark.text.trim(),
@@ -537,6 +626,31 @@ class ReceivableDetailPage extends ConsumerWidget {
       businessStatusController.dispose();
     }
   }
+
+  static Widget _statusLine(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.appSecondaryText,
+            ),
+          ),
+        ),
+        const Spacer(),
+        AccountPrototypeStatusPill(label: value, color: color),
+      ],
+    ),
+  );
 
   static Widget _line(
     BuildContext context,
