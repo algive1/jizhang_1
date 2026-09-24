@@ -195,7 +195,6 @@ class AppLiquidGlassButton extends StatelessWidget {
       return _HighContrastActionButton(
         label: label,
         icon: icon,
-        child: child,
         onPressed: onPressed,
         width: width,
         height: height,
@@ -204,13 +203,13 @@ class AppLiquidGlassButton extends StatelessWidget {
         fontSize: fontSize,
         fontWeight: fontWeight,
         iconSize: iconSize,
+        child: child,
       );
     }
 
     return LiquidGlassButton(
       label: label,
       icon: icon,
-      child: child,
       onPressed: onPressed,
       width: width,
       height: height,
@@ -223,6 +222,7 @@ class AppLiquidGlassButton extends StatelessWidget {
         context,
         cornerRadius: height / 2,
       ),
+      child: child,
     );
   }
 }
