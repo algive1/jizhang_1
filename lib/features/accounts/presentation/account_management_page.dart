@@ -147,9 +147,23 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                   hidden: _hidden,
                   onOpenAll: () =>
                       context.push('/profile/accounts/receivables'),
-                  onTap: (item) => context.push(
-                    '/profile/accounts/receivables/${item.id}',
-                  ),
+                  onTap: (item) {
+                    final sourceId = item.sourceTransactionId;
+                    if (sourceId != null) {
+                      context.push(
+                        '/transactions/${Uri.encodeComponent(sourceId)}',
+                      );
+                      return;
+                    }
+                    final sourceId = item.sourceTransactionId;
+              if (sourceId != null) {
+                context.push(
+                  '/transactions/${Uri.encodeComponent(sourceId)}',
+                );
+              } else {
+                context.push('/profile/accounts/receivables/${item.id}');
+              }
+                  },
                 ),
             ],
             const SizedBox(height: 6),
