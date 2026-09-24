@@ -88,6 +88,7 @@ class Receivable {
     this.expectedAt,
     this.reminderAt,
     this.remark,
+    this.sourceTransactionId,
   });
 
   final String id;
@@ -103,6 +104,7 @@ class Receivable {
   final ReceivableStatus status;
   final String businessStatus;
   final String? remark;
+  final String? sourceTransactionId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -126,6 +128,8 @@ class Receivable {
     }
     return status;
   }
+
+  bool get isTransactionProjection => sourceTransactionId != null;
 
   String get visibleStatus =>
       effectiveStatus == ReceivableStatus.overdue
