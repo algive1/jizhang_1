@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
+import '../../../core/models/account_balance_effect.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
@@ -13,6 +14,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../data/account_management_repository.dart';
 import '../data/account_repository.dart';
 import '../domain/account_management.dart';
+import 'account_management_visuals.dart';
 
 class RestrictedAccountDetailPage extends ConsumerStatefulWidget {
   const RestrictedAccountDetailPage({required this.accountId, super.key});
@@ -54,6 +56,17 @@ class _RestrictedAccountDetailPageState
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     final showOpening =
         item.account.openingBalance != 0 && _filter != 2;
+    var runningBalance = item.account.balance;
+    final movements = <_FundMovement>[];
+    for (final record in transactions) {
+      final balanceAfter = runningBalance;
+      final effectInCents =
+          accountBalanceEffect(record)[item.account.id] ?? 0;
+      runningBalance -= effectInCents / 100;
+      movements.add(
+        _FundMovement(record: record, balanceAfter: balanceAfter),
+      );
+    }
 
     return SafeArea(
       child: ListView(
@@ -86,21 +99,34 @@ class _RestrictedAccountDetailPageState
           _IdentityCard(item: item),
           const SizedBox(height: 10),
           AppCard(
-            color: context.appPrimarySoft.withValues(alpha: .66),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            color: context.appSurface.withValues(alpha: .92),
+            borderRadius: 22,
+            child: Stack(
               children: [
-                Text(
-                  '当前余额（元）',
-                  style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+                const Positioned(
+                  right: -8,
+                  top: -8,
+                  child: AccountLeafPlaceholder(size: 102, opacity: .14),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '¥ ${MoneyFormatter.decimal(item.account.balance)}',
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '当前余额（元）',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '¥ ${MoneyFormatter.decimal(item.account.balance)}',
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -190,12 +216,15 @@ class _RestrictedAccountDetailPageState
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Column(
                 children: [
-                  for (var index = 0; index < transactions.length; index++) ...[
+                  for (var index = 0; index < movements.length; index++) ...[
                     _TransactionRow(
-                      record: transactions[index],
+                      movement: movements[index],
                       accountId: item.account.id,
+                      statusLabel:
+                          item.restrictedStatus?.label ??
+                          RestrictedFundStatus.locked.label,
                     ),
-                    if (index != transactions.length - 1 || showOpening)
+                    if (index != movements.length - 1 || showOpening)
                       Divider(height: 1, color: context.appDivider),
                   ],
                   if (showOpening)
@@ -524,31 +553,56 @@ class _IdentityCard extends StatelessWidget {
   final ManagedAccount item;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      CircleAvatar(
-        radius: 28,
-        backgroundColor: const Color(0xffF2E8D7),
-        child: Text(
-          _restrictedMark(item.platform),
-          style: const TextStyle(
-            color: Color(0xffD66A2C),
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => AppCard(
+    borderRadius: 22,
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: context.appPrimarySoft.withValues(alpha: .62),
+          child: Text(
+            _restrictedMark(item.platform),
+            style: TextStyle(
+              color: context.appPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        item.account.displayName,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        '平台账户',
-        style: TextStyle(fontSize: 12, color: context.appSecondaryText),
-      ),
-    ],
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.account.displayName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.platform?.trim().isNotEmpty == true
+                    ? item.platform!
+                    : '平台账户',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.appSecondaryText,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AccountPrototypeStatusPill(
+          label:
+              item.restrictedStatus?.label ??
+              RestrictedFundStatus.locked.label,
+          color: context.appPrimary,
+          icon: Icons.lock_outline_rounded,
+        ),
+      ],
+    ),
   );
 }
 
@@ -568,11 +622,10 @@ class _InfoCard extends StatelessWidget {
       children: [
         _line(context, '账户类型', '受限资金'),
         _line(context, '平台 / 机构', item.platform ?? '未设置'),
-        _line(
+        _statusLine(
           context,
           '资金状态',
           item.restrictedStatus?.label ?? RestrictedFundStatus.locked.label,
-          valueColor: const Color(0xffE88B37),
         ),
         _line(
           context,
@@ -583,6 +636,34 @@ class _InfoCard extends StatelessWidget {
         ),
         _line(context, '是否计入总资产', item.includeInTotal ? '是' : '否'),
         _line(context, '备注', item.note?.trim().isNotEmpty == true ? item.note! : '—'),
+      ],
+    ),
+  );
+
+  Widget _statusLine(
+    BuildContext context,
+    String label,
+    String value,
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 105,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: context.appSecondaryText,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        const Spacer(),
+        AccountPrototypeStatusPill(
+          label: value,
+          color: const Color(0xffE79B3A),
+          icon: Icons.lock_outline_rounded,
+        ),
       ],
     ),
   );
@@ -654,17 +735,30 @@ class _ActionButton extends StatelessWidget {
   );
 }
 
-class _TransactionRow extends StatelessWidget {
-  const _TransactionRow({
+class _FundMovement {
+  const _FundMovement({
     required this.record,
-    required this.accountId,
+    required this.balanceAfter,
   });
 
   final TransactionRecord record;
+  final double balanceAfter;
+}
+
+class _TransactionRow extends StatelessWidget {
+  const _TransactionRow({
+    required this.movement,
+    required this.accountId,
+    required this.statusLabel,
+  });
+
+  final _FundMovement movement;
   final String accountId;
+  final String statusLabel;
 
   @override
   Widget build(BuildContext context) {
+    final record = movement.record;
     final incoming =
         record.destinationAccountId == accountId ||
         (record.type == TransactionType.adjustment &&
@@ -673,26 +767,48 @@ class _TransactionRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 72,
             child: Text(
               _date(record.occurredAt),
-              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+              style: TextStyle(
+                fontSize: 11,
+                color: context.appSecondaryText,
+              ),
             ),
           ),
           Expanded(
-            child: Text(
-              record.note?.trim().isNotEmpty == true
-                  ? record.note!
-                  : record.displayCategoryLabel,
-              style: const TextStyle(fontSize: 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.note?.trim().isNotEmpty == true
+                      ? record.note!
+                      : record.displayCategoryLabel,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$statusLabel｜余额 ¥${MoneyFormatter.decimal(movement.balanceAfter)}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: context.appSecondaryText,
+                  ),
+                ),
+              ],
             ),
           ),
           Text(
             '${incoming ? '+' : '-'}¥${MoneyFormatter.decimal(record.amount.abs())}',
             style: TextStyle(
-              color: incoming ? const Color(0xff3D9B5C) : const Color(0xffE05C5C),
+              color: incoming
+                  ? const Color(0xff3D9B5C)
+                  : const Color(0xffE05C5C),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -724,8 +840,27 @@ class _OpeningBalanceRow extends StatelessWidget {
             style: TextStyle(fontSize: 11, color: context.appSecondaryText),
           ),
         ),
-        const Expanded(
-          child: Text('初始存入', style: TextStyle(fontSize: 13)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '初始存入',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '锁定中｜余额 ¥${MoneyFormatter.decimal((account.openingBalance ?? 0).abs())}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: context.appSecondaryText,
+                ),
+              ),
+            ],
+          ),
         ),
         Text(
           '+¥${MoneyFormatter.decimal((account.openingBalance ?? 0).abs())}',
