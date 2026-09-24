@@ -195,6 +195,9 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                 _TrendSummaryRow(
                   expense: snapshot.totalExpense,
                   income: snapshot.totalIncome,
+                  average: snapshot.range.dayCount <= 0
+                      ? 0
+                      : snapshot.totalExpense / snapshot.range.dayCount,
                   asset: latestAsset,
                   currency: trendCurrency,
                 ),
@@ -240,7 +243,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                 )
               else
                 SizedBox(
-                  height: 112,
+                  height: 104,
                   child: Center(
                     child: Text(
                       '这段时间还没有流水',
@@ -362,12 +365,14 @@ class _TrendSummaryRow extends StatelessWidget {
   const _TrendSummaryRow({
     required this.expense,
     required this.income,
+    required this.average,
     required this.asset,
     required this.currency,
   });
 
   final double expense;
   final double income;
+  final double average;
   final double? asset;
   final String currency;
 
@@ -396,6 +401,11 @@ class _TrendSummaryRow extends StatelessWidget {
             ),
             _divider(context),
             _metric('资产 $assetText', homeTrendAssetColor),
+            _divider(context),
+            _metric(
+              '日均 ¥${MoneyFormatter.whole(average)}',
+              homeTrendExpenseColor,
+            ),
           ],
         ),
       ),
