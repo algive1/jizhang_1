@@ -64,7 +64,7 @@ class AppLiquidGlassCard extends StatelessWidget {
 }
 
 /// Inline tab/segmented control using the same capsule, ink, settled pill,
-/// and moving glass material as [AppBottomNavigation].
+/// and moving glass material as the app bottom navigation.
 ///
 /// The package's inline segmented host owns the local layout; all visible
 /// optical parameters come from [AppLiquidGlassSpec], so it does not invent a
@@ -148,7 +148,7 @@ class AppLiquidGlassTabs extends StatelessWidget {
 ///
 /// Its geometry may be a pill instead of a circle, but tint, blur, shadow,
 /// refraction, chromatic aberration and optical rim are shared with
-/// [QuickAddButton].
+/// the docked quick-add FAB.
 class AppLiquidGlassButton extends StatelessWidget {
   const AppLiquidGlassButton({
     super.key,
