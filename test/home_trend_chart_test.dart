@@ -10,9 +10,9 @@ void main() {
       for (var i = 0; i < 7; i++)
         CashflowPoint(
           DateTime(2026, 9, 19 + i),
-          100 + i * 20,
-          60 + i * 15,
-          totalAssets: 9800 + i * 10,
+          (100 + i * 20).toDouble(),
+          (60 + i * 15).toDouble(),
+          totalAssets: (9800 + i * 10).toDouble(),
         ),
     ];
 
