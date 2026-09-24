@@ -181,7 +181,7 @@ test('账户管理扩展可随共享账本完整同步并校验引用',async(t)=
  store.db.prepare('INSERT INTO users(id,username,password_hash,created_at) VALUES(?,?,?,?)').run('owner','account_owner','unused',now);
  const book='account-management-'+randomUUID();
  const meta:Data={id:'meta-cash',book_id:book,account_id:'cash',fund_category:'restricted',platform:'淘宝',restricted_status:'locked',expected_return_at:null,include_in_total:1,note:'保证金',updated_at:now};
- const receivable:Data={id:'r1',book_id:book,name:'差旅待报销',type:'reimbursement',counterparty:'公司',total_amount_in_cents:56000,received_amount_in_cents:0,occurred_at:now,expected_at:now+86400,status:'pending',business_status:'待提交',remark:null,created_at:now,updated_at:now};
+ const receivable:Data={id:'r1',book_id:book,name:'差旅待报销',type:'reimbursement',counterparty:'公司',total_amount_in_cents:56000,received_amount_in_cents:0,occurred_at:now,expected_at:now+86400,reminder_at:now+43200,status:'pending',business_status:'待提交',remark:null,created_at:now,updated_at:now};
  const event:Data={id:'e1',book_id:book,receivable_id:'r1',event_type:'created',title:'创建应收',description:'记录应收信息',amount_in_cents:null,created_at:now};
  store.create('owner',book,'家庭','family',[
    {kind:'accounts',id:'cash',data:account(book)},
@@ -191,6 +191,7 @@ test('账户管理扩展可随共享账本完整同步并校验引用',async(t)=
  ]);
  assert.equal(store.get(book,'account_management_meta','meta-cash')?.data.account_id,'cash');
  assert.equal(store.get(book,'receivables','r1')?.data.business_status,'待提交');
+ assert.equal(store.get(book,'receivables','r1')?.data.reminder_at,now+43200);
  assert.equal(store.get(book,'receivable_events','e1')?.data.receivable_id,'r1');
 
  const updated={...receivable,received_amount_in_cents:20000,status:'partial',business_status:'部分回收',updated_at:now+1};
