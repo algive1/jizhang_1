@@ -24,6 +24,7 @@ class _RestrictedAccountFormPageState
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _balance = TextEditingController();
+  final _customPlatform = TextEditingController();
   final _note = TextEditingController();
   String _platform = '淘宝';
   RestrictedFundStatus _status = RestrictedFundStatus.locked;
@@ -36,6 +37,7 @@ class _RestrictedAccountFormPageState
   void dispose() {
     _name.dispose();
     _balance.dispose();
+    _customPlatform.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -152,6 +154,20 @@ class _RestrictedAccountFormPageState
                       ? null
                       : (value) => setState(() => _platform = value ?? '其他'),
                 ),
+                if (_platform == '其他') ...[
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _customPlatform,
+                    decoration: const InputDecoration(
+                      labelText: '平台 / 机构名称 *',
+                      hintText: '请输入实际平台或机构名称',
+                    ),
+                    validator: (value) =>
+                        value == null || value.trim().isEmpty
+                        ? '请填写平台或机构名称'
+                        : null,
+                  ),
+                ],
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _balance,
@@ -312,7 +328,9 @@ class _RestrictedAccountFormPageState
           .create(
             account: account,
             category: AccountFundCategory.restricted,
-            platform: _platform,
+            platform: _platform == '其他'
+                ? _customPlatform.text.trim()
+                : _platform,
             restrictedStatus: _status,
             expectedReturnAt: _expectedReturnAt,
             includeInTotal: _includeInTotal,
