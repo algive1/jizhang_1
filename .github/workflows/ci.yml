@@ -76,6 +76,7 @@ jobs:
           test/financial_insight_engine_test.dart
           test/home_insight_drawer_test.dart
           test/home_redesign_domain_test.dart
+          test/home_trend_chart_test.dart
           test/home_recent_transactions_test.dart
           test/analysis_multibook_and_annual_report_test.dart
           test/bookkeeping_template_repository_test.dart
