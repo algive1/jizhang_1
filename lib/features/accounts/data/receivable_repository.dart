@@ -496,15 +496,18 @@ final receivablesProvider = FutureProvider<List<Receivable>>((ref) async {
             item.reimbursementStatus == ReimbursementStatus.partial;
         final completed =
             item.reimbursementStatus == ReimbursementStatus.reimbursed;
+        final projectedTotal = completed
+            ? (item.reimbursementAmount ?? item.amount)
+            : item.amount;
         return Receivable(
           id: 'reimbursement-projection-${item.id}',
           bookId: item.bookId,
           name: item.displayTitle,
           type: ReceivableType.reimbursement,
           counterparty: '公司报销',
-          totalAmount: item.amount,
+          totalAmount: projectedTotal,
           receivedAmount: completed
-              ? item.amount
+              ? projectedTotal
               : partial
               ? (item.reimbursementAmount ?? 0)
               : 0,
