@@ -270,17 +270,19 @@ class _SummaryCard extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact =
+                    constraints.maxWidth < 280 ||
+                    MediaQuery.textScalerOf(context).scale(10) > 13.5;
+                final title = Text(
                   '账户资金总额',
                   style: TextStyle(
                     color: context.appSecondaryText,
                     fontSize: 12,
                   ),
-                ),
-                const SizedBox(width: 6),
-                IconButton(
+                );
+                final visibility = IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints.tightFor(
@@ -295,22 +297,47 @@ class _SummaryCard extends StatelessWidget {
                     size: 17,
                     color: context.appSecondaryText,
                   ),
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(right: 72),
-                  child: Text(
-                    '每一份资金\n都是生活的底气',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: context.appPrimary.withValues(alpha: .64),
-                      fontSize: 10,
-                      height: 1.35,
-                      fontStyle: FontStyle.italic,
-                    ),
+                );
+                final slogan = Text(
+                  '每一份资金\n都是生活的底气',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: context.appPrimary.withValues(alpha: .64),
+                    fontSize: 10,
+                    height: 1.35,
+                    fontStyle: FontStyle.italic,
                   ),
-                ),
-              ],
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [title, const SizedBox(width: 6), visibility],
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: slogan,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    title,
+                    const SizedBox(width: 6),
+                    visibility,
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 72),
+                      child: slogan,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 2),
             Text(
@@ -475,45 +502,75 @@ class _AccountRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: _color(item).withValues(alpha: .13),
-            child: Icon(_icon(item), color: _color(item), size: 19),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.account.displayName,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact =
+          constraints.maxWidth < 280 ||
+          MediaQuery.textScalerOf(context).scale(14) > 17.5;
+      final balance = hidden
+          ? '••••'
+          : '¥${MoneyFormatter.decimal(item.account.balance)}';
+      const balanceStyle = TextStyle(fontWeight: FontWeight.w700);
+
+      return InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: _color(item).withValues(alpha: .13),
+                child: Icon(_icon(item), color: _color(item), size: 19),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.account.displayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if ((item.platform ?? '').isNotEmpty)
+                      Text(
+                        item.platform!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.appSecondaryText,
+                        ),
+                      ),
+                    if (compact)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(balance, style: balanceStyle),
+                        ),
+                      ),
+                  ],
                 ),
-                if ((item.platform ?? '').isNotEmpty)
-                  Text(
-                    item.platform!,
-                    style: TextStyle(fontSize: 11, color: context.appSecondaryText),
-                  ),
-              ],
-            ),
+              ),
+              if (!compact) Text(balance, style: balanceStyle),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: context.appSecondaryText,
+              ),
+            ],
           ),
-          Text(
-            hidden
-                ? '••••'
-                : '¥${MoneyFormatter.decimal(item.account.balance)}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 18, color: context.appSecondaryText),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 
   IconData _icon(ManagedAccount item) {

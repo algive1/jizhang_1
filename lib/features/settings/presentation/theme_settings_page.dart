@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../../core/models/membership.dart';
 import '../../../core/config/testing_access.dart';
@@ -43,18 +44,29 @@ class ThemeSettingsPage extends ConsumerWidget {
                 locked: theme.premium && !premium,
                 onTap: () async {
                   if (theme.premium && !premium) {
-                    final upgrade = await showModalBottomSheet<bool>(
+                    final upgrade = await AppBottomSheet.show<bool>(
                       context: context,
-                      showDragHandle: true,
                       builder: (context) => Padding(
                         padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
-                        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          Text('会员主题', style: Theme.of(context).textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          const Text('该主题属于会员个性化权益。开通会员后即可使用；会员到期后会暂时恢复默认主题，并保留本机主题偏好。'),
-                          const SizedBox(height: 18),
-                          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('查看会员')),
-                        ]),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              '会员主题',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              '该主题属于会员个性化权益。开通会员后即可使用；会员到期后会暂时恢复默认主题，并保留本机主题偏好。',
+                            ),
+                            const SizedBox(height: 18),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('查看会员'),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                     if (upgrade == true && context.mounted) context.push('/profile/membership');

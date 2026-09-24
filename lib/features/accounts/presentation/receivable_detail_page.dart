@@ -6,6 +6,7 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
@@ -320,60 +321,57 @@ class ReceivableDetailPage extends ConsumerWidget {
     Receivable item,
   ) async {
     final now = DateTime.now();
-    final choice = await showModalBottomSheet<String>(
+    final choice = await AppBottomSheet.show<String>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '应收提醒',
-                style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '应收提醒',
+              style: Theme.of(sheetContext).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.reminderAt == null
+                  ? '尚未设置提醒日期'
+                  : '当前提醒：${_date(item.reminderAt!)}',
+              style: TextStyle(
+                color: sheetContext.appSecondaryText,
+                fontSize: 12,
               ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.pop(sheetContext, 'set'),
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(item.reminderAt == null ? '设置提醒日期' : '修改提醒日期'),
+              ),
+            ),
+            if (item.reminderAt != null) ...[
               const SizedBox(height: 8),
-              Text(
-                item.reminderAt == null
-                    ? '尚未设置提醒日期'
-                    : '当前提醒：${_date(item.reminderAt!)}',
-                style: TextStyle(
-                  color: sheetContext.appSecondaryText,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(sheetContext, 'set'),
-                  icon: const Icon(Icons.calendar_month_outlined),
-                  label: Text(item.reminderAt == null ? '设置提醒日期' : '修改提醒日期'),
-                ),
-              ),
-              if (item.reminderAt != null) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(sheetContext, 'clear'),
-                    child: const Text('取消提醒'),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 6),
-              Text(
-                '当前先保存提醒日期；系统级通知统一接入后可直接使用该数据。',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: sheetContext.appSecondaryText,
-                  fontSize: 10,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(sheetContext, 'clear'),
+                  child: const Text('取消提醒'),
                 ),
               ),
             ],
-          ),
+            const SizedBox(height: 6),
+            Text(
+              '当前先保存提醒日期；系统级通知统一接入后可直接使用该数据。',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: sheetContext.appSecondaryText,
+                fontSize: 10,
+              ),
+            ),
+          ],
         ),
       ),
     );

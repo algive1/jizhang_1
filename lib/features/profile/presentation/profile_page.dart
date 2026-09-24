@@ -9,6 +9,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/membership.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../account/application/account_session_controller.dart';
 import '../../account/domain/account_session.dart';
@@ -408,60 +409,56 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  static void _settings(BuildContext context) => showModalBottomSheet<void>(
+  static void _settings(BuildContext context) => AppBottomSheet.show<void>(
     context: context,
-    useRootNavigator: true,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const ListTile(title: Text('设置')),
-          for (final item in [
-            ('信用卡分期', '/profile/installments'),
-            ('财税与账单', '/profile/finance-center'),
-            ('通知设置', '/profile/notification-settings'),
-            ('自动记账', '/profile/autobookkeeping'),
-            ('数据与安全', '/profile/data'),
-          ])
-            ListTile(
-              title: Text(item.$1),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                context.push(item.$2);
-              },
-            ),
-          const Divider(height: 1),
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const ListTile(title: Text('设置')),
+        for (final item in [
+          ('信用卡分期', '/profile/installments'),
+          ('财税与账单', '/profile/finance-center'),
+          ('通知设置', '/profile/notification-settings'),
+          ('自动记账', '/profile/autobookkeeping'),
+          ('数据与安全', '/profile/data'),
+        ])
           ListTile(
-            leading: const Icon(Icons.menu_book_outlined),
-            title: const Text('使用手册'),
+            title: Text(item.$1),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pop(sheetContext);
-              context.push('/profile/help');
+              context.push(item.$2);
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.feedback_outlined),
-            title: const Text('反馈建议'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pop(sheetContext);
-              context.push('/profile/feedback');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('关于好好记账'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pop(sheetContext);
-              context.push('/profile/about');
-            },
-          ),
-        ],
-      ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.menu_book_outlined),
+          title: const Text('使用手册'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.push('/profile/help');
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.feedback_outlined),
+          title: const Text('反馈建议'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.push('/profile/feedback');
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('关于好好记账'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.pop(sheetContext);
+            context.push('/profile/about');
+          },
+        ),
+      ],
     ),
   );
 
