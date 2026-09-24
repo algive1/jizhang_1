@@ -52,6 +52,7 @@ class SharedIdMap {
       'related_transaction_id': 'transactions',
       'credit_account_id': 'accounts',
       'repayment_account_id': 'accounts',
+      'receivable_id': 'receivables',
     };
     for (final entry in refs.entries) {
       if (data[entry.key] != null)

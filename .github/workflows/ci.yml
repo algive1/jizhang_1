@@ -93,6 +93,9 @@ jobs:
           test/xlsx_bill_import_test.dart
           test/category_template_upgrade_test.dart
           test/account_balance_effect_test.dart
+          test/account_management_domain_test.dart
+          test/account_management_schema_test.dart
+          test/account_management_sync_id_map_test.dart
           test/investment_repository_test.dart
           test/voice_parser_test.dart
           test/payment_notification_test.dart

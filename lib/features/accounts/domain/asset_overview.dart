@@ -3,10 +3,19 @@ import '../../../core/models/account.dart';
 /// All totals use signed ledger balances, including archived accounts.
 /// Different currencies are never converted or added together.
 class AssetOverview {
-  AssetOverview(this.currency, this.accounts, {this.investmentValue = 0});
+  AssetOverview(
+    this.currency,
+    this.accounts, {
+    this.investmentValue = 0,
+    this.excludedAccountIds = const {},
+  });
 
   final String currency;
   final List<Account> accounts;
+  final Set<String> excludedAccountIds;
+
+  Iterable<Account> get _includedAccounts =>
+      accounts.where((account) => !excludedAccountIds.contains(account.id));
 
   /// Market value of the investment positions held in this currency.
   ///
@@ -17,11 +26,11 @@ class AssetOverview {
   int get _investmentCents => (investmentValue * 100).round();
 
   int get _assetCents =>
-      accounts
+      _includedAccounts
           .where((a) => a.balance > 0)
           .fold(0, (sum, a) => sum + (a.balance * 100).round()) +
       _investmentCents;
-  int get _debtCents => accounts
+  int get _debtCents => _includedAccounts
       .where((a) => a.balance < 0)
       .fold(0, (sum, a) => sum - (a.balance * 100).round());
   double get assets => _assetCents / 100;
@@ -32,7 +41,7 @@ class AssetOverview {
 
   Map<AssetForm, double> get byForm {
     final cents = <AssetForm, int>{};
-    for (final account in accounts.where((a) => a.balance > 0)) {
+    for (final account in _includedAccounts.where((a) => a.balance > 0)) {
       cents.update(
         account.assetForm,
         (v) => v + (account.balance * 100).round(),
@@ -52,6 +61,7 @@ class AssetOverview {
   static List<AssetOverview> group(
     List<Account> accounts, {
     Map<String, double> investmentByCurrency = const {},
+    Set<String> excludedAccountIds = const {},
   }) {
     final groups = <String, List<Account>>{};
     for (final account in accounts) {
@@ -75,6 +85,7 @@ class AssetOverview {
           currency,
           groups[currency]!,
           investmentValue: investmentByCurrency[currency] ?? 0,
+          excludedAccountIds: excludedAccountIds,
         ),
     ];
   }

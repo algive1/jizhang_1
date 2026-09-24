@@ -18,6 +18,14 @@ import '../../features/account/presentation/account_register_page.dart';
 import '../../features/accounts/presentation/account_management_page.dart';
 import '../../features/accounts/presentation/asset_overview_page.dart';
 import '../../features/accounts/presentation/account_detail_page.dart';
+import '../../features/accounts/presentation/account_type_selection_page.dart';
+import '../../features/accounts/presentation/basic_account_form_page.dart';
+import '../../features/accounts/presentation/restricted_account_form_page.dart';
+import '../../features/accounts/presentation/restricted_account_detail_page.dart';
+import '../../features/accounts/presentation/receivable_overview_page.dart';
+import '../../features/accounts/presentation/receivable_form_page.dart';
+import '../../features/accounts/presentation/receivable_detail_page.dart';
+import '../../features/accounts/domain/account_management.dart';
 import '../../features/budgets/presentation/budget_page.dart';
 import '../../features/categories/presentation/category_management_page.dart';
 import '../../features/goals/presentation/goal_detail_page.dart';
@@ -201,6 +209,51 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const AccountManagementPage(),
                 routes: [
                   GoRoute(
+                    path: 'add',
+                    builder: (context, state) =>
+                        const AccountTypeSelectionPage(),
+                    routes: [
+                      GoRoute(
+                        path: 'basic/:category',
+                        builder: (context, state) => BasicAccountFormPage(
+                          category: _accountFundCategory(
+                            state.pathParameters['category'],
+                          ),
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'restricted',
+                        builder: (context, state) =>
+                            const RestrictedAccountFormPage(),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'receivables',
+                    builder: (context, state) =>
+                        const ReceivableOverviewPage(),
+                    routes: [
+                      GoRoute(
+                        path: 'add',
+                        builder: (context, state) =>
+                            const ReceivableFormPage(),
+                      ),
+                      GoRoute(
+                        path: ':receivableId',
+                        builder: (context, state) => ReceivableDetailPage(
+                          receivableId:
+                              state.pathParameters['receivableId']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'restricted/:accountId',
+                    builder: (context, state) => RestrictedAccountDetailPage(
+                      accountId: state.pathParameters['accountId']!,
+                    ),
+                  ),
+                  GoRoute(
                     path: ':accountId',
                     builder: (context, state) => AccountDetailPage(
                       accountId: state.pathParameters['accountId']!,
@@ -379,6 +432,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 /// Maps a route/query value onto an asset class, defaulting to 股票.
+AccountFundCategory _accountFundCategory(String? value) {
+  return AccountFundCategory.values.firstWhere(
+    (category) => category.name == value,
+    orElse: () => AccountFundCategory.available,
+  );
+}
+
 InvestmentAssetType _assetType(String? value) {
   if (value == null) return InvestmentAssetType.stock;
   return InvestmentAssetType.values.firstWhere(
