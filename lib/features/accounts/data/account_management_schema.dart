@@ -1,0 +1,121 @@
+import '../../../core/database/app_database.dart';
+
+Future<void> ensureAccountManagementSchema(AppDatabase database) async {
+  await database.customStatement(
+    'CREATE TABLE IF NOT EXISTS account_management_meta ('
+    'id TEXT PRIMARY KEY NOT NULL,'
+    'book_id TEXT NOT NULL,'
+    'account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,'
+    'fund_category TEXT NOT NULL DEFAULT "available",'
+    'platform TEXT,'
+    'restricted_status TEXT,'
+    'expected_return_at INTEGER,'
+    'include_in_total INTEGER NOT NULL DEFAULT 1,'
+    'note TEXT,'
+    'updated_at INTEGER NOT NULL'
+    ')',
+  );
+  final metaColumns = await database
+      .customSelect('PRAGMA table_info(account_management_meta)')
+      .get();
+  if (!metaColumns.any((row) => row.read<String>('name') == 'id')) {
+    await database.customStatement(
+      'ALTER TABLE account_management_meta ADD COLUMN id TEXT',
+    );
+  }
+  if (!metaColumns.any((row) => row.read<String>('name') == 'book_id')) {
+    await database.customStatement(
+      'ALTER TABLE account_management_meta ADD COLUMN book_id TEXT',
+    );
+  }
+  await database.customStatement(
+    'UPDATE account_management_meta SET id=account_id WHERE id IS NULL',
+  );
+  await database.customStatement(
+    'UPDATE account_management_meta '
+    'SET book_id=(SELECT book_id FROM accounts WHERE accounts.id=account_management_meta.account_id) '
+    'WHERE book_id IS NULL',
+  );
+  await database.customStatement(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_account_management_meta_id '
+    'ON account_management_meta(id)',
+  );
+  await database.customStatement(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_account_management_meta_account '
+    'ON account_management_meta(account_id)',
+  );
+  await database.customStatement(
+    'CREATE INDEX IF NOT EXISTS idx_account_management_meta_book_category '
+    'ON account_management_meta(book_id, fund_category)',
+  );
+  await database.customStatement(
+    'CREATE TABLE IF NOT EXISTS receivables ('
+    'id TEXT PRIMARY KEY NOT NULL,'
+    'book_id TEXT NOT NULL,'
+    'name TEXT NOT NULL,'
+    'type TEXT NOT NULL,'
+    'counterparty TEXT NOT NULL,'
+    'total_amount_in_cents INTEGER NOT NULL,'
+    'received_amount_in_cents INTEGER NOT NULL DEFAULT 0,'
+    'occurred_at INTEGER NOT NULL,'
+    'expected_at INTEGER,'
+    'reminder_at INTEGER,'
+    'status TEXT NOT NULL DEFAULT "pending",'
+    'business_status TEXT NOT NULL DEFAULT "",'
+    'remark TEXT,'
+    'created_at INTEGER NOT NULL,'
+    'updated_at INTEGER NOT NULL'
+    ')',
+  );
+  final receivableColumns = await database
+      .customSelect('PRAGMA table_info(receivables)')
+      .get();
+  var syncColumnsChanged = false;
+  if (!receivableColumns.any((row) => row.read<String>('name') == 'reminder_at')) {
+    await database.customStatement(
+      'ALTER TABLE receivables ADD COLUMN reminder_at INTEGER',
+    );
+    syncColumnsChanged = true;
+  }
+  await database.customStatement(
+    'CREATE INDEX IF NOT EXISTS idx_receivables_book_status '
+    'ON receivables(book_id, status, expected_at)',
+  );
+  await database.customStatement(
+    'CREATE TABLE IF NOT EXISTS receivable_events ('
+    'id TEXT PRIMARY KEY NOT NULL,'
+    'book_id TEXT NOT NULL,'
+    'receivable_id TEXT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,'
+    'event_type TEXT NOT NULL,'
+    'title TEXT NOT NULL,'
+    'description TEXT,'
+    'amount_in_cents INTEGER,'
+    'created_at INTEGER NOT NULL'
+    ')',
+  );
+  final eventColumns = await database
+      .customSelect('PRAGMA table_info(receivable_events)')
+      .get();
+  if (!eventColumns.any((row) => row.read<String>('name') == 'book_id')) {
+    await database.customStatement(
+      'ALTER TABLE receivable_events ADD COLUMN book_id TEXT',
+    );
+  }
+  if (!eventColumns.any((row) => row.read<String>('name') == 'amount_in_cents')) {
+    await database.customStatement(
+      'ALTER TABLE receivable_events ADD COLUMN amount_in_cents INTEGER',
+    );
+  }
+  await database.customStatement(
+    'UPDATE receivable_events '
+    'SET book_id=(SELECT book_id FROM receivables WHERE receivables.id=receivable_events.receivable_id) '
+    'WHERE book_id IS NULL',
+  );
+  await database.customStatement(
+    'CREATE INDEX IF NOT EXISTS idx_receivable_events_receivable '
+    'ON receivable_events(book_id, receivable_id, created_at DESC)',
+  );
+  if (syncColumnsChanged) {
+    await database.installSyncSchema();
+  }
+}

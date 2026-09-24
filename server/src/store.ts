@@ -254,7 +254,7 @@ export class Store {
       check(owned<3,'已达到三个自建共享账本上限',409);
       this.db.prepare('INSERT INTO books(id,name,type,owner_user_id,created_at,updated_at,is_archived,version,asset_source_book_id) VALUES(?,?,?,?,?,?,0,1,?)').run(id,name,type,user,this.now(),this.now(),assetSourceBookId);
       this.db.prepare('INSERT INTO members VALUES(?,?,?,?)').run(id,user,'owner',this.now());
-      const rank: Record<Kind,number> = {books:0,accounts:1,categories:2,goals:3,goal_milestones:4,transactions:5,goal_contributions:6,budgets:7,recurring_bills:8,installment_plans:9};
+      const rank: Record<Kind,number> = {books:0,accounts:1,account_management_meta:2,categories:3,goals:4,receivables:5,transactions:6,receivable_events:7,goal_milestones:8,goal_contributions:9,budgets:10,recurring_bills:11,installment_plans:12};
       const sorted = [...entities].sort((a,b)=>rank[a.kind]-rank[b.kind] || Number(a.data.parent_id!=null)-Number(b.data.parent_id!=null));
       for (const e of sorted) {
         check(e.kind!=='books','快照不能包含其他账本');
@@ -362,7 +362,23 @@ export class Store {
     const accounts=new Map(live('accounts').map(e=>[e.id,e]));
     const categories=new Map(live('categories').map(e=>[e.id,e]));
     const goals=new Map(live('goals').map(e=>[e.id,e]));
+    const receivables=new Map(live('receivables').map(e=>[e.id,e]));
     const balances=new Map([...accounts].map(([id,e])=>[id,Number(e.data.opening_balance_in_cents)]));
+    const metaAccounts=new Set<string>();
+    for (const meta of live('account_management_meta')) {
+      const accountId=String(meta.data.account_id);
+      check(accounts.has(accountId),'账户扩展引用的账户不存在');
+      check(!metaAccounts.has(accountId),'同一账户只能存在一份账户扩展信息');
+      metaAccounts.add(accountId);
+    }
+    for (const receivable of receivables.values()) {
+      const total=Number(receivable.data.total_amount_in_cents);
+      const received=Number(receivable.data.received_amount_in_cents);
+      check(received>=0 && received<=total,'应收已回收金额无效');
+    }
+    for (const event of live('receivable_events')) {
+      check(receivables.has(String(event.data.receivable_id)),'应收跟进记录引用的应收不存在');
+    }
     for (const account of accounts.values()) this.validateAccountIdentity(book, account.data, account.id);
     for (const c of categories.values()) if(c.data.parent_id) {const p=categories.get(String(c.data.parent_id));check(p && !p.data.parent_id && p.data.type===c.data.type && p.id!==c.id,'分类父级必须属于同一本账且仅支持两级');}
     for (const e of live('transactions')) {

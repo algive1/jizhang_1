@@ -27,6 +27,7 @@ import '../../analysis/data/analysis_repository.dart';
 import '../../analysis/domain/statistical_analysis_service.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../accounts/data/account_repository.dart';
+import '../../accounts/data/account_management_repository.dart';
 import '../../investments/data/investment_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../goals/data/goal_repository.dart';
@@ -135,6 +136,11 @@ class _HomePageState extends ConsumerState<HomePage>
     final recent = recentState.value ?? const <TransactionRecord>[];
     final accountsState = ref.watch(allAccountsProvider);
     final accounts = accountsState.value ?? const [];
+    final excludedAssetAccountIds =
+        ref.watch(excludedAssetAccountIdsProvider).value ?? const <String>{};
+    final accountsForAssetTotal = accounts
+        .where((account) => !excludedAssetAccountIds.contains(account.id))
+        .toList(growable: false);
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
@@ -298,7 +304,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 const HomeAssetCard.loading()
               else
                 HomeAssetCard(
-                  accounts: accounts,
+                  accounts: accountsForAssetTotal,
                   investmentByCurrency: ref.watch(
                     investmentValueByCurrencyProvider,
                   ),
