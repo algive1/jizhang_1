@@ -9,6 +9,7 @@ import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/account_management_repository.dart';
 import '../domain/account_management.dart';
+import 'account_management_visuals.dart';
 
 class RestrictedAccountFormPage extends ConsumerStatefulWidget {
   const RestrictedAccountFormPage({super.key});
@@ -59,42 +60,55 @@ class _RestrictedAccountFormPageState
                 ),
               ),
             ),
-            TextButton(onPressed: _saving ? null : _save, child: const Text('保存')),
+            const SizedBox(width: 48),
           ],
         ),
         const SizedBox(height: 12),
         AppCard(
-          color: const Color(0xffEDF4FF),
-          child: Row(
+          color: context.appSurface.withValues(alpha: .92),
+          borderRadius: 22,
+          child: Stack(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: const BoxDecoration(
-                  color: Color(0xffDDEBFF),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.lock_outline_rounded,
-                  color: Color(0xff4E83DE),
-                ),
+              const Positioned(
+                right: -8,
+                top: -10,
+                child: AccountLeafPlaceholder(size: 88, opacity: .12),
               ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '受限资金',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xff5B8DEF).withValues(alpha: .13),
+                      shape: BoxShape.circle,
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      '在特定条件下才能使用的资金\n如保证金、押金等',
-                      style: TextStyle(fontSize: 12),
+                    child: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: Color(0xff5B8DEF),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '受限资金',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '在特定条件下才能使用的资金\n如保证金、押金等',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -198,7 +212,20 @@ class _RestrictedAccountFormPageState
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('是否计入总资产'),
+                  title: Row(
+                    children: [
+                      const Text('是否计入总资产'),
+                      const SizedBox(width: 5),
+                      Tooltip(
+                        message: '关闭后账户仍保留，但不计入首页和资产总览合计。',
+                        child: Icon(
+                          Icons.help_outline_rounded,
+                          size: 16,
+                          color: context.appSecondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
                   subtitle: const Text('关闭后，该账户不计入资产统计'),
                   value: _includeInTotal,
                   onChanged: _saving
@@ -221,11 +248,24 @@ class _RestrictedAccountFormPageState
             child: Text(_saving ? '保存中…' : '保存'),
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          '初始余额作为账户期初资金保存，不计入收入或支出。',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline_rounded,
+              size: 14,
+              color: context.appSecondaryText.withValues(alpha: .72),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '认真记录，守护每一份资金的安全',
+              style: TextStyle(
+                fontSize: 11,
+                color: context.appSecondaryText.withValues(alpha: .82),
+              ),
+            ),
+          ],
         ),
       ],
     ),
