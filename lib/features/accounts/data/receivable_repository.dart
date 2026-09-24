@@ -190,11 +190,17 @@ class DriftReceivableRepository implements ReceivableRepository {
           bookId,
         ],
       );
+      final statusChanged =
+          current.businessStatus.trim() != receivable.businessStatus.trim();
       await _insertEvent(
         receivable.id,
-        eventType: 'edited',
-        title: '编辑应收',
-        description: '更新应收信息',
+        eventType: statusChanged ? 'status_changed' : 'edited',
+        title: statusChanged
+            ? receivable.businessStatus.trim()
+            : '编辑应收',
+        description: statusChanged
+            ? '状态由“${current.businessStatus}”更新为“${receivable.businessStatus.trim()}”'
+            : '更新应收信息',
       );
     });
     _notifyReceivablesChanged();
