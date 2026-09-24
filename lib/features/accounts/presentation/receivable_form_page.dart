@@ -77,6 +77,21 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
                       ? null
                       : (value) => setState(() => _type = value ?? _type),
                 ),
+                if (_type == ReceivableType.reimbursement) ...[
+                  const SizedBox(height: 12),
+                  AppCard(
+                    color: context.appPrimarySoft.withValues(alpha: .45),
+                    child: Text(
+                      '已在“记一笔”中标记为报销的流水会自动出现在应收资金中。'
+                      '这里仅用于没有原始消费流水的独立报销应收。',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 12,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _name,
