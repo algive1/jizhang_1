@@ -155,14 +155,9 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                       );
                       return;
                     }
-                    final sourceId = item.sourceTransactionId;
-              if (sourceId != null) {
-                context.push(
-                  '/transactions/${Uri.encodeComponent(sourceId)}',
-                );
-              } else {
-                context.push('/profile/accounts/receivables/${item.id}');
-              }
+                    context.push(
+                      '/profile/accounts/receivables/${item.id}',
+                    );
                   },
                 ),
             ],
