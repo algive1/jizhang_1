@@ -209,7 +209,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-spending-card')), findsOneWidget);
     expect(find.text('未设置预算'), findsWidgets);
     expect(find.text('我的净资产'), findsOneWidget);
-    expect(find.text('支出趋势'), findsOneWidget);
+    expect(find.text('收支趋势'), findsOneWidget);
     expect(find.text('本地账本初始化失败'), findsNothing);
     expect(tester.takeException(), isNull);
   });
