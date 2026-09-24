@@ -314,11 +314,15 @@ class _TrendPeriodControl extends StatelessWidget {
         children: [
           for (final item in items)
             Expanded(
-              child: GestureDetector(
-                key: ValueKey('home-trend-${item.$1.name}'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(item.$1),
-                child: AnimatedContainer(
+              child: Semantics(
+                button: true,
+                selected: item.$1 == selected,
+                label: '趋势周期${item.$2}',
+                child: GestureDetector(
+                  key: ValueKey('home-trend-${item.$1.name}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(item.$1),
+                  child: AnimatedContainer(
                   duration: reduceMotion
                       ? Duration.zero
                       : const Duration(milliseconds: 180),
@@ -339,17 +343,18 @@ class _TrendPeriodControl extends StatelessWidget {
                         : null,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    item.$2,
-                    style: TextStyle(
-                      color: item.$1 == selected
-                          ? Colors.white
-                          : context.appSecondaryText,
-                      fontSize: 10.5,
-                      height: 1,
-                      fontWeight: item.$1 == selected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
+                    child: Text(
+                      item.$2,
+                      style: TextStyle(
+                        color: item.$1 == selected
+                            ? Colors.white
+                            : context.appSecondaryText,
+                        fontSize: 12,
+                        height: 1,
+                        fontWeight: item.$1 == selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
