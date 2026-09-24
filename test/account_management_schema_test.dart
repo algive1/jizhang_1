@@ -30,6 +30,13 @@ void main() {
       eventColumns.map((row) => row.read<String>('name')),
       containsAll(['book_id', 'amount_in_cents']),
     );
+    final receivableColumns = await database
+        .customSelect('PRAGMA table_info(receivables)')
+        .get();
+    expect(
+      receivableColumns.map((row) => row.read<String>('name')),
+      contains('reminder_at'),
+    );
     final metaColumns = await database
         .customSelect('PRAGMA table_info(account_management_meta)')
         .get();
