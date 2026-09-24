@@ -161,7 +161,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                     child: Text(
                       '收支趋势',
                       style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 16,
                         height: 1.05,
                         fontWeight: FontWeight.w800,
                         color: context.appPrimaryText,
@@ -169,7 +169,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                     ),
                   ),
                   SizedBox(
-                    width: 120,
+                    width: 112,
                     child: _TrendPeriodControl(
                       selected: _period,
                       onChanged: (period) => setState(() {
@@ -201,7 +201,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
               const SizedBox(height: 9),
               if (widget.amountHidden)
                 SizedBox(
-                  height: 112,
+                  height: 104,
                   child: Center(
                     child: Text(
                       '趋势金额已隐藏',
@@ -342,7 +342,7 @@ class _TrendPeriodControl extends StatelessWidget {
                       color: item.$1 == selected
                           ? Colors.white
                           : context.appSecondaryText,
-                      fontSize: 12.5,
+                      fontSize: 10.5,
                       height: 1,
                       fontWeight: item.$1 == selected
                           ? FontWeight.w700
@@ -379,7 +379,7 @@ class _TrendSummaryRow extends StatelessWidget {
     return SizedBox(
       key: const ValueKey('home-trend-value'),
       width: double.infinity,
-      height: 19,
+      height: 16,
       child: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,
@@ -406,7 +406,7 @@ class _TrendSummaryRow extends StatelessWidget {
     text,
     style: TextStyle(
       color: color,
-      fontSize: 12.5,
+      fontSize: 10.5,
       height: 1,
       fontWeight: FontWeight.w800,
     ),
@@ -414,8 +414,8 @@ class _TrendSummaryRow extends StatelessWidget {
 
   Widget _divider(BuildContext context) => Container(
     width: 1,
-    height: 15,
-    margin: const EdgeInsets.symmetric(horizontal: 9),
+    height: 13,
+    margin: const EdgeInsets.symmetric(horizontal: 8),
     color: context.appSecondaryText.withValues(alpha: .38),
   );
 }
