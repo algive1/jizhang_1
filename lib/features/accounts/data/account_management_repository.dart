@@ -212,13 +212,10 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
 final accountManagementRepositoryProvider =
     Provider<AccountManagementRepository>((ref) {
       final database = ref.watch(databaseProvider);
-      final String? assetBookCandidate =
-          ref.watch(activeBookProvider)?.assetBookId ??
-          ref.watch(activeBookIdProvider);
-      if (assetBookCandidate == null) {
-        throw StateError('当前资产账本不可用');
-      }
-      final assetBookId = assetBookCandidate;
+      final activeBook = ref.watch(activeBookProvider);
+      final assetBookId = activeBook == null
+          ? ref.watch(activeBookIdProvider)
+          : activeBook.assetBookId;
       return DriftAccountManagementRepository(
         database,
         DriftAccountRepository(database, bookId: assetBookId),
