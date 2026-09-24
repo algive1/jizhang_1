@@ -7,6 +7,7 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
+import 'account_management_visuals.dart';
 
 class ReceivableOverviewPage extends ConsumerStatefulWidget {
   const ReceivableOverviewPage({super.key});
@@ -91,49 +92,60 @@ class _ReceivableOverviewPageState
             const SizedBox(height: 10),
             AppCard(
               borderRadius: 22,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              color: context.appSurface.withValues(alpha: .92),
+              child: Stack(
                 children: [
-                  Text(
-                    '应收资金总额（元）',
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      fontSize: 12,
-                    ),
+                  const Positioned(
+                    right: -8,
+                    top: -12,
+                    child: AccountLeafPlaceholder(size: 108, opacity: .14),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '¥ ${MoneyFormatter.decimal(total)}',
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _Metric(
-                          label: '本月已回收',
-                          value: '¥${MoneyFormatter.decimal(monthCollected)}',
-                          color: const Color(0xff3D9B5C),
+                      Text(
+                        '应收资金总额（元）',
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          fontSize: 12,
                         ),
                       ),
-                      Expanded(
-                        child: _Metric(
-                          label: '待回收',
-                          value: '$pendingCount 笔',
-                          color: context.appPrimary,
+                      const SizedBox(height: 4),
+                      Text(
+                        '¥ ${MoneyFormatter.decimal(total)}',
+                        style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Expanded(
-                        child: _Metric(
-                          label: '逾期',
-                          value: '$overdueCount 笔',
-                          color: overdueCount > 0
-                              ? const Color(0xffE05C5C)
-                              : context.appPrimaryText,
-                        ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Metric(
+                              label: '本月已回收',
+                              value:
+                                  '¥${MoneyFormatter.decimal(monthCollected)}',
+                              color: context.appPrimary,
+                            ),
+                          ),
+                          Expanded(
+                            child: _Metric(
+                              label: '待回收',
+                              value: '$pendingCount 笔',
+                              color: context.appPrimary,
+                            ),
+                          ),
+                          Expanded(
+                            child: _Metric(
+                              label: '逾期',
+                              value: '$overdueCount 笔',
+                              color: overdueCount > 0
+                                  ? const Color(0xffE05C5C)
+                                  : context.appPrimaryText,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -141,27 +153,16 @@ class _ReceivableOverviewPageState
               ),
             ),
             const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final item in const [
-                    (_ReceivableFilter.all, '全部'),
-                    (_ReceivableFilter.pending, '待回收'),
-                    (_ReceivableFilter.partial, '部分回收'),
-                    (_ReceivableFilter.completed, '已完成'),
-                    (_ReceivableFilter.overdue, '逾期'),
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(item.$2),
-                        selected: _filter == item.$1,
-                        onSelected: (_) => setState(() => _filter = item.$1),
-                      ),
-                    ),
-                ],
-              ),
+            AccountPrototypeFilterBar<_ReceivableFilter>(
+              items: const [
+                (_ReceivableFilter.all, '全部'),
+                (_ReceivableFilter.pending, '待回收'),
+                (_ReceivableFilter.partial, '部分回收'),
+                (_ReceivableFilter.completed, '已完成'),
+                (_ReceivableFilter.overdue, '逾期'),
+              ],
+              selected: _filter,
+              onSelected: (value) => setState(() => _filter = value),
             ),
             const SizedBox(height: 12),
             if (state.isLoading && items.isEmpty)
@@ -345,23 +346,9 @@ class _ReceivableRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    item.visibleStatus,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                AccountPrototypeStatusPill(
+                  label: item.visibleStatus,
+                  color: statusColor,
                 ),
               ],
             ),
