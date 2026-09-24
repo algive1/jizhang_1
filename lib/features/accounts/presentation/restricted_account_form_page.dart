@@ -82,12 +82,12 @@ class _RestrictedAccountFormPageState
                     width: 54,
                     height: 54,
                     decoration: BoxDecoration(
-                      color: const Color(0xff5B8DEF).withValues(alpha: .13),
+                      color: context.appPrimarySoft.withValues(alpha: .72),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.lock_outline_rounded,
-                      color: Color(0xff5B8DEF),
+                      color: context.appPrimary,
                     ),
                   ),
                   const SizedBox(width: 14),
