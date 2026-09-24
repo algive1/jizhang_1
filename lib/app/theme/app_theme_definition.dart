@@ -182,7 +182,7 @@ abstract final class BuiltInThemes {
     surface: Color(0xFFFFFAF3),
     surfaceSoft: Color(0xFFF4E7D8),
     primary: Color(0xFFD88A3D),
-    primaryDark: Color(0xFF8C5729),
+    primaryDark: Color(0xFF5E371D),
     primarySoft: Color(0xFFF5DDBF),
     textPrimary: Color(0xFF2C2118),
     textSecondary: Color(0xFF7E6D5E),
