@@ -87,7 +87,14 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
               receivable: receivableTotal,
             ),
             const SizedBox(height: 12),
-            _FilterBar(
+            AccountPrototypeFilterBar<_OverviewFilter>(
+              items: const [
+                (_OverviewFilter.all, '全部'),
+                (_OverviewFilter.available, '可用'),
+                (_OverviewFilter.stored, '储值'),
+                (_OverviewFilter.restricted, '受限'),
+                (_OverviewFilter.receivable, '应收'),
+              ],
               selected: _filter,
               onSelected: (value) => setState(() => _filter = value),
             ),
@@ -387,39 +394,6 @@ class _SummaryMetric extends StatelessWidget {
       ),
     ],
   );
-}
-
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.selected, required this.onSelected});
-  final _OverviewFilter selected;
-  final ValueChanged<_OverviewFilter> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <(_OverviewFilter, String)>[
-      (_OverviewFilter.all, '全部'),
-      (_OverviewFilter.available, '可用'),
-      (_OverviewFilter.stored, '储值'),
-      (_OverviewFilter.restricted, '受限'),
-      (_OverviewFilter.receivable, '应收'),
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final item in items)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(item.$2),
-                selected: selected == item.$1,
-                onSelected: (_) => onSelected(item.$1),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _AccountGroup extends StatelessWidget {
