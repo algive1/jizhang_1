@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
+import 'app_liquid_glass_spec.dart';
 
 /// Floating bottom navigation bar, built on the package's own
 /// **navigation** component.
@@ -56,16 +57,17 @@ class AppBottomNavigation extends StatelessWidget {
   static const AppNavGeometry geometry = AppNavGeometry();
 
   /// The ordinary-contrast white tint shared by the navigation capsule and FAB.
-  static Color capsuleTint() => Colors.white.withValues(alpha: .24);
+  static Color capsuleTint() => AppLiquidGlassSpec.capsuleTint();
 
   /// The ordinary-contrast selected ink shared by navigation and the FAB glyph.
   static Color selectedEmphasisFor(
     ColorScheme scheme, {
     required bool liquidGlass,
   }) =>
-      liquidGlass
-          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
-          : _darken(scheme.secondary, selectedInkFactor);
+      AppLiquidGlassSpec.selectedEmphasisFor(
+        scheme,
+        liquidGlass: liquidGlass,
+      );
 
   /// Capsule backdrop blur, in logical pixels.
   ///
@@ -83,7 +85,7 @@ class AppBottomNavigation extends StatelessWidget {
   /// out from under the glass by `AppNavGeometry.reservedBottomInset` and the
   /// shell's viewport inset, so this radius only ever softens content
   /// mid-scroll.
-  static const double capsuleBlurSigma = 5;
+  static const double capsuleBlurSigma = AppLiquidGlassSpec.capsuleBlurSigma;
 
   /// Height the host has to leave free for the bar overlay to be usable.
   static double reservedBottomInset(BuildContext context) =>
@@ -158,55 +160,16 @@ class AppBottomNavigation extends StatelessWidget {
 
   /// The **bar capsule** — layer 1.
   ///
-  /// Params follow the reference implementation: `distortion 0.07` over a
-  /// `28` px band with `0.002` chromatic aberration, a `0.7` px rim, and the
-  /// optical border that supplies the edge highlight. Contrast comes from
-  /// refraction plus that rim, so high-contrast mode swaps the transparent
-  /// tinge for an opaque surface and drops refraction entirely instead of
-  /// only softening the blur — the project's accessibility contract.
-  static LiquidGlassStyle _capsuleStyle(BuildContext context) {
-    final highContrast = MediaQuery.highContrastOf(context);
-    return LiquidGlassTabBar.defaultStyle.copyWith(
-      shape: LiquidGlassShape.roundedRectangle(
+  /// The concrete optical recipe lives in [AppLiquidGlassSpec]; this method
+  /// only supplies navigation geometry. High-contrast mode swaps the
+  /// transparent tinge for an opaque surface and drops refraction entirely
+  /// instead of only softening the blur — the project's accessibility
+  /// contract.
+  static LiquidGlassStyle _capsuleStyle(BuildContext context) =>
+      AppLiquidGlassSpec.capsuleStyle(
+        context,
         cornerRadius: AppNavGeometry.barHeight / 2,
-        borderWidth: highContrast ? 1.4 : .9,
-        borderColor: highContrast
-            ? context.appPrimary.withValues(alpha: .34)
-            : Colors.white.withValues(alpha: .42),
-        lightIntensity: 1.1,
-        lightColor: const Color(0xCCFFFFFF),
-        lightDirection: 62,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.2,
-          ambientIntensity: 1.0,
-          borderSolidity: .55,
-          lightSpread: .5,
-        ),
-      ),
-      appearance: LiquidGlassAppearance(
-        color: highContrast
-            ? const Color(0xFFF7FAFF)
-            : capsuleTint(),
-        // Blur and tint work together; icons and labels render above both.
-        blur: LiquidGlassBlur(
-          sigmaX: highContrast ? 8 : capsuleBlurSigma,
-          sigmaY: highContrast ? 8 : capsuleBlurSigma,
-        ),
-        shadow: const LiquidGlassShadow(blur: 14, opacity: .18, inset: 0),
-      ),
-      refraction: highContrast
-          ? const LiquidGlassRefraction(
-              distortion: 0,
-              distortionWidth: 0,
-              chromaticAberration: 0,
-            )
-          : const LiquidGlassRefraction(
-              distortion: .06,
-              distortionWidth: 26,
-              chromaticAberration: .003,
-            ),
-    );
-  }
+      );
 
   /// **Icon and label** styling. The selected ink uses a brighter theme
   /// accent per the reference palette; unselected ink remains muted. Both
@@ -236,7 +199,7 @@ class AppBottomNavigation extends StatelessWidget {
 
   /// How much the selected ink is darkened from secondary in the three solid
   /// themes. Liquid Glass uses a 40% blend toward primary instead.
-  static const double selectedInkFactor = .90;
+  static const double selectedInkFactor = AppLiquidGlassSpec.selectedInkFactor;
 
   /// How much the unselected ink is darkened from the theme's secondary text.
   ///
@@ -244,14 +207,11 @@ class AppBottomNavigation extends StatelessWidget {
   /// close to the reference's ~4.7 : 1 grey. The capsule's tint reduces
   /// contrast for dark ink, so the unselected ink stays dark enough to keep
   /// the ratio above the accessibility threshold.
-  static const double unselectedInkFactor = .84;
+  static const double unselectedInkFactor =
+      AppLiquidGlassSpec.unselectedInkFactor;
 
-  static Color _darken(Color color, double factor) => Color.from(
-        alpha: color.a,
-        red: color.r * factor,
-        green: color.g * factor,
-        blue: color.b * factor,
-      );
+  static Color _darken(Color color, double factor) =>
+      AppLiquidGlassSpec.darken(color, factor);
 
   /// The **selection pill** — layers 2 and 3.
   ///
@@ -264,45 +224,11 @@ class AppBottomNavigation extends StatelessWidget {
   /// refraction; only the motion and shape knobs below are set, matching the
   /// reference (`growHeight 9`, distortion `0.04` over `12` px, travel
   /// spring `280 / 31.4`, deformation capped at ±12 %).
-  static LiquidGlassTabPillStyle _pillStyle(BuildContext context) {
-    final highContrast = MediaQuery.highContrastOf(context);
-    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-    final restFill = highContrast
-        ? const Color(0xFFDCE8FF)
-        : const Color(0xFF333333).withValues(alpha: .03);
-
-    return LiquidGlassTabPillStyle(
-      // `impellerOnly`, not `both`: on Skia `both` would make the pill
-      // capture the page a second time on top of the bar's own capture.
-      mode: LiquidGlassPillMode.impellerOnly,
-      growHeight: 9,
-      distortion: .04,
-      distortionWidth: 12,
-      magnification: 1,
-      travelStiffness: 280,
-      travelDamping: 31.4,
-      animated: !animationsDisabled,
-      rest: LiquidGlassStyle(
-        shape: LiquidGlassShape.roundedRectangle(
-          cornerRadius: AppNavGeometry.barHeight / 2,
-          borderWidth: .7,
-          borderColor: Colors.white.withValues(alpha: .55),
-        ),
-        appearance: LiquidGlassAppearance(color: restFill),
-      ),
-      magnifierPill: const LiquidGlassTabMagnifierPillStyle(
-        enabled: true,
-        magnification: .87,
-      ),
-      motion: const LiquidGlassLensMotionSpec(
-        sampleWindow: .3,
-        sensitivity: .00007,
-        maxDeformation: .12,
-        responseTime: .18,
-      ),
-    );
-  }
-
+  static LiquidGlassTabPillStyle _pillStyle(BuildContext context) =>
+      AppLiquidGlassSpec.tabPillStyle(
+        context,
+        cornerRadius: AppNavGeometry.barHeight / 2,
+      );
 }
 
 /// Screen-space geometry shared by the bar overlay, the docked centre

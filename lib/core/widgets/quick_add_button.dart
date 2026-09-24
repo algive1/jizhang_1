@@ -3,6 +3,7 @@ import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
 import 'app_bottom_navigation.dart';
+import 'app_liquid_glass_spec.dart';
 
 /// The docked "记一笔" action button.
 ///
@@ -25,8 +26,8 @@ class QuickAddButton extends StatelessWidget {
   /// Refraction strength, slightly softer than the navigation capsule's: its
   /// circular silhouette is close to the bar's height, so the capsule's 26 px
   /// band would dominate it.
-  static const double refractionDistortion = .06;
-  static const double refractionWidth = 26;
+  static const double refractionDistortion = AppLiquidGlassSpec.actionDistortion;
+  static const double refractionWidth = AppLiquidGlassSpec.actionDistortionWidth;
 
   final VoidCallback onPressed;
   final VoidCallback onLongPress;
@@ -51,7 +52,6 @@ class QuickAddButton extends StatelessWidget {
       );
     }
 
-    final tint = AppBottomNavigation.capsuleTint();
     final foreground = AppBottomNavigation.selectedEmphasisFor(
       scheme,
       liquidGlass: liquidGlass,
@@ -70,35 +70,9 @@ class QuickAddButton extends StatelessWidget {
           foregroundColor: foreground,
           iconSize: diameter * .58,
           padding: EdgeInsets.zero,
-          style: LiquidGlassStyle(
-            shape: LiquidGlassShape.roundedRectangle(
-              cornerRadius: diameter / 2,
-              borderWidth: 1,
-              lightIntensity: 1.2,
-              lightColor: const Color(0xE6FFFFFF),
-              lightDirection: 80,
-              borderType: const OpticalBorder(
-                borderSaturation: 1.3,
-                ambientIntensity: 1.0,
-                borderSolidity: .45,
-                lightSpread: .5,
-              ),
-            ),
-            appearance: LiquidGlassAppearance(
-              color: tint,
-              blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-              shadow: LiquidGlassShadow(
-                color: Colors.black.withValues(alpha: .22),
-                blur: 14,
-                opacity: .3,
-                offset: const Offset(0, 5),
-              ),
-            ),
-            refraction: const LiquidGlassRefraction(
-              distortion: refractionDistortion,
-              distortionWidth: refractionWidth,
-              chromaticAberration: .002,
-            ),
+          style: AppLiquidGlassSpec.actionStyle(
+            context,
+            cornerRadius: diameter / 2,
           ),
         ),
       ),
