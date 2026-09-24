@@ -194,14 +194,14 @@ class _RestrictedAccountDetailPageState
             ),
           ),
           const SizedBox(height: 8),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 0, label: Text('全部')),
-              ButtonSegment(value: 1, label: Text('转入')),
-              ButtonSegment(value: 2, label: Text('转出')),
+          AccountPrototypeFilterBar<int>(
+            items: const [
+              (0, '全部'),
+              (1, '转入'),
+              (2, '转出'),
             ],
-            selected: {_filter},
-            onSelectionChanged: (value) => setState(() => _filter = value.first),
+            selected: _filter,
+            onSelected: (value) => setState(() => _filter = value),
           ),
           const SizedBox(height: 10),
           if (transactions.isEmpty && !showOpening)
