@@ -728,7 +728,7 @@ class _OpeningBalanceRow extends StatelessWidget {
           child: Text('初始存入', style: TextStyle(fontSize: 13)),
         ),
         Text(
-          '+¥${MoneyFormatter.decimal(account.openingBalance.abs())}',
+          '+¥${MoneyFormatter.decimal((account.openingBalance ?? 0).abs())}',
           style: const TextStyle(
             color: Color(0xff3D9B5C),
             fontWeight: FontWeight.w700,
