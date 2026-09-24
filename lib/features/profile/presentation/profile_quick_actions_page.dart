@@ -126,7 +126,7 @@ class ProfileQuickActionsPage extends ConsumerWidget {
                       child: child,
                     ),
                   ),
-                  onReorder: (oldIndex, newIndex) {
+                  onReorderItem: (oldIndex, newIndex) {
                     unawaited(
                       ref
                           .read(profileQuickActionsProvider.notifier)

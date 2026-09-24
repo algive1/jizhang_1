@@ -29,9 +29,7 @@ class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
     final current =
         state.value ?? List<String>.from(profileQuickActionDefaults);
     if (oldIndex < 0 || oldIndex >= current.length) return;
-    var destination = newIndex;
-    if (destination > oldIndex) destination -= 1;
-    destination = destination.clamp(0, current.length - 1).toInt();
+    final destination = newIndex.clamp(0, current.length - 1).toInt();
 
     final next = List<String>.from(current);
     final item = next.removeAt(oldIndex);

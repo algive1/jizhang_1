@@ -96,7 +96,7 @@ void main() {
 
     await container
         .read(profileQuickActionsProvider.notifier)
-        .reorder(0, 3);
+        .reorder(0, 2);
 
     expect(
       container.read(profileQuickActionsProvider).value,
