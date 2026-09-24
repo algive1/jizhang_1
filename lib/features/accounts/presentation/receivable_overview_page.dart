@@ -197,9 +197,19 @@ class _ReceivableOverviewPageState
                     for (var index = 0; index < filtered.length; index++) ...[
                       _ReceivableRow(
                         item: filtered[index],
-                        onTap: () => context.push(
-                          '/profile/accounts/receivables/${filtered[index].id}',
-                        ),
+                        onTap: () {
+                          final item = filtered[index];
+                          final sourceId = item.sourceTransactionId;
+                          if (sourceId != null) {
+                            context.push(
+                              '/transactions/${Uri.encodeComponent(sourceId)}',
+                            );
+                            return;
+                          }
+                          context.push(
+                            '/profile/accounts/receivables/${item.id}',
+                          );
+                        },
                       ),
                       if (index != filtered.length - 1)
                         Divider(height: 1, color: context.appDivider),
