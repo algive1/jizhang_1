@@ -9,6 +9,7 @@ import '../../../core/widgets/app_card.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
+import 'account_management_visuals.dart';
 
 class AccountManagementPage extends ConsumerStatefulWidget {
   const AccountManagementPage({super.key});
@@ -241,74 +242,105 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-    color: context.appSurface.withValues(alpha: .88),
+    color: context.appSurface.withValues(alpha: .90),
     borderRadius: 22,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Stack(
       children: [
-        Row(
+        const Positioned(
+          right: -6,
+          top: -4,
+          child: AccountLeafPlaceholder(size: 112, opacity: .16),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Text(
+                  '账户资金总额',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  onPressed: onHiddenChanged,
+                  icon: Icon(
+                    hidden
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 17,
+                    color: context.appSecondaryText,
+                  ),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.only(right: 72),
+                  child: Text(
+                    '每一份资金\n都是生活的底气',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: context.appPrimary.withValues(alpha: .64),
+                      fontSize: 10,
+                      height: 1.35,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
             Text(
-              '账户资金总额',
-              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+              hidden ? '••••••' : '¥${MoneyFormatter.decimal(total)}',
+              style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(width: 6),
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              onPressed: onHiddenChanged,
-              icon: Icon(
-                hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                size: 17,
-                color: context.appSecondaryText,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          hidden ? '••••••' : '¥${MoneyFormatter.decimal(total)}',
-          style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _SummaryMetric(
-                icon: Icons.account_balance_wallet_outlined,
-                label: '可用资金',
-                value: available,
-                color: const Color(0xff54A85D),
-                hidden: hidden,
-              ),
-            ),
-            Expanded(
-              child: _SummaryMetric(
-                icon: Icons.toll_outlined,
-                label: '储值资金',
-                value: stored,
-                color: const Color(0xffE79B3A),
-                hidden: hidden,
-              ),
-            ),
-            Expanded(
-              child: _SummaryMetric(
-                icon: Icons.lock_outline_rounded,
-                label: '受限资金',
-                value: restricted,
-                color: const Color(0xff5B8DEF),
-                hidden: hidden,
-              ),
-            ),
-            Expanded(
-              child: _SummaryMetric(
-                icon: Icons.schedule_rounded,
-                label: '应收资金',
-                value: receivable,
-                color: const Color(0xff8867D8),
-                hidden: hidden,
-              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _SummaryMetric(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: '可用资金',
+                    value: available,
+                    color: context.appPrimary,
+                    hidden: hidden,
+                  ),
+                ),
+                Expanded(
+                  child: _SummaryMetric(
+                    icon: Icons.toll_outlined,
+                    label: '储值资金',
+                    value: stored,
+                    color: const Color(0xffE79B3A),
+                    hidden: hidden,
+                  ),
+                ),
+                Expanded(
+                  child: _SummaryMetric(
+                    icon: Icons.lock_outline_rounded,
+                    label: '受限资金',
+                    value: restricted,
+                    color: const Color(0xff5B8DEF),
+                    hidden: hidden,
+                  ),
+                ),
+                Expanded(
+                  child: _SummaryMetric(
+                    icon: Icons.schedule_rounded,
+                    label: '应收资金',
+                    value: receivable,
+                    color: const Color(0xff8867D8),
+                    hidden: hidden,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
