@@ -482,7 +482,53 @@ final receivableDataSignalProvider = StreamProvider<int>((ref) async* {
 final receivablesProvider = FutureProvider<List<Receivable>>((ref) async {
   ref.watch(receivableDataSignalProvider);
   await ref.watch(databaseBootstrapProvider.future);
-  return ref.watch(receivableRepositoryProvider).getAll();
+  final manual = await ref.watch(receivableRepositoryProvider).getAll();
+  final transactions =
+      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final projected = transactions
+      .where(
+        (item) =>
+            item.reimbursementStatus != ReimbursementStatus.none &&
+            item.type == TransactionType.expense,
+      )
+      .map((item) {
+        final partial =
+            item.reimbursementStatus == ReimbursementStatus.partial;
+        final completed =
+            item.reimbursementStatus == ReimbursementStatus.reimbursed;
+        return Receivable(
+          id: 'reimbursement-projection-${item.id}',
+          bookId: item.bookId,
+          name: item.displayTitle,
+          type: ReceivableType.reimbursement,
+          counterparty: '公司报销',
+          totalAmount: item.amount,
+          receivedAmount: completed
+              ? item.amount
+              : partial
+              ? (item.reimbursementAmount ?? 0)
+              : 0,
+          occurredAt: item.occurredAt,
+          expectedAt: null,
+          reminderAt: null,
+          status: completed
+              ? ReceivableStatus.completed
+              : partial
+              ? ReceivableStatus.partial
+              : ReceivableStatus.pending,
+          businessStatus: completed
+              ? '已完成'
+              : partial
+              ? '部分回收'
+              : '待报销',
+          remark: item.reimbursementNote,
+          sourceTransactionId: item.id,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        );
+      })
+      .toList(growable: false);
+  return [...manual, ...projected];
 });
 
 final receivableEventsProvider =
@@ -498,7 +544,18 @@ final receivableMonthCollectedProvider = FutureProvider<double>((ref) async {
   final now = DateTime.now();
   final start = DateTime(now.year, now.month);
   final end = DateTime(now.year, now.month + 1);
-  return ref
+  final manual = await ref
       .watch(receivableRepositoryProvider)
       .getCollectedBetween(start, end);
+  final transactions =
+      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final reimbursements = transactions
+      .where(
+        (item) =>
+            item.type == TransactionType.reimbursement &&
+            !item.occurredAt.isBefore(start) &&
+            item.occurredAt.isBefore(end),
+      )
+      .fold<double>(0, (sum, item) => sum + item.amount);
+  return manual + reimbursements;
 });
