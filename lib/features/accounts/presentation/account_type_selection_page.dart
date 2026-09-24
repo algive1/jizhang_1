@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import 'account_management_visuals.dart';
 
 class AccountTypeSelectionPage extends StatelessWidget {
   const AccountTypeSelectionPage({super.key});
@@ -31,22 +32,27 @@ class AccountTypeSelectionPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        Center(
-          child: Container(
-            width: 82,
-            height: 82,
-            decoration: BoxDecoration(
-              color: context.appPrimarySoft,
-              shape: BoxShape.circle,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const AccountLeafPlaceholder(size: 92, opacity: .34),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(right: 8, bottom: 8),
+              child: Text(
+                '选择合适的账户类型\n让每一分钱各归其位',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.appPrimary.withValues(alpha: .62),
+                  fontSize: 11,
+                  height: 1.35,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ),
-            child: Icon(
-              Icons.energy_savings_leaf_outlined,
-              size: 44,
-              color: context.appPrimary,
-            ),
-          ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         Text(
           '请选择账户类型',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -91,8 +97,25 @@ class AccountTypeSelectionPage extends StatelessWidget {
           icon: Icons.grid_view_rounded,
           title: '自定义账户',
           subtitle: '根据个人需要，自定义账户类型',
-          color: const Color(0xff66A66D),
+          color: context.appPrimary,
           onTap: () => context.push('/profile/accounts/add/basic/custom'),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const AccountLeafPlaceholder(size: 42, opacity: .28),
+            const SizedBox(width: 8),
+            Text(
+              '好好管理每一份资金\n让生活更从容',
+              style: TextStyle(
+                color: context.appPrimary.withValues(alpha: .54),
+                fontSize: 10,
+                height: 1.35,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
       ],
     ),
