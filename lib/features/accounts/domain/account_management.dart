@@ -86,6 +86,7 @@ class Receivable {
     required this.createdAt,
     required this.updatedAt,
     this.expectedAt,
+    this.reminderAt,
     this.remark,
   });
 
@@ -98,6 +99,7 @@ class Receivable {
   final double receivedAmount;
   final DateTime occurredAt;
   final DateTime? expectedAt;
+  final DateTime? reminderAt;
   final ReceivableStatus status;
   final String businessStatus;
   final String? remark;
