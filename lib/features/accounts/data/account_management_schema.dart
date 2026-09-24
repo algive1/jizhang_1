@@ -59,6 +59,7 @@ Future<void> ensureAccountManagementSchema(AppDatabase database) async {
     'received_amount_in_cents INTEGER NOT NULL DEFAULT 0,'
     'occurred_at INTEGER NOT NULL,'
     'expected_at INTEGER,'
+    'reminder_at INTEGER,'
     'status TEXT NOT NULL DEFAULT "pending",'
     'business_status TEXT NOT NULL DEFAULT "",'
     'remark TEXT,'
@@ -66,6 +67,16 @@ Future<void> ensureAccountManagementSchema(AppDatabase database) async {
     'updated_at INTEGER NOT NULL'
     ')',
   );
+  final receivableColumns = await database
+      .customSelect('PRAGMA table_info(receivables)')
+      .get();
+  var syncColumnsChanged = false;
+  if (!receivableColumns.any((row) => row.read<String>('name') == 'reminder_at')) {
+    await database.customStatement(
+      'ALTER TABLE receivables ADD COLUMN reminder_at INTEGER',
+    );
+    syncColumnsChanged = true;
+  }
   await database.customStatement(
     'CREATE INDEX IF NOT EXISTS idx_receivables_book_status '
     'ON receivables(book_id, status, expected_at)',
@@ -104,4 +115,7 @@ Future<void> ensureAccountManagementSchema(AppDatabase database) async {
     'CREATE INDEX IF NOT EXISTS idx_receivable_events_receivable '
     'ON receivable_events(book_id, receivable_id, created_at DESC)',
   );
+  if (syncColumnsChanged) {
+    await database.installSyncSchema();
+  }
 }
