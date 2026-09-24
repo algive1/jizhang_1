@@ -160,12 +160,11 @@ class AppBottomNavigation extends StatelessWidget {
 
   /// The **bar capsule** — layer 1.
   ///
-  /// Params follow the reference implementation: `distortion 0.07` over a
-  /// `28` px band with `0.002` chromatic aberration, a `0.7` px rim, and the
-  /// optical border that supplies the edge highlight. Contrast comes from
-  /// refraction plus that rim, so high-contrast mode swaps the transparent
-  /// tinge for an opaque surface and drops refraction entirely instead of
-  /// only softening the blur — the project's accessibility contract.
+  /// The concrete optical recipe lives in [AppLiquidGlassSpec]; this method
+  /// only supplies navigation geometry. High-contrast mode swaps the
+  /// transparent tinge for an opaque surface and drops refraction entirely
+  /// instead of only softening the blur — the project's accessibility
+  /// contract.
   static LiquidGlassStyle _capsuleStyle(BuildContext context) =>
       AppLiquidGlassSpec.capsuleStyle(
         context,
@@ -208,7 +207,8 @@ class AppBottomNavigation extends StatelessWidget {
   /// close to the reference's ~4.7 : 1 grey. The capsule's tint reduces
   /// contrast for dark ink, so the unselected ink stays dark enough to keep
   /// the ratio above the accessibility threshold.
-  static const double unselectedInkFactor = AppLiquidGlassSpec.unselectedInkFactor;
+  static const double unselectedInkFactor =
+      AppLiquidGlassSpec.unselectedInkFactor;
 
   static Color _darken(Color color, double factor) =>
       AppLiquidGlassSpec.darken(color, factor);
