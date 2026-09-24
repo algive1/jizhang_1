@@ -714,7 +714,14 @@ class _AccountSearchDelegate extends SearchDelegate<void> {
             subtitle: Text('${item.counterparty} · ${item.visibleStatus}'),
             onTap: () {
               close(context, null);
-              context.push('/profile/accounts/receivables/${item.id}');
+              final sourceId = item.sourceTransactionId;
+              if (sourceId != null) {
+                context.push(
+                  '/transactions/${Uri.encodeComponent(sourceId)}',
+                );
+              } else {
+                context.push('/profile/accounts/receivables/${item.id}');
+              }
             },
           ),
         if (accountMatches.isEmpty && receivableMatches.isEmpty)
