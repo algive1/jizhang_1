@@ -186,7 +186,7 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
     });
     final assetBookId =
         ref.read(activeBookProvider)?.assetBookId ??
-        ref.read(activeBookIdProvider);
+        (ref.read(activeBookIdProvider) as String);
     final now = DateTime.now();
     final item = Receivable(
       id: 'receivable-${newEntityId()}',
