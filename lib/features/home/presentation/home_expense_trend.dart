@@ -3,27 +3,27 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
-import '../../../core/models/analysis.dart';
 import '../../../core/models/account.dart';
+import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
-import '../../../core/widgets/cashflow_trend_chart.dart';
-import '../../../core/widgets/sliding_segmented_control.dart';
-import '../../analysis/data/analysis_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../accounts/domain/asset_history.dart';
 import '../../accounts/domain/asset_overview.dart';
+import '../../analysis/data/analysis_repository.dart';
 import '../../investments/data/investment_repository.dart';
 import '../../investments/domain/investment_portfolio.dart';
 import '../../transactions/data/transactions_repository.dart';
 import 'home_cards.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import 'home_trend_chart.dart';
 
 class HomeExpenseTrend extends ConsumerStatefulWidget {
   const HomeExpenseTrend({super.key, this.amountHidden = false});
+
   final bool amountHidden;
+
   @override
   ConsumerState<HomeExpenseTrend> createState() => _HomeExpenseTrendState();
 }
@@ -55,6 +55,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
     final trendAccounts = accounts
         .where((account) => account.currency.toUpperCase() == trendCurrency)
         .toList(growable: false);
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final assetHistory = AssetHistory(trendAccounts, transactions, now);
@@ -64,18 +65,16 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
     };
     final currentCurrencyInvestment =
         currentInvestmentByCurrency[trendCurrency] ?? 0;
+
     double? investmentAt(DateTime date) {
       final day = DateTime(date.year, date.month, date.day);
-      if (day == today) {
-        return currentCurrencyInvestment;
-      }
-      final key = InvestmentSnapshot.dateKey(day);
-      final exact = investmentsByDay[key];
+      if (day == today) return currentCurrencyInvestment;
+      final exact = investmentsByDay[InvestmentSnapshot.dateKey(day)];
       if (exact == 0) return 0;
       if (currentInvestmentByCurrency.isEmpty && investmentSnapshots.isEmpty) {
         return 0;
       }
-      return null;
+      return exact;
     }
 
     int accountAssetsAt(DateTime date) =>
@@ -83,11 +82,13 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
           final balance = assetHistory.balanceAt(date, accountId: account.id);
           return balance > 0 ? cents + (balance * 100).round() : cents;
         });
+
     int currentAccountAssets() => trendAccounts.fold<int>(
       0,
       (cents, account) =>
           account.balance > 0 ? cents + (account.balance * 100).round() : cents,
     );
+
     double? totalAssetsAt(DateTime date) {
       final day = DateTime(date.year, date.month, date.day);
       if (assetHistory.hasFutureRecords && day != today) return null;
@@ -103,40 +104,50 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
     }
 
     final dailyPoints = [
-      for (final p in snapshot.cashflowTrend)
+      for (final point in snapshot.cashflowTrend)
         CashflowPoint(
-          p.date,
-          p.income,
-          p.expense,
-          totalAssets: totalAssetsAt(p.date),
+          point.date,
+          point.income,
+          point.expense,
+          totalAssets: totalAssetsAt(point.date),
         ),
     ];
     final points = _period == AnalysisPeriod.currentYear
         ? _monthlyPoints(dailyPoints)
         : dailyPoints;
-    final selected = (_selected ?? points.length - 1)
-        .clamp(0, math.max(0, points.length - 1))
-        .toInt();
+    final selected = points.isEmpty
+        ? 0
+        : (_selected ?? ((points.length - 1) / 2).round())
+              .clamp(0, math.max(0, points.length - 1))
+              .toInt();
     final point = points.isEmpty ? null : points[selected];
     final year = _period == AnalysisPeriod.currentYear;
-    String dateLabel(CashflowPoint p) => year
-        ? '${p.date.year}年${p.date.month}月'
-        : '${p.date.month}月${p.date.day}日';
-    final average = snapshot.range.dayCount <= 0
-        ? 0.0
-        : snapshot.totalExpense / snapshot.range.dayCount;
+
+    double? latestAsset;
+    for (final candidate in points.reversed) {
+      if (candidate.totalAssets != null) {
+        latestAsset = candidate.totalAssets;
+        break;
+      }
+    }
+
+    String dateLabel(CashflowPoint value) => year
+        ? '${value.date.year}年${value.date.month}月'
+        : '${value.date.month}月${value.date.day}日';
+
     return HomeSurface(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 9),
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 10),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            right: 0,
-            top: 0,
-            width: 70,
-            height: 70,
+            right: -2,
+            top: -9,
+            width: 48,
+            height: 48,
             child: IgnorePointer(
               child: Opacity(
-                opacity: .38,
+                opacity: .34,
                 child: Image.asset(AppAssets.homeLeaves, fit: BoxFit.contain),
               ),
             ),
@@ -148,27 +159,18 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                 children: [
                   Expanded(
                     child: Text(
-                      '收支与资产趋势',
+                      '收支趋势',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                        fontWeight: FontWeight.w800,
                         color: context.appPrimaryText,
                       ),
                     ),
                   ),
                   SizedBox(
-                    width: 132,
-                    child: SlidingSegmentedControl<AnalysisPeriod>(
-                      compact: true,
-                      colors: [context.appPrimary, context.appPrimary],
-                      backgroundColor: context.appSurfaceSoft,
-                      inactiveTextColor: context.appSecondaryText,
-                      keyPrefix: 'home-trend',
-                      items: const [
-                        (AnalysisPeriod.last7Days, '周'),
-                        (AnalysisPeriod.currentMonth, '月'),
-                        (AnalysisPeriod.currentYear, '年'),
-                      ],
+                    width: 112,
+                    child: _TrendPeriodControl(
                       selected: _period,
                       onChanged: (period) => setState(() {
                         _period = period;
@@ -178,54 +180,31 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.amountHidden
-                          ? '金额已隐藏'
-                          : '本期累计支出 ¥${MoneyFormatter.whole(snapshot.totalExpense)}  · 日均 ¥${MoneyFormatter.whole(average)}',
-                      key: const ValueKey('home-trend-value'),
-                      style: TextStyle(
-                        color: context.appPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              const SizedBox(height: 9),
+              if (widget.amountHidden)
+                Text(
+                  '金额已隐藏',
+                  key: const ValueKey('home-trend-value'),
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
-              if (!widget.amountHidden && point != null) ...[
-                const SizedBox(height: 3),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 2,
-                  children: [
-                    _TrendValue(
-                      color: context.appPrimary,
-                      label: '支出',
-                      amount: point.expense,
-                    ),
-                    _TrendValue(
-                      color: AppColors.income,
-                      label: '收入',
-                      amount: point.income,
-                    ),
-                    _TrendValue(
-                      color: AppColors.warning,
-                      label: '总资产',
-                      amount: point.totalAssets,
-                      currency: trendCurrency,
-                    ),
-                  ],
+                )
+              else
+                _TrendSummaryRow(
+                  expense: snapshot.totalExpense,
+                  income: snapshot.totalIncome,
+                  average: snapshot.range.dayCount <= 0
+                      ? 0
+                      : snapshot.totalExpense / snapshot.range.dayCount,
+                  asset: latestAsset,
+                  currency: trendCurrency,
                 ),
-              ],
-              const SizedBox(height: 5),
+              const SizedBox(height: 9),
               if (widget.amountHidden)
                 SizedBox(
-                  height: 88,
+                  height: 104,
                   child: Center(
                     child: Text(
                       '趋势金额已隐藏',
@@ -238,9 +217,9 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                 )
               else if (points.isNotEmpty)
                 Semantics(
-                  label: '收支与资产趋势，${year ? "按月" : "按日"}查看',
+                  label: '收支趋势，${year ? "按月" : "按日"}查看',
                   value:
-                      '${dateLabel(point!)}，支出 CNY ${MoneyFormatter.decimal(point.expense)}，收入 CNY ${MoneyFormatter.decimal(point.income)}，${point.totalAssets == null ? '总资产暂无历史估值' : '总资产 ${MoneyFormatter.decimal(point.totalAssets!)} $trendCurrency'}',
+                      '${dateLabel(point!)}，支出 CNY ${MoneyFormatter.decimal(point.expense)}，收入 CNY ${MoneyFormatter.decimal(point.income)}，${point.totalAssets == null ? '资产暂无历史估值' : '资产 ${MoneyFormatter.decimal(point.totalAssets!)} $trendCurrency'}',
                   increasedValue: selected < points.length - 1
                       ? dateLabel(points[selected + 1])
                       : null,
@@ -253,28 +232,25 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                   onDecrease: selected > 0
                       ? () => setState(() => _selected = selected - 1)
                       : null,
-                  child: CashflowTrendChart(
+                  child: HomeTrendChart(
                     key: const ValueKey('home-trend-chart'),
                     points: points,
                     selected: selected,
                     year: year,
-                    height: 88,
-                    showIncome: true,
-                    showTotalAssets: true,
-                    independentSeriesScales: true,
-                    incomeColor: AppColors.income,
-                    totalAssetsColor: AppColors.warning,
+                    currency: trendCurrency,
                     onSelected: (index) => setState(() => _selected = index),
                   ),
-                ),
-              if (snapshot.expenseCount == 0)
-                Padding(
-                  padding: EdgeInsets.only(top: 6),
-                  child: Text(
-                    '这段时间还没有支出，记下一笔就能看到变化',
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      fontSize: 11,
+                )
+              else
+                SizedBox(
+                  height: 104,
+                  child: Center(
+                    child: Text(
+                      '这段时间还没有流水',
+                      style: TextStyle(
+                        color: context.appSecondaryText,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
@@ -288,13 +264,13 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
   List<CashflowPoint> _monthlyPoints(List<CashflowPoint> daily) {
     final amounts =
         <DateTime, ({int income, int expense, double? totalAssets})>{};
-    for (final p in daily) {
-      final month = DateTime(p.date.year, p.date.month);
+    for (final point in daily) {
+      final month = DateTime(point.date.year, point.date.month);
       final old = amounts[month];
       amounts[month] = (
-        income: (old?.income ?? 0) + (p.income * 100).round(),
-        expense: (old?.expense ?? 0) + (p.expense * 100).round(),
-        totalAssets: p.totalAssets,
+        income: (old?.income ?? 0) + (point.income * 100).round(),
+        expense: (old?.expense ?? 0) + (point.expense * 100).round(),
+        totalAssets: point.totalAssets ?? old?.totalAssets,
       );
     }
     return amounts.entries
@@ -310,44 +286,160 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
   }
 }
 
-class _TrendValue extends StatelessWidget {
-  const _TrendValue({
-    required this.color,
-    required this.label,
-    required this.amount,
-    this.currency,
+class _TrendPeriodControl extends StatelessWidget {
+  const _TrendPeriodControl({
+    required this.selected,
+    required this.onChanged,
   });
 
-  final Color color;
-  final String label;
-  final double? amount;
-  final String? currency;
+  final AnalysisPeriod selected;
+  final ValueChanged<AnalysisPeriod> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final value = amount == null
-        ? '暂无历史估值'
-        : currency == null
-        ? '¥${MoneyFormatter.whole(amount!)}'
-        : _formatCurrencyAmount(currency!, amount!);
-    return Text(
-      '$label $value',
-      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+    const items = [
+      (AnalysisPeriod.last7Days, '周'),
+      (AnalysisPeriod.currentMonth, '月'),
+      (AnalysisPeriod.currentYear, '年'),
+    ];
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: context.appSurfaceSoft.withValues(alpha: .94),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          for (final item in items)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: item.$1 == selected,
+                label: '趋势周期${item.$2}',
+                child: GestureDetector(
+                  key: ValueKey('home-trend-${item.$1.name}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(item.$1),
+                  child: AnimatedContainer(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: item.$1 == selected
+                        ? context.appPrimary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: item.$1 == selected
+                        ? [
+                            BoxShadow(
+                              color: context.appPrimary.withValues(alpha: .18),
+                              blurRadius: 5,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                    child: Text(
+                      item.$2,
+                      style: TextStyle(
+                        color: item.$1 == selected
+                            ? Colors.white
+                            : context.appSecondaryText,
+                        fontSize: 12,
+                        height: 1,
+                        fontWeight: item.$1 == selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-String _formatCurrencyAmount(String currency, double amount) {
-  final symbol = switch (currency.toUpperCase()) {
-    'CNY' => '¥',
-    'USD' => r'$',
-    'EUR' => '€',
-    'GBP' => '£',
-    'JPY' => '¥',
-    _ => '',
-  };
-  final formatted = MoneyFormatter.whole(amount);
-  return symbol.isEmpty
-      ? '$currency $formatted'
-      : '$currency $symbol$formatted';
+class _TrendSummaryRow extends StatelessWidget {
+  const _TrendSummaryRow({
+    required this.expense,
+    required this.income,
+    required this.average,
+    required this.asset,
+    required this.currency,
+  });
+
+  final double expense;
+  final double income;
+  final double average;
+  final double? asset;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final assetText = asset == null
+        ? '--'
+        : '${_currencySymbol(currency)}${MoneyFormatter.whole(asset!)}';
+    return SizedBox(
+      key: const ValueKey('home-trend-value'),
+      width: double.infinity,
+      height: 16,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            _metric(
+              '支出 ¥${MoneyFormatter.whole(expense)}',
+              homeTrendExpenseColor,
+            ),
+            _divider(context),
+            _metric(
+              '收入 ¥${MoneyFormatter.whole(income)}',
+              homeTrendIncomeColor,
+            ),
+            _divider(context),
+            _metric('资产 $assetText', homeTrendAssetColor),
+            _divider(context),
+            _metric(
+              '日均 ¥${MoneyFormatter.whole(average)}',
+              homeTrendExpenseColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metric(String text, Color color) => Text(
+    text,
+    style: TextStyle(
+      color: color,
+      fontSize: 10.5,
+      height: 1,
+      fontWeight: FontWeight.w800,
+    ),
+  );
+
+  Widget _divider(BuildContext context) => Container(
+    width: 1,
+    height: 13,
+    margin: const EdgeInsets.symmetric(horizontal: 8),
+    color: context.appSecondaryText.withValues(alpha: .38),
+  );
 }
+
+String _currencySymbol(String currency) => switch (currency.toUpperCase()) {
+  'CNY' => '¥',
+  'USD' => r'$',
+  'EUR' => '€',
+  'GBP' => '£',
+  'JPY' => '¥',
+  _ => '$currency ',
+};
