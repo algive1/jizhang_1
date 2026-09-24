@@ -397,7 +397,16 @@ class _RestrictedAccountDetailPageState
   Future<void> _edit(ManagedAccount item) async {
     final name = TextEditingController(text: item.account.name);
     final note = TextEditingController(text: item.note ?? '');
-    var platform = item.platform ?? '其他';
+    const presetPlatforms = ['淘宝', '抖音', '拼多多', '京东', '房东'];
+    final originalPlatform = item.platform?.trim() ?? '';
+    var platform = presetPlatforms.contains(originalPlatform)
+        ? originalPlatform
+        : '其他';
+    final customPlatform = TextEditingController(
+      text: platform == '其他' && originalPlatform != '其他'
+          ? originalPlatform
+          : '',
+    );
     var status = item.restrictedStatus ?? RestrictedFundStatus.locked;
     var expected = item.expectedReturnAt;
     var include = item.includeInTotal;
@@ -417,10 +426,7 @@ class _RestrictedAccountDetailPageState
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: ['淘宝', '抖音', '拼多多', '京东', '房东', '其他']
-                          .contains(platform)
-                      ? platform
-                      : '其他',
+                  initialValue: platform,
                   decoration: const InputDecoration(labelText: '平台 / 机构'),
                   items: const [
                     DropdownMenuItem(value: '淘宝', child: Text('淘宝')),
@@ -433,6 +439,16 @@ class _RestrictedAccountDetailPageState
                   onChanged: (value) =>
                       setLocalState(() => platform = value ?? '其他'),
                 ),
+                if (platform == '其他') ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: customPlatform,
+                    decoration: const InputDecoration(
+                      labelText: '平台 / 机构名称',
+                      hintText: '请输入实际平台或机构名称',
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<RestrictedFundStatus>(
                   initialValue: status,
@@ -496,6 +512,18 @@ class _RestrictedAccountDetailPageState
     if (confirmed != true) {
       name.dispose();
       note.dispose();
+      customPlatform.dispose();
+      return;
+    }
+
+    final resolvedPlatform = platform == '其他'
+        ? customPlatform.text.trim()
+        : platform;
+    if (resolvedPlatform.isEmpty) {
+      if (mounted) _message('请填写平台或机构名称');
+      name.dispose();
+      note.dispose();
+      customPlatform.dispose();
       return;
     }
 
@@ -523,7 +551,7 @@ class _RestrictedAccountDetailPageState
       await ref.read(accountManagementRepositoryProvider).updateMeta(
         accountId: old.id,
         category: AccountFundCategory.restricted,
-        platform: platform,
+        platform: resolvedPlatform,
         restrictedStatus: status,
         expectedReturnAt: expected,
         includeInTotal: include,
@@ -535,6 +563,7 @@ class _RestrictedAccountDetailPageState
     } finally {
       name.dispose();
       note.dispose();
+      customPlatform.dispose();
     }
   }
 
