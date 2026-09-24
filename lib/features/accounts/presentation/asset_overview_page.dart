@@ -52,7 +52,9 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
     };
     final groups = AssetOverview.group(
       allAccounts,
-      investmentByCurrency: ref.watch(investmentValueByCurrencyProvider),
+      investmentByCurrency: ref.watch(
+        includedInvestmentValueByCurrencyProvider,
+      ),
       excludedAccountIds: excludedAssetAccountIds,
     );
     final selected =
@@ -165,10 +167,11 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 onTrend: () => _showTrendSheet(context, selected, history),
               ),
               const SizedBox(height: 8),
-              AssetLiabilitySection(
-                accounts: selected.accounts,
-                onAccounts: () => context.push('/profile/accounts'),
-              ),
+              if (selected.accounts.isNotEmpty)
+                AssetLiabilitySection(
+                  accounts: selected.accounts,
+                  onAccounts: () => context.push('/profile/accounts'),
+                ),
               const SizedBox(height: 8),
               _RecentChanges(
                 records: records,
@@ -176,6 +179,8 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 accountNames: accountNames,
                 onViewAll: () => context.push('/transactions'),
                 onOpen: (record) => openTransactionDetail(context, record),
+                onLongPress: (record) =>
+                    showTransactionActions(context, ref, record),
               ),
               if (activeBook?.usesPrimaryAssets == true)
                 Padding(
@@ -558,22 +563,7 @@ class _ChartPair extends StatelessWidget {
   final VoidCallback onTrend;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, box) {
-      if (box.maxWidth < 380)
-        return Column(
-          children: [
-            AssetDistribution(overview: selected, onTap: onDistribution),
-            const SizedBox(height: 8),
-            AssetTrend(
-              history: history,
-              currency: selected.currency,
-              days: days,
-              onDays: onDays,
-              onTap: onTrend,
-            ),
-          ],
-        );
-      return Row(
+    builder: (context, box) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
@@ -586,14 +576,14 @@ class _ChartPair extends StatelessWidget {
             child: AssetTrend(
               history: history,
               currency: selected.currency,
+              currentInvestmentValue: selected.investmentValue,
               days: days,
               onDays: onDays,
               onTap: onTrend,
             ),
           ),
         ],
-      );
-    },
+      ),
   );
 }
 
@@ -604,12 +594,14 @@ class _RecentChanges extends StatefulWidget {
     required this.accountNames,
     required this.onViewAll,
     required this.onOpen,
+    required this.onLongPress,
   });
   final List<TransactionRecord> records;
   final Set<String> accountIds;
   final Map<String, String> accountNames;
   final VoidCallback onViewAll;
   final ValueChanged<TransactionRecord> onOpen;
+  final ValueChanged<TransactionRecord> onLongPress;
   @override
   State<_RecentChanges> createState() => _RecentChangesState();
 }
@@ -693,6 +685,7 @@ class _RecentChangesState extends State<_RecentChanges> {
                 accountIds: accountIds,
                 accountNames: widget.accountNames,
                 onTap: () => widget.onOpen(visible[index]),
+                onLongPress: () => widget.onLongPress(visible[index]),
               ),
               if (index < visible.length - 1)
                 Divider(height: 1, indent: 44, color: context.appDivider),
@@ -760,11 +753,13 @@ class _RecentRow extends StatelessWidget {
     required this.accountIds,
     required this.accountNames,
     required this.onTap,
+    required this.onLongPress,
   });
   final TransactionRecord record;
   final Set<String> accountIds;
   final Map<String, String> accountNames;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -790,6 +785,7 @@ class _RecentRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),
@@ -903,6 +899,7 @@ class _AssetOverviewSheet extends StatelessWidget {
         AssetTrendDetail(
           history: history,
           currency: overview.currency,
+          currentInvestmentValue: overview.investmentValue,
           days: days,
         ),
       ],
@@ -958,6 +955,7 @@ class _TrendSheetState extends State<_TrendSheet> {
         AssetTrendDetail(
           history: widget.history,
           currency: widget.overview.currency,
+          currentInvestmentValue: widget.overview.investmentValue,
           days: _days,
           onDays: (days) {
             setState(() => _days = days);
@@ -976,6 +974,7 @@ class _AssetSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
+    bottom: false,
     child: FractionallySizedBox(
       heightFactor: .52,
       alignment: Alignment.bottomCenter,
@@ -1009,7 +1008,9 @@ class _AssetSheetFrame extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(child: child),
+            Expanded(
+              child: SafeArea(top: false, child: child),
+            ),
           ],
         ),
       ),

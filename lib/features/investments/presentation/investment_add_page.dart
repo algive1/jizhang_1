@@ -562,6 +562,9 @@ class _InvestmentForm extends ConsumerStatefulWidget {
 }
 
 class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
+  static const _homeAssetsTip =
+      '关闭后，投资类金额仅在投资管理页面展示，不计入首页展示的账目净资产。';
+
   final _formKey = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.name);
   late final _symbol = TextEditingController(text: widget.symbol);
@@ -576,6 +579,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
   late InvestmentAssetType _type = widget.type;
   DateTime _date = DateUtils.dateOnly(DateTime.now());
   String? _accountId;
+  bool _includeInHomeNetAssets = false;
 
   bool get _isLocked => widget.onCancel != null;
 
@@ -727,6 +731,38 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             controller: _note,
             decoration: appFieldDecoration('备注（可选）'),
           ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            key: const ValueKey('investment-include-in-home-net-assets'),
+            contentPadding: EdgeInsets.zero,
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('计入首页账目净资产'),
+                IconButton(
+                  key: const ValueKey('investment-home-assets-tip'),
+                  tooltip: '提示',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      content: const Text(_homeAssetsTip),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('知道了'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  icon: const Icon(Icons.info_outline, size: 18),
+                ),
+              ],
+            ),
+            value: _includeInHomeNetAssets,
+            onChanged: (value) =>
+                setState(() => _includeInHomeNetAssets = value),
+          ),
           SizedBox(height: 20),
           FilledButton(
             key: const ValueKey('investment-form-submit'),
@@ -765,6 +801,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
         currentPrice: widget.priceSource == PriceSource.manual
             ? (valuation ?? price)
             : null,
+        includeInHomeNetAssets: _includeInHomeNetAssets,
       ),
     );
   }

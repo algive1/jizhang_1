@@ -441,12 +441,12 @@ void main() {
     expect(visited, ['/profile']);
   });
 
-  testWidgets('the bar takes its colors from the active theme', (tester) async {
+  testWidgets('all themes share pale glass layers and keep themed ink', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    // The whole point of decoupling the bar from `AppThemeStyle.liquidGlass`
-    // is that the *material* is shared while the *colors* stay per-theme.
+    // The material layers are shared while selected/unselected ink stays
+    // specific to each theme.
     //
     // `pumpWidget` in a loop reuses the `MaterialApp` element and keeps
     // resolving the first theme it ever saw, so the tree is torn down between
@@ -462,15 +462,14 @@ void main() {
         find.byType(LiquidGlassTabBar),
       );
       final scheme = AppTheme.light(theme).colorScheme;
-      final expectedSelected = _darken(
-        scheme.secondary,
-        AppBottomNavigation.selectedInkFactor,
-      );
+      final expectedSelected = theme.style == AppThemeStyle.liquidGlass
+          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
+          : _darken(scheme.secondary, .90);
 
       expect(
         bar.itemStyle.selectedColor,
         expectedSelected,
-        reason: '${theme.id} must select in its own darkened accent',
+        reason: '${theme.id} must use its selected ink palette',
       );
       expect(
         bar.itemStyle.unselectedColor,
@@ -480,16 +479,25 @@ void main() {
         ),
         reason: '${theme.id} must dim unselected items in its own ink',
       );
-      // The capsule tint is derived from the active theme so the glass
-      // keeps the current palette instead of importing a fixed cool tint.
       expect(
         bar.style!.appearance.color,
-        AppBottomNavigation.plateTint(scheme),
+        Colors.white.withValues(alpha: .24),
+        reason: '${theme.id} capsule must use the shared pale glass tint',
       );
       expect(
         bar.style!.refraction.distortion,
         greaterThan(0),
         reason: '${theme.id} must keep real refraction, not a flat slab',
+      );
+      expect(
+        bar.pillStyle.rest!.appearance.color,
+        const Color(0xFF333333).withValues(alpha: .03),
+        reason: '${theme.id} settled selected pill uses dark gray at 3%',
+      );
+      expect(
+        bar.pillStyle.glassStyle,
+        isNull,
+        reason: '${theme.id} must use the default transparent moving glass',
       );
       resolved[theme.id] = bar.itemStyle.selectedColor;
     }
@@ -499,32 +507,84 @@ void main() {
     expect(resolved.values.toSet().length, BuiltInThemes.all.length);
   });
 
+  testWidgets(
+    'liquid glass uses a pale capsule and transparent moving pill',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_shell(theme: BuiltInThemes.liquidGlass));
+      await tester.pump();
+
+      final bar = tester.widget<LiquidGlassTabBar>(
+        find.byType(LiquidGlassTabBar),
+      );
+      final pill = bar.pillStyle;
+      final defaultMovingGlass = const LiquidGlassTabPillStyle().effectiveGlass;
+
+      expect(
+        bar.style!.appearance.color,
+        Colors.white.withValues(alpha: .24),
+        reason: 'the liquid glass capsule should have a pale translucent base',
+      );
+      expect(pill.glassStyle, isNull);
+      expect(
+        pill.effectiveGlass.appearance.blur.sigmaX,
+        defaultMovingGlass.appearance.blur.sigmaX,
+      );
+      expect(
+        pill.effectiveGlass.appearance.blur.sigmaY,
+        defaultMovingGlass.appearance.blur.sigmaY,
+      );
+      expect(
+        pill.effectiveGlass.appearance.shadow?.blur,
+        defaultMovingGlass.appearance.shadow?.blur,
+      );
+      expect(
+        pill.effectiveGlass.appearance.shadow?.opacity,
+        defaultMovingGlass.appearance.shadow?.opacity,
+      );
+      expect(
+        pill.rest!.appearance.color,
+        const Color(0xFF333333).withValues(alpha: .03),
+        reason: 'the settled pill should use dark gray at 3%',
+      );
+      expect(pill.growHeight, 9);
+      expect(pill.distortion, .04);
+      expect(pill.distortionWidth, 12);
+      expect(pill.travelStiffness, 280);
+      expect(pill.travelDamping, 31.4);
+    },
+  );
+
   testWidgets('tab ink clears the contrast gate on the capsule and the pill', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(393, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    expect(AppBottomNavigation.selectedInkFactor, .90);
 
-    // Measured off the reference bar: unselected 4.73:1 on its capsule,
-    // selected 8.04:1 on its pill. This is the contract that the previous
-    // 86 %-dimmed ink broke at 3.3:1, making the tab row lose to whatever
-    // page content sat behind the glass.
+    final capsuleTint = Colors.white.withValues(alpha: .24);
+    final restTint = const Color(0xFF333333).withValues(alpha: .03);
+
+    // Compare both ink states with the shared glass layers composited over
+    // each theme's actual page background color.
     for (final theme in BuiltInThemes.all) {
       final scheme = AppTheme.light(theme).colorScheme;
-      final selected = _darken(
-        scheme.secondary,
-        AppBottomNavigation.selectedInkFactor,
-      );
+      final selected = theme.style == AppThemeStyle.liquidGlass
+          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
+          : _darken(scheme.secondary, AppBottomNavigation.selectedInkFactor);
       final unselected = _darken(
         scheme.onSurfaceVariant,
         AppBottomNavigation.unselectedInkFactor,
       );
 
-      // The capsule is a theme-derived plate tint composited over the page;
-      // the settled pill is the accent tinted over that plate.
-      const capsule = Color(0xFFE4E8F1);
+      final capsule = _blend(
+        capsuleTint,
+        theme.background,
+      );
       final pill = _blend(
-        scheme.primary.withValues(alpha: AppBottomNavigation.restFillAlpha),
+        restTint,
         capsule,
       );
 
@@ -538,26 +598,12 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: '${theme.id}: selected label must clear 4.5:1 on its pill',
       );
-      // Selection has to *read* as the strong state, which the reference
-      // encodes by making its selected ink darker than its grey — near black
-      // on a coloured pill, not a mere hue swap. Contrast against the pill
-      // alone cannot express that (a lighter pill flatters a lighter ink), so
-      // the two inks are compared directly. The comparison is directional
-      // rather than a fixed multiple: how much darker a theme's dark accent is
-      // than its grey is the theme's own business — the green theme's
-      // `primaryDark` is the lightest of the four and gates any multiple.
       expect(
         _luminance(selected),
-        lessThan(_luminance(unselected)),
-        reason: '${theme.id}: the selected ink must be darker than the '
-            'resting ink, as the reference\'s near-black-on-amber is',
-      );
-      // …and the settled pill must carry the accent rather than being a
-      // neutral frost, which is what makes the selection read as the theme's.
-      expect(
-        _luminance(pill),
-        lessThan(_luminance(capsule) * .97),
-        reason: '${theme.id}: the settled pill must be visibly tinted',
+        greaterThan(
+          _luminance(_darken(scheme.secondary, .85)),
+        ),
+        reason: '${theme.id}: selected ink must be brighter than the previous tune',
       );
     }
   });
@@ -582,9 +628,15 @@ void main() {
 
     final bar = tester.widget<LiquidGlassTabBar>(find.byType(LiquidGlassTabBar));
     final style = bar.style!;
+    final highContrastInk =
+        AppTheme.light(BuiltInThemes.freshGreen).colorScheme.onSurface;
     expect(style.refraction.distortion, 0);
     expect(style.refraction.distortionWidth, 0);
     expect(style.appearance.color.a, 1);
+    expect(bar.pillStyle.rest!.appearance.color, const Color(0xFFDCE8FF));
+    expect(bar.itemStyle.selectedColor, highContrastInk);
+    expect(bar.itemStyle.unselectedColor, highContrastInk);
+    expect(bar.pillStyle.glassStyle, isNull);
   });
 }
 

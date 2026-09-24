@@ -7,6 +7,7 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
@@ -33,7 +34,8 @@ class ReceivableDetailPage extends ConsumerWidget {
     }
 
     final events = eventsState.value ?? const <ReceivableEvent>[];
-    final ended = item.status == ReceivableStatus.completed ||
+    final ended =
+        item.status == ReceivableStatus.completed ||
         item.status == ReceivableStatus.writtenOff;
 
     return SafeArea(
@@ -52,9 +54,8 @@ class ReceivableDetailPage extends ConsumerWidget {
                 child: Text(
                   '应收详情',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               TextButton(
@@ -70,8 +71,9 @@ class ReceivableDetailPage extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor:
-                      context.appPrimarySoft.withValues(alpha: .62),
+                  backgroundColor: context.appPrimarySoft.withValues(
+                    alpha: .62,
+                  ),
                   child: Icon(
                     _icon(item.type),
                     color: context.appPrimary,
@@ -185,12 +187,7 @@ class ReceivableDetailPage extends ConsumerWidget {
                   label: '收回',
                   color: const Color(0xff3D9B5C),
                   enabled: !ended && item.remainingAmount > 0,
-                  onTap: () => _collect(
-                    context,
-                    ref,
-                    item,
-                    full: true,
-                  ),
+                  onTap: () => _collect(context, ref, item, full: true),
                 ),
               ),
               const SizedBox(width: 8),
@@ -200,12 +197,7 @@ class ReceivableDetailPage extends ConsumerWidget {
                   label: '部分收回',
                   color: const Color(0xff5B8DEF),
                   enabled: !ended && item.remainingAmount > 0,
-                  onTap: () => _collect(
-                    context,
-                    ref,
-                    item,
-                    full: false,
-                  ),
+                  onTap: () => _collect(context, ref, item, full: false),
                 ),
               ),
               const SizedBox(width: 8),
@@ -233,9 +225,8 @@ class ReceivableDetailPage extends ConsumerWidget {
           const SizedBox(height: 16),
           Text(
             '跟进记录',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           if (eventsState.isLoading && events.isEmpty)
@@ -301,11 +292,13 @@ class ReceivableDetailPage extends ConsumerWidget {
     if (result == null) return;
 
     try {
-      await ref.read(receivableRepositoryProvider).collect(
-        receivableId: item.id,
-        amount: result.amount,
-        destinationAccountId: result.accountId,
-      );
+      await ref
+          .read(receivableRepositoryProvider)
+          .collect(
+            receivableId: item.id,
+            amount: result.amount,
+            destinationAccountId: result.accountId,
+          );
       ref.invalidate(receivablesProvider);
       ref.invalidate(receivableEventsProvider(item.id));
       ref.invalidate(receivableMonthCollectedProvider);
@@ -380,18 +373,19 @@ class ReceivableDetailPage extends ConsumerWidget {
       if (choice == 'clear') {
         await ref.read(receivableRepositoryProvider).setReminder(item.id, null);
       } else {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate:
-              item.reminderAt ??
+        final picked = await AppDatePicker.show(
+          context,
+          item.reminderAt ??
               (item.expectedAt?.isAfter(now) == true
                   ? item.expectedAt!
                   : now.add(const Duration(days: 1))),
-          firstDate: DateTime(now.year, now.month, now.day),
-          lastDate: DateTime(now.year + 5),
+          minimumDate: DateTime(now.year, now.month, now.day),
+          maximumDate: DateTime(now.year + 5),
         );
         if (picked == null) return;
-        await ref.read(receivableRepositoryProvider).setReminder(item.id, picked);
+        await ref
+            .read(receivableRepositoryProvider)
+            .setReminder(item.id, picked);
       }
       ref.invalidate(receivablesProvider);
       ref.invalidate(receivableEventsProvider(item.id));
@@ -471,10 +465,7 @@ class ReceivableDetailPage extends ConsumerWidget {
                   decoration: const InputDecoration(labelText: '应收类型'),
                   items: [
                     for (final value in ReceivableType.values)
-                      DropdownMenuItem(
-                        value: value,
-                        child: Text(value.label),
-                      ),
+                      DropdownMenuItem(value: value, child: Text(value.label)),
                   ],
                   onChanged: (value) =>
                       setLocalState(() => type = value ?? type),
@@ -513,11 +504,11 @@ class ReceivableDetailPage extends ConsumerWidget {
                   subtitle: Text(_date(occurredAt)),
                   trailing: const Icon(Icons.calendar_month_outlined),
                   onTap: () async {
-                    final value = await showDatePicker(
-                      context: context,
-                      initialDate: occurredAt,
-                      firstDate: DateTime(DateTime.now().year - 10),
-                      lastDate: DateTime(DateTime.now().year + 5),
+                    final value = await AppDatePicker.show(
+                      context,
+                      occurredAt,
+                      minimumDate: DateTime(DateTime.now().year - 10),
+                      maximumDate: DateTime(DateTime.now().year + 5),
                     );
                     if (value != null) {
                       setLocalState(() => occurredAt = value);
@@ -532,11 +523,11 @@ class ReceivableDetailPage extends ConsumerWidget {
                   ),
                   trailing: const Icon(Icons.calendar_month_outlined),
                   onTap: () async {
-                    final value = await showDatePicker(
-                      context: context,
-                      initialDate: expectedAt ?? DateTime.now(),
-                      firstDate: DateTime(DateTime.now().year - 5),
-                      lastDate: DateTime(DateTime.now().year + 10),
+                    final value = await AppDatePicker.show(
+                      context,
+                      expectedAt ?? DateTime.now(),
+                      minimumDate: DateTime(DateTime.now().year - 5),
+                      maximumDate: DateTime(DateTime.now().year + 10),
                     );
                     if (value != null) {
                       setLocalState(() => expectedAt = value);
@@ -585,25 +576,27 @@ class ReceivableDetailPage extends ConsumerWidget {
     }
 
     try {
-      await ref.read(receivableRepositoryProvider).update(
-        Receivable(
-          id: item.id,
-          bookId: item.bookId,
-          name: name.text.trim(),
-          type: type,
-          counterparty: counterparty.text.trim(),
-          totalAmount: totalAmount,
-          receivedAmount: item.receivedAmount,
-          occurredAt: occurredAt,
-          expectedAt: expectedAt,
-          reminderAt: item.reminderAt,
-          status: item.status,
-          businessStatus: businessStatus,
-          remark: remark.text.trim(),
-          createdAt: item.createdAt,
-          updatedAt: DateTime.now(),
-        ),
-      );
+      await ref
+          .read(receivableRepositoryProvider)
+          .update(
+            Receivable(
+              id: item.id,
+              bookId: item.bookId,
+              name: name.text.trim(),
+              type: type,
+              counterparty: counterparty.text.trim(),
+              totalAmount: totalAmount,
+              receivedAmount: item.receivedAmount,
+              occurredAt: occurredAt,
+              expectedAt: expectedAt,
+              reminderAt: item.reminderAt,
+              status: item.status,
+              businessStatus: businessStatus,
+              remark: remark.text.trim(),
+              createdAt: item.createdAt,
+              updatedAt: DateTime.now(),
+            ),
+          );
       ref.invalidate(receivablesProvider);
       ref.invalidate(receivableEventsProvider(item.id));
       if (context.mounted) _message(context, '应收已更新');
@@ -631,10 +624,7 @@ class ReceivableDetailPage extends ConsumerWidget {
           width: 100,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.appSecondaryText,
-            ),
+            style: TextStyle(fontSize: 12, color: context.appSecondaryText),
           ),
         ),
         const Spacer(),
@@ -657,10 +647,7 @@ class ReceivableDetailPage extends ConsumerWidget {
           width: 100,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.appSecondaryText,
-            ),
+            style: TextStyle(fontSize: 12, color: context.appSecondaryText),
           ),
         ),
         Expanded(
@@ -692,9 +679,7 @@ class ReceivableDetailPage extends ConsumerWidget {
       '${value.day.toString().padLeft(2, '0')}';
 
   static void _message(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }
 
@@ -752,10 +737,7 @@ class _TimelineRow extends StatelessWidget {
           child: Text(
             '${event.createdAt.month.toString().padLeft(2, '0')}-'
             '${event.createdAt.day.toString().padLeft(2, '0')}',
-            style: TextStyle(
-              fontSize: 11,
-              color: context.appSecondaryText,
-            ),
+            style: TextStyle(fontSize: 11, color: context.appSecondaryText),
           ),
         ),
         SizedBox(
@@ -771,12 +753,7 @@ class _TimelineRow extends StatelessWidget {
                 ),
               ),
               if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 1,
-                    color: context.appDivider,
-                  ),
-                ),
+                Expanded(child: Container(width: 1, color: context.appDivider)),
             ],
           ),
         ),
@@ -858,9 +835,8 @@ class _CollectSheetState extends State<_CollectSheet> {
       children: [
         Text(
           widget.fixedAmount == null ? '部分收回' : '收回',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
@@ -884,8 +860,7 @@ class _CollectSheetState extends State<_CollectSheet> {
           decoration: InputDecoration(
             labelText: '到账金额',
             prefixText: '¥ ',
-            helperText:
-                '剩余待收 ¥${MoneyFormatter.decimal(widget.maxAmount)}',
+            helperText: '剩余待收 ¥${MoneyFormatter.decimal(widget.maxAmount)}',
             errorText: _error,
           ),
         ),
@@ -902,10 +877,7 @@ class _CollectSheetState extends State<_CollectSheet> {
                 setState(() => _error = '请输入有效金额');
                 return;
               }
-              Navigator.pop(
-                context,
-                _CollectResult(_accountId, value),
-              );
+              Navigator.pop(context, _CollectResult(_accountId, value));
             },
             child: const Text('确认'),
           ),

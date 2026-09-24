@@ -55,67 +55,31 @@ class AppBottomNavigation extends StatelessWidget {
   /// page has to leave free.
   static const AppNavGeometry geometry = AppNavGeometry();
 
-  /// Alpha of the capsule's tonal fill.
-  ///
-  /// Low on purpose: the fill's job is to give the plate a **luminance step**
-  /// below the page (that is what makes it visible), not to cover the page.
-  /// Everything the backdrop contributes stays in the composite, so the blurred
-  /// content keeps showing through at `1 - glassTintAlpha`.
-  static const double glassTintAlpha = .38;
+  /// The ordinary-contrast white tint shared by the navigation capsule and FAB.
+  static Color capsuleTint() => Colors.white.withValues(alpha: .24);
 
-  /// How much of the theme's accent is washed into the plate fill.
-  static const double _plateHue = .20;
-
-  /// How far the fill is pulled below the theme's own surface.
-  static const double _plateDarken = .88;
-
-  /// Glass tint of the capsule — **derived from the active theme**.
-  ///
-  /// Two properties matter, and they are what a fixed colour cannot have at
-  /// once:
-  ///
-  ///  * it must be **darker than the page**, or the plate is invisible. The
-  ///    page behind this bar is near-white, so a *white* fill has nothing to
-  ///    separate itself from: at 18 % the old white tint lifted the backdrop by
-  ///    ~3/255 — under the visibility threshold, which is why the plate read as
-  ///    "no plate at all" — while the alpha that would make white visible
-  ///    (60 %+) washed the backdrop out instead. That one-dimensional trade is
-  ///    why tuning white produced only "fully see-through" or "background
-  ///    gone".
-  ///  * it must carry the **theme's own hue**. A fixed cool grey-blue plate
-  ///    reads as *blue glass* on the green, amber and warm themes — it was
-  ///    importing another theme's colour into every page.
-  ///
-  /// So the fill is the theme's accent washed into the theme's surface, then
-  /// pulled down: `darken(blend(primary @ 20 %, surface), .88)`. Composited
-  /// over the page at [glassTintAlpha] that lands 15–22/255 *below* the page on
-  /// all four built-in themes, with the accent's hue (green theme → greenish
-  /// plate, blue theme → blue-grey, amber → warm). The ink gate in
-  /// `test/app_scaffold_navigation_test.dart` measures against that composite
-  /// per theme.
-  ///
-  /// High contrast mode replaces this tint with an opaque surface.
-  static Color plateTint(ColorScheme scheme) {
-    final toned = Color.alphaBlend(
-      scheme.primary.withValues(alpha: _plateHue),
-      scheme.surface,
-    );
-    return _darken(toned, _plateDarken).withValues(alpha: glassTintAlpha);
-  }
+  /// The ordinary-contrast selected ink shared by navigation and the FAB glyph.
+  static Color selectedEmphasisFor(
+    ColorScheme scheme, {
+    required bool liquidGlass,
+  }) =>
+      liquidGlass
+          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
+          : _darken(scheme.secondary, selectedInkFactor);
 
   /// Capsule backdrop blur, in logical pixels.
   ///
   /// Deliberately low. Blur is what decides how much *detail* survives behind
   /// the plate — it does **not** decide how much background shows through; that
-  /// is the tint's alpha alone ([glassTint]). A big radius therefore does not
+  /// is the tint's alpha alone. A big radius therefore does not
   /// buy "more glass", it buys "less background": at 16 the backdrop was
   /// smeared into flat wash and the bar read as an opaque slab. At 5 the
   /// backdrop stays legible as shapes moving under the plate, which is what
   /// makes it read as glass at all — and it is much closer to the reference
-  /// implementation's own 2.5.
+  /// implementation's own 2.5. Every theme uses the same faint white tint.
   ///
-  /// Contrast for the tab row comes from the plate's tone, not from destroying
-  /// the backdrop; see [glassTint]. Content that *rests* near the bar is kept
+  /// Contrast for the tab row comes from its theme-specific ink, not from
+  /// destroying the backdrop. Content that *rests* near the bar is kept
   /// out from under the glass by `AppNavGeometry.reservedBottomInset` and the
   /// shell's viewport inset, so this radius only ever softens content
   /// mid-scroll.
@@ -222,7 +186,7 @@ class AppBottomNavigation extends StatelessWidget {
       appearance: LiquidGlassAppearance(
         color: highContrast
             ? const Color(0xFFF7FAFF)
-            : plateTint(Theme.of(context).colorScheme),
+            : capsuleTint(),
         // Blur and tint work together; icons and labels render above both.
         blur: LiquidGlassBlur(
           sigmaX: highContrast ? 8 : capsuleBlurSigma,
@@ -244,37 +208,21 @@ class AppBottomNavigation extends StatelessWidget {
     );
   }
 
-  /// **Icon and label** styling.
-  ///
-  /// Colours are measured against the reference bar rather than picked by eye.
-  /// Sampling the reference's own screenshots gives it:
-  ///
-  /// | state | reference ink | vs capsule |
-  /// | --- | --- | --- |
-  /// | unselected | a warm dark grey, luminance ≈ 0.13 | **4.73 : 1** |
-  /// | selected | its accent, darkened, luminance ≈ 0.06 | **8.04 : 1** |
-  ///
-  /// Neither is white — the package's defaults (`Colors.white` /
-  /// `Colors.white70`) are invisible on a near-clear capsule over a pale
-  /// finance page, which is what this bar sits on. Two consequences:
-  ///
-  ///  * **Unselected darkens `onSurfaceVariant`** ([unselectedInkFactor]). At
-  ///    full strength it measures **3.6 : 1** on our capsule — short of both
-  ///    the reference's 4.73 : 1 and the project's 4.5 : 1 gate. The previous
-  ///    86 %-*alpha* dimming was worse still at **3.3 : 1**, which is where
-  ///    the bar started losing to the page content behind it.
-  ///  * **Selected uses a darkened `primaryDark`**, not `primary`. The
-  ///    reference's selected amber is far darker than its own pill
-  ///    (`primary` on our light accent pill measures ~2.2 : 1 — it fails
-  ///    outright). [selectedInkFactor] keeps the hue while buying the
-  ///    contrast, so the selected tab still reads as *coloured* dark, not as
-  ///    black.
+  /// **Icon and label** styling. The selected ink uses a brighter theme
+  /// accent per the reference palette; unselected ink remains muted. Both
+  /// states are checked against their rendered capsule/pill composites in
+  /// `test/app_scaffold_navigation_test.dart` for at least 4.5:1 contrast.
   static LiquidGlassTabItemStyle _itemStyle(BuildContext context) {
     final highContrast = MediaQuery.highContrastOf(context);
+    final liquidGlass = context.appUsesLiquidGlass;
+    final selectedColor = highContrast
+        ? context.appPrimaryText
+        : selectedEmphasisFor(
+            context.appColors,
+            liquidGlass: liquidGlass,
+          );
     return LiquidGlassTabItemStyle(
-      selectedColor: highContrast
-          ? context.appPrimaryText
-          : _darken(context.appColors.secondary, selectedInkFactor),
+      selectedColor: selectedColor,
       unselectedColor: highContrast
           ? context.appPrimaryText
           : _darken(context.appSecondaryText, unselectedInkFactor),
@@ -286,22 +234,16 @@ class AppBottomNavigation extends StatelessWidget {
     );
   }
 
-  /// How much the selected ink is darkened from the theme's dark accent.
-  ///
-  /// The binding constraint is the **worst** theme, not the average: the green
-  /// theme's accent is the lightest of the four, so its darkened secondary on
-  /// its own accent pill gates the factor. At `.80` every theme clears 4.5 : 1
-  /// on the pill (worst 4.65 : 1).
-  static const double selectedInkFactor = .80;
+  /// How much the selected ink is darkened from secondary in the three solid
+  /// themes. Liquid Glass uses a 40% blend toward primary instead.
+  static const double selectedInkFactor = .90;
 
   /// How much the unselected ink is darkened from the theme's secondary text.
   ///
   /// At `.84` every theme clears 4.5 : 1 on the capsule (worst 4.77 : 1),
-  /// which is the reference's own ~4.7 : 1 grey. Both factors are darker than
-  /// they were when the capsule was a white lift: a darker plate takes
-  /// contrast away from dark ink, so the ink follows the plate down and the
-  /// *ratio* — the thing that actually has to hold — comes back to where the
-  /// reference sits.
+  /// close to the reference's ~4.7 : 1 grey. The capsule's tint reduces
+  /// contrast for dark ink, so the unselected ink stays dark enough to keep
+  /// the ratio above the accessibility threshold.
   static const double unselectedInkFactor = .84;
 
   static Color _darken(Color color, double factor) => Color.from(
@@ -315,11 +257,8 @@ class AppBottomNavigation extends StatelessWidget {
   ///
   /// [LiquidGlassTabPillStyle.rest] is the settled highlight: a
   /// **zero-refraction** fill that the moving glass lerps into as it lands.
-  /// It is a **light tint of the accent** ([restFillAlpha] over the near-white
-  /// capsule), matching the reference — whose settled pill is a pale amber
-  /// under a near-black amber glyph. The tint has to stay light: the selected
-  /// ink is a *dark* accent, so a saturated fill would eat the contrast it
-  /// needs.
+  /// Every theme uses the same 3% dark-gray fill. Theme-specific icon and
+  /// label colors are checked against it for accessible contrast.
   ///
   /// [glassStyle] is left at the tuned default so the moving pill stays pure
   /// refraction; only the motion and shape knobs below are set, matching the
@@ -330,7 +269,7 @@ class AppBottomNavigation extends StatelessWidget {
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final restFill = highContrast
         ? const Color(0xFFDCE8FF)
-        : context.appPrimary.withValues(alpha: restFillAlpha);
+        : const Color(0xFF333333).withValues(alpha: .03);
 
     return LiquidGlassTabPillStyle(
       // `impellerOnly`, not `both`: on Skia `both` would make the pill
@@ -364,9 +303,6 @@ class AppBottomNavigation extends StatelessWidget {
     );
   }
 
-  /// How strongly the accent tints the settled pill. Light on purpose — see
-  /// [_pillStyle].
-  static const double restFillAlpha = .26;
 }
 
 /// Screen-space geometry shared by the bar overlay, the docked centre

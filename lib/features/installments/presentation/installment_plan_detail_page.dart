@@ -90,6 +90,8 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
                 subtitle: Text('原始消费 · ${original.amount.toStringAsFixed(2)}'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openTransactionDetail(context, original),
+                onLongPress: () =>
+                    showTransactionActions(context, ref, original),
               ),
             ),
           const SizedBox(height: 14),

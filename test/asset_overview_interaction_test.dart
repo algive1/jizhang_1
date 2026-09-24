@@ -1,20 +1,159 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/core/models/account.dart';
+import 'package:jizhang_app/features/accounts/domain/asset_overview.dart';
+import 'package:jizhang_app/features/accounts/presentation/asset_dashboard_charts.dart';
+import 'package:jizhang_app/features/investments/data/investment_repository.dart';
 
 void main() {
+  testWidgets('distribution compact and detail rows share filtered data', (
+    tester,
+  ) async {
+    final overview = AssetOverview(
+      'CNY',
+      [_account('included', 300), _account('excluded', 900)],
+      investmentValue: 700,
+      excludedAccountIds: const {'excluded'},
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ListView(
+            children: [
+              AssetDistribution(overview: overview),
+              AssetDistributionDetail(overview: overview),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('投资管理'), findsNWidgets(2));
+    expect(find.text('¥700.00'), findsNWidgets(2));
+    expect(find.text('¥300.00'), findsNWidgets(2));
+    expect(find.text('70.0%'), findsNWidgets(2));
+    expect(find.text('30.0%'), findsNWidgets(2));
+    expect(find.text('excluded'), findsNothing);
+    final compact = find.byKey(const ValueKey('asset-distribution-card'));
+    final compactInvestment = tester.getTopLeft(
+      find.descendant(of: compact, matching: find.text('投资管理')),
+    );
+    final compactAccount = tester.getTopLeft(
+      find.descendant(of: compact, matching: find.text('included')),
+    );
+    expect(compactInvestment.dy, lessThan(compactAccount.dy));
+    final detail = find.byType(AssetDistributionDetail);
+    expect(
+      tester
+          .getRect(find.descendant(of: detail, matching: find.text('¥700.00')))
+          .right,
+      closeTo(
+        tester
+            .getRect(find.descendant(of: detail, matching: find.text('70.0%')))
+            .right,
+        1,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('zero total distribution renders without a percentage error', (
+    tester,
+  ) async {
+    final overview = AssetOverview(
+      'CNY',
+      [_account('zero', 0), _account('excluded', 100)],
+      excludedAccountIds: const {'excluded'},
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ListView(
+            children: [
+              AssetDistribution(overview: overview),
+              AssetDistributionDetail(overview: overview),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('暂无正余额资产'), findsNWidgets(2));
+    expect(find.textContaining('NaN'), findsNothing);
+    expect(find.textContaining('Infinity'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact distribution legend is a fixed scrolling viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final overview = AssetOverview(
+      'CNY',
+      List.generate(8, (index) => _account('账户${index + 1}', 800 - index * 100)),
+      investmentValue: 10,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ListView(children: [AssetDistribution(overview: overview)]),
+        ),
+      ),
+    );
+
+    final card = find.byKey(const ValueKey('asset-distribution-card'));
+    final viewport = find.descendant(
+      of: card,
+      matching: find.byKey(
+        const ValueKey('asset-distribution-legend-scroll'),
+      ),
+    );
+    expect(tester.getSize(viewport).height, closeTo(95, 0.1));
+    expect(tester.getSize(card).height, lessThan(200));
+    final lastAccount = find.descendant(of: card, matching: find.text('账户8'));
+    final lastAccountTop = tester.getTopLeft(lastAccount).dy;
+    await tester.drag(viewport, const Offset(0, -120));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(lastAccount).dy, lessThan(lastAccountTop));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('asset cards open detail bottom sheets', (tester) async {
     await tester.binding.setSurfaceSize(const Size(420.5, 935));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final systemInset = 24 * tester.view.devicePixelRatio;
+    tester.view.viewPadding = FakeViewPadding(
+      top: systemInset,
+      bottom: systemInset,
+    );
+    tester.view.padding = FakeViewPadding(
+      top: systemInset,
+      bottom: systemInset,
+    );
+    addTearDown(tester.view.resetViewPadding);
+    addTearDown(tester.view.resetPadding);
     final database = createMemoryDatabase();
     await DatabaseSeeder(database).seedIfNeeded(includeDemoData: true);
     addTearDown(database.close);
     final container = ProviderContainer(
-      overrides: [databaseProvider.overrideWithValue(database)],
+      overrides: [
+        databaseProvider.overrideWithValue(database),
+        includedInvestmentValueByCurrencyProvider.overrideWithValue(const {
+          'CNY': 700,
+        }),
+      ],
     );
     addTearDown(container.dispose);
     final router = container.read(appRouterProvider);
@@ -25,6 +164,10 @@ void main() {
         child: MaterialApp.router(
           theme: AppTheme.light(),
           routerConfig: router,
+          builder: (context, child) => RepaintBoundary(
+            key: const ValueKey('asset-route-pixels'),
+            child: child!,
+          ),
         ),
       ),
     );
@@ -51,6 +194,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('资产详情'), findsOneWidget);
     expect(find.byTooltip('关闭'), findsNothing);
+    final overviewSheet = find.byKey(const ValueKey('asset-sheet-frame'));
+    final overviewPlot = find.byKey(const ValueKey('asset-trend-detail-plot'));
+    final plotBeforeScroll = tester.getRect(overviewPlot);
+    await tester.drag(
+      find.descendant(of: overviewSheet, matching: find.byType(ListView)),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getRect(overviewPlot).top, lessThan(plotBeforeScroll.top));
     Navigator.of(tester.element(find.text('资产详情'))).pop();
     await tester.pumpAndSettle();
 
@@ -59,6 +211,17 @@ void main() {
     await tester.tap(distribution);
     await tester.pumpAndSettle();
     expect(find.text('资产分布详情'), findsOneWidget);
+    final detailContext = tester.element(find.text('资产分布详情'));
+    expect(MediaQuery.paddingOf(detailContext).bottom, closeTo(24, 0.1));
+    expect(MediaQuery.viewPaddingOf(detailContext).bottom, closeTo(24, 0.1));
+    final darkFooterRows = await _readDarkFooterRows(tester);
+    expect(darkFooterRows, isEmpty);
+    expect(find.text('投资管理'), findsWidgets);
+    final distributionSheet = find.byKey(const ValueKey('asset-sheet-frame'));
+    expect(
+      find.descendant(of: distributionSheet, matching: find.text('¥700.00')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('asset-distribution-analysis')),
       findsOneWidget,
@@ -81,6 +244,10 @@ void main() {
     await tester.tap(trend);
     await tester.pumpAndSettle();
     expect(find.text('资产变化详情'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('asset-trend-detail-current-investment')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('asset-trend-analysis')), findsOneWidget);
     final sheet = find.byKey(const ValueKey('asset-sheet-frame'));
     final sheetTitle = tester.getRect(find.text('资产变化详情'));
@@ -172,3 +339,56 @@ void main() {
     },
   );
 }
+
+Future<List<int>> _readDarkFooterRows(WidgetTester tester) async {
+  final sheetRect = tester.getRect(
+    find.byKey(const ValueKey('asset-sheet-frame')),
+  );
+  final routeBoundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('asset-route-pixels')),
+  );
+  return (await tester.runAsync(() async {
+    final image = await routeBoundary.toImage(pixelRatio: 1);
+    try {
+      final pixels = (await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      final footerRows = <int>[];
+      for (var y = sheetRect.top.ceil(); y < image.height; y++) {
+        var dark = 0;
+        var samples = 0;
+        for (var x = 4; x < image.width - 4; x += 2) {
+          final offset = (y * image.width + x) * 4;
+          if (pixels.getUint8(offset) < 128 &&
+              pixels.getUint8(offset + 1) < 128 &&
+              pixels.getUint8(offset + 2) < 128) {
+            dark++;
+          }
+          samples++;
+        }
+        if (samples > 0 && dark / samples > .8 && y >= image.height - 80) {
+          footerRows.add(y);
+        }
+      }
+      return footerRows;
+    } finally {
+      image.dispose();
+    }
+  }))!;
+}
+
+Account _account(String id, double balance) => Account(
+  id: id,
+  name: id,
+  type: AccountType.debitCard,
+  balance: balance,
+  currency: 'CNY',
+  icon: 'wallet',
+  color: 0xff73963b,
+  sortOrder: 0,
+  isArchived: false,
+  assetForm: AssetForm.demandDeposit,
+  identifierSuffix: null,
+  createdAt: DateTime(2026),
+  updatedAt: DateTime(2026),
+);

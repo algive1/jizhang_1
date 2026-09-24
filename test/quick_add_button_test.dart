@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
@@ -53,20 +55,26 @@ void main() {
     expect(style.refraction.distortion, greaterThan(0));
     expect(style.refraction.distortionWidth, greaterThan(0));
     expect(style.appearance.blur.sigmaX, greaterThan(0));
+    expect(fab.size, QuickAddButton.defaultDiameter);
+    final shadow = style.appearance.shadow;
+    expect(shadow, isNotNull);
+    expect(shadow!.blur, greaterThan(0));
+    expect(shadow.opacity, greaterThan(0));
+    expect(shadow.color, Colors.black.withValues(alpha: .22));
+    expect(shadow.offset, const Offset(0, 5));
 
-    // …and it must keep the brand accent: the tint *is* the theme's primary,
-    // carried semi-transparently so the shader still has a backdrop to mix
-    // into. Pre-blending it opaque would leave `mix()` nothing to do and the
-    // interior would be flat paint.
+    // The fill and plus glyph share the capsule tint and selected ink used by
+    // navigation; both stay semitransparent/colored over the live backdrop.
     final context = tester.element(find.byType(LiquidGlassFab));
+    final scheme = context.appColors;
     expect(
       style.appearance.color,
-      context.appPrimary.withValues(alpha: QuickAddButton.glassTintAlpha),
+      Colors.white.withValues(alpha: .24),
     );
     expect(
-      style.appearance.color.a,
-      greaterThanOrEqualTo(.7),
-      reason: 'the button must stay the brand accent, not wash out to glass',
+      fab.foregroundColor,
+      _darken(scheme.secondary, .90),
+      reason: 'the plus glyph should match the navigation selected accent',
     );
     expect(
       style.appearance.color.a,
@@ -79,23 +87,49 @@ void main() {
     expect(style.shape!.borderType, isNot(isNull));
   });
 
-  testWidgets('the tint follows the theme, so the accent is never stale', (
+  testWidgets('the FAB shares navigation colors across all themes', (
     tester,
   ) async {
-    final tints = <int, Color>{};
+    final fills = <int, Color>{};
+    final foregrounds = <int, Color>{};
     for (final theme in BuiltInThemes.all) {
       // A fresh tree per theme: an in-place theme swap keeps resolving the
       // first theme it saw.
       await tester.pumpWidget(const SizedBox.shrink());
       await pump(tester, theme: theme);
       final fab = tester.widget<LiquidGlassFab>(find.byType(LiquidGlassFab));
-      tints[theme.primary.toARGB32()] = fab.style!.appearance.color;
+      final scheme = AppTheme.light(theme).colorScheme;
+      final expectedFill = Colors.white.withValues(alpha: .24);
+      final expectedForeground = theme.style == AppThemeStyle.liquidGlass
+          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
+          : _darken(scheme.secondary, .90);
+      final actualFill = fab.style!.appearance.color;
+      final actualForeground = fab.foregroundColor!;
+      final composedFill = _blend(expectedFill, theme.background);
+
+      expect(actualFill, expectedFill, reason: '${theme.id} fill matches nav');
+      expect(
+        actualForeground,
+        expectedForeground,
+        reason: '${theme.id} glyph matches nav selected ink',
+      );
+      expect(
+        _contrast(actualForeground, composedFill),
+        greaterThanOrEqualTo(3),
+        reason: '${theme.id} plus glyph must clear 3:1 on the glass fill',
+      );
+      fills[actualFill.toARGB32()] = actualFill;
+      foregrounds[actualForeground.toARGB32()] = actualForeground;
     }
-    expect(tints.length, BuiltInThemes.all.length);
     expect(
-      tints.values.toSet().length,
+      fills.length,
+      1,
+      reason: 'all themes must use the same white glass fill',
+    );
+    expect(
+      foregrounds.length,
       BuiltInThemes.all.length,
-      reason: 'each theme must tint the button with its own accent',
+      reason: 'each theme must give the plus glyph its own accent',
     );
   });
 
@@ -116,6 +150,10 @@ void main() {
       ),
     );
     expect(material.color, BuiltInThemes.freshGreen.primary);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.add)).color,
+      Colors.white,
+    );
   });
 
   testWidgets('tapping and long-pressing reach their callbacks', (
@@ -146,4 +184,26 @@ void main() {
     await tester.pump();
     expect(longPresses, 1);
   });
+}
+
+Color _darken(Color color, double factor) => Color.from(
+      alpha: color.a,
+      red: color.r * factor,
+      green: color.g * factor,
+      blue: color.b * factor,
+    );
+
+Color _blend(Color foreground, Color background) => Color.from(
+      alpha: 1,
+      red: foreground.r * foreground.a + background.r * (1 - foreground.a),
+      green: foreground.g * foreground.a + background.g * (1 - foreground.a),
+      blue: foreground.b * foreground.a + background.b * (1 - foreground.a),
+    );
+
+double _contrast(Color foreground, Color background) {
+  final foregroundLuminance = foreground.computeLuminance();
+  final backgroundLuminance = background.computeLuminance();
+  final lighter = math.max(foregroundLuminance, backgroundLuminance);
+  final darker = math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + .05) / (darker + .05);
 }

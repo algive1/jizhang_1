@@ -135,6 +135,7 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
                 accountName: accountNames[record.accountId] ?? '未知账户',
                 bookName: bookNames[record.bookId] ?? '当前账本',
                 onTap: () => openTransactionDetail(context, record),
+                onLongPress: () => showTransactionActions(context, ref, record),
                 onReimburse:
                     record.reimbursementStatus == ReimbursementStatus.reimbursed
                     ? null
@@ -237,6 +238,7 @@ class _ReimbursementCard extends StatelessWidget {
     required this.accountName,
     required this.bookName,
     required this.onTap,
+    required this.onLongPress,
     required this.onReimburse,
   });
 
@@ -244,6 +246,7 @@ class _ReimbursementCard extends StatelessWidget {
   final String accountName;
   final String bookName;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final VoidCallback? onReimburse;
 
   @override
@@ -258,6 +261,7 @@ class _ReimbursementCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -86,6 +86,17 @@ void main() {
     expect(total.byForm[AssetForm.demandDeposit], 1000);
   });
 
+  test('zero total overview remains finite and empty', () {
+    final overview = AssetOverview.group([
+      _account('zero', 0),
+      _account('debt', -5),
+    ]).single;
+
+    expect(overview.assets, 0);
+    expect(overview.byForm, isEmpty);
+    expect(overview.netAssets, -5);
+  });
+
   test('an investment-only currency still gets its own group', () {
     final groups = AssetOverview.group(
       [_account('bank', 10)],
@@ -138,8 +149,8 @@ void main() {
       final account = (await DriftAccountRepository(migrated).getAll()).single;
       expect(account.balance, -123.45);
       expect(account.assetForm, AssetForm.unspecified);
-      expect(migrated.schemaVersion, 18);
-      // The 17→18 branch is additive: an old database gains the investment
+      expect(migrated.schemaVersion, 22);
+      // The pre-investment branch is additive: an old database gains the investment
       // tables without losing the account it already had.
       final investmentTables = await migrated
           .customSelect(

@@ -44,7 +44,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
         ref.watch(investmentSnapshotsProvider(365)).value ??
         const <InvestmentSnapshot>[];
     final currentInvestmentByCurrency = ref.watch(
-      investmentValueByCurrencyProvider,
+      includedInvestmentValueByCurrencyProvider,
     );
     final trendCurrency =
         AssetOverview.group(

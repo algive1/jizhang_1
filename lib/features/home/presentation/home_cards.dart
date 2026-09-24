@@ -492,6 +492,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                 ),
               ),
               Container(
+                key: const ValueKey('home-goal-panel'),
                 margin: const EdgeInsets.fromLTRB(1, 0, 1, 0),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -509,28 +510,29 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                     color: context.appSurface.withValues(alpha: .8),
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(15, 6, 15, 5),
-                child: goal == null
-                    ? InkWell(
-                        key: const ValueKey('home-goal-area'),
-                        onTap: widget.onGoal,
-                        child: _EmptyGoalLabel(bookType: widget.bookType),
-                      )
-                    : Semantics(
-                        button: true,
-                        label: '打开目标${goal.name}',
-                        child: InkWell(
-                          key: const ValueKey('home-goal-area'),
-                          onTap: widget.onGoal,
-                          borderRadius: BorderRadius.circular(12),
-                          child: _HomeGoalTimeline(
-                            goal: goal,
-                            amountHidden: goalAmountHidden,
-                            onAmountHiddenChanged:
-                                widget.onGoalAmountHiddenChanged,
-                          ),
-                        ),
+                child: Semantics(
+                  button: true,
+                  label: goal == null ? '打开目标列表' : '打开目标${goal.name}',
+                  child: InkWell(
+                    key: const ValueKey('home-goal-area'),
+                    onTap: widget.onGoal,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(15, 6, 15, 5),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: goal == null
+                            ? _EmptyGoalLabel(bookType: widget.bookType)
+                            : _HomeGoalTimeline(
+                                goal: goal,
+                                amountHidden: goalAmountHidden,
+                                onAmountHiddenChanged:
+                                    widget.onGoalAmountHiddenChanged,
+                              ),
                       ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

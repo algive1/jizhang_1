@@ -36,6 +36,24 @@ class AssetOverview {
   double get assets => _assetCents / 100;
   double get liabilities => _debtCents / 100;
   double get netAssets => (_assetCents - _debtCents) / 100;
+
+  /// Positive asset rows used by both compact and detailed distribution views.
+  /// Excluded accounts never appear, and included investments are one row.
+  List<MapEntry<String, double>> get distributionEntries {
+    final entries = _includedAccounts
+        .where((account) => account.balance > 0)
+        .map((account) => MapEntry(account.displayName, account.balance))
+        .toList();
+    if (investmentValue > 0) {
+      entries.add(MapEntry('投资管理', investmentValue));
+    }
+    entries.sort((a, b) => b.value.compareTo(a.value));
+    return entries;
+  }
+
+  double distributionSharePercent(double value) =>
+      assets <= 0 ? 0 : value / assets * 100;
+
   bool get hasUnverifiedNegativeBalance =>
       accounts.any((a) => !a.type.isDebt && a.balance < 0);
 

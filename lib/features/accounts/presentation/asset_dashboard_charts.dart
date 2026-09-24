@@ -31,14 +31,7 @@ class AssetDistribution extends StatelessWidget {
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    // Keep each real account visible in the distribution legend. Aggregating
-    // by form hides separate bank, wallet, or investment accounts.
-    final entries =
-        overview.accounts
-            .where((account) => account.balance > 0)
-            .map((account) => MapEntry(account.displayName, account.balance))
-            .toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+    final entries = overview.distributionEntries;
     final panel = AssetPanel(
       key: const ValueKey('asset-distribution-card'),
       child: Column(
@@ -50,7 +43,10 @@ class AssetDistribution extends StatelessWidget {
             SizedBox(
               height: 95,
               child: Center(
-                child: Text('暂无正余额资产', style: TextStyle(color: context.appSecondaryText)),
+                child: Text(
+                  '暂无正余额资产',
+                  style: TextStyle(color: context.appSecondaryText),
+                ),
               ),
             )
           else
@@ -96,50 +92,21 @@ class AssetDistribution extends StatelessWidget {
                   ),
                   const SizedBox(width: 7),
                   Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          for (var i = 0; i < entries.length; i++)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 5,
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          _formColors[i % _formColors.length],
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: FittedBox(
-                                      alignment: Alignment.centerLeft,
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        entries[i].key,
-                                        maxLines: 1,
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          color: context.appSecondaryText,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${(entries[i].value / overview.assets * 100).toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: context.appPrimaryText,
-                                    ),
-                                  ),
-                                ],
+                    child: SizedBox(
+                      height: 95,
+                      child: SingleChildScrollView(
+                        key: const ValueKey('asset-distribution-legend-scroll'),
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < entries.length; i++)
+                              _DistributionLegendRow(
+                                overview: overview,
+                                entry: entries[i],
+                                color: _formColors[i % _formColors.length],
+                                compact: true,
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -166,6 +133,7 @@ class AssetTrend extends StatefulWidget {
   const AssetTrend({
     required this.history,
     required this.currency,
+    this.currentInvestmentValue = 0,
     required this.days,
     required this.onDays,
     this.onTap,
@@ -173,6 +141,7 @@ class AssetTrend extends StatefulWidget {
   });
   final AssetHistory history;
   final String currency;
+  final double currentInvestmentValue;
   final int days;
   final ValueChanged<int> onDays;
   final VoidCallback? onTap;
@@ -187,6 +156,7 @@ class _AssetTrendState extends State<AssetTrend> {
     final delta = widget.history.change(widget.days);
     final percent = widget.history.percent(widget.days);
     final panel = AssetPanel(
+      key: const ValueKey('asset-trend-card'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -221,7 +191,10 @@ class _AssetTrendState extends State<AssetTrend> {
                 child: Text(
                   '存在未来日期流水\n历史曲线暂不可用',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: context.appSecondaryText),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.appSecondaryText,
+                  ),
                 ),
               ),
             )
@@ -243,6 +216,15 @@ class _AssetTrendState extends State<AssetTrend> {
                 color: delta < 0 ? assetCoral : assetGreen,
               ),
             ),
+            if (widget.currentInvestmentValue > 0) ...[
+              const SizedBox(height: 6),
+              _CurrentInvestmentValue(
+                key: const ValueKey('asset-trend-current-investment'),
+                value: widget.currentInvestmentValue,
+                currency: widget.currency,
+                compact: true,
+              ),
+            ],
             const SizedBox(height: 6),
             Semantics(
               label:
@@ -260,6 +242,16 @@ class _AssetTrendState extends State<AssetTrend> {
                   );
                 },
               ),
+            ),
+          ],
+          if (widget.history.hasFutureRecords &&
+              widget.currentInvestmentValue > 0) ...[
+            const SizedBox(height: 6),
+            _CurrentInvestmentValue(
+              key: const ValueKey('asset-trend-current-investment'),
+              value: widget.currentInvestmentValue,
+              currency: widget.currency,
+              compact: true,
             ),
           ],
         ],
@@ -319,7 +311,9 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       fontSize: 8,
-                      color: days == option.$1 ? Colors.white : context.appSecondaryText,
+                      color: days == option.$1
+                          ? Colors.white
+                          : context.appSecondaryText,
                     ),
                   ),
                 ),
@@ -337,12 +331,7 @@ class AssetDistributionDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries =
-        overview.accounts
-            .where((account) => account.balance > 0)
-            .map((account) => MapEntry(account.displayName, account.balance))
-            .toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+    final entries = overview.distributionEntries;
     return AssetPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +361,10 @@ class AssetDistributionDetail extends StatelessWidget {
                           children: [
                             Text(
                               '总资产',
-                              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+                              style: TextStyle(
+                                color: context.appSecondaryText,
+                                fontSize: 12,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             AssetAmount(
@@ -390,33 +382,10 @@ class AssetDistributionDetail extends StatelessWidget {
                     child: Column(
                       children: [
                         for (var i = 0; i < entries.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 5),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: _formColors[i % _formColors.length],
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                                const SizedBox(width: 7),
-                                Expanded(
-                                  child: Text(
-                                    entries[i].key,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                AssetAmount(
-                                  entries[i].value,
-                                  currency: overview.currency,
-                                  size: 12,
-                                ),
-                              ],
-                            ),
+                          _DistributionLegendRow(
+                            overview: overview,
+                            entry: entries[i],
+                            color: _formColors[i % _formColors.length],
                           ),
                       ],
                     ),
@@ -439,12 +408,14 @@ class AssetTrendDetail extends StatelessWidget {
   const AssetTrendDetail({
     required this.history,
     required this.currency,
+    this.currentInvestmentValue = 0,
     required this.days,
     this.onDays,
     super.key,
   });
   final AssetHistory history;
   final String currency;
+  final double currentInvestmentValue;
   final int days;
   final ValueChanged<int>? onDays;
 
@@ -538,6 +509,14 @@ class AssetTrendDetail extends StatelessWidget {
               style: TextStyle(color: context.appSecondaryText, fontSize: 11),
             ),
           ],
+          if (currentInvestmentValue > 0) ...[
+            const SizedBox(height: 8),
+            _CurrentInvestmentValue(
+              key: const ValueKey('asset-trend-detail-current-investment'),
+              value: currentInvestmentValue,
+              currency: currency,
+            ),
+          ],
           const SizedBox(height: 12),
           _AssetAnalysisNote(
             key: const ValueKey('asset-trend-analysis'),
@@ -549,6 +528,130 @@ class AssetTrendDetail extends StatelessWidget {
   }
 }
 
+class _DistributionLegendRow extends StatelessWidget {
+  const _DistributionLegendRow({
+    required this.overview,
+    required this.entry,
+    required this.color,
+    this.compact = false,
+  });
+
+  final AssetOverview overview;
+  final MapEntry<String, double> entry;
+  final Color color;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = AssetAmount(
+      entry.value,
+      currency: overview.currency,
+      size: compact ? 8 : 12,
+    );
+    final share = Text(
+      '${overview.distributionSharePercent(entry.value).toStringAsFixed(1)}%',
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        fontSize: compact ? 8 : 11,
+        color: context.appPrimaryText,
+      ),
+    );
+    final marker = Container(
+      width: compact ? 5 : 8,
+      height: compact ? 6 : 8,
+      margin: EdgeInsets.only(top: compact ? 2 : 3),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(compact ? 2 : 3),
+      ),
+    );
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            marker,
+            const SizedBox(width: 3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    entry.key,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: context.appSecondaryText,
+                    ),
+                  ),
+                  Align(alignment: Alignment.centerRight, child: amount),
+                  Align(alignment: Alignment.centerRight, child: share),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          marker,
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              entry.key,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [amount, share],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CurrentInvestmentValue extends StatelessWidget {
+  const _CurrentInvestmentValue({
+    required this.value,
+    required this.currency,
+    this.compact = false,
+    super.key,
+  });
+
+  final double value;
+  final String currency;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          '当前计入投资市值',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: compact ? 8 : 12,
+            color: context.appSecondaryText,
+          ),
+        ),
+      ),
+      const SizedBox(width: 4),
+      AssetAmount(value, currency: currency, size: compact ? 9 : 13),
+    ],
+  );
+}
+
 String _distributionSummary(
   List<MapEntry<String, double>> entries,
   AssetOverview overview,
@@ -556,9 +659,9 @@ String _distributionSummary(
   if (entries.isEmpty) return '当前没有正余额资产，添加或更新账户后可以查看分布。';
 
   final top = entries.first;
-  final share = top.value / overview.assets * 100;
+  final share = overview.distributionSharePercent(top.value);
   final prefix =
-      '当前共有 ${entries.length} 个正余额账户，${top.key} 占总资产 ${share.toStringAsFixed(1)}%。';
+      '当前共有 ${entries.length} 项正资产，${top.key} 占总资产 ${share.toStringAsFixed(1)}%。';
   if (share >= 60) return '$prefix 资金相对集中，可留意资金分散和备用金安排。';
   if (share <= 40 && entries.length >= 3) return '$prefix 资产分布相对分散。';
   return '$prefix 可继续关注各账户的余额变化。';
@@ -602,7 +705,11 @@ class _AssetAnalysisNote extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 1),
-          child: Icon(Icons.insights_outlined, size: 17, color: context.appPrimary),
+          child: Icon(
+            Icons.insights_outlined,
+            size: 17,
+            color: context.appPrimary,
+          ),
         ),
         const SizedBox(width: 7),
         Expanded(
@@ -776,7 +883,10 @@ class _AssetTrendPlotState extends State<AssetTrendPlot> {
                   selectedLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10, color: context.appSecondaryText),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: context.appSecondaryText,
+                  ),
                 ),
               ),
             ),
@@ -853,7 +963,10 @@ class _AssetTrendPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [primary.withValues(alpha: .31), primary.withValues(alpha: .02)],
+          colors: [
+            primary.withValues(alpha: .31),
+            primary.withValues(alpha: .02),
+          ],
         ).createShader(Rect.fromLTWH(left, top, width, bottom - top)),
     );
     final activeIndex = selectedIndex.clamp(0, points.length - 1);
@@ -930,11 +1043,7 @@ class _AssetTrendPainter extends CustomPainter {
     final text = TextPainter(
       text: TextSpan(
         text: value,
-        style: TextStyle(
-          fontSize: 7,
-          color: muted,
-          fontFamily: fontFamily,
-        ),
+        style: TextStyle(fontSize: 7, color: muted, fontFamily: fontFamily),
       ),
       maxLines: 1,
       ellipsis: '…',

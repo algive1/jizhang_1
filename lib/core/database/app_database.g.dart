@@ -15742,6 +15742,21 @@ class $InvestmentHoldingEntriesTable extends InvestmentHoldingEntries
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _includeInHomeNetAssetsMeta =
+      const VerificationMeta('includeInHomeNetAssets');
+  @override
+  late final GeneratedColumn<bool> includeInHomeNetAssets =
+      GeneratedColumn<bool>(
+        'include_in_home_net_assets',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("include_in_home_net_assets" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -15774,6 +15789,7 @@ class $InvestmentHoldingEntriesTable extends InvestmentHoldingEntries
     averageCost,
     note,
     isArchived,
+    includeInHomeNetAssets,
     createdAt,
     updatedAt,
   ];
@@ -15845,6 +15861,15 @@ class $InvestmentHoldingEntriesTable extends InvestmentHoldingEntries
         isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
       );
     }
+    if (data.containsKey('include_in_home_net_assets')) {
+      context.handle(
+        _includeInHomeNetAssetsMeta,
+        includeInHomeNetAssets.isAcceptableOrUnknown(
+          data['include_in_home_net_assets']!,
+          _includeInHomeNetAssetsMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -15905,6 +15930,10 @@ class $InvestmentHoldingEntriesTable extends InvestmentHoldingEntries
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
       )!,
+      includeInHomeNetAssets: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}include_in_home_net_assets'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -15934,6 +15963,7 @@ class InvestmentHoldingEntity extends DataClass
   final double averageCost;
   final String? note;
   final bool isArchived;
+  final bool includeInHomeNetAssets;
   final DateTime createdAt;
   final DateTime updatedAt;
   const InvestmentHoldingEntity({
@@ -15945,6 +15975,7 @@ class InvestmentHoldingEntity extends DataClass
     required this.averageCost,
     this.note,
     required this.isArchived,
+    required this.includeInHomeNetAssets,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -15963,6 +15994,7 @@ class InvestmentHoldingEntity extends DataClass
       map['note'] = Variable<String>(note);
     }
     map['is_archived'] = Variable<bool>(isArchived);
+    map['include_in_home_net_assets'] = Variable<bool>(includeInHomeNetAssets);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -15980,6 +16012,7 @@ class InvestmentHoldingEntity extends DataClass
       averageCost: Value(averageCost),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       isArchived: Value(isArchived),
+      includeInHomeNetAssets: Value(includeInHomeNetAssets),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -15999,6 +16032,9 @@ class InvestmentHoldingEntity extends DataClass
       averageCost: serializer.fromJson<double>(json['averageCost']),
       note: serializer.fromJson<String?>(json['note']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
+      includeInHomeNetAssets: serializer.fromJson<bool>(
+        json['includeInHomeNetAssets'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -16015,6 +16051,7 @@ class InvestmentHoldingEntity extends DataClass
       'averageCost': serializer.toJson<double>(averageCost),
       'note': serializer.toJson<String?>(note),
       'isArchived': serializer.toJson<bool>(isArchived),
+      'includeInHomeNetAssets': serializer.toJson<bool>(includeInHomeNetAssets),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -16029,6 +16066,7 @@ class InvestmentHoldingEntity extends DataClass
     double? averageCost,
     Value<String?> note = const Value.absent(),
     bool? isArchived,
+    bool? includeInHomeNetAssets,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => InvestmentHoldingEntity(
@@ -16040,6 +16078,8 @@ class InvestmentHoldingEntity extends DataClass
     averageCost: averageCost ?? this.averageCost,
     note: note.present ? note.value : this.note,
     isArchived: isArchived ?? this.isArchived,
+    includeInHomeNetAssets:
+        includeInHomeNetAssets ?? this.includeInHomeNetAssets,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -16059,6 +16099,9 @@ class InvestmentHoldingEntity extends DataClass
       isArchived: data.isArchived.present
           ? data.isArchived.value
           : this.isArchived,
+      includeInHomeNetAssets: data.includeInHomeNetAssets.present
+          ? data.includeInHomeNetAssets.value
+          : this.includeInHomeNetAssets,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -16075,6 +16118,7 @@ class InvestmentHoldingEntity extends DataClass
           ..write('averageCost: $averageCost, ')
           ..write('note: $note, ')
           ..write('isArchived: $isArchived, ')
+          ..write('includeInHomeNetAssets: $includeInHomeNetAssets, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -16091,6 +16135,7 @@ class InvestmentHoldingEntity extends DataClass
     averageCost,
     note,
     isArchived,
+    includeInHomeNetAssets,
     createdAt,
     updatedAt,
   );
@@ -16106,6 +16151,7 @@ class InvestmentHoldingEntity extends DataClass
           other.averageCost == this.averageCost &&
           other.note == this.note &&
           other.isArchived == this.isArchived &&
+          other.includeInHomeNetAssets == this.includeInHomeNetAssets &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -16120,6 +16166,7 @@ class InvestmentHoldingEntriesCompanion
   final Value<double> averageCost;
   final Value<String?> note;
   final Value<bool> isArchived;
+  final Value<bool> includeInHomeNetAssets;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -16132,6 +16179,7 @@ class InvestmentHoldingEntriesCompanion
     this.averageCost = const Value.absent(),
     this.note = const Value.absent(),
     this.isArchived = const Value.absent(),
+    this.includeInHomeNetAssets = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -16145,6 +16193,7 @@ class InvestmentHoldingEntriesCompanion
     required double averageCost,
     this.note = const Value.absent(),
     this.isArchived = const Value.absent(),
+    this.includeInHomeNetAssets = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -16163,6 +16212,7 @@ class InvestmentHoldingEntriesCompanion
     Expression<double>? averageCost,
     Expression<String>? note,
     Expression<bool>? isArchived,
+    Expression<bool>? includeInHomeNetAssets,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -16176,6 +16226,8 @@ class InvestmentHoldingEntriesCompanion
       if (averageCost != null) 'average_cost': averageCost,
       if (note != null) 'note': note,
       if (isArchived != null) 'is_archived': isArchived,
+      if (includeInHomeNetAssets != null)
+        'include_in_home_net_assets': includeInHomeNetAssets,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -16191,6 +16243,7 @@ class InvestmentHoldingEntriesCompanion
     Value<double>? averageCost,
     Value<String?>? note,
     Value<bool>? isArchived,
+    Value<bool>? includeInHomeNetAssets,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -16204,6 +16257,8 @@ class InvestmentHoldingEntriesCompanion
       averageCost: averageCost ?? this.averageCost,
       note: note ?? this.note,
       isArchived: isArchived ?? this.isArchived,
+      includeInHomeNetAssets:
+          includeInHomeNetAssets ?? this.includeInHomeNetAssets,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -16237,6 +16292,11 @@ class InvestmentHoldingEntriesCompanion
     if (isArchived.present) {
       map['is_archived'] = Variable<bool>(isArchived.value);
     }
+    if (includeInHomeNetAssets.present) {
+      map['include_in_home_net_assets'] = Variable<bool>(
+        includeInHomeNetAssets.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -16260,6 +16320,7 @@ class InvestmentHoldingEntriesCompanion
           ..write('averageCost: $averageCost, ')
           ..write('note: $note, ')
           ..write('isArchived: $isArchived, ')
+          ..write('includeInHomeNetAssets: $includeInHomeNetAssets, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -29709,6 +29770,7 @@ typedef $$InvestmentHoldingEntriesTableCreateCompanionBuilder =
       required double averageCost,
       Value<String?> note,
       Value<bool> isArchived,
+      Value<bool> includeInHomeNetAssets,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -29723,6 +29785,7 @@ typedef $$InvestmentHoldingEntriesTableUpdateCompanionBuilder =
       Value<double> averageCost,
       Value<String?> note,
       Value<bool> isArchived,
+      Value<bool> includeInHomeNetAssets,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -29827,6 +29890,11 @@ class $$InvestmentHoldingEntriesTableFilterComposer
 
   ColumnFilters<bool> get isArchived => $composableBuilder(
     column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get includeInHomeNetAssets => $composableBuilder(
+    column: $table.includeInHomeNetAssets,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -29938,6 +30006,11 @@ class $$InvestmentHoldingEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get includeInHomeNetAssets => $composableBuilder(
+    column: $table.includeInHomeNetAssets,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -30004,6 +30077,11 @@ class $$InvestmentHoldingEntriesTableAnnotationComposer
 
   GeneratedColumn<bool> get isArchived => $composableBuilder(
     column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get includeInHomeNetAssets => $composableBuilder(
+    column: $table.includeInHomeNetAssets,
     builder: (column) => column,
   );
 
@@ -30117,6 +30195,7 @@ class $$InvestmentHoldingEntriesTableTableManager
                 Value<double> averageCost = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
+                Value<bool> includeInHomeNetAssets = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -30129,6 +30208,7 @@ class $$InvestmentHoldingEntriesTableTableManager
                 averageCost: averageCost,
                 note: note,
                 isArchived: isArchived,
+                includeInHomeNetAssets: includeInHomeNetAssets,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -30143,6 +30223,7 @@ class $$InvestmentHoldingEntriesTableTableManager
                 required double averageCost,
                 Value<String?> note = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
+                Value<bool> includeInHomeNetAssets = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -30155,6 +30236,7 @@ class $$InvestmentHoldingEntriesTableTableManager
                 averageCost: averageCost,
                 note: note,
                 isArchived: isArchived,
+                includeInHomeNetAssets: includeInHomeNetAssets,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

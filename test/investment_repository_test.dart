@@ -147,6 +147,55 @@ void main() {
     expect(await balanceOf('account-bank'), closeTo(6500, 0.001));
   });
 
+  test(
+    'holdings default to excluded and persist an explicit inclusion value',
+    () async {
+      final excluded = await repository.addHolding(
+        AddInvestmentRequest(
+          type: InvestmentAssetType.crypto,
+          symbol: 'DEFAULT',
+          name: '默认关闭',
+          price: 2,
+          quantity: 3,
+          transactionDate: DateTime(2026, 9, 1),
+          priceSource: PriceSource.manual,
+          currentPrice: 4,
+        ),
+      );
+      final included = await repository.addHolding(
+        AddInvestmentRequest(
+          type: InvestmentAssetType.crypto,
+          symbol: 'INCLUDED',
+          name: '显式开启',
+          price: 5,
+          quantity: 6,
+          transactionDate: DateTime(2026, 9, 1),
+          priceSource: PriceSource.manual,
+          currentPrice: 7,
+          includeInHomeNetAssets: true,
+        ),
+      );
+
+      expect(excluded.includeInHomeNetAssets, isFalse);
+      expect(
+        (await repository.getHolding(excluded.id))!.includeInHomeNetAssets,
+        isFalse,
+      );
+      expect(included.includeInHomeNetAssets, isTrue);
+      expect(
+        (await repository.getHolding(included.id))!.includeInHomeNetAssets,
+        isTrue,
+      );
+
+      final portfolio = await repository.getPortfolio();
+      expect(
+        portfolio.positions.map((position) => position.holding.id),
+        containsAll([excluded.id, included.id]),
+      );
+      expect(portfolio.investmentValue, 54);
+    },
+  );
+
   test('a funded buy moves cash out of the funding account', () async {
     await seedAccount('account-bank', 10000);
     await repository.addHolding(

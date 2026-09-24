@@ -16,12 +16,13 @@ abstract final class AppTheme {
   ///
   /// Every other platform keeps Flutter's own default builder for that
   /// platform (iOS/macOS stay Cupertino, desktop stays Zoom).
-  static final PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
-    builders: {
-      ...const PageTransitionsTheme().builders,
-      TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
-    },
-  );
+  static final PageTransitionsTheme _pageTransitions =
+      _PageBackgroundTransitionsTheme(
+        builders: {
+          ...const PageTransitionsTheme().builders,
+          TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+        },
+      );
 
   static ThemeData light([AppThemeDefinition theme = BuiltInThemes.freshGreen]) {
     final colorScheme = ColorScheme.fromSeed(
@@ -58,11 +59,11 @@ abstract final class AppTheme {
         outlineVariant: theme.divider,
         error: AppColors.warning,
       ),
-      // Always transparent: `AppScaffold` paints the themed backdrop as the
-      // bottom layer of its stack, and the liquid-glass navigation bar
-      // refracts whatever is behind it. An opaque scaffold would sit between
-      // the two and the glass would sample a flat colour.
-      scaffoldBackgroundColor: Colors.transparent,
+      // A route needs its own opaque backing while it moves over the previous
+      // route. Otherwise empty space between cards reveals the old page until
+      // Navigator finishes the transition. AppScaffold explicitly opts into
+      // transparency so its glass bar can still sample the mesh underneath.
+      scaffoldBackgroundColor: theme.background,
       canvasColor: theme.background,
       pageTransitionsTheme: _pageTransitions,
       textTheme: TextTheme(
@@ -192,6 +193,34 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: theme.primary, width: 1.5),
         ),
+      ),
+    );
+  }
+}
+
+/// Paints a route-local backing before Flutter applies its platform transition.
+/// This also covers pages that return a bare SafeArea/ListView instead of a
+/// Scaffold. The backing moves with the new page, so the exposed strip during
+/// an interactive back swipe still shows the previous route as intended.
+class _PageBackgroundTransitionsTheme extends PageTransitionsTheme {
+  const _PageBackgroundTransitionsTheme({required super.builders});
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return super.buildTransitions<T>(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: child,
       ),
     );
   }

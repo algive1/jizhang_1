@@ -17,15 +17,29 @@ class AppLiquidGlassSurface extends StatefulWidget {
     this.margin,
     this.borderRadius = 30,
     this.tint,
+    this.blurSigma,
+    this.glassOpacity,
+    this.themeColorAccents = true,
     this.shadow = true,
     this.clipBehavior = Clip.antiAlias,
-  });
+  }) : assert(glassOpacity == null || (glassOpacity >= 0 && glassOpacity <= 1));
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final double borderRadius;
   final Color? tint;
+
+  /// Explicit strength for a Gaussian backdrop blur. Setting it bypasses the
+  /// five-tap shader softening so the surface can match navigation blur.
+  final double? blurSigma;
+
+  /// Optional alpha coverage override for all glass gradient stops.
+  final double? glassOpacity;
+
+  /// Whether this surface adds theme-colored shadows, tint, and rim accents.
+  final bool themeColorAccents;
+
   final bool shadow;
   final Clip clipBehavior;
 
@@ -60,10 +74,16 @@ class _AppLiquidGlassSurfaceState extends State<AppLiquidGlassSurface> {
     final highContrast = MediaQuery.highContrastOf(context);
     final radius = BorderRadius.circular(widget.borderRadius);
     final tint = widget.tint ?? context.appSurface;
-    final blurSigma = highContrast
-        ? material.blurSigma * .62
-        : material.blurSigma;
-    final filter = program != null && ui.ImageFilter.isShaderFilterSupported
+    final blurSigma = widget.blurSigma == null
+        ? (highContrast ? material.blurSigma * .62 : material.blurSigma)
+        : widget.blurSigma! * (highContrast ? 1.6 : 1);
+    final filter = widget.blurSigma != null
+        ? ui.ImageFilter.blur(
+            sigmaX: blurSigma,
+            sigmaY: blurSigma,
+            tileMode: TileMode.decal,
+          )
+        : program != null && ui.ImageFilter.isShaderFilterSupported
         ? ui.ImageFilter.shader(program.fragmentShader())
         : ui.ImageFilter.blur(
             sigmaX: blurSigma,
@@ -77,12 +97,13 @@ class _AppLiquidGlassSurfaceState extends State<AppLiquidGlassSurface> {
         borderRadius: radius,
         boxShadow: widget.shadow
             ? [
-                BoxShadow(
-                  color: context.appPrimary.withValues(alpha: .16),
-                  blurRadius: highContrast ? 12 : 20,
-                  spreadRadius: -5,
-                  offset: const Offset(0, 8),
-                ),
+                if (widget.themeColorAccents)
+                  BoxShadow(
+                    color: context.appPrimary.withValues(alpha: .16),
+                    blurRadius: highContrast ? 12 : 20,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 8),
+                  ),
                 BoxShadow(
                   color: Colors.white.withValues(alpha: .32),
                   blurRadius: 2,
@@ -107,13 +128,24 @@ class _AppLiquidGlassSurfaceState extends State<AppLiquidGlassSurface> {
                       end: Alignment.bottomRight,
                       colors: [
                         Colors.white.withValues(
-                          alpha: highContrast ? .46 : .30,
+                          alpha:
+                              widget.glassOpacity ?? (highContrast ? .46 : .30),
                         ),
-                        Color.alphaBlend(
-                          context.appPrimary.withValues(alpha: .035),
-                          tint,
-                        ).withValues(alpha: highContrast ? .34 : .20),
-                        tint.withValues(alpha: highContrast ? .28 : .13),
+                        (widget.themeColorAccents
+                                ? Color.alphaBlend(
+                                    context.appPrimary.withValues(alpha: .035),
+                                    tint,
+                                  )
+                                : tint)
+                            .withValues(
+                              alpha:
+                                  widget.glassOpacity ??
+                                  (highContrast ? .34 : .20),
+                            ),
+                        tint.withValues(
+                          alpha:
+                              widget.glassOpacity ?? (highContrast ? .28 : .13),
+                        ),
                       ],
                       stops: const [0, .48, 1],
                     ),
@@ -126,6 +158,7 @@ class _AppLiquidGlassSurfaceState extends State<AppLiquidGlassSurface> {
                 radius: widget.borderRadius,
                 primary: context.appPrimary,
                 highContrast: highContrast,
+                themeColorAccents: widget.themeColorAccents,
               ),
               child: Padding(
                 padding: widget.padding ?? EdgeInsets.zero,
@@ -144,11 +177,13 @@ class _LiquidGlassChromePainter extends CustomPainter {
     required this.radius,
     required this.primary,
     required this.highContrast,
+    required this.themeColorAccents,
   });
 
   final double radius;
   final Color primary;
   final bool highContrast;
+  final bool themeColorAccents;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -182,16 +217,19 @@ class _LiquidGlassChromePainter extends CustomPainter {
       );
     canvas.drawPath(highlightPath, topHighlight);
 
-    final lowerRim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = .85
-      ..color = primary.withValues(alpha: highContrast ? .26 : .14);
-    canvas.drawRRect(outer.deflate(.8), lowerRim);
+    if (themeColorAccents) {
+      final lowerRim = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = .85
+        ..color = primary.withValues(alpha: highContrast ? .26 : .14);
+      canvas.drawRRect(outer.deflate(.8), lowerRim);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _LiquidGlassChromePainter oldDelegate) =>
       oldDelegate.radius != radius ||
       oldDelegate.primary != primary ||
-      oldDelegate.highContrast != highContrast;
+      oldDelegate.highContrast != highContrast ||
+      oldDelegate.themeColorAccents != themeColorAccents;
 }

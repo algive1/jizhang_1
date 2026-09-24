@@ -4,8 +4,21 @@ import 'package:flutter/material.dart';
 import 'app_bottom_sheet.dart';
 
 abstract final class AppDatePicker {
-  static Future<DateTime?> show(BuildContext context, DateTime initial) async {
+  static Future<DateTime?> show(
+    BuildContext context,
+    DateTime initial, {
+    DateTime? minimumDate,
+    DateTime? maximumDate,
+  }) async {
+    final minimum = minimumDate == null ? null : DateUtils.dateOnly(minimumDate);
+    final maximum = maximumDate == null ? null : DateUtils.dateOnly(maximumDate);
+    assert(
+      minimum == null || maximum == null || !minimum.isAfter(maximum),
+      'minimumDate must not be after maximumDate',
+    );
     var value = DateUtils.dateOnly(initial);
+    if (minimum != null && value.isBefore(minimum)) value = minimum;
+    if (maximum != null && value.isAfter(maximum)) value = maximum;
     return AppBottomSheet.show<DateTime>(
       context: context,
       builder: (sheet) => Column(
@@ -20,8 +33,10 @@ abstract final class AppDatePicker {
             child: CupertinoDatePicker(
               mode: CupertinoDatePickerMode.date,
               initialDateTime: value,
-              minimumYear: 1900,
-              maximumYear: 2200,
+              minimumDate: minimum,
+              maximumDate: maximum,
+              minimumYear: minimum?.year ?? 1900,
+              maximumYear: maximum?.year ?? 2200,
               onDateTimeChanged: (date) => value = date,
             ),
           ),

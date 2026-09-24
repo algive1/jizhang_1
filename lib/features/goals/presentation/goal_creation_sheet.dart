@@ -1,4 +1,6 @@
 import '../../../core/widgets/app_form.dart';
+import '../../../core/widgets/app_date_picker.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -173,18 +175,18 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                       label: '目标日期，点击选择',
                       child: ListTile(
                         tileColor: context.appSurfaceSoft,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      leading: Icon(
-                        Icons.calendar_month_outlined,
-                        color: context.appPrimary,
-                      ),
-                      title: Text('目标日期'),
-                      trailing: Text(
-                        '${_targetDate.year}年${_targetDate.month}月',
-                        style: TextStyle(color: context.appPrimary),
-                      ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        leading: Icon(
+                          Icons.calendar_month_outlined,
+                          color: context.appPrimary,
+                        ),
+                        title: Text('目标日期'),
+                        trailing: Text(
+                          '${_targetDate.year}年${_targetDate.month}月',
+                          style: TextStyle(color: context.appPrimary),
+                        ),
                         onTap: _pickTargetDate,
                       ),
                     ),
@@ -287,11 +289,11 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
   }
 
   Future<void> _pickTargetDate() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _targetDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 50)),
+    final date = await AppDatePicker.show(
+      context,
+      _targetDate,
+      minimumDate: DateTime.now(),
+      maximumDate: DateTime.now().add(const Duration(days: 365 * 50)),
     );
     if (date != null && mounted) setState(() => _targetDate = date);
   }

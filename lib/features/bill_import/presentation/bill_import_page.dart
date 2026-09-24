@@ -13,6 +13,7 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../application/bill_import_commit_handler.dart';
 import '../application/bill_import_category_mapper.dart';
 import '../application/bill_import_deduplicator.dart';
 import '../application/bill_import_service.dart';
@@ -731,11 +732,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     });
     try {
       await ref.read(quickBookkeepingServiceProvider).saveAll(requests);
-      // Force both scoped ledger views and cross-ledger calendar views to
-      // re-read after a large batch import.
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(allTransactionsProvider);
       if (!mounted) return;
+      _refreshImportedTransactionViews();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -745,12 +743,36 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         ),
       );
       context.pop();
+    } on BookkeepingCommittedException catch (error) {
+      final recovery = handleCommittedBillImportFailure(
+        error,
+        refresh: () {
+          if (mounted) _refreshImportedTransactionViews();
+        },
+      );
+      if (recovery == null) {
+        if (!mounted) return;
+        setState(() => _error = '导入失败：$error');
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(recovery.notice)),
+      );
+      context.pop();
     } on Object catch (error) {
       if (!mounted) return;
       setState(() => _error = '导入失败：$error');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  void _refreshImportedTransactionViews() {
+    // Re-reading the Drift stream lets budget advice and insight providers
+    // rebuild from the committed ledger rows, including committed exceptions.
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(allTransactionsProvider);
   }
 
   String? _resolvedAccountId(

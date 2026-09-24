@@ -10,6 +10,8 @@ import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/constants/app_assets.dart';
+import 'package:jizhang_app/features/accounts/presentation/asset_dashboard_cards.dart';
+import 'package:jizhang_app/features/investments/data/investment_repository.dart';
 
 import 'support/reference_capture.dart';
 
@@ -22,7 +24,12 @@ void main() {
       await DatabaseSeeder(database).seedIfNeeded(includeDemoData: true);
       addTearDown(database.close);
       final container = ProviderContainer(
-        overrides: [databaseProvider.overrideWithValue(database)],
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          includedInvestmentValueByCurrencyProvider.overrideWithValue(const {
+            'CNY': 700,
+          }),
+        ],
       );
       addTearDown(container.dispose);
       final router = container.read(appRouterProvider);
@@ -51,6 +58,20 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      final distributionRect = tester.getRect(
+        find.byKey(const ValueKey('asset-distribution-card')),
+      );
+      final trendRect = tester.getRect(
+        find.ancestor(
+          of: find.text('资产变化').first,
+          matching: find.byType(AssetPanel),
+        ),
+      );
+      expect(distributionRect.top, closeTo(trendRect.top, 1));
+      expect(
+        find.byKey(const ValueKey('asset-trend-current-investment')),
+        findsOneWidget,
+      );
       if (width == 393) await _capture(tester, 'top');
       await tester.drag(find.byType(ListView), const Offset(0, -1000));
       await tester.pumpAndSettle();

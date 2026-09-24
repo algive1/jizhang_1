@@ -9,6 +9,7 @@ import '../../../core/models/account_balance_effect.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../data/account_management_repository.dart';
@@ -45,27 +46,24 @@ class _RestrictedAccountDetailPageState
 
     final allTransactions =
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
-    final transactions = allTransactions
-        .where(
-          (record) =>
-              record.accountId == item.account.id ||
-              record.destinationAccountId == item.account.id,
-        )
-        .where((record) => _matches(record, item.account.id))
-        .toList()
-      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    final showOpening =
-        item.account.openingBalance != 0 && _filter != 2;
+    final transactions =
+        allTransactions
+            .where(
+              (record) =>
+                  record.accountId == item.account.id ||
+                  record.destinationAccountId == item.account.id,
+            )
+            .where((record) => _matches(record, item.account.id))
+            .toList()
+          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final showOpening = item.account.openingBalance != 0 && _filter != 2;
     var runningBalance = item.account.balance;
     final movements = <_FundMovement>[];
     for (final record in transactions) {
       final balanceAfter = runningBalance;
-      final effectInCents =
-          accountBalanceEffect(record)[item.account.id] ?? 0;
+      final effectInCents = accountBalanceEffect(record)[item.account.id] ?? 0;
       runningBalance -= effectInCents / 100;
-      movements.add(
-        _FundMovement(record: record, balanceAfter: balanceAfter),
-      );
+      movements.add(_FundMovement(record: record, balanceAfter: balanceAfter));
     }
 
     return SafeArea(
@@ -84,15 +82,11 @@ class _RestrictedAccountDetailPageState
                 child: Text(
                   '账户详情',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
-              TextButton(
-                onPressed: () => _edit(item),
-                child: const Text('编辑'),
-              ),
+              TextButton(onPressed: () => _edit(item), child: const Text('编辑')),
             ],
           ),
           const SizedBox(height: 8),
@@ -141,11 +135,7 @@ class _RestrictedAccountDetailPageState
                   icon: Icons.add_rounded,
                   label: '追加',
                   color: const Color(0xff54A85D),
-                  onTap: () => _transfer(
-                    item,
-                    incoming: true,
-                    title: '追加受限资金',
-                  ),
+                  onTap: () => _transfer(item, incoming: true, title: '追加受限资金'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -177,11 +167,7 @@ class _RestrictedAccountDetailPageState
                   icon: Icons.swap_horiz_rounded,
                   label: '转账',
                   color: const Color(0xff5B8DEF),
-                  onTap: () => _transfer(
-                    item,
-                    incoming: false,
-                    title: '转账',
-                  ),
+                  onTap: () => _transfer(item, incoming: false, title: '转账'),
                 ),
               ),
             ],
@@ -189,17 +175,12 @@ class _RestrictedAccountDetailPageState
           const SizedBox(height: 16),
           Text(
             '资金变动记录',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           AccountPrototypeFilterBar<int>(
-            items: const [
-              (0, '全部'),
-              (1, '转入'),
-              (2, '转出'),
-            ],
+            items: const [(0, '全部'), (1, '转入'), (2, '转出')],
             selected: _filter,
             onSelected: (value) => setState(() => _filter = value),
           ),
@@ -227,8 +208,7 @@ class _RestrictedAccountDetailPageState
                     if (index != movements.length - 1 || showOpening)
                       Divider(height: 1, color: context.appDivider),
                   ],
-                  if (showOpening)
-                    _OpeningBalanceRow(account: item.account),
+                  if (showOpening) _OpeningBalanceRow(account: item.account),
                 ],
               ),
             ),
@@ -237,16 +217,19 @@ class _RestrictedAccountDetailPageState
     );
   }
 
-  bool _matches(TransactionRecord record, String accountId) => switch (_filter) {
-    1 => record.destinationAccountId == accountId ||
-        (record.accountId == accountId &&
-            record.type == TransactionType.adjustment &&
-            record.amount > 0),
-    2 => record.accountId == accountId &&
-        record.destinationAccountId != accountId &&
-        record.type != TransactionType.adjustment,
-    _ => true,
-  };
+  bool _matches(TransactionRecord record, String accountId) =>
+      switch (_filter) {
+        1 =>
+          record.destinationAccountId == accountId ||
+              (record.accountId == accountId &&
+                  record.type == TransactionType.adjustment &&
+                  record.amount > 0),
+        2 =>
+          record.accountId == accountId &&
+              record.destinationAccountId != accountId &&
+              record.type != TransactionType.adjustment,
+        _ => true,
+      };
 
   Future<void> _transfer(
     ManagedAccount restricted, {
@@ -254,7 +237,8 @@ class _RestrictedAccountDetailPageState
     required String title,
     bool markReturnedWhenEmpty = false,
   }) async {
-    final all = ref
+    final all =
+        ref
             .read(managedAccountsProvider)
             .value
             ?.where(
@@ -282,37 +266,39 @@ class _RestrictedAccountDetailPageState
     if (result == null) return;
     try {
       final now = DateTime.now();
-      final sourceId =
-          incoming ? result.accountId : restricted.account.id;
-      final destinationId =
-          incoming ? restricted.account.id : result.accountId;
-      await ref.read(transactionRepositoryProvider).create(
-        TransactionRecord(
-          id: 'restricted-transfer-${newEntityId()}',
-          bookId: ref.read(activeBookIdProvider),
-          type: TransactionType.transfer,
-          amount: result.amount,
-          currency: restricted.account.currency,
-          accountId: sourceId,
-          destinationAccountId: destinationId,
-          merchant: restricted.platform,
-          note: title,
-          occurredAt: now,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+      final sourceId = incoming ? result.accountId : restricted.account.id;
+      final destinationId = incoming ? restricted.account.id : result.accountId;
+      await ref
+          .read(transactionRepositoryProvider)
+          .create(
+            TransactionRecord(
+              id: 'restricted-transfer-${newEntityId()}',
+              bookId: ref.read(activeBookIdProvider),
+              type: TransactionType.transfer,
+              amount: result.amount,
+              currency: restricted.account.currency,
+              accountId: sourceId,
+              destinationAccountId: destinationId,
+              merchant: restricted.platform,
+              note: title,
+              occurredAt: now,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
       if (markReturnedWhenEmpty &&
           (restricted.account.balance - result.amount).abs() < .005) {
-        await ref.read(accountManagementRepositoryProvider).updateMeta(
-          accountId: restricted.account.id,
-          category: AccountFundCategory.restricted,
-          platform: restricted.platform,
-          restrictedStatus: RestrictedFundStatus.returned,
-          expectedReturnAt: restricted.expectedReturnAt,
-          includeInTotal: restricted.includeInTotal,
-          note: restricted.note,
-        );
+        await ref
+            .read(accountManagementRepositoryProvider)
+            .updateMeta(
+              accountId: restricted.account.id,
+              category: AccountFundCategory.restricted,
+              platform: restricted.platform,
+              restrictedStatus: RestrictedFundStatus.returned,
+              expectedReturnAt: restricted.expectedReturnAt,
+              includeInTotal: restricted.includeInTotal,
+              note: restricted.note,
+            );
       }
       if (mounted) _message('已完成$title');
     } on Object catch (error) {
@@ -328,31 +314,30 @@ class _RestrictedAccountDetailPageState
     if (amount == null) return;
     try {
       final now = DateTime.now();
-      await ref.read(transactionRepositoryProvider).create(
-        TransactionRecord(
-          id: 'restricted-deduct-${newEntityId()}',
-          bookId: ref.read(activeBookIdProvider),
-          type: TransactionType.expense,
-          amount: amount,
-          currency: item.account.currency,
-          accountId: item.account.id,
-          merchant: item.platform,
-          note: '受限资金扣除',
-          occurredAt: now,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+      await ref
+          .read(transactionRepositoryProvider)
+          .create(
+            TransactionRecord(
+              id: 'restricted-deduct-${newEntityId()}',
+              bookId: ref.read(activeBookIdProvider),
+              type: TransactionType.expense,
+              amount: amount,
+              currency: item.account.currency,
+              accountId: item.account.id,
+              merchant: item.platform,
+              note: '受限资金扣除',
+              occurredAt: now,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
       if (mounted) _message('扣除完成');
     } on Object catch (error) {
       if (mounted) _message('扣除失败：$error');
     }
   }
 
-  Future<double?> _askAmount({
-    required String title,
-    double? maxAmount,
-  }) async {
+  Future<double?> _askAmount({required String title, double? maxAmount}) async {
     final controller = TextEditingController();
     final result = await showDialog<double>(
       context: context,
@@ -455,10 +440,7 @@ class _RestrictedAccountDetailPageState
                   decoration: const InputDecoration(labelText: '资金状态'),
                   items: [
                     for (final value in RestrictedFundStatus.values)
-                      DropdownMenuItem(
-                        value: value,
-                        child: Text(value.label),
-                      ),
+                      DropdownMenuItem(value: value, child: Text(value.label)),
                   ],
                   onChanged: (value) =>
                       setLocalState(() => status = value ?? status),
@@ -470,11 +452,11 @@ class _RestrictedAccountDetailPageState
                   subtitle: Text(expected == null ? '未设置' : _date(expected!)),
                   trailing: const Icon(Icons.calendar_month_outlined),
                   onTap: () async {
-                    final result = await showDatePicker(
-                      context: context,
-                      initialDate: expected ?? DateTime.now(),
-                      firstDate: DateTime(DateTime.now().year - 1),
-                      lastDate: DateTime(DateTime.now().year + 20),
+                    final result = await AppDatePicker.show(
+                      context,
+                      expected ?? DateTime.now(),
+                      minimumDate: DateTime(DateTime.now().year - 1),
+                      maximumDate: DateTime(DateTime.now().year + 20),
                     );
                     if (result != null) {
                       setLocalState(() => expected = result);
@@ -490,8 +472,7 @@ class _RestrictedAccountDetailPageState
                   contentPadding: EdgeInsets.zero,
                   title: const Text('计入总资产'),
                   value: include,
-                  onChanged: (value) =>
-                      setLocalState(() => include = value),
+                  onChanged: (value) => setLocalState(() => include = value),
                 ),
               ],
             ),
@@ -529,34 +510,38 @@ class _RestrictedAccountDetailPageState
 
     try {
       final old = item.account;
-      await ref.read(accountRepositoryProvider).update(
-        Account(
-          bookId: old.bookId,
-          id: old.id,
-          name: name.text.trim().isEmpty ? old.name : name.text.trim(),
-          type: old.type,
-          balance: old.balance,
-          openingBalance: old.openingBalance,
-          currency: old.currency,
-          icon: old.icon,
-          color: old.color,
-          sortOrder: old.sortOrder,
-          isArchived: old.isArchived,
-          createdAt: old.createdAt,
-          updatedAt: DateTime.now(),
-          assetForm: old.assetForm,
-          identifierSuffix: old.identifierSuffix,
-        ),
-      );
-      await ref.read(accountManagementRepositoryProvider).updateMeta(
-        accountId: old.id,
-        category: AccountFundCategory.restricted,
-        platform: resolvedPlatform,
-        restrictedStatus: status,
-        expectedReturnAt: expected,
-        includeInTotal: include,
-        note: note.text,
-      );
+      await ref
+          .read(accountRepositoryProvider)
+          .update(
+            Account(
+              bookId: old.bookId,
+              id: old.id,
+              name: name.text.trim().isEmpty ? old.name : name.text.trim(),
+              type: old.type,
+              balance: old.balance,
+              openingBalance: old.openingBalance,
+              currency: old.currency,
+              icon: old.icon,
+              color: old.color,
+              sortOrder: old.sortOrder,
+              isArchived: old.isArchived,
+              createdAt: old.createdAt,
+              updatedAt: DateTime.now(),
+              assetForm: old.assetForm,
+              identifierSuffix: old.identifierSuffix,
+            ),
+          );
+      await ref
+          .read(accountManagementRepositoryProvider)
+          .updateMeta(
+            accountId: old.id,
+            category: AccountFundCategory.restricted,
+            platform: resolvedPlatform,
+            restrictedStatus: status,
+            expectedReturnAt: expected,
+            includeInTotal: include,
+            note: note.text,
+          );
       if (mounted) _message('账户已更新');
     } on Object catch (error) {
       if (mounted) _message('保存失败：$error');
@@ -615,10 +600,7 @@ class _IdentityCard extends StatelessWidget {
                 item.platform?.trim().isNotEmpty == true
                     ? item.platform!
                     : '平台账户',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.appSecondaryText,
-                ),
+                style: TextStyle(fontSize: 12, color: context.appSecondaryText),
               ),
             ],
           ),
@@ -657,38 +639,36 @@ class _InfoCard extends StatelessWidget {
               : _RestrictedAccountDetailPageState._date(item.expectedReturnAt!),
         ),
         _line(context, '是否计入总资产', item.includeInTotal ? '是' : '否'),
-        _line(context, '备注', item.note?.trim().isNotEmpty == true ? item.note! : '—'),
+        _line(
+          context,
+          '备注',
+          item.note?.trim().isNotEmpty == true ? item.note! : '—',
+        ),
       ],
     ),
   );
 
-  Widget _statusLine(
-    BuildContext context,
-    String label,
-    String value,
-  ) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 7),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 105,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: context.appSecondaryText,
-              fontSize: 12,
+  Widget _statusLine(BuildContext context, String label, String value) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 105,
+              child: Text(
+                label,
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+              ),
             ),
-          ),
+            const Spacer(),
+            AccountPrototypeStatusPill(
+              label: value,
+              color: const Color(0xffE79B3A),
+              icon: Icons.lock_outline_rounded,
+            ),
+          ],
         ),
-        const Spacer(),
-        AccountPrototypeStatusPill(
-          label: value,
-          color: const Color(0xffE79B3A),
-          icon: Icons.lock_outline_rounded,
-        ),
-      ],
-    ),
-  );
+      );
 
   Widget _line(
     BuildContext context,
@@ -758,10 +738,7 @@ class _ActionButton extends StatelessWidget {
 }
 
 class _FundMovement {
-  const _FundMovement({
-    required this.record,
-    required this.balanceAfter,
-  });
+  const _FundMovement({required this.record, required this.balanceAfter});
 
   final TransactionRecord record;
   final double balanceAfter;
@@ -795,10 +772,7 @@ class _TransactionRow extends StatelessWidget {
             width: 72,
             child: Text(
               _date(record.occurredAt),
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
             ),
           ),
           Expanded(
@@ -868,18 +842,12 @@ class _OpeningBalanceRow extends StatelessWidget {
             children: [
               const Text(
                 '初始存入',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 3),
               Text(
                 '锁定中｜余额 ¥${MoneyFormatter.decimal((account.openingBalance ?? 0).abs())}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: context.appSecondaryText,
-                ),
+                style: TextStyle(fontSize: 10, color: context.appSecondaryText),
               ),
             ],
           ),
@@ -946,9 +914,8 @@ class _MoneyMoveSheetState extends State<_MoneyMoveSheet> {
       children: [
         Text(
           widget.title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
@@ -991,10 +958,7 @@ class _MoneyMoveSheetState extends State<_MoneyMoveSheet> {
                 setState(() => _error = '请输入有效金额');
                 return;
               }
-              Navigator.pop(
-                context,
-                _MoneyMoveResult(_accountId, amount),
-              );
+              Navigator.pop(context, _MoneyMoveResult(_accountId, amount));
             },
             child: const Text('确认'),
           ),

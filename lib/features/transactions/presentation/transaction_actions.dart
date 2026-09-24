@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../books/data/book_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../categories/data/category_repository.dart';
@@ -30,6 +31,8 @@ enum _TransactionAction {
   delete,
 }
 
+enum _CrossBookTransactionAction { switchAndOperate, viewDetails }
+
 void openTransactionDetail(
   BuildContext context,
   TransactionRecord transaction,
@@ -46,6 +49,63 @@ Future<void> showTransactionActions(
   TransactionRecord transaction, {
   Future<void> Function()? onCorrectCategory,
 }) async {
+  if (transaction.bookId != ref.read(activeBookIdProvider)) {
+    final action = await AppBottomSheet.show<_CrossBookTransactionAction>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.swap_horiz_rounded),
+              title: Text('这笔流水属于其他账本'),
+              subtitle: Text('切换账本后再编辑、删除或登记退款。'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.switch_account_outlined),
+              title: const Text('切换到该账本并操作'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _CrossBookTransactionAction.switchAndOperate,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('查看流水详情'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _CrossBookTransactionAction.viewDetails,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || action == null) return;
+    if (action == _CrossBookTransactionAction.viewDetails) {
+      openTransactionDetail(context, transaction);
+      return;
+    }
+    try {
+      await ref.read(activeBookIdProvider.notifier).select(transaction.bookId);
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('切换账本失败：$error')));
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    await showTransactionActions(
+      context,
+      ref,
+      transaction,
+      onCorrectCategory: onCorrectCategory,
+    );
+    return;
+  }
+
   final action = await AppBottomSheet.show<_TransactionAction>(
     context: context,
     builder: (sheetContext) => SafeArea(

@@ -7,6 +7,7 @@ import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/features/investments/data/investment_repository.dart';
 import 'package:jizhang_app/features/investments/domain/investment_asset.dart';
+import 'package:jizhang_app/features/home/presentation/home_asset_card.dart';
 
 void main() {
   late ProviderContainer container;
@@ -59,6 +60,58 @@ void main() {
           ),
         );
   }
+
+  testWidgets('homepage asset card and trend use opted-in investment values', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(420.5, 935));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpApp(tester);
+
+    final repository = container.read(investmentRepositoryProvider);
+    await repository.addHolding(
+      AddInvestmentRequest(
+        type: InvestmentAssetType.stock,
+        symbol: 'CLOSED-HOME-TEST',
+        name: '未计入首页仓位',
+        price: 10,
+        currentPrice: 10,
+        quantity: 10,
+        transactionDate: DateTime.now(),
+        priceSource: PriceSource.manual,
+      ),
+    );
+    await repository.addHolding(
+      AddInvestmentRequest(
+        type: InvestmentAssetType.stock,
+        symbol: 'OPEN-HOME-TEST',
+        name: '计入首页仓位',
+        price: 10,
+        currentPrice: 10,
+        quantity: 3,
+        transactionDate: DateTime.now(),
+        priceSource: PriceSource.manual,
+        includeInHomeNetAssets: true,
+      ),
+    );
+    container.invalidate(investmentPortfolioProvider);
+    await tester.pumpAndSettle();
+
+    final portfolio = await repository.getPortfolio();
+    expect(portfolio.positions, hasLength(2));
+    expect(portfolio.investmentValue, closeTo(130, 1e-9));
+
+    final card = tester.widget<HomeAssetCard>(find.byType(HomeAssetCard));
+    expect(card.investmentByCurrency, {'CNY': 30});
+
+    final semantics = tester.ensureSemantics();
+    final trend = tester.getSemantics(
+      find.byKey(const ValueKey('home-trend-chart')),
+    );
+    expect(trend.value, contains('总资产 30.00 CNY'));
+    semantics.dispose();
+    await tester.pump(const Duration(milliseconds: 700));
+  });
 
   testWidgets('the asset overview replaces 分类统计 with 投资管理', (
     tester,
@@ -315,6 +368,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final inclusionSwitch = find.byKey(
+      const ValueKey('investment-include-in-home-net-assets'),
+    );
+    expect(inclusionSwitch, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(inclusionSwitch).value, isFalse);
+    await tester.tap(
+      find.byKey(const ValueKey('investment-home-assets-tip')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('关闭后，投资类金额仅在投资管理页面展示，不计入首页展示的账目净资产。'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const ValueKey('investment-form-name')),
       '我的币',
@@ -345,11 +414,58 @@ void main() {
     expect(holdings.single.asset.priceSource.name, 'manual');
     expect(holdings.single.asset.manualPrice, closeTo(12, 1e-9));
     expect(holdings.single.quantity, closeTo(100, 1e-9));
+    expect(holdings.single.includeInHomeNetAssets, isFalse);
 
     // And it renders on the crypto tab.
     await tester.tap(find.byKey(const ValueKey('investment-tab-crypto')));
     await tester.pumpAndSettle();
     expect(find.text('我的币'), findsOneWidget);
+  });
+
+  testWidgets('manual add persists opt-in to homepage net assets', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(420.5, 935));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpApp(tester);
+    await openInvestments(tester);
+    await tester.tap(find.byKey(const ValueKey('investment-empty-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('investment-type-pick-crypto')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('investment-add-mode-manual')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('investment-include-in-home-net-assets')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('investment-form-name')),
+      '计入首页的币',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('investment-form-symbol')),
+      'INCLUDED',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('investment-form-price')),
+      '10',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('investment-form-quantity')),
+      '2',
+    );
+    await tester.tap(find.byKey(const ValueKey('investment-form-submit')));
+    await tester.pumpAndSettle();
+
+    final holdings = await container
+        .read(investmentRepositoryProvider)
+        .getHoldings(InvestmentAssetType.crypto);
+    expect(holdings.single.includeInHomeNetAssets, isTrue);
   });
 
   testWidgets('invalid input is rejected in the form', (tester) async {

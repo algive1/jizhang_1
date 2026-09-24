@@ -6,6 +6,7 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../../books/data/book_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
@@ -53,9 +54,8 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
               child: Text(
                 '新增应收',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 48),
@@ -159,7 +159,10 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ],
         const SizedBox(height: 20),
         FilledButton(
@@ -177,11 +180,11 @@ class _ReceivableFormPageState extends ConsumerState<ReceivableFormPage> {
     required DateTime initial,
     required ValueChanged<DateTime> onPicked,
   }) async {
-    final result = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 20),
+    final result = await AppDatePicker.show(
+      context,
+      initial,
+      minimumDate: DateTime(DateTime.now().year - 5),
+      maximumDate: DateTime(DateTime.now().year + 20),
     );
     if (result != null) onPicked(result);
   }

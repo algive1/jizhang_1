@@ -39,7 +39,11 @@ import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/category_icon.dart';
+import '../../../core/widgets/app_bottom_navigation.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/app_glass_surface.dart';
+import '../../../core/widgets/payment_brand_icon.dart';
+import '../../../core/widgets/app_liquid_glass_surface.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
@@ -156,7 +160,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         _type == TransactionType.repayment) {
       _debtType = _type;
     }
-    _bookId = transaction?.bookId ?? widget.initialBookId ?? ref.read(activeBookIdProvider);
+    _bookId =
+        transaction?.bookId ??
+        widget.initialBookId ??
+        ref.read(activeBookIdProvider);
     if (transaction == null) {
       final initialDate = widget.initialOccurredAt;
       if (initialDate != null) {
@@ -339,11 +346,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         ];
       }
     }
-    final transactions = selectedBookId == activeBookId
-        ? ref.watch(transactionsProvider).value ?? const <TransactionRecord>[]
-        : ref.watch(transactionsByBookProvider(selectedBookId)).value ??
-              const <TransactionRecord>[];
-    final activeCategories = _sortedCategories(categories, transactions);
+    final activeCategories = _sortedCategories(categories);
     final selectedCategory = _selectedCategory(activeCategories);
     // 二级分类必须从未裁剪的分类全集查找，主网格只保留一级分类。
     final subcategories = _subcategoriesFor(
@@ -377,143 +380,149 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               color: context.appBackground,
               clipBehavior: Clip.antiAlias,
               child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: '返回',
-                        constraints: const BoxConstraints.tightFor(
-                          width: 48,
-                          height: 48,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.arrow_back_rounded,
-                          color: context.appPrimaryText,
-                          size: 24,
-                        ),
-                      ),
-                      Expanded(
-                        child: _EntryTabs(
-                          selected: _tab,
-                          onChanged: _changeTab,
-                        ),
-                      ),
-                      if (!_isEditing)
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                    child: Row(
+                      children: [
                         IconButton(
-                          key: const ValueKey('quick-templates'),
-                          tooltip: '常用模板',
+                          onPressed: () => Navigator.pop(context),
+                          tooltip: '返回',
                           constraints: const BoxConstraints.tightFor(
-                            width: 40,
-                            height: 40,
+                            width: 48,
+                            height: 48,
                           ),
                           padding: EdgeInsets.zero,
-                          onPressed: () => _openTemplates(
-                            selectedBookId,
-                            accounts,
-                            categories,
-                            sourceAccount,
-                            selectedCategory,
-                            effectiveSubcategoryId,
-                          ),
-                          icon: const Icon(
-                            Icons.bookmarks_outlined,
-                            size: 20,
+                          icon: Icon(
+                            Icons.arrow_back_rounded,
+                            color: context.appPrimaryText,
+                            size: 24,
                           ),
                         ),
-                      SizedBox(width: 52, child: Center(child: _headerNote())),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (_tab == _EntryTab.debt) ...[
-                            _DebtTabs(
-                              selected: _debtType,
-                              onChanged: (value) => setState(() {
-                                _debtType = value;
-                                _type = value;
-                                _categoryId = null;
-                                _subcategoryId = null;
-                                _reimbursementStatus = ReimbursementStatus.none;
-                              }),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                          if (!_usesAccountPair)
-                            SizedBox(
-                              height: (constraints.maxHeight - 242).clamp(
-                                150.0,
-                                360.0,
-                              ),
-                              child: CategoryGrid(
-                                categories: activeCategories,
-                                selected: selectedCategory,
-                                subcategories: subcategories,
-                                selectedSubcategoryId: effectiveSubcategoryId,
-                                onSelected: (category, anchorRect) =>
-                                    _chooseCategory(
-                                      categories,
-                                      category,
-                                      anchorRect: anchorRect,
-                                      currentSubcategoryId:
-                                          effectiveSubcategoryId,
-                                    ),
-                              ),
-                            )
-                          else
-                            _AccountPairCard(
-                              isRepayment: _type == TransactionType.repayment,
-                              source: sourceAccount,
-                              destination: destinationAccount,
-                              onSourceTap: () => _chooseAccount(
-                                accounts,
-                                isDestination: false,
-                              ),
-                              onDestinationTap: () =>
-                                  _chooseAccount(accounts, isDestination: true),
-                            ),
-                          const SizedBox(height: 10),
-                          _buildDetailCard(
-                            context,
-                            input: input,
-                            accounts: accounts,
-                            selectedBook: selectedBook,
-                            sourceAccount: sourceAccount,
+                        Expanded(
+                          child: _EntryTabs(
+                            selected: _tab,
+                            onChanged: _changeTab,
                           ),
-                        ],
+                        ),
+                        if (!_isEditing)
+                          IconButton(
+                            key: const ValueKey('quick-templates'),
+                            tooltip: '常用模板',
+                            constraints: const BoxConstraints.tightFor(
+                              width: 40,
+                              height: 40,
+                            ),
+                            padding: EdgeInsets.zero,
+                            onPressed: () => _openTemplates(
+                              selectedBookId,
+                              accounts,
+                              categories,
+                              sourceAccount,
+                              selectedCategory,
+                              effectiveSubcategoryId,
+                            ),
+                            icon: const Icon(
+                              Icons.bookmarks_outlined,
+                              size: 20,
+                            ),
+                          ),
+                        SizedBox(
+                          width: 52,
+                          child: Center(child: _headerNote()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (_tab == _EntryTab.debt) ...[
+                              _DebtTabs(
+                                selected: _debtType,
+                                onChanged: (value) => setState(() {
+                                  _debtType = value;
+                                  _type = value;
+                                  _categoryId = null;
+                                  _subcategoryId = null;
+                                  _reimbursementStatus =
+                                      ReimbursementStatus.none;
+                                }),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            if (!_usesAccountPair)
+                              SizedBox(
+                                height: (constraints.maxHeight - 242).clamp(
+                                  150.0,
+                                  360.0,
+                                ),
+                                child: CategoryGrid(
+                                  categories: activeCategories,
+                                  selected: selectedCategory,
+                                  subcategories: subcategories,
+                                  selectedSubcategoryId: effectiveSubcategoryId,
+                                  onSelected: (category, anchorRect) =>
+                                      _chooseCategory(
+                                        categories,
+                                        category,
+                                        anchorRect: anchorRect,
+                                        currentSubcategoryId:
+                                            effectiveSubcategoryId,
+                                      ),
+                                ),
+                              )
+                            else
+                              _AccountPairCard(
+                                isRepayment: _type == TransactionType.repayment,
+                                source: sourceAccount,
+                                destination: destinationAccount,
+                                onSourceTap: () => _chooseAccount(
+                                  accounts,
+                                  isDestination: false,
+                                ),
+                                onDestinationTap: () => _chooseAccount(
+                                  accounts,
+                                  isDestination: true,
+                                ),
+                              ),
+                            const SizedBox(height: 10),
+                            _buildDetailCard(
+                              context,
+                              input: input,
+                              accounts: accounts,
+                              selectedBook: selectedBook,
+                              sourceAccount: sourceAccount,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (!keyboardVisible)
-                  SafeArea(
-                    top: false,
-                    child: NumberKeyboard(
-                      canRepeat: !_isEditing,
-                      isSaving: _isSaving,
-                      onKey: (key) => _updateAmount(_amount.enter(key)),
-                      onBackspace: () => _updateAmount(_amount.backspace()),
-                      onDone: () => _submit(
-                        bookId: selectedBookId,
-                        sourceAccount: sourceAccount,
-                        destinationAccount: destinationAccount,
-                        selectedCategory: selectedCategory,
-                        subcategoryId: effectiveSubcategoryId,
+                  if (!keyboardVisible)
+                    SafeArea(
+                      top: false,
+                      child: NumberKeyboard(
+                        canRepeat: !_isEditing,
+                        isSaving: _isSaving,
+                        onKey: (key) => _updateAmount(_amount.enter(key)),
+                        onBackspace: () => _updateAmount(_amount.backspace()),
+                        onDone: () => _submit(
+                          bookId: selectedBookId,
+                          sourceAccount: sourceAccount,
+                          destinationAccount: destinationAccount,
+                          selectedCategory: selectedCategory,
+                          subcategoryId: effectiveSubcategoryId,
+                        ),
+                        onRepeat: _resetForNextEntry,
                       ),
-                      onRepeat: _resetForNextEntry,
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
             ),
           ),
         ),
@@ -631,8 +640,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 _QuickChip(
                   key: const ValueKey('quick-account-chip'),
                   label: sourceAccount?.displayName ?? '请选择账户',
-                  icon: _accountVisual(sourceAccount?.type).$1,
-                  iconColor: _accountVisual(sourceAccount?.type).$2,
+                  leading: _accountVisualWidget(sourceAccount?.type),
                   // 账户、报销状态、账本在进页面时就已有确定取值，
                   // 因此默认就呈选中态，而不是等用户改过才高亮。
                   selected: sourceAccount != null,
@@ -653,7 +661,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   selectedBook?.isShared == true)
                 _QuickChip(
                   key: const ValueKey('quick-family-payer-chip'),
-                  label: _payerLabel ?? (_payerUserId == null ? '本人付款' : '付款成员'),
+                  label:
+                      _payerLabel ?? (_payerUserId == null ? '本人付款' : '付款成员'),
                   icon: Icons.person_outline_rounded,
                   selected: true,
                   showChevron: true,
@@ -816,9 +825,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   leading: const CircleAvatar(
                     child: Icon(Icons.person_outline_rounded),
                   ),
-                  title: Text(
-                    _familyMemberName(member),
-                  ),
+                  title: Text(_familyMemberName(member)),
                   subtitle: Text(switch (member['role']) {
                     'owner' => '所有者',
                     'admin' => '管理员',
@@ -1075,11 +1082,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final categoryExists = categories.any(
       (item) => item.id == template.categoryId && !item.isArchived,
     );
-    final subcategoryExists = template.subcategoryId != null &&
+    final subcategoryExists =
+        template.subcategoryId != null &&
         categories.any(
           (item) => item.id == template.subcategoryId && !item.isArchived,
         );
-    final destinationExists = template.destinationAccountId != null &&
+    final destinationExists =
+        template.destinationAccountId != null &&
         accounts.any(
           (item) =>
               item.id == template.destinationAccountId && !item.isArchived,
@@ -1095,8 +1104,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           ? const AmountInput()
           : AmountInput(template.amount!.toStringAsFixed(2));
       _accountId = accountExists ? template.accountId : null;
-      _destinationAccountId =
-          destinationExists ? template.destinationAccountId : null;
+      _destinationAccountId = destinationExists
+          ? template.destinationAccountId
+          : null;
       _categoryId = categoryExists ? template.categoryId : null;
       _subcategoryId = subcategoryExists ? template.subcategoryId : null;
       _merchantController.text = template.merchant ?? '';
@@ -1108,9 +1118,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _amountError = false;
     });
     _showMessage(
-      accountExists
-          ? '已套用模板「${template.name}」'
-          : '已套用模板；原账户已不存在，请重新选择账户',
+      accountExists ? '已套用模板「${template.name}」' : '已套用模板；原账户已不存在，请重新选择账户',
     );
   }
 
@@ -1369,10 +1377,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     return children;
   }
 
-  List<Category> _sortedCategories(
-    List<Category> categories,
-    List<TransactionRecord> transactions,
-  ) {
+  List<Category> _sortedCategories(List<Category> categories) {
     final desiredType = switch (_type) {
       TransactionType.income ||
       TransactionType.refund ||
@@ -1380,24 +1385,21 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       TransactionType.borrow => CategoryType.income,
       _ => CategoryType.expense,
     };
-    final usage = <String, int>{};
-    for (final transaction in transactions) {
-      final categoryId = transaction.categoryId;
-      if (categoryId != null) {
-        usage.update(categoryId, (value) => value + 1, ifAbsent: () => 1);
-      }
-    }
     final result = categories
         .where(
           (category) =>
               category.type == desiredType && category.parentId == null,
         )
         .toList();
+    bool isOtherCategory(Category category) =>
+        category.id == 'expense-other' ||
+        category.id == 'income-other' ||
+        category.name.trim().startsWith('其他');
     result.sort((a, b) {
-      final usageComparison = (usage[b.id] ?? 0).compareTo(usage[a.id] ?? 0);
-      return usageComparison != 0
-          ? usageComparison
-          : a.sortOrder.compareTo(b.sortOrder);
+      final aIsOther = isOtherCategory(a);
+      final bIsOther = isOtherCategory(b);
+      if (aIsOther != bIsOther) return aIsOther ? -1 : 1;
+      return b.sortOrder.compareTo(a.sortOrder);
     });
     return result;
   }
@@ -1447,8 +1449,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Rect anchorRect,
     String? currentSubcategoryId,
   }) async {
-    final initial =
-        widget.initialTransaction?.categoryId == category.id
+    final initial = widget.initialTransaction?.categoryId == category.id
         ? widget.initialTransaction
         : null;
     final children = _subcategoriesFor(categories, category, initial);
@@ -1522,10 +1523,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             const SizedBox(height: 8),
             ...available.map(
               (account) => ListTile(
-                leading: Icon(
-                  _accountVisual(account.type).$1,
-                  color: _accountVisual(account.type).$2,
-                ),
+                leading: _accountVisualWidget(account.type, size: 24),
                 title: Text(account.displayName),
                 subtitle: Text(
                   '${_accountTypeLabel(account.type)} · ${MoneyFormatter.decimal(account.balance)}',
@@ -1571,7 +1569,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         : ref.read(categoriesByBookProvider(selectedBookId)).value ??
               const <Category>[];
     final sourceAccount = _selectedAccount(accounts, _accountId);
-    final activeCategories = _sortedCategories(categories, const []);
+    final activeCategories = _sortedCategories(categories);
     final selectedCategory = _selectedCategory(activeCategories);
     if (sourceAccount == null || selectedCategory == null) {
       _showMessage('请先选择扣款账户和分类');
@@ -1696,8 +1694,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       setState(() {
         _attachments.remove(pending);
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('附件读取失败，请重新选择：$error')));
+      _showMessage('附件读取失败，请重新选择：$error');
     } finally {
       if (mounted) setState(() => _attachmentsBusy = false);
     }
@@ -1737,8 +1734,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         final pendingIndex = _attachments.indexOf(pending);
         if (pendingIndex >= 0) _attachments[pendingIndex] = existing;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('附件替换失败，请重试：$error')));
+      _showMessage('附件替换失败，请重试：$error');
     } finally {
       if (mounted) setState(() => _attachmentsBusy = false);
     }
@@ -1783,8 +1779,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         final pendingIndex = _attachments.indexOf(pending);
         if (pendingIndex >= 0) _attachments[pendingIndex] = failed;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('附件重试失败，请稍后再试：$error')));
+      _showMessage('附件重试失败，请稍后再试：$error');
     } finally {
       if (mounted) setState(() => _attachmentsBusy = false);
     }
@@ -2026,22 +2021,24 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       unawaited(HapticFeedback.lightImpact());
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
-      Navigator.pop(context);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.initialTransaction == null ? '已保存到本地账本' : '已更新本地账本',
-          ),
-        ),
+      final snackBar = AppSnackBar.build(
+        context,
+        widget.initialTransaction == null ? '已保存到本地账本' : '已更新本地账本',
       );
+      messenger.clearSnackBars();
+      Navigator.pop(context);
+      messenger.showSnackBar(snackBar);
     } on BookkeepingCommittedException catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
       final messenger = ScaffoldMessenger.of(context);
-      Navigator.pop(context);
-      messenger.showSnackBar(
-        SnackBar(content: Text('已入账，但${error.stage}失败，请稍后检查')),
+      final snackBar = AppSnackBar.build(
+        context,
+        '已入账，但${error.stage}失败，请稍后检查',
       );
+      messenger.clearSnackBars();
+      Navigator.pop(context);
+      messenger.showSnackBar(snackBar);
     } on Object {
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -2086,8 +2083,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    AppSnackBar.show(context, message);
   }
 
   void _updateAmount(AmountInput value) {
@@ -2114,6 +2110,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   AccountType.liability => (Icons.trending_down_rounded, AppColors.warning),
   _ => (Icons.account_balance_wallet_outlined, const Color(0xFF747A70)),
 };
+
+Widget _accountVisualWidget(AccountType? type, {double size = 16}) {
+  final brand = paymentBrandForAccountType(type);
+  if (brand != null) return PaymentBrandIcon(brand: brand, size: size);
+  final visual = _accountVisual(type);
+  return Icon(visual.$1, size: size, color: visual.$2);
+}
 
 String _transactionTypeLabel(TransactionType type) => switch (type) {
   TransactionType.assetSale => '资产卖出',
@@ -2239,11 +2242,11 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
       final safeTop = media.padding.top + 8;
       final safeBottom = screen.height - media.padding.bottom - 8;
       final textScale = media.textScaler.scale(14);
-      final width = (screen.width - 16).clamp(1.0, 500.0).toDouble();
+      final width = (screen.width - 32).clamp(1.0, 344.0).toDouble();
       final columns = textScale > 19 ? 4 : 5;
       final rows = (categories.length + columns - 1) ~/ columns;
-      final rowHeight = 52 + media.textScaler.scale(12) * 1.7;
-      const outerPadding = 8.0;
+      final rowHeight = 43 + media.textScaler.scale(10) * 1.5;
+      const outerPadding = 6.0;
       final desiredHeight = rows * rowHeight + outerPadding * 2;
       final maxHeight = (safeBottom - safeTop)
           .clamp(1.0, screen.height)
@@ -2260,6 +2263,36 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
           ? above
           : (safeBottom - height).clamp(safeTop, safeBottom).toDouble();
 
+      final radius = context.appUsesLiquidGlass
+          ? AppNavGeometry.barHeight / 2
+          : 24.0;
+      final picker = _SubcategoryPicker(
+        categories: categories,
+        selectedId: selectedId,
+        columns: columns,
+        rowHeight: rowHeight,
+        onSelected: onSelected,
+      );
+      final popover = context.appUsesLiquidGlass
+          ? AppLiquidGlassSurface(
+              borderRadius: radius,
+              tint: Colors.white,
+              blurSigma: AppBottomNavigation.capsuleBlurSigma,
+              glassOpacity: .94,
+              themeColorAccents: false,
+              key: const ValueKey('quick-subcategory-bubble'),
+              padding: const EdgeInsets.all(outerPadding),
+              child: picker,
+            )
+          : AppGlassSurface(
+              borderRadius: radius,
+              tint: context.appPopoverSurface.withValues(alpha: 1),
+              chromaticEdge: false,
+              key: const ValueKey('quick-subcategory-bubble'),
+              padding: const EdgeInsets.all(outerPadding),
+              child: picker,
+            );
+
       return Material(
         type: MaterialType.transparency,
         child: Stack(
@@ -2275,22 +2308,7 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
               top: top,
               width: width,
               height: height,
-              child: AppGlassSurface(
-                borderRadius: 24,
-                tint: context.appPopoverSurface.withValues(alpha: 1),
-                blurSigma: context.appUsesLiquidGlass ? 32 : null,
-                glassOpacity: context.appUsesLiquidGlass ? .96 : null,
-                chromaticEdge: false,
-                key: const ValueKey('quick-subcategory-bubble'),
-                padding: const EdgeInsets.all(outerPadding),
-                child: _SubcategoryPicker(
-                  categories: categories,
-                  selectedId: selectedId,
-                  columns: columns,
-                  rowHeight: rowHeight,
-                  onSelected: onSelected,
-                ),
-              ),
+              child: popover,
             ),
           ],
         ),
@@ -2326,7 +2344,28 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
   int? _focusedIndex;
 
   @override
+  void initState() {
+    super.initState();
+    _focusedIndex = _selectedIndex;
+    _scrollController.addListener(_handleScroll);
+  }
+
+  void _handleScroll() {
+    if (_focusedIndex != null && context.appUsesLiquidGlass) {
+      setState(() {});
+    }
+  }
+
+  int? get _selectedIndex {
+    final selected = widget.categories.indexWhere(
+      (category) => category.id == widget.selectedId,
+    );
+    return selected < 0 ? null : selected;
+  }
+
+  @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -2340,7 +2379,8 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
     if (count == 0) return 0;
     final contentPosition = Offset(
       position.dx,
-      position.dy + (_scrollController.hasClients ? _scrollController.offset : 0),
+      position.dy +
+          (_scrollController.hasClients ? _scrollController.offset : 0),
     );
     var nearest = 0;
     var nearestDistance = double.infinity;
@@ -2360,11 +2400,7 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
     return nearest;
   }
 
-  void _updatePointer(
-    Offset position,
-    double cellWidth,
-    double spacing,
-  ) {
+  void _updatePointer(Offset position, double cellWidth, double spacing) {
     final nearest = _nearestIndex(
       position,
       cellWidth,
@@ -2379,17 +2415,23 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
 
   void _selectIndex(int index) {
     HapticFeedback.selectionClick();
-    widget.onSelected(_CategorySelection(widget.categories[index].id));
+    final selection = _CategorySelection(widget.categories[index].id);
+    setState(() => _focusedIndex = index);
+    if (!context.appUsesLiquidGlass ||
+        MediaQuery.disableAnimationsOf(context)) {
+      widget.onSelected(selection);
+      return;
+    }
+    Future<void>.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) widget.onSelected(selection);
+    });
   }
 
-  void _finishPointer(
-    Offset position,
-    double cellWidth,
-    double spacing,
-  ) {
+  void _finishPointer(Offset position, double cellWidth, double spacing) {
     final origin = _pointerOrigin;
     final moved = origin != null && (position - origin).distance > 12;
-    final scrolled = _scrollController.hasClients &&
+    final scrolled =
+        _scrollController.hasClients &&
         (_scrollController.offset - _scrollOffsetAtPointerDown).abs() > 2;
     final index = _nearestIndex(
       position,
@@ -2400,7 +2442,7 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
     setState(() {
       _pointer = null;
       _pointerOrigin = null;
-      _focusedIndex = null;
+      _focusedIndex = _selectedIndex;
     });
     if (moved && !scrolled && widget.categories.isNotEmpty) {
       _selectIndex(index);
@@ -2433,108 +2475,148 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
           onPointerCancel: (_) => setState(() {
             _pointer = null;
             _pointerOrigin = null;
-            _focusedIndex = null;
+            _focusedIndex = _selectedIndex;
           }),
           onPointerUp: (event) =>
               _finishPointer(event.localPosition, cellWidth, spacing),
-          child: GridView.builder(
-            controller: _scrollController,
-            padding: EdgeInsets.zero,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: widget.columns,
-              crossAxisSpacing: spacing,
-              mainAxisExtent: widget.rowHeight,
-            ),
-            itemCount: widget.categories.length,
-            itemBuilder: (context, index) {
-              final category = widget.categories[index];
-              final selected = widget.selectedId == category.id;
-              final focused = _focusedIndex == index;
-              final row = index ~/ widget.columns;
-              final column = index % widget.columns;
-              final center = Offset(
-                column * (cellWidth + spacing) + cellWidth / 2,
-                row * widget.rowHeight + widget.rowHeight / 2,
-              );
-
-              var scale = 1.0;
-              var translation = Offset.zero;
-              final pointer = _pointer;
-              if (pointer != null && !animationsDisabled) {
-                final contentPointer = Offset(
-                  pointer.dx,
-                  pointer.dy +
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
+            children: [
+              if (context.appUsesLiquidGlass && _focusedIndex != null)
+                AnimatedPositioned(
+                  key: const ValueKey('quick-subcategory-liquid-pill'),
+                  duration: animationsDisabled
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  left:
+                      (_focusedIndex! % widget.columns) * (cellWidth + spacing),
+                  top:
+                      (_focusedIndex! ~/ widget.columns) * widget.rowHeight -
                       (_scrollController.hasClients
                           ? _scrollController.offset
                           : 0),
-                );
-                final vector = center - contentPointer;
-                final distance = vector.distance;
-                final proximity = (1 - distance / 108)
-                    .clamp(0.0, 1.0)
-                    .toDouble();
-                final strength = proximity * proximity;
-                scale = 1 + .32 * strength;
-                if (distance > .5) {
-                  translation = Offset(vector.dx / distance, vector.dy / distance) *
-                      (9 * proximity * (1 - strength * .45));
-                }
-              }
-
-              return Transform.translate(
-                offset: translation,
-                transformHitTests: false,
-                child: Transform.scale(
-                  key: ValueKey('quick-subcategory-focus-${category.id}'),
-                  scale: scale,
-                  transformHitTests: false,
-                  child: Semantics(
-                    button: true,
-                    selected: selected,
-                    label: category.name,
-                    child: InkWell(
-                      key: ValueKey('quick-subcategory-${category.id}'),
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _selectIndex(index),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 2,
-                          vertical: 1,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CategoryIcon(
-                              category: category.name,
-                              iconKey: category.icon,
-                              size: 28,
-                              monochrome: true,
-                              bare: true,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              category.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: selected || focused
-                                    ? context.appPrimary
-                                    : context.appPrimaryText,
-                                fontWeight: selected || focused
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
+                  width: cellWidth,
+                  height: widget.rowHeight,
+                  child: IgnorePointer(
+                    child: AppLiquidGlassSurface(
+                      key: const ValueKey(
+                        'quick-subcategory-liquid-pill-surface',
                       ),
+                      borderRadius: 12,
+                      tint: AppBottomNavigation.capsuleTint(),
+                      blurSigma: AppBottomNavigation.capsuleBlurSigma,
+                      themeColorAccents: false,
+                      shadow: false,
+                      child: const SizedBox.expand(),
                     ),
                   ),
                 ),
-              );
-            },
+              Positioned.fill(
+                child: GridView.builder(
+                  controller: _scrollController,
+                  padding: EdgeInsets.zero,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: widget.columns,
+                    crossAxisSpacing: spacing,
+                    mainAxisExtent: widget.rowHeight,
+                  ),
+                  itemCount: widget.categories.length,
+                  itemBuilder: (context, index) {
+                    final category = widget.categories[index];
+                    final selected = widget.selectedId == category.id;
+                    final focused = _focusedIndex == index;
+                    final row = index ~/ widget.columns;
+                    final column = index % widget.columns;
+                    final center = Offset(
+                      column * (cellWidth + spacing) + cellWidth / 2,
+                      row * widget.rowHeight + widget.rowHeight / 2,
+                    );
+
+                    var scale = 1.0;
+                    var translation = Offset.zero;
+                    final pointer = _pointer;
+                    if (pointer != null && !animationsDisabled) {
+                      final contentPointer = Offset(
+                        pointer.dx,
+                        pointer.dy +
+                            (_scrollController.hasClients
+                                ? _scrollController.offset
+                                : 0),
+                      );
+                      final vector = center - contentPointer;
+                      final distance = vector.distance;
+                      final proximity = (1 - distance / 108)
+                          .clamp(0.0, 1.0)
+                          .toDouble();
+                      final strength = proximity * proximity;
+                      scale = 1 + .32 * strength;
+                      if (distance > .5) {
+                        translation =
+                            Offset(vector.dx / distance, vector.dy / distance) *
+                            (9 * proximity * (1 - strength * .45));
+                      }
+                    }
+
+                    return Transform.translate(
+                      offset: translation,
+                      transformHitTests: false,
+                      child: Transform.scale(
+                        key: ValueKey('quick-subcategory-focus-${category.id}'),
+                        scale: scale,
+                        transformHitTests: false,
+                        child: Semantics(
+                          button: true,
+                          selected: selected,
+                          label: category.name,
+                          child: InkWell(
+                            key: ValueKey('quick-subcategory-${category.id}'),
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _selectIndex(index),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                                vertical: 1,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CategoryIcon(
+                                    category: category.name,
+                                    iconKey: category.icon,
+                                    size: 24,
+                                    monochrome: true,
+                                    bare: true,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    category.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: selected || focused
+                                          ? context.appPrimary
+                                          : context.appPrimaryText,
+                                      fontWeight: selected || focused
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                      fontSize: 10,
+                                      height: 1.05,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -2754,7 +2836,6 @@ class _AccountPairButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visual = _accountVisual(account?.type);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -2769,15 +2850,12 @@ class _AccountPairButton extends StatelessWidget {
           children: [
             Text(
               label,
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
             ),
             SizedBox(height: 4),
             Row(
               children: [
-                Icon(visual.$1, size: 16, color: visual.$2),
+                _accountVisualWidget(account?.type, size: 16),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -2821,11 +2899,7 @@ class _NoteRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.edit_outlined,
-            size: 18,
-            color: context.appSecondaryText,
-          ),
+          Icon(Icons.edit_outlined, size: 18, color: context.appSecondaryText),
           SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -2836,10 +2910,7 @@ class _NoteRow extends StatelessWidget {
               textAlignVertical: TextAlignVertical.center,
               onTapOutside: (_) =>
                   FocusManager.instance.primaryFocus?.unfocus(),
-              style: TextStyle(
-                fontSize: 14,
-                color: context.appPrimaryText,
-              ),
+              style: TextStyle(fontSize: 14, color: context.appPrimaryText),
               decoration: InputDecoration(
                 // This is an integrated row, not a standalone form field.
                 // Explicitly neutralize the app-wide 52dp outlined field theme
@@ -2885,11 +2956,7 @@ class _NoteRow extends StatelessWidget {
     );
     final actions = Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        aiAction,
-        const SizedBox(width: 4),
-        voiceAction,
-      ],
+      children: [aiAction, const SizedBox(width: 4), voiceAction],
     );
 
     if (stacks) {

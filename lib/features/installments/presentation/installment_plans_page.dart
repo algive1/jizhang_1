@@ -198,6 +198,8 @@ class _PlanCard extends ConsumerWidget {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => openTransactionDetail(context, original),
+                  onLongPress: () =>
+                      showTransactionActions(context, ref, original),
                   child: const Text('查看原始消费'),
                 ),
               ),

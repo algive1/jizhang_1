@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/account.dart';
+import '../../../core/widgets/payment_brand_icon.dart';
 
-enum AssetGlyph { wallet, bank, alipay, house, card, tag, transfer, pie, growth }
+enum AssetGlyph {
+  wallet,
+  bank,
+  wechat,
+  alipay,
+  house,
+  card,
+  tag,
+  transfer,
+  pie,
+  growth,
+}
 
 AssetGlyph accountGlyph(Account account) => switch (account.type) {
-  AccountType.cash || AccountType.wechat => AssetGlyph.wallet,
+  AccountType.cash => AssetGlyph.wallet,
+  AccountType.wechat => AssetGlyph.wechat,
   AccountType.debitCard || AccountType.liability => AssetGlyph.bank,
   AccountType.creditCard => AssetGlyph.card,
   AccountType.alipay => AssetGlyph.alipay,
@@ -26,12 +39,39 @@ class AssetVectorIcon extends StatelessWidget {
   final bool tile;
   @override
   Widget build(BuildContext context) {
+    final brand = switch (glyph) {
+      AssetGlyph.wechat => PaymentBrand.wechat,
+      AssetGlyph.alipay => PaymentBrand.alipay,
+      _ => null,
+    };
     final base = switch (glyph) {
       AssetGlyph.bank || AssetGlyph.card => const Color(0xffff8073),
+      AssetGlyph.wechat => const Color(0xff63aa8c),
       AssetGlyph.alipay => const Color(0xff289eff),
       AssetGlyph.house => const Color(0xffffa05f),
       _ => const Color(0xff63aa8c),
     };
+    if (brand != null) {
+      if (!tile) return PaymentBrandIcon(brand: brand, size: size);
+      return Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * .18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(size * .25),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color.lerp(base, Colors.white, .18)!, base],
+          ),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: .6),
+            width: .6,
+          ),
+        ),
+        child: PaymentBrandIcon(brand: brand, size: size * .64),
+      );
+    }
     return Container(
       width: size,
       height: size,
@@ -78,7 +118,7 @@ class _GlyphPainter extends CustomPainter {
     void line(double x, double y, double xx, double yy) =>
         canvas.drawLine(Offset(x, y), Offset(xx, yy), pen);
     switch (glyph) {
-      case AssetGlyph.wallet:
+      case AssetGlyph.wallet || AssetGlyph.wechat:
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             const Rect.fromLTWH(3, 6, 18, 15),
@@ -161,7 +201,12 @@ class _GlyphPainter extends CustomPainter {
       case AssetGlyph.growth:
         // A rising trend line with three markers. Deliberately not a K-line /
         // candlestick: 投资管理 is a personal-asset view, not a trading app.
-        path(const [Offset(3, 18), Offset(9, 12), Offset(14, 15), Offset(21, 6)]);
+        path(const [
+          Offset(3, 18),
+          Offset(9, 12),
+          Offset(14, 15),
+          Offset(21, 6),
+        ]);
         line(21, 6, 15.5, 6);
         line(21, 6, 21, 11.5);
         for (final point in const [

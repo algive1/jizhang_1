@@ -6,6 +6,7 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/payment_brand_icon.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
@@ -521,7 +522,7 @@ class _AccountRow extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: _color(item).withValues(alpha: .13),
-                child: Icon(_icon(item), color: _color(item), size: 19),
+                child: _accountVisual(item),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -572,6 +573,13 @@ class _AccountRow extends StatelessWidget {
       );
     },
   );
+
+  Widget _accountVisual(ManagedAccount item) {
+    final brand = paymentBrandForAccountType(item.account.type);
+    return brand == null
+        ? Icon(_icon(item), color: _color(item), size: 19)
+        : PaymentBrandIcon(brand: brand, size: 19);
+  }
 
   IconData _icon(ManagedAccount item) {
     if (item.category == AccountFundCategory.restricted) {

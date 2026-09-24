@@ -109,7 +109,7 @@ class _ConsumptionCalendarPageState
         : (monthTransactions
               .where((item) => item.occurredAt.day == _selectedDay)
               .toList()
-          ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
+            ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
 
     final recordMonths =
         filtered
@@ -189,6 +189,26 @@ class _ConsumptionCalendarPageState
 
     return Scaffold(
       backgroundColor: context.appBackground,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .4,
+            ),
+            child: SingleChildScrollView(
+              child: _MonthlyOverviewCard(
+                month: _month,
+                totalExpense: totalExpense,
+                totalIncome: totalIncome,
+                balance: balance,
+                consumptionDays: dailyExpenseCents.length,
+              ),
+            ),
+          ),
+        ),
+      ),
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -273,15 +293,10 @@ class _ConsumptionCalendarPageState
                     transactions: selected,
                     accountNames: accountNames,
                     onAdd: _addForSelectedDate,
+                    onLongPress: (record) =>
+                        showTransactionActions(context, ref, record),
                   ),
                 if (selectedDate != null) const SizedBox(height: 12),
-                _MonthlyOverviewCard(
-                  month: _month,
-                  totalExpense: totalExpense,
-                  totalIncome: totalIncome,
-                  balance: balance,
-                  consumptionDays: dailyExpenseCents.length,
-                ),
               ],
             ),
           ),
@@ -317,7 +332,8 @@ class _ConsumptionCalendarPageState
   }
 
   List<DateTime> _weekDates(DateTime? selectedDate) {
-    final anchor = selectedDate ??
+    final anchor =
+        selectedDate ??
         (_isCurrentMonth ? _today : DateTime(_month.year, _month.month, 1));
     final start = anchor.subtract(Duration(days: anchor.weekday - 1));
     return List.generate(7, (index) => start.add(Duration(days: index)));
@@ -345,8 +361,8 @@ class _ConsumptionCalendarPageState
     _selectedDay = isCurrentMonth
         ? today.day
         : _viewMode == _CalendarViewMode.week
-            ? 1
-            : null;
+        ? 1
+        : null;
   });
 
   void _goToday() => setState(() {
@@ -554,14 +570,14 @@ class _HeroIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        icon: Icon(icon),
-        style: IconButton.styleFrom(
-          backgroundColor: context.appSurface.withValues(alpha: .72),
-          foregroundColor: context.appPrimaryText,
-        ),
-      );
+    onPressed: onPressed,
+    tooltip: tooltip,
+    icon: Icon(icon),
+    style: IconButton.styleFrom(
+      backgroundColor: context.appSurface.withValues(alpha: .72),
+      foregroundColor: context.appPrimaryText,
+    ),
+  );
 }
 
 class _CalendarToolbar extends StatelessWidget {
@@ -597,10 +613,7 @@ class _CalendarToolbar extends StatelessWidget {
                 onNext: onNext,
               ),
               const SizedBox(height: 8),
-              _ViewModeSegment(
-                mode: mode,
-                onChanged: onModeChanged,
-              ),
+              _ViewModeSegment(mode: mode, onChanged: onModeChanged),
             ],
           );
         }
@@ -617,10 +630,7 @@ class _CalendarToolbar extends StatelessWidget {
             const SizedBox(width: 10),
             SizedBox(
               width: 156,
-              child: _ViewModeSegment(
-                mode: mode,
-                onChanged: onModeChanged,
-              ),
+              child: _ViewModeSegment(mode: mode, onChanged: onModeChanged),
             ),
           ],
         );
@@ -644,35 +654,32 @@ class _MonthNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: onPrevious,
-            icon: const Icon(Icons.chevron_left_rounded),
-            tooltip: '上个月',
-          ),
-          Expanded(
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '${month.year}年${month.month}月',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+    children: [
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        onPressed: onPrevious,
+        icon: const Icon(Icons.chevron_left_rounded),
+        tooltip: '上个月',
+      ),
+      Expanded(
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '${month.year}年${month.month}月',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: canGoNext ? onNext : null,
-            icon: const Icon(Icons.chevron_right_rounded),
-            tooltip: '下个月',
-          ),
-        ],
-      );
+        ),
+      ),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        onPressed: canGoNext ? onNext : null,
+        icon: const Icon(Icons.chevron_right_rounded),
+        tooltip: '下个月',
+      ),
+    ],
+  );
 }
 
 class _ViewModeSegment extends StatelessWidget {
@@ -726,38 +733,38 @@ class _SegmentItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: InkWell(
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? context.appPrimary : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? context.appPrimary : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: context.appPrimary.withValues(alpha: .18),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : context.appPrimaryText,
-              ),
-            ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: context.appPrimary.withValues(alpha: .18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected
+                ? Theme.of(context).colorScheme.onPrimary
+                : context.appPrimaryText,
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _WeekdayHeader extends StatelessWidget {
@@ -765,19 +772,14 @@ class _WeekdayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: const ['一', '二', '三', '四', '五', '六', '日']
-            .map(
-              (day) => Expanded(
-                child: Center(
-                  child: Text(
-                    day,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-      );
+    children: const ['一', '二', '三', '四', '五', '六', '日']
+        .map(
+          (day) => Expanded(
+            child: Center(child: Text(day, style: TextStyle(fontSize: 12))),
+          ),
+        )
+        .toList(),
+  );
 }
 
 class _CalendarGrid extends StatelessWidget {
@@ -813,11 +815,12 @@ class _CalendarGrid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final baseCellHeight =
-            (constraints.maxWidth / 7 * 1.04).clamp(48.0, 56.0).toDouble();
+        final baseCellHeight = (constraints.maxWidth / 7 * 1.04)
+            .clamp(48.0, 56.0)
+            .toDouble();
         final textScale = MediaQuery.textScalerOf(context).scale(1);
-        final scaleExtra = (textScale - 1).clamp(0.0, 0.6).toDouble();
-        final cellHeight = baseCellHeight + scaleExtra * 24;
+        final scaleExtra = (textScale - 1).clamp(0.0, 0.8).toDouble();
+        final cellHeight = baseCellHeight + scaleExtra * 36;
         final rowCount = (dates.length / 7).ceil();
 
         return SizedBox(
@@ -834,19 +837,18 @@ class _CalendarGrid extends StatelessWidget {
               final date = dates[index];
               final inMonth =
                   date.year == month.year && date.month == month.month;
-              final isFuture =
-                  date.isAfter(DateTime(today.year, today.month, today.day));
+              final isFuture = date.isAfter(
+                DateTime(today.year, today.month, today.day),
+              );
               final showData = inMonth || showDataOutsideMonth;
-              final amount =
-                  showData ? (dailyExpense[date.day] ?? 0) : 0.0;
-              final income =
-                  showData ? (dailyIncome[date.day] ?? 0) : 0.0;
-              final hasOther =
-                  showData && dailyOther.contains(date.day);
+              final amount = showData ? (dailyExpense[date.day] ?? 0) : 0.0;
+              final income = showData ? (dailyIncome[date.day] ?? 0) : 0.0;
+              final hasOther = showData && dailyOther.contains(date.day);
               final intensity = maxDailyExpense == 0
                   ? 0.0
                   : (amount / maxDailyExpense).clamp(0.0, 1.0);
-              final selected = selectedDate != null &&
+              final selected =
+                  selectedDate != null &&
                   DateUtils.isSameDay(date, selectedDate);
 
               return _CalendarDateCell(
@@ -898,8 +900,8 @@ class _CalendarDateCell extends StatelessWidget {
     final amountLabel = expense > 0
         ? '¥${expense.toStringAsFixed(2)}'
         : income > 0
-            ? '+¥${income.toStringAsFixed(2)}'
-            : null;
+        ? '+¥${income.toStringAsFixed(2)}'
+        : null;
 
     Color background;
     if (selected) {
@@ -907,7 +909,8 @@ class _CalendarDateCell extends StatelessWidget {
     } else if (!inMonth) {
       background = context.appSurfaceSoft.withValues(alpha: .35);
     } else if (hasRecords) {
-      background = Color.lerp(
+      background =
+          Color.lerp(
             context.appSurface,
             context.appPrimarySoft,
             .12 + intensity * .18,
@@ -919,7 +922,8 @@ class _CalendarDateCell extends StatelessWidget {
 
     return Semantics(
       button: onTap != null,
-      label: '${date.month}月${date.day}日'
+      label:
+          '${date.month}月${date.day}日'
           '${expense > 0 ? '，支出${expense.toStringAsFixed(2)}元' : ''}'
           '${income > 0 ? '，收入${income.toStringAsFixed(2)}元' : ''}',
       child: GestureDetector(
@@ -933,16 +937,14 @@ class _CalendarDateCell extends StatelessWidget {
             borderRadius: BorderRadius.circular(11),
             border: selected
                 ? null
-                : Border.all(
-                    color: context.appDivider.withValues(alpha: .22),
-                  ),
+                : Border.all(color: context.appDivider.withValues(alpha: .22)),
           ),
           child: Opacity(
             opacity: isFuture
                 ? .34
                 : inMonth
-                    ? 1
-                    : .42,
+                ? 1
+                : .42,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
@@ -968,8 +970,9 @@ class _CalendarDateCell extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color:
-                                selected ? selectedText : context.appPrimaryText,
+                            color: selected
+                                ? selectedText
+                                : context.appPrimaryText,
                           ),
                         ),
                       ),
@@ -1060,10 +1063,7 @@ class _CalendarInlineStats extends StatelessWidget {
               ),
               SizedBox(
                 width: itemWidth,
-                child: _InlineStat(
-                  label: '消费天数',
-                  value: '$consumptionDays天',
-                ),
+                child: _InlineStat(label: '消费天数', value: '$consumptionDays天'),
               ),
               SizedBox(
                 width: itemWidth,
@@ -1086,11 +1086,7 @@ class _CalendarInlineStats extends StatelessWidget {
 }
 
 class _InlineStat extends StatelessWidget {
-  const _InlineStat({
-    required this.label,
-    required this.value,
-    this.helper,
-  });
+  const _InlineStat({required this.label, required this.value, this.helper});
 
   final String label;
   final String value;
@@ -1098,37 +1094,28 @@ class _InlineStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: context.appSecondaryText,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (helper != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              helper!,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
-            ),
-          ],
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+      if (helper != null) ...[
+        const SizedBox(height: 2),
+        Text(
+          helper!,
+          style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+        ),
+      ],
+    ],
+  );
 }
 
 class _CalendarFooter extends StatelessWidget {
@@ -1164,10 +1151,7 @@ class _CalendarFooter extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 visualDensity: VisualDensity.compact,
               ),
-              child: const Text(
-                '回到今天',
-                style: TextStyle(fontSize: 12),
-              ),
+              child: const Text('回到今天', style: TextStyle(fontSize: 12)),
             ),
           ],
         );
@@ -1226,11 +1210,7 @@ class _CompactBookFilter extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (selected == null)
-                Icon(
-                  Icons.all_inclusive,
-                  size: 14,
-                  color: context.appPrimary,
-                )
+                Icon(Icons.all_inclusive, size: 14, color: context.appPrimary)
               else
                 BookColorDot(book: selected, size: 8),
               const SizedBox(width: 5),
@@ -1257,47 +1237,35 @@ class _CalendarLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: const [
-          _CalendarLegendItem(
-            color: Color(0xFFFF7A45),
-            label: '支出',
-          ),
-          _CalendarLegendItem(
-            color: Color(0xFF5BAE61),
-            label: '收入',
-          ),
-          _CalendarLegendItem(
-            color: Color(0xFF3FA7E8),
-            label: '有记账',
-          ),
-        ],
-      );
+    spacing: 8,
+    runSpacing: 4,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: const [
+      _CalendarLegendItem(color: Color(0xFFFF7A45), label: '支出'),
+      _CalendarLegendItem(color: Color(0xFF5BAE61), label: '收入'),
+      _CalendarLegendItem(color: Color(0xFF3FA7E8), label: '有记账'),
+    ],
+  );
 }
 
 class _CalendarLegendItem extends StatelessWidget {
-  const _CalendarLegendItem({
-    required this.color,
-    required this.label,
-  });
+  const _CalendarLegendItem({required this.color, required this.label});
 
   final Color color;
   final String label;
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _CalendarDot(color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 10, color: context.appSecondaryText),
-          ),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _CalendarDot(color: color),
+      const SizedBox(width: 4),
+      Text(
+        label,
+        style: TextStyle(fontSize: 10, color: context.appSecondaryText),
+      ),
+    ],
+  );
 }
 
 class _CalendarDot extends StatelessWidget {
@@ -1307,10 +1275,10 @@ class _CalendarDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: 6,
+    height: 6,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }
 
 class _SelectedDayCard extends StatelessWidget {
@@ -1319,20 +1287,19 @@ class _SelectedDayCard extends StatelessWidget {
     required this.transactions,
     required this.accountNames,
     required this.onAdd,
+    required this.onLongPress,
   });
 
   final DateTime date;
   final List<TransactionRecord> transactions;
   final Map<String, String> accountNames;
   final VoidCallback onAdd;
+  final ValueChanged<TransactionRecord> onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final expense = transactions
-        .where(
-          (item) =>
-              item.isConsumptionExpense && item.netExpenseAmount > 0,
-        )
+        .where((item) => item.isConsumptionExpense && item.netExpenseAmount > 0)
         .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
     final income = transactions
         .where((item) => item.isIncome)
@@ -1356,10 +1323,7 @@ class _SelectedDayCard extends StatelessWidget {
               const SizedBox(width: 7),
               Text(
                 '周${weekdays[date.weekday - 1]}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.appSecondaryText,
-                ),
+                style: TextStyle(fontSize: 12, color: context.appSecondaryText),
               ),
               const Spacer(),
               Flexible(
@@ -1409,26 +1373,25 @@ class _SelectedDayCard extends StatelessWidget {
               ),
             )
           else
-            ...transactions.asMap().entries.map(
-              (entry) {
-                final record = entry.value;
-                final source = accountNames[record.accountId];
-                final destination = record.destinationAccountId == null
+            ...transactions.asMap().entries.map((entry) {
+              final record = entry.value;
+              final source = accountNames[record.accountId];
+              final destination = record.destinationAccountId == null
+                  ? null
+                  : accountNames[record.destinationAccountId!];
+              return TransactionTile(
+                transaction: record,
+                showDate: false,
+                showDivider: entry.key != transactions.length - 1,
+                accountName: source == null
                     ? null
-                    : accountNames[record.destinationAccountId!];
-                return TransactionTile(
-                  transaction: record,
-                  showDate: false,
-                  showDivider: entry.key != transactions.length - 1,
-                  accountName: source == null
-                      ? null
-                      : destination == null
-                      ? source
-                      : '$source → $destination',
-                  onTap: () => openTransactionDetail(context, record),
-                );
-              },
-            ),
+                    : destination == null
+                    ? source
+                    : '$source → $destination',
+                onTap: () => openTransactionDetail(context, record),
+                onLongPress: () => onLongPress(record),
+              );
+            }),
           const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,
@@ -1486,10 +1449,7 @@ class _MonthlyOverviewCard extends StatelessWidget {
               final range = Text(
                 '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
                 ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.appSecondaryText,
-                ),
+                style: TextStyle(fontSize: 11, color: context.appSecondaryText),
               );
               const title = Text(
                 '本月概览',
@@ -1499,11 +1459,7 @@ class _MonthlyOverviewCard extends StatelessWidget {
               if (textScale > 1.2 || constraints.maxWidth < 300) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    title,
-                    const SizedBox(height: 4),
-                    range,
-                  ],
+                  children: [title, const SizedBox(height: 4), range],
                 );
               }
 
@@ -1584,51 +1540,45 @@ class _MonthlyMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                maxLines: 1,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
-            ),
-            const SizedBox(height: 9),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: SizedBox(
-                height: 5,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ColoredBox(color: context.appSurfaceSoft),
-                    FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: progress.clamp(0.0, 1.0).toDouble(),
-                      child: ColoredBox(color: color),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(horizontal: 7),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
         ),
-      );
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+        ),
+        const SizedBox(height: 9),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 5,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: context.appSurfaceSoft),
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: progress.clamp(0.0, 1.0).toDouble(),
+                  child: ColoredBox(color: color),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 String _formatMoneyLabel(double value) {
@@ -1641,9 +1591,6 @@ class _MetricDivider extends StatelessWidget {
   const _MetricDivider();
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 54,
-        color: context.appDivider,
-      );
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 54, color: context.appDivider);
 }

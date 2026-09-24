@@ -359,6 +359,8 @@ class InvestmentHoldingEntries extends Table {
   RealColumn get averageCost => real()();
   TextColumn get note => text().nullable()();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  BoolColumn get includeInHomeNetAssets =>
+      boolean().withDefault(const Constant(false))();
 
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -740,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -952,6 +954,16 @@ class AppDatabase extends _$AppDatabase {
         if (from < 21) {
           await _createAccountManagementSchema();
           await installSyncSchema();
+        }
+        if (from < 22 &&
+            !await _hasColumn(
+              'investment_holdings',
+              'include_in_home_net_assets',
+            )) {
+          await migrator.addColumn(
+            investmentHoldingEntries,
+            investmentHoldingEntries.includeInHomeNetAssets,
+          );
         }
       });
     },

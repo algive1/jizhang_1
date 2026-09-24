@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_form.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../data/finance_center_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
@@ -18,10 +19,11 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
   int _tab = 0;
   int _revision = 0;
 
-  FinanceCenterRepository get _repo => ref.read(financeCenterRepositoryProvider);
-  String get _bookId =>
-      (ref.read(financeCenterRepositoryProvider) as DriftFinanceCenterRepository)
-          .bookId;
+  FinanceCenterRepository get _repo =>
+      ref.read(financeCenterRepositoryProvider);
+  String get _bookId => (ref.read(
+    financeCenterRepositoryProvider,
+  ) as DriftFinanceCenterRepository).bookId;
 
   @override
   Widget build(BuildContext context) {
@@ -188,20 +190,17 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
     if (yes == true) await _run(action, '已删除');
   }
 
-  Future<void> _run(
-    Future<void> Function() action,
-    String message,
-  ) async {
+  Future<void> _run(Future<void> Function() action, String message) async {
     try {
       await action();
       if (!mounted) return;
       setState(() => _revision++);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } on Object catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('操作失败：$error')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('操作失败：$error')));
     }
   }
 }
@@ -267,7 +266,9 @@ class _TaxList extends StatelessWidget {
     builder: (item) => AppCard(
       child: ListTile(
         contentPadding: EdgeInsets.zero,
-        leading: const CircleAvatar(child: Icon(Icons.account_balance_outlined)),
+        leading: const CircleAvatar(
+          child: Icon(Icons.account_balance_outlined),
+        ),
         title: Text('${item.period} · ${item.taxType}'),
         subtitle: Text(
           '截止 ${_date(item.dueDate)} · ${_taxStatus(item.status)}'
@@ -398,10 +399,7 @@ class _RowMenu extends StatelessWidget {
           if (amountLabel != null)
             Text(
               amountLabel!,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
             ),
           Text(
             '¥${amount.toStringAsFixed(2)}',
@@ -497,10 +495,12 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
               initialValue: status,
               decoration: appFieldDecoration('状态'),
               items: InvoiceStatus.values
-                  .map((v) => DropdownMenuItem(
-                        value: v,
-                        child: Text(_invoiceStatus(v)),
-                      ))
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(_invoiceStatus(v)),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => status = v ?? status,
             ),
@@ -605,10 +605,10 @@ class _TaxDialogState extends State<_TaxDialog> {
               initialValue: status,
               decoration: appFieldDecoration('状态'),
               items: TaxFilingStatus.values
-                  .map((v) => DropdownMenuItem(
-                        value: v,
-                        child: Text(_taxStatus(v)),
-                      ))
+                  .map(
+                    (v) =>
+                        DropdownMenuItem(value: v, child: Text(_taxStatus(v))),
+                  )
                   .toList(),
               onChanged: (v) => status = v ?? status,
             ),
@@ -758,10 +758,12 @@ class _StatementDialogState extends State<_StatementDialog> {
               initialValue: status,
               decoration: appFieldDecoration('状态'),
               items: CardStatementStatus.values
-                  .map((v) => DropdownMenuItem(
-                        value: v,
-                        child: Text(_statementStatus(v)),
-                      ))
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(_statementStatus(v)),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => status = v ?? status,
             ),
@@ -785,8 +787,7 @@ class _StatementDialogState extends State<_StatementDialog> {
             double.tryParse(paid.text.trim()) ?? 0,
           ];
           if (account.text.trim().isEmpty ||
-              !RegExp(r'^\d{4}-(0[1-9]|1[0-2])$')
-                  .hasMatch(month.text.trim()) ||
+              !RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(month.text.trim()) ||
               values.skip(2).any((v) => v < 0)) {
             _invalid(context, '请检查账户、月份与金额');
             return;
@@ -818,17 +819,15 @@ class _StatementDialogState extends State<_StatementDialog> {
 
 const _financeFieldHeight = 52.0;
 
-InputDecoration _financeDecoration({
-  String? hintText,
-  Widget? suffixIcon,
-}) => InputDecoration(
-  hintText: hintText,
-  floatingLabelBehavior: FloatingLabelBehavior.never,
-  isDense: true,
-  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-  constraints: const BoxConstraints(minHeight: _financeFieldHeight),
-  suffixIcon: suffixIcon,
-);
+InputDecoration _financeDecoration({String? hintText, Widget? suffixIcon}) =>
+    InputDecoration(
+      hintText: hintText,
+      floatingLabelBehavior: FloatingLabelBehavior.never,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      constraints: const BoxConstraints(minHeight: _financeFieldHeight),
+      suffixIcon: suffixIcon,
+    );
 
 Widget _field(
   TextEditingController controller,
@@ -850,7 +849,11 @@ Widget _field(
 );
 
 class _DateField extends StatelessWidget {
-  const _DateField({required this.label, required this.value, required this.onChanged});
+  const _DateField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
   final String label;
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
@@ -864,11 +867,11 @@ class _DateField extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: value,
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
+          final picked = await AppDatePicker.show(
+            context,
+            value,
+            minimumDate: DateTime(2000),
+            maximumDate: DateTime(2100),
           );
           if (picked != null) onChanged(picked);
         },
@@ -880,7 +883,10 @@ class _DateField extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 12, color: context.appSecondaryText)),
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: context.appSecondaryText),
+              ),
               const SizedBox(height: 2),
               Text(_date(value)),
             ],
@@ -892,7 +898,8 @@ class _DateField extends StatelessWidget {
 }
 
 void _invalid(BuildContext context, String message) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
 
 String _date(DateTime value) =>
     '${value.year}-${value.month.toString().padLeft(2, '0')}-'

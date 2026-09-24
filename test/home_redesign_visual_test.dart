@@ -7,6 +7,65 @@ import 'package:jizhang_app/core/widgets/sliding_segmented_control.dart';
 import 'package:jizhang_app/features/home/presentation/home_cards.dart';
 
 void main() {
+  testWidgets('active home goal surface padding accepts taps', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var goalTaps = 0;
+    final goal = Goal(
+      id: 'goal',
+      name: '储蓄目标',
+      icon: 'savings',
+      targetAmount: 10000,
+      currentAmount: 1000,
+      targetDate: DateTime(2027),
+      status: GoalStatus.active,
+      createdAt: DateTime(2026),
+      milestones: const [],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 357,
+              child: HomeSpendingGoalCard(
+                snapshot: DashboardSnapshot(
+                  safeToSpend: 100,
+                  forecastBalance: 100,
+                  hasBudget: true,
+                  month: DateTime(2026, 9),
+                  income: 1000,
+                  expense: 900,
+                  budgetAmount: 1000,
+                  availableAmount: 100,
+                  remainingDays: 10,
+                  goalReservation: 0,
+                ),
+                goal: goal,
+                onBudget: () {},
+                onGoal: () => goalTaps++,
+                onCalculation: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final goalArea = find.byKey(const ValueKey('home-goal-area'));
+    final rect = tester.getRect(goalArea);
+    final panelRect = tester.getRect(
+      find.byKey(const ValueKey('home-goal-panel')),
+    );
+    // This is inside the target panel's right padding, just outside the
+    // content-sized InkWell.
+    await tester.tapAt(Offset(panelRect.right - 8, rect.center.dy));
+
+    expect(goalTaps, 1);
+  });
+
   for (final hasBudget in [true, false]) {
     for (final hasGoal in [true, false]) {
       testWidgets(

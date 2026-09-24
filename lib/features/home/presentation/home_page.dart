@@ -306,7 +306,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 HomeAssetCard(
                   accounts: accountsForAssetTotal,
                   investmentByCurrency: ref.watch(
-                    investmentValueByCurrencyProvider,
+                    includedInvestmentValueByCurrencyProvider,
                   ),
                   amountHidden: visibility.assets,
                   onAmountHiddenChanged: (hidden) => ref

@@ -179,6 +179,11 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                     showDate: true,
                     showDivider: entry.key != transactions.length - 1,
                     onTap: () => openTransactionDetail(context, entry.value),
+                    onLongPress: () => showTransactionActions(
+                      context,
+                      ref,
+                      entry.value,
+                    ),
                   );
                 }).toList(),
               ),

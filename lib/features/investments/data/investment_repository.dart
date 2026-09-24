@@ -36,6 +36,7 @@ class AddInvestmentRequest {
     this.currentPrice,
     this.market,
     this.currency = InvestmentConfig.defaultCurrency,
+    this.includeInHomeNetAssets = false,
   });
 
   final InvestmentAssetType type;
@@ -55,6 +56,7 @@ class AddInvestmentRequest {
 
   final String? market;
   final String currency;
+  final bool includeInHomeNetAssets;
 }
 
 /// Input for appending a transaction to an existing holding.
@@ -353,6 +355,7 @@ class DriftInvestmentRepository implements InvestmentRepository {
           accountId: row.accountId,
           note: row.note,
           isArchived: row.isArchived,
+          includeInHomeNetAssets: row.includeInHomeNetAssets,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         ),
@@ -430,6 +433,7 @@ class DriftInvestmentRepository implements InvestmentRepository {
           quantity: request.quantity,
           averageCost: request.price,
           note: Value(request.note),
+          includeInHomeNetAssets: Value(request.includeInHomeNetAssets),
           createdAt: now,
           updatedAt: now,
         ),
@@ -881,6 +885,22 @@ final investmentValueByCurrencyProvider = Provider<Map<String, double>>((ref) {
   }
   return totals;
 });
+
+/// Market value of holdings opted into the homepage's account net assets.
+/// Investment management continues to use the complete portfolio above.
+final includedInvestmentValueByCurrencyProvider =
+    Provider<Map<String, double>>((ref) {
+      final positions = ref.watch(investmentPortfolioProvider).value?.positions;
+      if (positions == null || positions.isEmpty) return const {};
+      final totals = <String, double>{};
+      for (final position in positions) {
+        if (!position.holding.includeInHomeNetAssets) continue;
+        final currency = position.holding.asset.currency.toUpperCase();
+        final value = position.marketValue;
+        totals.update(currency, (v) => v + value, ifAbsent: () => value);
+      }
+      return totals;
+    });
 
 /// Stored once-per-day snapshots for the 投资资产趋势 chart.
 ///

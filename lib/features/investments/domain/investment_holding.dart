@@ -14,6 +14,7 @@ class InvestmentHolding {
     this.note,
     this.bookId = 'book-personal',
     this.isArchived = false,
+    this.includeInHomeNetAssets = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -31,6 +32,7 @@ class InvestmentHolding {
   final String? note;
   final String bookId;
   final bool isArchived;
+  final bool includeInHomeNetAssets;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -55,6 +57,7 @@ class InvestmentHolding {
     bool clearAccountId = false,
     String? note,
     bool? isArchived,
+    bool? includeInHomeNetAssets,
     DateTime? updatedAt,
   }) => InvestmentHolding(
     id: id,
@@ -65,6 +68,8 @@ class InvestmentHolding {
     note: note ?? this.note,
     bookId: bookId,
     isArchived: isArchived ?? this.isArchived,
+    includeInHomeNetAssets:
+        includeInHomeNetAssets ?? this.includeInHomeNetAssets,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );

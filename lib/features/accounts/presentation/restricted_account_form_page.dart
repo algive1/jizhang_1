@@ -7,6 +7,7 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../data/account_management_repository.dart';
 import '../domain/account_management.dart';
 import 'account_management_visuals.dart';
@@ -57,9 +58,8 @@ class _RestrictedAccountFormPageState
               child: Text(
                 '新增账户',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 48),
@@ -162,8 +162,7 @@ class _RestrictedAccountFormPageState
                       labelText: '平台 / 机构名称 *',
                       hintText: '请输入实际平台或机构名称',
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty
+                    validator: (value) => value == null || value.trim().isEmpty
                         ? '请填写平台或机构名称'
                         : null,
                   ),
@@ -197,8 +196,7 @@ class _RestrictedAccountFormPageState
                   ],
                   onChanged: _saving
                       ? null
-                      : (value) =>
-                            setState(() => _status = value ?? _status),
+                      : (value) => setState(() => _status = value ?? _status),
                 ),
                 const SizedBox(height: 14),
                 InkWell(
@@ -254,7 +252,10 @@ class _RestrictedAccountFormPageState
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ],
         const SizedBox(height: 18),
         FilledButton(
@@ -289,11 +290,11 @@ class _RestrictedAccountFormPageState
 
   Future<void> _pickExpectedDate() async {
     final now = DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _expectedReturnAt ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 20),
+    final selected = await AppDatePicker.show(
+      context,
+      _expectedReturnAt ?? now,
+      minimumDate: DateTime(now.year - 1),
+      maximumDate: DateTime(now.year + 20),
     );
     if (selected != null) setState(() => _expectedReturnAt = selected);
   }

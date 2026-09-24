@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/payment_brand_icon.dart';
 import '../data/membership_catalog.dart';
 import '../domain/commercial_service_contracts.dart';
 
@@ -23,8 +24,8 @@ const memberCardShadows = <BoxShadow>[
 
 /// Brand assets are kept in the membership asset folder so the same payment
 /// marks can be reused by order history and other checkout surfaces.
-const memberWechatPayAsset = '${memberAssets}wechat-pay.png';
-const memberAlipayAsset = '${memberAssets}alipay.png';
+const memberWechatPayAsset = paymentWechatAsset;
+const memberAlipayAsset = paymentAlipayAsset;
 
 class MembershipHero extends StatelessWidget {
   const MembershipHero({super.key});
@@ -775,7 +776,13 @@ class _PaymentMethodCard extends StatelessWidget {
                   color: color.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: PaymentBrandIcon(asset: asset, fallbackColor: color),
+                child: PaymentBrandIcon(
+                  brand: asset == memberWechatPayAsset
+                      ? PaymentBrand.wechat
+                      : PaymentBrand.alipay,
+                  size: 29,
+                  fallbackColor: color,
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -1020,33 +1027,6 @@ class MemberSectionCard extends StatelessWidget {
         SizedBox(height: childSpacing),
         child,
       ],
-    ),
-  );
-}
-
-class PaymentBrandIcon extends StatelessWidget {
-  const PaymentBrandIcon({
-    super.key,
-    required this.asset,
-    required this.fallbackColor,
-  });
-
-  final String asset;
-  final Color fallbackColor;
-
-  @override
-  Widget build(BuildContext context) => Image.asset(
-    asset,
-    fit: BoxFit.cover,
-    errorBuilder: (context, error, stackTrace) => ColoredBox(
-      color: fallbackColor.withValues(alpha: .12),
-      child: Icon(
-        asset == memberWechatPayAsset
-            ? Icons.chat_bubble_rounded
-            : Icons.account_balance_wallet_rounded,
-        color: fallbackColor,
-        size: 17,
-      ),
     ),
   );
 }
