@@ -38,7 +38,7 @@ class HoldingItem extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
           decoration: BoxDecoration(
-            color: const Color(0xF7FFFFFC),
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: context.appDivider.withValues(alpha: .7)),
           ),
