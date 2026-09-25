@@ -332,7 +332,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             ...catalog.benefits.map(
               (benefit) => ListTile(
                 dense: true,
-                leading: const Icon(Icons.check_circle, color: memberGreenFor(context)),
+                leading: Icon(Icons.check_circle, color: memberGreenFor(context)),
                 title: Text(benefit.title),
                 subtitle: Text('${benefit.subtitle}\n${benefit.detail}'),
               ),
@@ -450,8 +450,8 @@ class _MemberHeader extends StatelessWidget {
             child: TextButton(
               onPressed: onRecords,
               style: TextButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: memberInk,
+                backgroundColor: memberSurfaceFor(context),
+                foregroundColor: memberInkFor(context),
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 minimumSize: const Size(0, 32),
                 shape: RoundedRectangleBorder(
