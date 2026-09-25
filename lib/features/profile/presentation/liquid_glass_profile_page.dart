@@ -1096,7 +1096,7 @@ class _GlassSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        padding: const EdgeInsets.fromLTRB(9, 8, 9, 9),
+        padding: const EdgeInsets.fromLTRB(6, 8, 6, 9),
         child: Column(
           children: [
             Row(
@@ -1106,8 +1106,8 @@ class _GlassSection extends StatelessWidget {
                     title,
                     style: TextStyle(
                       color: context.appPrimaryText,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1123,9 +1123,12 @@ class _GlassSection extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(trailing!),
+                        Text(
+                          trailing!,
+                          style: const TextStyle(fontSize: 11),
+                        ),
                         const SizedBox(width: 2),
-                        const Icon(Icons.chevron_right_rounded, size: 18),
+                        const Icon(Icons.chevron_right_rounded, size: 16),
                       ],
                     ),
                   ),
@@ -1150,7 +1153,7 @@ class _QuickActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
-          final itemWidth = (constraints.maxWidth - 16) / 3;
+          final itemWidth = (constraints.maxWidth - 12) / 3;
           final scaledBody = MediaQuery.textScalerOf(context).scale(12);
           final textScale = (scaledBody / 12).clamp(1.0, 2.0);
           final itemHeight = 47 + (textScale - 1) * 18;
@@ -1195,7 +1198,7 @@ class _QuickActionTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(15),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(7, 5, 5, 5),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             child: Row(
               children: [
                 Container(
@@ -1233,28 +1236,24 @@ class _QuickActionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.appPrimaryText,
-                          fontSize: 10.5,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         spec.subtitle,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                         style: TextStyle(
                           color: context.appSecondaryText,
-                          fontSize: 7.7,
-                          height: 1.15,
+                          fontSize: 8.5,
+                          height: 1.1,
                         ),
                       ),
                     ],
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: context.appSecondaryText.withValues(alpha: .58),
-                  size: 14,
                 ),
               ],
             ),

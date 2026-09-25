@@ -57,6 +57,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('常用功能'), findsOneWidget);
+      final sectionTitle = tester.widget<Text>(find.text('常用功能'));
+      expect(sectionTitle.style?.fontSize, 16);
+      expect(sectionTitle.style?.fontWeight, FontWeight.w700);
+
+      expect(find.text('多账本管理'), findsOneWidget);
+      expect(find.text('多平台导入'), findsOneWidget);
+      expect(find.text('收支分类'), findsOneWidget);
+      expect(find.text('预算规划'), findsOneWidget);
+      expect(find.text('个性主题'), findsOneWidget);
+      expect(find.text('智能识别'), findsOneWidget);
+
+      final billImportTitle = tester.widget<Text>(find.text('账单导入'));
+      expect(billImportTitle.style?.fontSize, 11.5);
+      final billImportSubtitle = tester.widget<Text>(find.text('多平台导入'));
+      expect(billImportSubtitle.maxLines, 1);
+      expect(billImportSubtitle.style?.fontSize, 8.5);
+
       expect(find.byKey(const ValueKey('profile-dark-mode')), findsOneWidget);
       expect(tester.takeException(), isNull);
 
