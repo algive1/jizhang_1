@@ -239,7 +239,6 @@ class _ConsumptionCalendarPageState
         : all
             .where((item) => item.bookId == effectiveBookFilterId)
             .toList(growable: false);
-    final monthTransactions = <TransactionRecord>[];
     final transactionsByDay = <int, List<TransactionRecord>>{};
     final dailyExpense = <int, double>{};
     final dailyIncome = <int, double>{};
@@ -255,7 +254,6 @@ class _ConsumptionCalendarPageState
       recordedMonths.add(DateTime(date.year, date.month));
       if (date.year != _month.year || date.month != _month.month) continue;
 
-      monthTransactions.add(item);
       transactionsByDay.putIfAbsent(date.day, () => []).add(item);
       if (_isConsumption(item)) {
         final cents = (item.netExpenseAmount * 100).round();
@@ -304,7 +302,6 @@ class _ConsumptionCalendarPageState
 
     final data = _CalendarMonthData(
       filtered: filtered,
-      monthTransactions: monthTransactions,
       transactionsByDay: transactionsByDay,
       dailyExpense: dailyExpense,
       dailyIncome: dailyIncome,
@@ -531,7 +528,6 @@ class _ConsumptionCalendarPageState
 class _CalendarMonthData {
   const _CalendarMonthData({
     required this.filtered,
-    required this.monthTransactions,
     required this.transactionsByDay,
     required this.dailyExpense,
     required this.dailyIncome,
@@ -546,7 +542,6 @@ class _CalendarMonthData {
   });
 
   final List<TransactionRecord> filtered;
-  final List<TransactionRecord> monthTransactions;
   final Map<int, List<TransactionRecord>> transactionsByDay;
   final Map<int, double> dailyExpense;
   final Map<int, double> dailyIncome;

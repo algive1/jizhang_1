@@ -703,7 +703,7 @@ double _niceCeiling(double value) {
 
 String _compactAxisMoney(double value, {String currency = 'CNY'}) {
   final absolute = value.abs();
-  final prefix = currency == 'CNY' ? '' : _currencySymbol(currency);
+  final prefix = _currencySymbol(currency);
   final sign = value < 0 ? '-' : '';
   if (absolute >= 100000000) {
     return '$sign$prefix${_trimAxis(absolute / 100000000)}亿';

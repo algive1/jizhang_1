@@ -79,7 +79,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
         ? null
         : assetHistory.positiveBalancesAt(assetTargets);
 
-    double investmentAt(DateTime date) {
+    double? investmentAt(DateTime date) {
       final day = DateTime(date.year, date.month, date.day);
       if (day == today) return currentCurrencyInvestment;
       final exact = investmentsByDay[InvestmentSnapshot.dateKey(day)];
@@ -87,7 +87,7 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
       if (currentInvestmentByCurrency.isEmpty && investmentSnapshots.isEmpty) {
         return 0;
       }
-      return exact ?? 0;
+      return exact;
     }
 
     final dailyPoints = <CashflowPoint>[
@@ -102,8 +102,9 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
             final accountAssets = day == today
                 ? currentAccountAssets
                 : historicalAccountAssets?[index];
-            if (accountAssets == null) return null;
-            return accountAssets + investmentAt(point.date);
+            final investmentAssets = investmentAt(point.date);
+            if (accountAssets == null || investmentAssets == null) return null;
+            return accountAssets + investmentAssets;
           }(),
         ),
     ];
