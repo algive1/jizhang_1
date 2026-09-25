@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
+import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/constants/app_assets.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
@@ -94,7 +96,7 @@ void main() {
           UncontrolledProviderScope(
             container: container,
             child: MaterialApp.router(
-              theme: AppTheme.light(),
+              theme: AppTheme.light(BuiltInThemes.liquidGlass),
               routerConfig: router,
               builder: (context, child) => MediaQuery(
                 data: MediaQuery.of(context).copyWith(
@@ -141,6 +143,8 @@ void main() {
         );
 
         expect(tester.getSize(brightnessToggle), const Size(92, 36));
+        expect(find.byType(LiquidGlassBatch), findsWidgets);
+        expect(find.byType(LiquidGlassLens), findsWidgets);
         expect(
           (tester.getCenter(lightMode) - tester.getCenter(sunIcon)).distance,
           lessThan(.01),
