@@ -1341,7 +1341,7 @@ class _RecommendedApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 68,
-        padding: const EdgeInsets.fromLTRB(7, 7, 7, 6),
+        padding: const EdgeInsets.fromLTRB(7, 5, 7, 5),
         decoration: BoxDecoration(
           color: Colors.white.withValues(
             alpha: Theme.of(context).brightness == Brightness.dark ? .11 : .60,
@@ -1379,18 +1379,18 @@ class _RecommendedApp extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: context.appSecondaryText, fontSize: 7.4),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Align(
                     alignment: Alignment.centerRight,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFFE2F0FF),
                         borderRadius: BorderRadius.circular(999),
