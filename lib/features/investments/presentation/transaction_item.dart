@@ -42,7 +42,10 @@ class TransactionItem extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: _tint(type),
+                color: Color.alphaBlend(
+                  _color(type).withValues(alpha: .14),
+                  context.appSurfaceSoft,
+                ),
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Icon(_icon(type), size: 17, color: _color(type)),
@@ -139,10 +142,4 @@ class TransactionItem extends StatelessWidget {
     InvestmentTransactionType.interest => const Color(0xFF7C8BD9),
   };
 
-  static Color _tint(InvestmentTransactionType type) => switch (type) {
-    InvestmentTransactionType.buy => const Color(0xFFFBEDEB),
-    InvestmentTransactionType.sell => const Color(0xFFEEF4E5),
-    InvestmentTransactionType.dividend => const Color(0xFFF8F0DE),
-    InvestmentTransactionType.interest => const Color(0xFFEDEFF9),
-  };
 }
