@@ -124,9 +124,9 @@ class _CashflowTrendCardState extends State<CashflowTrendCard> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFEFB),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF0EEE5)),
+        border: Border.all(color: context.appDivider),
         boxShadow: const [
           BoxShadow(
             color: Color(0x07000000),
