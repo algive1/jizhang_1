@@ -249,8 +249,19 @@ void main() {
     expect(find.text('账户资产'), findsOneWidget);
     expect(find.byKey(const ValueKey('profile-quick-actions-sort')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('profile-quick-toggle-bill_import')));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('profile-quick-toggle-bill_import')),
+      160,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('profile-quick-toggle-bill_import')),
+    );
     await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('profile-quick-toggle-assets')),
+      -160,
+    );
     await tester.tap(find.byKey(const ValueKey('profile-quick-toggle-assets')));
     await tester.pumpAndSettle();
 
@@ -294,6 +305,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('更多服务'), findsOneWidget);
     expect(find.text('通知设置'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('服务协议'), 180);
     expect(find.text('服务协议'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
