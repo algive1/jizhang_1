@@ -472,6 +472,8 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     }
 
     final appearance = ref.watch(effectiveThemeProvider);
+    final disableThemeAnimations =
+        MediaQueryData.fromView(View.of(context)).disableAnimations;
     final brightnessPreference =
         ref.watch(brightnessModeProvider).value ??
         AppBrightnessPreference.light;
@@ -482,6 +484,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       themeMode: brightnessPreference == AppBrightnessPreference.dark
           ? ThemeMode.dark
           : ThemeMode.light,
+      themeAnimationDuration: disableThemeAnimations
+          ? Duration.zero
+          : const Duration(milliseconds: 260),
+      themeAnimationCurve: Curves.easeOutCubic,
       routerConfig: ref.watch(appRouterProvider),
       locale: const Locale('zh', 'CN'),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,

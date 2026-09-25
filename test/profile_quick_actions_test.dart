@@ -75,6 +75,9 @@ void main() {
       expect(billImportSubtitle.style?.fontSize, 8.5);
 
       expect(find.byKey(const ValueKey('profile-dark-mode')), findsOneWidget);
+      expect(find.byKey(const ValueKey('profile-progressive-haze')), findsOneWidget);
+      expect(find.byKey(const ValueKey('profile-notifications')), findsOneWidget);
+      expect(find.byKey(const ValueKey('profile-settings')), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.byKey(const ValueKey('profile-dark-mode')));
@@ -161,7 +164,7 @@ void main() {
     );
   });
 
-  test('profile quick actions normalize incomplete stored order', () async {
+  test('profile quick actions preserve selected subset and normalize invalid ids', () async {
     final settings = _MemorySettings({
       'profile.quickActions.order.v1':
           'appearance,unknown,appearance,books',
@@ -175,15 +178,124 @@ void main() {
 
     expect(
       await container.read(profileQuickActionsProvider.future),
-      [
-        'appearance',
-        'books',
-        'bill_import',
-        'categories',
-        'budgets',
-        'autobookkeeping',
+      ['appearance', 'books'],
+    );
+  });
+
+  test('profile quick actions support add remove and six item limit', () async {
+    final settings = _MemorySettings();
+    final container = ProviderContainer(
+      overrides: [
+        appSettingsRepositoryProvider.overrideWithValue(settings),
       ],
     );
+    addTearDown(container.dispose);
+
+    await container.read(profileQuickActionsProvider.future);
+    expect(
+      await container
+          .read(profileQuickActionsProvider.notifier)
+          .toggle('bill_import'),
+      ProfileQuickActionToggleResult.removed,
+    );
+    expect(
+      await container
+          .read(profileQuickActionsProvider.notifier)
+          .toggle('assets'),
+      ProfileQuickActionToggleResult.added,
+    );
+    expect(container.read(profileQuickActionsProvider).value, contains('assets'));
+    expect(
+      await container
+          .read(profileQuickActionsProvider.notifier)
+          .toggle('family'),
+      ProfileQuickActionToggleResult.atLimit,
+    );
+  });
+
+  testWidgets('all functions page exposes selection and separate sort mode', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final db = createMemoryDatabase();
+    await DatabaseSeeder(db).seedIfNeeded(includeDemoData: true);
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        sessionProvider.overrideWithValue(const AsyncData(null)),
+      ],
+    );
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    final router = container.read(appRouterProvider);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          theme: AppTheme.light(BuiltInThemes.liquidGlass),
+          darkTheme: AppTheme.dark(BuiltInThemes.liquidGlass),
+          routerConfig: router,
+        ),
+      ),
+    );
+
+    router.go('/profile/quick-actions');
+    await tester.pumpAndSettle();
+
+    expect(find.text('全部功能'), findsOneWidget);
+    expect(find.text('账户资产'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-quick-actions-sort')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('profile-quick-toggle-bill_import')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-quick-toggle-assets')));
+    await tester.pumpAndSettle();
+
+    expect(container.read(profileQuickActionsProvider).value, contains('assets'));
+
+    await tester.tap(find.byKey(const ValueKey('profile-quick-actions-sort')));
+    await tester.pumpAndSettle();
+    expect(find.text('常用功能排序'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('profile services route exposes complete service center', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final db = createMemoryDatabase();
+    await DatabaseSeeder(db).seedIfNeeded(includeDemoData: true);
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        sessionProvider.overrideWithValue(const AsyncData(null)),
+      ],
+    );
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    final router = container.read(appRouterProvider);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          theme: AppTheme.light(BuiltInThemes.liquidGlass),
+          routerConfig: router,
+        ),
+      ),
+    );
+
+    router.go('/profile/services');
+    await tester.pumpAndSettle();
+    expect(find.text('更多服务'), findsOneWidget);
+    expect(find.text('通知设置'), findsOneWidget);
+    expect(find.text('服务协议'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

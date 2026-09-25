@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -64,7 +67,17 @@ class LiquidGlassProfilePage extends ConsumerWidget {
             ),
             children: [
               _Header(
+                dark: dark,
                 unread: unread,
+                onBrightnessChanged: (nextDark) {
+                  unawaited(
+                    ref.read(brightnessModeProvider.notifier).select(
+                      nextDark
+                          ? AppBrightnessPreference.dark
+                          : AppBrightnessPreference.light,
+                    ),
+                  );
+                },
                 onMessages: () async {
                   await context.push<void>('/profile/messages');
                   ref.invalidate(systemUnreadCountProvider);
@@ -98,7 +111,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
               const SizedBox(height: 10),
               _GlassSection(
                 title: '常用功能',
-                trailing: '管理',
+                trailing: '更多',
                 onTrailing: () => context.push('/profile/quick-actions'),
                 child: _QuickActionGrid(
                   order: quickActionOrder,
@@ -109,6 +122,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
               const _RecommendedAppsSection(),
               const SizedBox(height: 10),
               _ServicesSection(
+                onMore: () => context.push('/profile/services'),
                 onHelp: () => context.push('/profile/help'),
                 onSecurity: () => context.push('/profile/data'),
                 onAbout: () => context.push('/profile/about'),
@@ -161,6 +175,33 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         return;
       case 'autobookkeeping':
         context.push('/profile/autobookkeeping');
+        return;
+      case 'assets':
+        context.push('/profile/assets');
+        return;
+      case 'family':
+        context.push('/profile/family');
+        return;
+      case 'receipt_ocr':
+        context.push('/profile/receipt-ocr');
+        return;
+      case 'finance_center':
+        context.push('/profile/finance-center');
+        return;
+      case 'recurring_bills':
+        context.push('/profile/recurring-bills');
+        return;
+      case 'data':
+        context.push('/profile/data');
+        return;
+      case 'payment_notifications':
+        context.push('/profile/payment-notifications');
+        return;
+      case 'installments':
+        context.push('/profile/installments');
+        return;
+      case 'goals':
+        context.push('/goals');
         return;
       default:
         return;
@@ -285,142 +326,176 @@ class _ImmersiveProfileBackground extends StatelessWidget {
 
   final bool dark;
 
+  Widget _image({required bool filtered}) {
+    final image = Image.asset(
+      AppAssets.liquidGlassProfileBackground,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      filterQuality: FilterQuality.high,
+    );
+    final toned = dark
+        ? ColorFiltered(
+            colorFilter: const ColorFilter.mode(
+              Color(0xFFB49C88),
+              BlendMode.modulate,
+            ),
+            child: image,
+          )
+        : image;
+    if (!filtered) return toned;
+    return Transform.scale(
+      scale: 1.025,
+      child: ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(sigmaX: dark ? 13 : 10, sigmaY: dark ? 13 : 10),
+        child: toned,
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            AppAssets.liquidGlassProfileBackground,
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            filterQuality: FilterQuality.high,
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _image(filtered: false),
+            ShaderMask(
+              key: const ValueKey('profile-progressive-haze'),
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: dark
-                    ? [
-                        const Color(0x99110D12),
-                        const Color(0x66151217),
-                        const Color(0xB315110F),
-                      ]
-                    : [
-                        const Color(0x220C0A08),
-                        const Color(0x0FFFFFFF),
-                        const Color(0x44F5E4D0),
-                      ],
-                stops: const [0, .42, 1],
+                colors: [
+                  Color(0x00000000),
+                  Color(0x22000000),
+                  Color(0xCC000000),
+                  Color(0xFF000000),
+                ],
+                stops: [0.20, 0.38, 0.66, 1],
+              ).createShader(bounds),
+              child: _image(filtered: true),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: dark
+                      ? const [
+                          Color(0x76100D0C),
+                          Color(0x5C171310),
+                          Color(0xB81D1713),
+                          Color(0xE31C1714),
+                        ]
+                      : const [
+                          Color(0x120B0907),
+                          Color(0x0AFFFFFF),
+                          Color(0x66F4E5D4),
+                          Color(0xADF2E5D8),
+                        ],
+                  stops: const [0, .26, .60, 1],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
 }
 
-class _Header extends ConsumerWidget {
+class _Header extends StatelessWidget {
   const _Header({
+    required this.dark,
     required this.unread,
+    required this.onBrightnessChanged,
     required this.onMessages,
     required this.onSettings,
   });
 
+  final bool dark;
   final int unread;
+  final ValueChanged<bool> onBrightnessChanged;
   final VoidCallback onMessages;
   final VoidCallback onSettings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dark =
-        (ref.watch(brightnessModeProvider).value ??
-            AppBrightnessPreference.light) ==
-        AppBrightnessPreference.dark;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '你好，\n生活值得好好记录',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Kaiti SC',
-                    fontFamilyFallback: ['STKaiti', 'KaiTi', 'serif'],
-                    fontSize: 27,
-                    height: 1.08,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: .8,
-                    shadows: [
-                      Shadow(
-                        color: Color(0x66000000),
-                        blurRadius: 12,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '你好，\n生活值得好好记录',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Kaiti SC',
+                      fontFamilyFallback: ['STKaiti', 'KaiTi', 'serif'],
+                      fontSize: 27,
+                      height: 1.08,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: .8,
+                      shadows: [
+                        Shadow(
+                          color: Color(0x66000000),
+                          blurRadius: 12,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  '让每一笔收支，都通向更好的自己',
-                  style: TextStyle(
-                    color: Color(0xF2FFFFFF),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    shadows: [
-                      Shadow(
-                        color: Color(0x66000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
+                  const SizedBox(height: 6),
+                  const Text(
+                    '让每一笔收支，都通向更好的自己',
+                    style: TextStyle(
+                      color: Color(0xF2FFFFFF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      shadows: [
+                        Shadow(
+                          color: Color(0x66000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Row(
-              children: [
-                _HeaderIconButton(
-                  tooltip: '通知',
-                  onTap: onMessages,
-                  badge: unread,
-                  icon: Icons.notifications_none_rounded,
-                ),
-                const SizedBox(width: 6),
-                _HeaderIconButton(
-                  tooltip: '设置',
-                  onTap: onSettings,
-                  icon: Icons.settings_outlined,
-                ),
-              ],
-            ),
-            const SizedBox(height: 9),
-            _BrightnessToggle(
-              dark: dark,
-              onChanged: (nextDark) => ref
-                  .read(brightnessModeProvider.notifier)
-                  .select(
-                    nextDark
-                        ? AppBrightnessPreference.dark
-                        : AppBrightnessPreference.light,
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  _HeaderIconButton(
+                    key: const ValueKey('profile-notifications'),
+                    tooltip: '通知',
+                    onTap: onMessages,
+                    badge: unread,
+                    icon: Icons.notifications_none_rounded,
                   ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+                  const SizedBox(width: 6),
+                  _HeaderIconButton(
+                    key: const ValueKey('profile-settings'),
+                    tooltip: '设置',
+                    onTap: onSettings,
+                    icon: Icons.settings_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              _BrightnessToggle(
+                dark: dark,
+                onChanged: onBrightnessChanged,
+              ),
+            ],
+          ),
+        ],
+      );
 }
 
 class _HeaderIconButton extends StatelessWidget {
@@ -429,6 +504,7 @@ class _HeaderIconButton extends StatelessWidget {
     required this.onTap,
     required this.icon,
     this.badge = 0,
+    super.key,
   });
 
   final String tooltip;
@@ -442,24 +518,36 @@ class _HeaderIconButton extends StatelessWidget {
         child: SizedBox(
           width: 40,
           height: 40,
-          child: AppLiquidGlassSurface(
-            borderRadius: 22,
-            themeColorAccents: false,
-            glassOpacity: MediaQuery.highContrastOf(context) ? .72 : .16,
-            shadow: false,
-            child: InkWell(
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkResponse(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(22),
+              radius: 20,
+              containedInkWell: true,
+              customBorder: const CircleBorder(),
+              highlightColor: Colors.white.withValues(alpha: .12),
+              splashColor: Colors.white.withValues(alpha: .18),
               child: Stack(
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  const SizedBox.expand(),
-                  Icon(icon, color: Colors.white, size: 23),
+                  Icon(
+                    icon,
+                    color: Colors.white,
+                    size: 23,
+                    shadows: const [
+                      Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
                   if (badge > 0)
                     Positioned(
-                      right: 7,
-                      top: 6,
+                      right: 5,
+                      top: 5,
                       child: Container(
                         width: 9,
                         height: 9,
@@ -478,7 +566,7 @@ class _HeaderIconButton extends StatelessWidget {
       );
 }
 
-class _BrightnessToggle extends StatelessWidget {
+class _BrightnessToggle extends StatefulWidget {
   const _BrightnessToggle({
     required this.dark,
     required this.onChanged,
@@ -486,6 +574,50 @@ class _BrightnessToggle extends StatelessWidget {
 
   final bool dark;
   final ValueChanged<bool> onChanged;
+
+  @override
+  State<_BrightnessToggle> createState() => _BrightnessToggleState();
+}
+
+class _BrightnessToggleState extends State<_BrightnessToggle> {
+  Timer? _commitTimer;
+  late bool _visualDark;
+
+  @override
+  void initState() {
+    super.initState();
+    _visualDark = widget.dark;
+  }
+
+  @override
+  void didUpdateWidget(covariant _BrightnessToggle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.dark != oldWidget.dark && !_commitTimerIsActive) {
+      _visualDark = widget.dark;
+    }
+  }
+
+  bool get _commitTimerIsActive => _commitTimer?.isActive ?? false;
+
+  void _select(bool value) {
+    if (_visualDark == value && widget.dark == value) return;
+    _commitTimer?.cancel();
+    setState(() => _visualDark = value);
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
+    if (disableAnimations) {
+      widget.onChanged(value);
+      return;
+    }
+    _commitTimer = Timer(const Duration(milliseconds: 70), () {
+      if (mounted) widget.onChanged(value);
+    });
+  }
+
+  @override
+  void dispose() {
+    _commitTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -496,27 +628,28 @@ class _BrightnessToggle extends StatelessWidget {
       child: AppLiquidGlassSurface(
         borderRadius: 22,
         themeColorAccents: false,
-        glassOpacity: MediaQuery.highContrastOf(context) ? .72 : .18,
+        glassOpacity: MediaQuery.highContrastOf(context) ? .78 : .24,
         shadow: false,
         padding: const EdgeInsets.all(3),
         child: Stack(
           children: [
-            AnimatedAlign(
-              alignment:
-                  dark ? Alignment.centerRight : Alignment.centerLeft,
+            AnimatedPositioned(
+              left: _visualDark ? 45 : 0,
+              top: 0,
+              bottom: 0,
+              width: 45,
               duration: disableAnimations
                   ? Duration.zero
-                  : const Duration(milliseconds: 220),
+                  : const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
-              child: Container(
-                width: 44,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: dark
-                      ? const Color(0x99453C54)
-                      : const Color(0xDFFFF4DF),
-                  borderRadius: BorderRadius.circular(15),
+                  color: _visualDark
+                      ? const Color(0xB54B4154)
+                      : const Color(0xE8FFF2DD),
+                  borderRadius: BorderRadius.circular(17),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: .56),
+                    color: Colors.white.withValues(alpha: .58),
                   ),
                 ),
               ),
@@ -526,15 +659,15 @@ class _BrightnessToggle extends StatelessWidget {
                 Expanded(
                   child: Semantics(
                     button: true,
-                    selected: !dark,
+                    selected: !_visualDark,
                     label: '白天模式',
                     child: InkWell(
                       key: const ValueKey('profile-light-mode'),
-                      onTap: () => onChanged(false),
-                      borderRadius: BorderRadius.circular(15),
+                      onTap: () => _select(false),
+                      borderRadius: BorderRadius.circular(17),
                       child: Icon(
                         Icons.wb_sunny_rounded,
-                        color: dark
+                        color: _visualDark
                             ? const Color(0xCCFFFFFF)
                             : const Color(0xFFFF9D24),
                         size: 19,
@@ -545,12 +678,12 @@ class _BrightnessToggle extends StatelessWidget {
                 Expanded(
                   child: Semantics(
                     button: true,
-                    selected: dark,
+                    selected: _visualDark,
                     label: '夜晚模式',
                     child: InkWell(
                       key: const ValueKey('profile-dark-mode'),
-                      onTap: () => onChanged(true),
-                      borderRadius: BorderRadius.circular(15),
+                      onTap: () => _select(true),
+                      borderRadius: BorderRadius.circular(17),
                       child: Icon(
                         Icons.dark_mode_rounded,
                         color: Colors.white,
@@ -1191,7 +1324,7 @@ class _QuickActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
         color: Colors.white.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? .12 : .56,
+          alpha: Theme.of(context).brightness == Brightness.dark ? .28 : .56,
         ),
         borderRadius: BorderRadius.circular(15),
         child: InkWell(
@@ -1343,7 +1476,7 @@ class _RecommendedApp extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(7, 5, 7, 5),
         decoration: BoxDecoration(
           color: Colors.white.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark ? .11 : .60,
+            alpha: Theme.of(context).brightness == Brightness.dark ? .26 : .60,
           ),
           borderRadius: BorderRadius.circular(15),
         ),
@@ -1414,11 +1547,13 @@ class _RecommendedApp extends StatelessWidget {
 
 class _ServicesSection extends StatelessWidget {
   const _ServicesSection({
+    required this.onMore,
     required this.onHelp,
     required this.onSecurity,
     required this.onAbout,
   });
 
+  final VoidCallback onMore;
   final VoidCallback onHelp;
   final VoidCallback onSecurity;
   final VoidCallback onAbout;
@@ -1429,15 +1564,38 @@ class _ServicesSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '更多服务',
-              style: TextStyle(
-                color: context.appPrimaryText,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '更多服务',
+                    style: TextStyle(
+                      color: context.appPrimaryText,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onMore,
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.appSecondaryText,
+                    minimumSize: const Size(0, 26),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('更多', style: TextStyle(fontSize: 11)),
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded, size: 16),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             _ServiceRow(
               icon: Icons.help_outline_rounded,
               iconColor: const Color(0xFF409CF0),
@@ -1549,10 +1707,10 @@ class _GlassPanel extends StatelessWidget {
         borderRadius: 22,
         themeColorAccents: false,
         glassOpacity: MediaQuery.highContrastOf(context)
-            ? .84
+            ? .88
             : Theme.of(context).brightness == Brightness.dark
-            ? .38
-            : .58,
+            ? .68
+            : .62,
         padding: padding,
         child: child,
       );

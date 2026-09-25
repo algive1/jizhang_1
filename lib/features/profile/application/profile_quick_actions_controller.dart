@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../settings/data/app_settings_repository.dart';
 
 const _profileQuickActionOrderKey = 'profile.quickActions.order.v1';
+const profileQuickActionLimit = 6;
 
 const profileQuickActionDefaults = <String>[
   'books',
@@ -13,6 +14,26 @@ const profileQuickActionDefaults = <String>[
   'autobookkeeping',
 ];
 
+const profileQuickActionAvailableIds = <String>[
+  ...profileQuickActionDefaults,
+  'assets',
+  'family',
+  'receipt_ocr',
+  'finance_center',
+  'recurring_bills',
+  'data',
+  'payment_notifications',
+  'installments',
+  'goals',
+];
+
+enum ProfileQuickActionToggleResult {
+  added,
+  removed,
+  atLimit,
+  minimumRequired,
+}
+
 class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
   @override
   Future<List<String>> build() async {
@@ -22,7 +43,10 @@ class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
     if (raw == null || raw.trim().isEmpty) {
       return List.unmodifiable(profileQuickActionDefaults);
     }
-    return _normalize(raw.split(','));
+    final normalized = _normalize(raw.split(','));
+    return normalized.isEmpty
+        ? List.unmodifiable(profileQuickActionDefaults)
+        : normalized;
   }
 
   Future<void> reorder(int oldIndex, int newIndex) async {
@@ -37,15 +61,40 @@ class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
     await setOrder(next);
   }
 
+  Future<ProfileQuickActionToggleResult> toggle(String id) async {
+    if (!profileQuickActionAvailableIds.contains(id)) {
+      return ProfileQuickActionToggleResult.atLimit;
+    }
+    final current =
+        state.value ?? List<String>.from(profileQuickActionDefaults);
+    final next = List<String>.from(current);
+    if (next.contains(id)) {
+      if (next.length <= 1) {
+        return ProfileQuickActionToggleResult.minimumRequired;
+      }
+      next.remove(id);
+      await setOrder(next);
+      return ProfileQuickActionToggleResult.removed;
+    }
+    if (next.length >= profileQuickActionLimit) {
+      return ProfileQuickActionToggleResult.atLimit;
+    }
+    next.add(id);
+    await setOrder(next);
+    return ProfileQuickActionToggleResult.added;
+  }
+
   Future<void> setOrder(Iterable<String> order) async {
     final previous =
         state.value ?? List<String>.from(profileQuickActionDefaults);
-    final next = _normalize(order);
-    state = AsyncData(next);
+    final next = _normalize(order).take(profileQuickActionLimit).toList();
+    if (next.isEmpty) return;
+    final immutable = List<String>.unmodifiable(next);
+    state = AsyncData(immutable);
     try {
       await ref
           .read(appSettingsRepositoryProvider)
-          .set(_profileQuickActionOrderKey, next.join(','));
+          .set(_profileQuickActionOrderKey, immutable.join(','));
     } on Object {
       state = AsyncData(List.unmodifiable(previous));
       rethrow;
@@ -56,13 +105,10 @@ class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
     final seen = <String>{};
     final normalized = <String>[];
     for (final value in values) {
-      if (!profileQuickActionDefaults.contains(value) || !seen.add(value)) {
+      if (!profileQuickActionAvailableIds.contains(value) || !seen.add(value)) {
         continue;
       }
       normalized.add(value);
-    }
-    for (final value in profileQuickActionDefaults) {
-      if (seen.add(value)) normalized.add(value);
     }
     return List.unmodifiable(normalized);
   }
