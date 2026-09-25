@@ -7,6 +7,14 @@ import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
+import 'package:jizhang_app/features/investments/presentation/investment_widgets.dart';
+import 'package:jizhang_app/features/investments/presentation/investment_states.dart';
+import 'package:jizhang_app/features/investments/domain/investment_asset.dart';
+import 'package:jizhang_app/core/widgets/insight_card.dart';
+import 'package:jizhang_app/core/widgets/goal_progress_card.dart';
+import 'package:jizhang_app/core/widgets/app_card.dart';
+import 'package:jizhang_app/core/models/goal.dart';
+import 'package:jizhang_app/core/models/dashboard_snapshot.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/components/number_keyboard.dart';
 import 'package:jizhang_app/features/books/presentation/book_selector.dart';
 import 'package:jizhang_app/features/investments/data/investment_repository.dart';
@@ -190,4 +198,103 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+  testWidgets('shared finance cards use semantic dark surfaces', (tester) async {
+    final theme = _darkTheme();
+    final now = DateTime(2026, 9, 25);
+    final goal = Goal(
+      id: 'goal-dark',
+      name: '旅行基金',
+      icon: 'travel',
+      goalType: GoalType.travel,
+      targetAmount: 10000,
+      currentAmount: 3200,
+      targetDate: DateTime(2027, 6, 1),
+      status: GoalStatus.active,
+      createdAt: now,
+      milestones: const [],
+    );
+    const insight = FinancialInsight(
+      timeLabel: '本月夜间消费',
+      amount: 288,
+      increasePercent: 12,
+      description: '夜间消费较上月同期有所增加。',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: Scaffold(
+          body: ListView(
+            children: [
+              GoalProgressCard(goal: goal),
+              const InsightCard(insight: insight),
+              InvestmentEmptyState(
+                type: InvestmentAssetType.stock,
+                onAdd: _noop,
+              ),
+              const InvestmentTypeAvatar(
+                key: ValueKey('dark-investment-avatar'),
+                type: InvestmentAssetType.stock,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final goalCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('旅行基金'),
+        matching: find.byType(AppCard),
+      ).first,
+    );
+    expect(goalCard.color, isNot(const Color(0xFFF2F5E4)));
+    expect(goalCard.color!.computeLuminance(), lessThan(.2));
+
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(progress.backgroundColor, isNot(const Color(0xFFDFE7CB)));
+
+    final richText = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(InsightCard),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(
+      (richText.text as TextSpan).style?.color,
+      theme.colorScheme.onSurface,
+    );
+
+    final emptySurface = tester
+        .widgetList<Container>(
+          find.ancestor(
+            of: find.text('暂无股票持仓'),
+            matching: find.byType(Container),
+          ),
+        )
+        .map((container) => container.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((decoration) => decoration.color != null);
+    expect(emptySurface.color, theme.colorScheme.surface);
+
+    final avatarSurface = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byKey(const ValueKey('dark-investment-avatar')),
+            matching: find.byType(Container),
+          ),
+        )
+        .map((container) => container.decoration)
+        .whereType<BoxDecoration>()
+        .first;
+    expect(avatarSurface.color, isNot(InvestmentAssetType.stock.surface));
+    expect(avatarSurface.color!.computeLuminance(), lessThan(.25));
+    expect(tester.takeException(), isNull);
+  });
+
 }
+
+void _noop() {}
