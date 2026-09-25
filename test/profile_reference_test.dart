@@ -119,6 +119,42 @@ void main() {
           }
         });
         await tester.pumpAndSettle();
+
+        expect(find.text('你好，\n生活值得好好记录'), findsNothing);
+        expect(find.text('让每一笔收支，都通向更好的自己'), findsNothing);
+
+        final brightnessToggle = find.byKey(
+          const ValueKey('profile-brightness-toggle'),
+        );
+        final lightMode = find.byKey(const ValueKey('profile-light-mode'));
+        final darkMode = find.byKey(const ValueKey('profile-dark-mode'));
+        final brightnessThumb = find.byKey(
+          const ValueKey('profile-brightness-thumb'),
+        );
+        final sunIcon = find.descendant(
+          of: lightMode,
+          matching: find.byIcon(Icons.wb_sunny_rounded),
+        );
+        final moonIcon = find.descendant(
+          of: darkMode,
+          matching: find.byIcon(Icons.dark_mode_rounded),
+        );
+
+        expect(tester.getSize(brightnessToggle), const Size(92, 36));
+        expect(
+          (tester.getCenter(lightMode) - tester.getCenter(sunIcon)).distance,
+          lessThan(.01),
+        );
+        expect(
+          (tester.getCenter(darkMode) - tester.getCenter(moonIcon)).distance,
+          lessThan(.01),
+        );
+        expect(
+          (tester.getCenter(brightnessThumb) - tester.getCenter(lightMode))
+              .distance,
+          lessThan(.01),
+        );
+
         expect(tester.takeException(), isNull);
         await _capture(tester, boundary, 'profile-$width-$scale');
         await tester.drag(find.byType(ListView).first, const Offset(0, -550));
