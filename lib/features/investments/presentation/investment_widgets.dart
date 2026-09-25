@@ -50,7 +50,9 @@ class ProfitText extends StatelessWidget {
             style: TextStyle(
               fontSize: fontSize,
               fontWeight: weight,
-              color: profitColor(value),
+              color: value == 0
+                  ? context.appSecondaryText
+                  : profitColor(value),
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           );
@@ -243,7 +245,10 @@ class InvestmentTypeAvatar extends StatelessWidget {
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: type.surface,
+      color: Color.alphaBlend(
+        type.accent.withValues(alpha: .14),
+        context.appSurfaceSoft,
+      ),
       borderRadius: BorderRadius.circular(size * .3),
     ),
     child: Icon(type.icon, size: size * .52, color: type.accent),
