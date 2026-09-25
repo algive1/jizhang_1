@@ -257,12 +257,17 @@ void main() {
     );
     expect(progress.backgroundColor, isNot(const Color(0xFFDFE7CB)));
 
-    final richText = tester.widget<RichText>(
-      find.descendant(
-        of: find.byType(InsightCard),
-        matching: find.byType(RichText),
-      ),
-    );
+    final richText = tester
+        .widgetList<RichText>(
+          find.descendant(
+            of: find.byType(InsightCard),
+            matching: find.byType(RichText),
+          ),
+        )
+        .firstWhere(
+          (widget) =>
+              widget.text.toPlainText().contains('本月夜间消费'),
+        );
     expect(
       (richText.text as TextSpan).style?.color,
       theme.colorScheme.onSurface,
