@@ -417,84 +417,38 @@ class _Header extends StatelessWidget {
   final VoidCallback onSettings;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '你好，\n生活值得好好记录',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Kaiti SC',
-                      fontFamilyFallback: ['STKaiti', 'KaiTi', 'serif'],
-                      fontSize: 27,
-                      height: 1.08,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: .8,
-                      shadows: [
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 12,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    '让每一笔收支，都通向更好的自己',
-                    style: TextStyle(
-                      color: Color(0xF2FFFFFF),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      shadows: [
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.topRight,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HeaderIconButton(
+                  key: const ValueKey('profile-notifications'),
+                  tooltip: '通知',
+                  onTap: onMessages,
+                  badge: unread,
+                  icon: Icons.notifications_none_rounded,
+                ),
+                const SizedBox(width: 6),
+                _HeaderIconButton(
+                  key: const ValueKey('profile-settings'),
+                  tooltip: '设置',
+                  onTap: onSettings,
+                  icon: Icons.settings_outlined,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                children: [
-                  _HeaderIconButton(
-                    key: const ValueKey('profile-notifications'),
-                    tooltip: '通知',
-                    onTap: onMessages,
-                    badge: unread,
-                    icon: Icons.notifications_none_rounded,
-                  ),
-                  const SizedBox(width: 6),
-                  _HeaderIconButton(
-                    key: const ValueKey('profile-settings'),
-                    tooltip: '设置',
-                    onTap: onSettings,
-                    icon: Icons.settings_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 9),
-              _BrightnessToggle(
-                dark: dark,
-                onChanged: onBrightnessChanged,
-              ),
-            ],
-          ),
-        ],
+            const SizedBox(height: 8),
+            _BrightnessToggle(
+              dark: dark,
+              onChanged: onBrightnessChanged,
+            ),
+          ],
+        ),
       );
 }
 
@@ -623,78 +577,90 @@ class _BrightnessToggleState extends State<_BrightnessToggle> {
   Widget build(BuildContext context) {
     final disableAnimations = MediaQuery.disableAnimationsOf(context);
     return SizedBox(
-      width: 96,
-      height: 40,
+      key: const ValueKey('profile-brightness-toggle'),
+      width: 92,
+      height: 36,
       child: AppLiquidGlassSurface(
-        borderRadius: 22,
+        borderRadius: 18,
         themeColorAccents: false,
         glassOpacity: MediaQuery.highContrastOf(context) ? .78 : .24,
         shadow: false,
-        padding: const EdgeInsets.all(3),
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              left: _visualDark ? 45 : 0,
-              top: 0,
-              bottom: 0,
-              width: 45,
-              duration: disableAnimations
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _visualDark
-                      ? const Color(0xB54B4154)
-                      : const Color(0xE8FFF2DD),
-                  borderRadius: BorderRadius.circular(17),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .58),
-                  ),
-                ),
-              ),
-            ),
-            Row(
+        padding: const EdgeInsets.all(2),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final segmentWidth = constraints.maxWidth / 2;
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: !_visualDark,
-                    label: '白天模式',
-                    child: InkWell(
-                      key: const ValueKey('profile-light-mode'),
-                      onTap: () => _select(false),
-                      borderRadius: BorderRadius.circular(17),
-                      child: Icon(
-                        Icons.wb_sunny_rounded,
-                        color: _visualDark
-                            ? const Color(0xCCFFFFFF)
-                            : const Color(0xFFFF9D24),
-                        size: 19,
+                AnimatedPositioned(
+                  left: _visualDark ? segmentWidth : 0,
+                  top: 0,
+                  bottom: 0,
+                  width: segmentWidth,
+                  duration: disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  child: DecoratedBox(
+                    key: const ValueKey('profile-brightness-thumb'),
+                    decoration: BoxDecoration(
+                      color: _visualDark
+                          ? const Color(0xB54B4154)
+                          : const Color(0xE8FFF2DD),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .58),
                       ),
                     ),
                   ),
                 ),
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: _visualDark,
-                    label: '夜晚模式',
-                    child: InkWell(
-                      key: const ValueKey('profile-dark-mode'),
-                      onTap: () => _select(true),
-                      borderRadius: BorderRadius.circular(17),
-                      child: Icon(
-                        Icons.dark_mode_rounded,
-                        color: Colors.white,
-                        size: 18,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: !_visualDark,
+                        label: '白天模式',
+                        child: InkWell(
+                          key: const ValueKey('profile-light-mode'),
+                          onTap: () => _select(false),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Center(
+                            child: Icon(
+                              Icons.wb_sunny_rounded,
+                              color: _visualDark
+                                  ? const Color(0xCCFFFFFF)
+                                  : const Color(0xFFFF9D24),
+                              size: 19,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: _visualDark,
+                        label: '夜晚模式',
+                        child: InkWell(
+                          key: const ValueKey('profile-dark-mode'),
+                          onTap: () => _select(true),
+                          borderRadius: BorderRadius.circular(16),
+                          child: const Center(
+                            child: Icon(
+                              Icons.dark_mode_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
