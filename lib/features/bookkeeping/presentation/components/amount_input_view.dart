@@ -18,7 +18,7 @@ class AmountInputView extends StatelessWidget {
     height: 58,
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: BoxDecoration(
-      color: const Color(0xFFF3F3F3),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(
