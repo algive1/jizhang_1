@@ -74,7 +74,6 @@ class LiquidGlassProfilePage extends ConsumerWidget {
               const SizedBox(height: 10),
               _ProfileIdentity(
                 name: _profileName(accountSession),
-                membership: membership,
                 bookkeepingDays: activity.bookkeepingDays,
                 onTap: () => _openProfile(context, accountSession),
               ),
@@ -538,7 +537,7 @@ class _BrightnessToggle extends StatelessWidget {
                         color: dark
                             ? const Color(0xCCFFFFFF)
                             : const Color(0xFFFF9D24),
-                        size: 17,
+                        size: 19,
                       ),
                     ),
                   ),
@@ -572,13 +571,11 @@ class _BrightnessToggle extends StatelessWidget {
 class _ProfileIdentity extends StatelessWidget {
   const _ProfileIdentity({
     required this.name,
-    required this.membership,
     required this.bookkeepingDays,
     required this.onTap,
   });
 
   final String name;
-  final MembershipSnapshot? membership;
   final int bookkeepingDays;
   final VoidCallback onTap;
 
@@ -651,7 +648,7 @@ class _ProfileIdentity extends StatelessWidget {
                               badge,
                               style: const TextStyle(
                                 color: Color(0xFF7C4B21),
-                                fontSize: 8.8,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -825,7 +822,7 @@ class _SummaryItem extends StatelessWidget {
                     softWrap: false,
                     style: TextStyle(
                       color: context.appPrimaryText,
-                      fontSize: 8.2,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -974,7 +971,7 @@ class _MembershipPanel extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 3),
                           const Text(
                             '解锁更多高级能力，让记账更轻松',
                             style: TextStyle(
@@ -1223,7 +1220,7 @@ class _QuickActionTile extends StatelessWidget {
                   ),
                   child: Icon(spec.icon, color: Colors.white, size: 18),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
