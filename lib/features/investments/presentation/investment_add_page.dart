@@ -57,7 +57,7 @@ class _InvestmentAddPageState extends ConsumerState<InvestmentAddPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7EE),
+      backgroundColor: context.appBackground,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -176,7 +176,7 @@ class _Header extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: const Color(0xFFEDEFE0),
+            color: context.appSurfaceSoft,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Row(
@@ -349,7 +349,7 @@ class _SearchHint extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
     decoration: BoxDecoration(
-      color: const Color(0xF7FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
@@ -378,7 +378,7 @@ class _SearchEmpty extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
     decoration: BoxDecoration(
-      color: const Color(0xF7FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
@@ -410,7 +410,7 @@ class _SearchError extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
     decoration: BoxDecoration(
-      color: const Color(0xF7FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
@@ -447,7 +447,7 @@ class _SearchResultRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
         decoration: BoxDecoration(
-          color: const Color(0xF7FFFFFC),
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: context.appDivider.withValues(alpha: .7)),
         ),
