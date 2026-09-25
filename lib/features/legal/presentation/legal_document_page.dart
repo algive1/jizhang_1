@@ -62,9 +62,13 @@ class LegalDocumentsPage extends StatelessWidget {
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
       children: [
-        const Text(
+        Text(
           '请点击查看对应协议内容，阅读后点击“确定”关闭。',
-          style: TextStyle(color: context.appSecondaryText, fontSize: 13, height: 1.5),
+          style: TextStyle(
+            color: context.appSecondaryText,
+            fontSize: 13,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 12),
         _AgreementMenuCard(
@@ -104,7 +108,7 @@ class LegalDocumentsPage extends StatelessWidget {
             for (final section in document.sections) ...[
               Text(
                 section.title,
-                style: const TextStyle(
+                style: TextStyle(
                   color: context.appPrimaryText,
                   fontWeight: FontWeight.w800,
                 ),
@@ -154,7 +158,7 @@ class _AgreementMenuCard extends StatelessWidget {
                 children: [
                   Text(
                     document.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: context.appPrimaryText,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -201,7 +205,7 @@ class _LegalSectionCard extends StatelessWidget {
       children: [
         Text(
           section.title,
-          style: const TextStyle(
+          style: TextStyle(
             color: context.appPrimaryText,
             fontSize: 16,
             fontWeight: FontWeight.w800,
