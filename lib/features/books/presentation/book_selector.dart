@@ -269,6 +269,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final width = MediaQuery.sizeOf(context).width.clamp(320.0, 600.0);
     final imageHeight = width * 1095 / 1437;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final active = books.where((book) => book.id == selectedId).firstOrNull;
     final ordered = [...books];
     final previewBooks = ordered.take(3).toList();
@@ -286,7 +287,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     return Transform.translate(
       offset: Offset(0, _dragOffset),
       child: Material(
-        color: const Color(0xFFFAF7EF),
+        color: context.appSurface,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
@@ -377,7 +378,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                 _closeAndPush(context, '/transactions/search'),
                             style: ButtonStyle(
                               backgroundColor: WidgetStatePropertyAll(
-                                Color(0xFFF2EEE3),
+                                context.appSurfaceSoft,
                               ),
                               minimumSize: const WidgetStatePropertyAll(
                                 Size(36, 36),
@@ -409,9 +410,20 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: Image.asset(
-                          AppAssets.bookshelfEmpty,
-                          fit: BoxFit.fill,
+                        child: ColorFiltered(
+                          colorFilter: dark
+                              ? ColorFilter.mode(
+                                  context.appSurface.withValues(alpha: .72),
+                                  BlendMode.modulate,
+                                )
+                              : const ColorFilter.mode(
+                                  Colors.transparent,
+                                  BlendMode.dst,
+                                ),
+                          child: Image.asset(
+                            AppAssets.bookshelfEmpty,
+                            fit: BoxFit.fill,
+                          ),
                         ),
                       ),
                       Positioned(
@@ -435,7 +447,9 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                         style: TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.w700,
-                                          color: Color(0xFF57351D),
+                                          color: dark
+                                              ? context.appPrimaryText
+                                              : const Color(0xFF57351D),
                                         ),
                                       ),
                                     ),
@@ -447,8 +461,10 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: Color(0xFF76502C)
-                                            .withValues(alpha: .75),
+                                        color: dark
+                                            ? context.appSecondaryText
+                                            : const Color(0xFF76502C)
+                                                .withValues(alpha: .75),
                                         fontSize: 11,
                                       ),
                                     ),
@@ -547,23 +563,29 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                             style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w600,
-                                              color: Color(0xFF4A3524),
+                                              color: dark
+                                                  ? context.appPrimaryText
+                                                  : const Color(0xFF4A3524),
                                             ),
                                           ),
                                           Text(
                                             '创建专属账本，开始新的记账之旅',
                                             style: TextStyle(
                                               fontSize: 11,
-                                              color: Color(0xFF806B58),
+                                              color: dark
+                                                  ? context.appSecondaryText
+                                                  : const Color(0xFF806B58),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right,
-                                    color: Color(0xFF66503A),
+                                    color: dark
+                                        ? context.appSecondaryText
+                                        : const Color(0xFF66503A),
                                   ),
                                 ],
                               ),
@@ -586,9 +608,11 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                   ? '—   查看全部账本（${books.length}）   —'
                                   : '共 ${books.length} 个账本',
                               style: TextStyle(
-                                color: const Color(
-                                  0xFF76502C,
-                                ).withValues(alpha: books.length > 3 ? 1 : .72),
+                                color: dark
+                                    ? context.appSecondaryText
+                                    : const Color(0xFF76502C).withValues(
+                                        alpha: books.length > 3 ? 1 : .72,
+                                      ),
                                 fontSize: 12,
                               ),
                             ),
@@ -1417,7 +1441,7 @@ class _CreateBookSheetState extends State<_CreateBookSheet> {
   Widget build(BuildContext context) {
     final name = _nameController.text.trim();
     return Material(
-      color: const Color(0xFFFAF7EF),
+      color: context.appSurface,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           20,
