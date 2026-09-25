@@ -346,8 +346,8 @@ class InvestmentRangeSelector<T> extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: item.$1 == selected
-                          ? const Color(0xFF83A25D)
-                          : const Color(0xFFF5F6EB),
+                          ? context.appPrimary
+                          : context.appSurfaceSoft,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -359,8 +359,8 @@ class InvestmentRangeSelector<T> extends StatelessWidget {
                             ? FontWeight.w600
                             : FontWeight.w400,
                         color: item.$1 == selected
-                            ? Colors.white
-                            : const Color(0xFF888C88),
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : context.appSecondaryText,
                       ),
                     ),
                   ),
