@@ -589,7 +589,7 @@ class _CategorySummaryCard extends StatelessWidget {
                   size: 13,
                   color: summary.profitPercent == null
                       ? context.appSecondaryText
-                      : profitColor(summary.profit),
+                      : profitColor(summary.profit, context: context),
                 ),
               ),
               const SizedBox(width: 6),
