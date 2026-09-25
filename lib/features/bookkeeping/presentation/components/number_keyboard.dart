@@ -55,7 +55,7 @@ class NumberKeyboard extends StatelessWidget {
                 _digit('4'),
                 _digit('5'),
                 _digit('6'),
-                _operatorPair('+', '-'),
+                _operatorPair(context, '+', '-'),
               ],
             ),
           ),
@@ -65,7 +65,7 @@ class NumberKeyboard extends StatelessWidget {
                 _digit('7'),
                 _digit('8'),
                 _digit('9'),
-                _operatorPair('×', '÷'),
+                _operatorPair(context, '×', '÷'),
               ],
             ),
           ),
@@ -123,7 +123,11 @@ class NumberKeyboard extends StatelessWidget {
     ),
   );
 
-  Widget _operatorPair(String multiplication, String division) => Expanded(
+  Widget _operatorPair(
+    BuildContext context,
+    String multiplication,
+    String division,
+  ) => Expanded(
     child: Padding(
       padding: const EdgeInsets.all(3),
       child: Material(
@@ -201,7 +205,7 @@ class _KeypadKey extends StatelessWidget {
               ),
               child: Center(
                 child: busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
