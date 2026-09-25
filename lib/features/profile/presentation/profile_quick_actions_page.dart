@@ -110,22 +110,31 @@ class ProfileQuickActionsPage extends ConsumerWidget {
                 child: ReorderableListView.builder(
                   buildDefaultDragHandles: false,
                   itemCount: ids.length,
-                  proxyDecorator: (child, index, animation) => Material(
-                    color: Colors.transparent,
-                    elevation: 0,
-                    child: ScaleTransition(
-                      scale: Tween<double>(
-                        begin: 1,
-                        end: 1.025,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
+                  proxyDecorator: (child, index, animation) {
+                    if (MediaQuery.disableAnimationsOf(context)) {
+                      return Material(
+                        color: Colors.transparent,
+                        elevation: 0,
+                        child: child,
+                      );
+                    }
+                    return Material(
+                      color: Colors.transparent,
+                      elevation: 0,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 1,
+                          end: 1.025,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
                         ),
+                        child: child,
                       ),
-                      child: child,
-                    ),
-                  ),
+                    );
+                  },
                   onReorderItem: (oldIndex, newIndex) {
                     unawaited(
                       ref
@@ -141,8 +150,9 @@ class ProfileQuickActionsPage extends ConsumerWidget {
                       child: AppLiquidGlassSurface(
                         borderRadius: 22,
                         themeColorAccents: false,
-                        glassOpacity: Theme.of(context).brightness ==
-                                Brightness.dark
+                        glassOpacity: MediaQuery.highContrastOf(context)
+                            ? .72
+                            : Theme.of(context).brightness == Brightness.dark
                             ? .24
                             : .18,
                         padding: const EdgeInsets.symmetric(

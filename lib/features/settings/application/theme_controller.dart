@@ -39,15 +39,16 @@ final themeCatalogProvider = FutureProvider<ThemeCatalog>((ref) async {
 
   ThemeCatalog? parseCatalog(Map<String, dynamic> data) {
     try {
-      final version = (data['version'] as num?)?.toInt() ?? 1;
       final items = (data['themes'] as List? ?? const [])
           .whereType<Map>()
           .map((e) => AppThemeDefinition.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      if (version < 2 &&
-          !items.any((e) => e.id == BuiltInThemes.liquidGlass.id)) {
-        items.add(BuiltInThemes.liquidGlass);
-      }
+      // Liquid Glass is a rendering contract, not only a catalogue palette.
+      // A stale remote/cache palette must never pull the production material
+      // back to the old cool-blue appearance while the shader/navigation use
+      // the new warm sunset tokens.
+      items.removeWhere((e) => e.id == BuiltInThemes.liquidGlass.id);
+      items.add(BuiltInThemes.liquidGlass);
       if (items.any((e) => e.id == BuiltInThemes.freshGreen.id)) {
         return ThemeCatalog(items);
       }

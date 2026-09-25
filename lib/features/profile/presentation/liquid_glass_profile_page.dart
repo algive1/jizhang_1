@@ -155,7 +155,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         context.push('/profile/categories');
         return;
       case 'budgets':
-        context.push('/profile/budgets');
+        _showBudgetAndGoals(context);
         return;
       case 'appearance':
         context.push('/profile/appearance');
@@ -167,6 +167,50 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         return;
     }
   }
+
+  static Future<void> _showBudgetAndGoals(BuildContext context) =>
+      AppBottomSheet.show<void>(
+        context: context,
+        builder: (sheetContext) => Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '预算与目标',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: sheetContext.appPrimary,
+                ),
+                title: const Text('预算管理'),
+                subtitle: const Text('设置月度与分类预算'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/profile/budgets');
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.flag_outlined,
+                  color: sheetContext.appPrimary,
+                ),
+                title: const Text('目标管理'),
+                subtitle: const Text('规划储蓄与生活目标'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/goals');
+                },
+              ),
+            ],
+          ),
+        ),
+      );
 
   static String _deltaText(double current, double previous) {
     if (previous <= 0) {
@@ -400,7 +444,7 @@ class _HeaderIconButton extends StatelessWidget {
           child: AppLiquidGlassSurface(
             borderRadius: 22,
             themeColorAccents: false,
-            glassOpacity: .16,
+            glassOpacity: MediaQuery.highContrastOf(context) ? .72 : .16,
             shadow: false,
             child: InkWell(
               onTap: onTap,
@@ -451,7 +495,7 @@ class _BrightnessToggle extends StatelessWidget {
       child: AppLiquidGlassSurface(
         borderRadius: 22,
         themeColorAccents: false,
-        glassOpacity: .18,
+        glassOpacity: MediaQuery.highContrastOf(context) ? .72 : .18,
         shadow: false,
         padding: const EdgeInsets.all(3),
         child: Stack(
@@ -1107,6 +1151,9 @@ class _QuickActionGrid extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
           final itemWidth = (constraints.maxWidth - 16) / 3;
+          final scaledBody = MediaQuery.textScalerOf(context).scale(12);
+          final textScale = (scaledBody / 12).clamp(1.0, 2.0);
+          final itemHeight = 88 + (textScale - 1) * 30;
           return GridView.builder(
             itemCount: order.length,
             shrinkWrap: true,
@@ -1115,7 +1162,7 @@ class _QuickActionGrid extends StatelessWidget {
               crossAxisCount: 3,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
-              childAspectRatio: itemWidth / 88,
+              childAspectRatio: itemWidth / itemHeight,
             ),
             itemBuilder: (context, index) {
               final spec = profileQuickActionSpec(order[index]);
@@ -1493,8 +1540,11 @@ class _GlassPanel extends StatelessWidget {
   Widget build(BuildContext context) => AppLiquidGlassSurface(
         borderRadius: 25,
         themeColorAccents: false,
-        glassOpacity:
-            Theme.of(context).brightness == Brightness.dark ? .24 : .17,
+        glassOpacity: MediaQuery.highContrastOf(context)
+            ? .72
+            : Theme.of(context).brightness == Brightness.dark
+            ? .24
+            : .17,
         padding: padding,
         child: child,
       );
