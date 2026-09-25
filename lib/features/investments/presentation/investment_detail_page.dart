@@ -349,7 +349,7 @@ class _PositionHeaderCard extends StatelessWidget {
                       size: 14,
                       color: quote == null
                           ? context.appSecondaryText
-                          : profitColor(quote.change),
+                          : profitColor(quote.change, context: context),
                     ),
                     ProfitText(
                       percent: quote?.changePercent,
@@ -414,7 +414,7 @@ class _PositionHeaderCard extends StatelessWidget {
                             size: 17,
                             color: position.profitPercent == null
                                 ? context.appSecondaryText
-                                : profitColor(position.profit),
+                                : profitColor(position.profit, context: context),
                           ),
                         ),
                         const SizedBox(width: 5),
