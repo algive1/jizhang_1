@@ -436,6 +436,7 @@ class _FilterSegment extends StatelessWidget {
           final selected = entry.key == selectedIndex;
           return Expanded(
             child: GestureDetector(
+              key: ValueKey('transactions-filter-${entry.key}'),
               onTap: () => onChanged(entry.key),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
