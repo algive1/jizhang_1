@@ -351,7 +351,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         child: ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-          children: const [
+          children: [
             Text(
               '他们都在用',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -419,7 +419,7 @@ class _MemberHeader extends StatelessWidget {
               padding: EdgeInsets.only(top: topInset + (scale > 1.2 ? 5 : 4)),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Text(
                     '开通会员',
                     style: TextStyle(
