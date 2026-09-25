@@ -84,19 +84,19 @@ class InvestmentSummaryCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.savings_outlined,
                       size: 15,
-                      color: Color(0xFF6D8A4A),
+                      color: context.appPrimary,
                     ),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF5F6B52),
+                          color: context.appSecondaryText,
                         ),
                       ),
                     ),
@@ -108,9 +108,9 @@ class InvestmentSummaryCard extends StatelessWidget {
                     const SizedBox(width: 2),
                     Text(
                       '${portfolio.currency} · ${portfolio.positions.length} 笔',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
-                        color: Color(0xFF7C8570),
+                        color: context.appSecondaryText,
                       ),
                     ),
                   ],
@@ -123,7 +123,7 @@ class InvestmentSummaryCard extends StatelessWidget {
                     portfolio.investmentValue,
                     hidden: amountHidden,
                     size: 28,
-                    color: const Color(0xFF2C3A22),
+                    color: context.appPrimaryText,
                     currency: portfolio.currency,
                   ),
                 ),
@@ -195,7 +195,7 @@ class _SummaryMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 10, color: Color(0xFF7C8570)),
+          style: TextStyle(fontSize: 10, color: context.appSecondaryText),
         ),
         const SizedBox(height: 2),
         InvestmentAmountText(
@@ -233,7 +233,7 @@ class _HideToggle extends StatelessWidget {
         child: Icon(
           hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
           size: 15,
-          color: const Color(0xFF6D8A4A),
+          color: context.appPrimary,
         ),
       ),
     ),
@@ -266,7 +266,7 @@ class InvestmentCategoryCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
           decoration: BoxDecoration(
-            color: const Color(0xF5FFFFFC),
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: context.appDivider.withValues(alpha: .7)),
           ),
@@ -279,7 +279,10 @@ class InvestmentCategoryCard extends StatelessWidget {
                     width: 30,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: type.surface,
+                      color: Color.alphaBlend(
+                        type.accent.withValues(alpha: .14),
+                        context.appSurfaceSoft,
+                      ),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(type.icon, size: 16, color: type.accent),
