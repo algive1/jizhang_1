@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/theme/app_theme_tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -90,7 +92,7 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: const Color(0xFFEDEFE0),
+                color: context.appSurfaceSoft,
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
