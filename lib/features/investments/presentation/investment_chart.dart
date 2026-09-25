@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/monotone_smooth_path.dart';
 import '../../../core/widgets/privacy_amount.dart';
@@ -18,7 +17,7 @@ class InvestmentChart extends StatefulWidget {
     required this.points,
     required this.amountHidden,
     this.height = 118,
-    this.lineColor = AppColors.primary,
+    this.lineColor,
     this.valueFormatter,
     this.emptyLabel = '暂无趋势数据',
     this.keyPrefix = 'investment-chart',
@@ -28,7 +27,7 @@ class InvestmentChart extends StatefulWidget {
   final List<({DateTime date, double value})> points;
   final bool amountHidden;
   final double height;
-  final Color lineColor;
+  final Color? lineColor;
 
   /// Overrides the axis/bubble formatting (money by default).
   final String Function(double value)? valueFormatter;
@@ -70,15 +69,16 @@ class _InvestmentChartState extends State<InvestmentChart> {
         child: Center(
           child: Text(
             widget.emptyLabel,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
           ),
         ),
       );
     }
     final selected = widget.points[_activeIndex];
+    final lineColor = widget.lineColor ?? context.appPrimary;
     final label = widget.valueFormatter?.call(selected.value) ??
         '¥${MoneyFormatter.decimal(selected.value)}';
     return SizedBox(
@@ -101,7 +101,10 @@ class _InvestmentChartState extends State<InvestmentChart> {
                   painter: _InvestmentChartPainter(
                     points: widget.points,
                     selectedIndex: _activeIndex,
-                    lineColor: widget.lineColor,
+                    lineColor: lineColor,
+                    gridColor: context.appDivider,
+                    labelColor: context.appSecondaryText,
+                    markerOutlineColor: context.appSurface,
                     fontFamily: Theme.of(
                       context,
                     ).textTheme.bodySmall?.fontFamily,
@@ -121,9 +124,9 @@ class _InvestmentChartState extends State<InvestmentChart> {
                 text:
                     '${selected.date.month}/${selected.date.day} · $label',
                 hidden: widget.amountHidden,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                 ),
               ),
             ),
@@ -139,6 +142,9 @@ class _InvestmentChartPainter extends CustomPainter {
     required this.points,
     required this.selectedIndex,
     required this.lineColor,
+    required this.gridColor,
+    required this.labelColor,
+    required this.markerOutlineColor,
     this.fontFamily,
     this.valueFormatter,
   });
@@ -146,6 +152,9 @@ class _InvestmentChartPainter extends CustomPainter {
   final List<({DateTime date, double value})> points;
   final int selectedIndex;
   final Color lineColor;
+  final Color gridColor;
+  final Color labelColor;
+  final Color markerOutlineColor;
   final String? fontFamily;
   final String Function(double value)? valueFormatter;
 
@@ -174,7 +183,7 @@ class _InvestmentChartPainter extends CustomPainter {
     );
 
     final grid = Paint()
-      ..color = AppColors.divider
+      ..color = gridColor
       ..strokeWidth = .8;
     for (var row = 0; row < 3; row++) {
       final y = top + row * height / 2;
@@ -242,7 +251,7 @@ class _InvestmentChartPainter extends CustomPainter {
       current,
       3.5,
       Paint()
-        ..color = Colors.white
+        ..color = markerOutlineColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.4,
     );
@@ -285,10 +294,11 @@ class _InvestmentChartPainter extends CustomPainter {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
+        style: TextStyle(
+          color: labelColor,
           fontSize: 9,
-        ).copyWith(fontFamily: fontFamily),
+          fontFamily: fontFamily,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: maxWidth);
@@ -300,6 +310,9 @@ class _InvestmentChartPainter extends CustomPainter {
       old.points != points ||
       old.selectedIndex != selectedIndex ||
       old.lineColor != lineColor ||
+      old.gridColor != gridColor ||
+      old.labelColor != labelColor ||
+      old.markerOutlineColor != markerOutlineColor ||
       old.valueFormatter != valueFormatter;
 }
 
