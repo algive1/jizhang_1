@@ -52,97 +52,91 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         profileQuickActionDefaults;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return LiquidGlassBatch(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: _ImmersiveProfileBackground(dark: dark),
-          ),
-          SafeArea(
-            bottom: false,
-            child: ScrollConfiguration(
-              // Android's stretch overscroll temporarily moves the scroll
-              // contents into a filtered subpass. A live lens inside that
-              // subpass can no longer see the page backdrop and may flash
-              // dark at the edges, so glass lists deliberately disable the
-              // stretch while keeping the platform's normal scroll physics.
-              behavior: ScrollConfiguration.of(
-                context,
-              ).copyWith(overscroll: false),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  8,
-                  16,
-                  AppScaffold.reservedBottomInset(context),
-                ),
-                children: [
-                  _Header(
-                    dark: dark,
-                    unread: unread,
-                    onBrightnessChanged: (nextDark) {
-                      unawaited(
-                        ref.read(brightnessModeProvider.notifier).select(
-                          nextDark
-                              ? AppBrightnessPreference.dark
-                              : AppBrightnessPreference.light,
-                        ),
-                      );
-                    },
-                    onMessages: () async {
-                      await context.push<void>('/profile/messages');
-                      ref.invalidate(systemUnreadCountProvider);
-                    },
-                    onSettings: () => _showSettings(context),
-                  ),
-                  const SizedBox(height: 10),
-                  _ProfileIdentity(
-                    name: _profileName(accountSession),
-                    bookkeepingDays: activity.bookkeepingDays,
-                    onTap: () => _openProfile(context, accountSession),
-                  ),
-                  const SizedBox(height: 6),
-                  _SummaryPanel(
-                    loading: transactions.isLoading,
-                    expense: month.expense,
-                    income: month.income,
-                    expenseDelta: _deltaText(month.expense, previous.expense),
-                    incomeDelta: _deltaText(month.income, previous.income),
-                    budgetRemaining: budget?.remaining,
-                    budgetRatio: budget == null
-                        ? null
-                        : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
-                    streak: activity.streak,
-                  ),
-                  const SizedBox(height: 8),
-                  _MembershipPanel(
-                    snapshot: membership,
-                    onTap: () => context.push('/profile/membership'),
-                  ),
-                  const SizedBox(height: 10),
-                  _GlassSection(
-                    title: '常用功能',
-                    trailing: '更多',
-                    onTrailing: () => context.push('/profile/quick-actions'),
-                    child: _QuickActionGrid(
-                      order: quickActionOrder,
-                      onTap: (id) => _openQuickAction(context, ref, id),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const _RecommendedAppsSection(),
-                  const SizedBox(height: 10),
-                  _ServicesSection(
-                    onMore: () => context.push('/profile/services'),
-                    onHelp: () => context.push('/profile/help'),
-                    onSecurity: () => context.push('/profile/data'),
-                    onAbout: () => context.push('/profile/about'),
-                  ),
-                ],
-              ),
+    return LiquidGlassView(
+      key: ValueKey('profile-glass-view-$dark'),
+      // The profile background is static within a brightness mode. Capturing
+      // it once gives every scrolling lens one stable coordinate space and
+      // avoids the device-dependent Impeller batch artefact that can paint a
+      // large misplaced slab or leave card glass completely transparent.
+      backgroundWidget: _ImmersiveProfileBackground(dark: dark),
+      useImpellerBackdrop: false,
+      realTimeCapture: false,
+      useSync: true,
+      pixelRatio: .75,
+      batch: false,
+      child: SafeArea(
+        bottom: false,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              AppScaffold.reservedBottomInset(context),
             ),
+            children: [
+              _ProfileTopArea(
+                name: _profileName(accountSession),
+                bookkeepingDays: activity.bookkeepingDays,
+                dark: dark,
+                unread: unread,
+                onProfile: () => _openProfile(context, accountSession),
+                onBrightnessChanged: (nextDark) {
+                  unawaited(
+                    ref.read(brightnessModeProvider.notifier).select(
+                      nextDark
+                          ? AppBrightnessPreference.dark
+                          : AppBrightnessPreference.light,
+                    ),
+                  );
+                },
+                onMessages: () async {
+                  await context.push<void>('/profile/messages');
+                  ref.invalidate(systemUnreadCountProvider);
+                },
+                onSettings: () => _showSettings(context),
+              ),
+              const SizedBox(height: 6),
+              _SummaryPanel(
+                loading: transactions.isLoading,
+                expense: month.expense,
+                income: month.income,
+                expenseDelta: _deltaText(month.expense, previous.expense),
+                incomeDelta: _deltaText(month.income, previous.income),
+                budgetRemaining: budget?.remaining,
+                budgetRatio: budget == null
+                    ? null
+                    : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
+                streak: activity.streak,
+              ),
+              const SizedBox(height: 8),
+              _MembershipPanel(
+                snapshot: membership,
+                onTap: () => context.push('/profile/membership'),
+              ),
+              const SizedBox(height: 10),
+              _GlassSection(
+                title: '常用功能',
+                trailing: '更多',
+                onTrailing: () => context.push('/profile/quick-actions'),
+                child: _QuickActionGrid(
+                  order: quickActionOrder,
+                  onTap: (id) => _openQuickAction(context, ref, id),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const _RecommendedAppsSection(),
+              const SizedBox(height: 10),
+              _ServicesSection(
+                onMore: () => context.push('/profile/services'),
+                onHelp: () => context.push('/profile/help'),
+                onSecurity: () => context.push('/profile/data'),
+                onAbout: () => context.push('/profile/about'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -411,6 +405,90 @@ class _ImmersiveProfileBackground extends StatelessWidget {
             ),
           ],
         ),
+      );
+}
+
+class _ProfileTopArea extends StatelessWidget {
+  const _ProfileTopArea({
+    required this.name,
+    required this.bookkeepingDays,
+    required this.dark,
+    required this.unread,
+    required this.onProfile,
+    required this.onBrightnessChanged,
+    required this.onMessages,
+    required this.onSettings,
+  });
+
+  final String name;
+  final int bookkeepingDays;
+  final bool dark;
+  final int unread;
+  final VoidCallback onProfile;
+  final ValueChanged<bool> onBrightnessChanged;
+  final VoidCallback onMessages;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          // On normal phones the controls float in the freed top-right space
+          // while the identity starts much higher on the left. Narrow layouts
+          // fall back to a vertical arrangement to avoid text/control overlap.
+          if (constraints.maxWidth < 340) {
+            return Column(
+              key: const ValueKey('profile-top-area'),
+              children: [
+                _Header(
+                  dark: dark,
+                  unread: unread,
+                  onBrightnessChanged: onBrightnessChanged,
+                  onMessages: onMessages,
+                  onSettings: onSettings,
+                ),
+                const SizedBox(height: 4),
+                _ProfileIdentity(
+                  key: const ValueKey('profile-identity'),
+                  name: name,
+                  bookkeepingDays: bookkeepingDays,
+                  onTap: onProfile,
+                ),
+              ],
+            );
+          }
+
+          return SizedBox(
+            key: const ValueKey('profile-top-area'),
+            height: 116,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: _Header(
+                    dark: dark,
+                    unread: unread,
+                    onBrightnessChanged: onBrightnessChanged,
+                    onMessages: onMessages,
+                    onSettings: onSettings,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 104,
+                  top: 34,
+                  child: _ProfileIdentity(
+                    key: const ValueKey('profile-identity'),
+                    name: name,
+                    bookkeepingDays: bookkeepingDays,
+                    onTap: onProfile,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       );
 }
 
