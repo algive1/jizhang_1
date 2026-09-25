@@ -35,21 +35,22 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     final catalog = ref.watch(membershipCatalogProvider);
     final currentPlan = snapshot?.membership.plan ?? MembershipPlan.free;
     final statusBarHeight = MediaQuery.viewPaddingOf(context).top;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final selectedProduct = catalog is AsyncData<MembershipCatalog>
         ? _selectedProduct(catalog.value)
         : null;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
+      value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: memberBackgroundFor(context),
+        systemNavigationBarIconBrightness:
+            dark ? Brightness.light : Brightness.dark,
       ),
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        backgroundColor: memberBackground,
+        backgroundColor: memberBackgroundFor(context),
         bottomNavigationBar: MemberBottomPayBar(
           product: selectedProduct,
           isPaying: _isPaying,
@@ -86,9 +87,9 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                memberSurface.withValues(alpha: .38),
-                                memberSurface.withValues(alpha: .06),
-                                memberBackground,
+                                memberSurfaceFor(context).withValues(alpha: dark ? .56 : .38),
+                                memberSurfaceFor(context).withValues(alpha: dark ? .20 : .06),
+                                memberBackgroundFor(context),
                               ],
                               stops: const [0, .56, 1],
                             ),
@@ -331,7 +332,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             ...catalog.benefits.map(
               (benefit) => ListTile(
                 dense: true,
-                leading: const Icon(Icons.check_circle, color: memberGreen),
+                leading: Icon(Icons.check_circle, color: memberGreenFor(context)),
                 title: Text(benefit.title),
                 subtitle: Text('${benefit.subtitle}\n${benefit.detail}'),
               ),
@@ -350,26 +351,26 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         child: ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-          children: const [
+          children: [
             Text(
               '他们都在用',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
             ),
             SizedBox(height: 12),
             ListTile(
-              leading: Icon(Icons.person, color: memberAccent),
+              leading: Icon(Icons.person, color: memberAccentFor(context)),
               title: Text('小橙子 · ★★★★★'),
               subtitle: Text('会员的自动记账太好用了！帮我省下很多时间，消费分析也很准，现在花钱更有计划了～'),
             ),
             ListTile(
-              leading: Icon(Icons.person, color: memberAccent),
+              leading: Icon(Icons.person, color: memberAccentFor(context)),
               title: Text('阿凯 · ★★★★★'),
               subtitle: Text('用了半年，真的改变了我的消费习惯。无广告、数据同步、导出功能都很实用，强烈推荐！'),
             ),
             SizedBox(height: 8),
             Text(
               '以上为原型示例评价，当前版本没有可验证的更多评价数据。',
-              style: TextStyle(color: memberMuted, fontSize: 12),
+              style: TextStyle(color: memberMutedFor(context), fontSize: 12),
             ),
           ],
         ),
@@ -418,11 +419,11 @@ class _MemberHeader extends StatelessWidget {
               padding: EdgeInsets.only(top: topInset + (scale > 1.2 ? 5 : 4)),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Text(
                     '开通会员',
                     style: TextStyle(
-                      color: memberInk,
+                      color: memberInkFor(context),
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
                       height: 1.1,
@@ -431,7 +432,7 @@ class _MemberHeader extends StatelessWidget {
                   SizedBox(height: 5),
                   Text(
                     '更多权益 · 让记账更简单',
-                    style: TextStyle(color: memberMuted, fontSize: 11),
+                    style: TextStyle(color: memberMutedFor(context), fontSize: 11),
                   ),
                 ],
               ),
@@ -449,8 +450,8 @@ class _MemberHeader extends StatelessWidget {
             child: TextButton(
               onPressed: onRecords,
               style: TextButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: memberInk,
+                backgroundColor: memberSurfaceFor(context),
+                foregroundColor: memberInkFor(context),
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 minimumSize: const Size(0, 32),
                 shape: RoundedRectangleBorder(
@@ -535,9 +536,9 @@ class _CatalogError extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 35),
     child: Column(
       children: [
-        const Icon(Icons.cloud_off_outlined, color: memberMuted, size: 30),
+        Icon(Icons.cloud_off_outlined, color: memberMutedFor(context), size: 30),
         const SizedBox(height: 8),
-        const Text('会员配置暂时不可用', style: TextStyle(color: memberInk)),
+        Text('会员配置暂时不可用', style: TextStyle(color: memberInkFor(context))),
         TextButton(onPressed: onRetry, child: const Text('重新加载')),
       ],
     ),

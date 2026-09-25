@@ -86,7 +86,10 @@ class AssetLiabilitySection extends StatelessWidget {
                           value: ratio,
                           minHeight: 6,
                           color: assetCoral,
-                          backgroundColor: const Color(0xfffaeae4),
+                          backgroundColor: Color.alphaBlend(
+                            assetCoral.withValues(alpha: .16),
+                            context.appSurfaceSoft,
+                          ),
                         ),
                       ),
                     ),
@@ -185,8 +188,17 @@ class AssetLiabilitySection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xfffff5f0), Color(0xffffeae3)],
+                    gradient: LinearGradient(
+                      colors: [
+                        Color.alphaBlend(
+                          assetCoral.withValues(alpha: .08),
+                          context.appSurface,
+                        ),
+                        Color.alphaBlend(
+                          assetCoral.withValues(alpha: .18),
+                          context.appSurfaceSoft,
+                        ),
+                      ],
                     ),
                   ),
                   child: Row(
@@ -197,13 +209,15 @@ class AssetLiabilitySection extends StatelessWidget {
                         height: 36,
                         fit: BoxFit.contain,
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           '控制负债\n让生活更轻松',
                           style: TextStyle(
                             fontSize: 9,
                             height: 1.45,
-                            color: Color(0xff9c5749),
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Color.lerp(assetCoral, context.appPrimaryText, .28)!
+                                : const Color(0xff9c5749),
                           ),
                         ),
                       ),

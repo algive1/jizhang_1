@@ -1,15 +1,21 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
 
-/// Navigation-layer liquid glass.
+/// Shared refracting surface for the liquid-glass theme.
 ///
-/// The shader path adds a small lens bend and a five-tap softening pass to the
-/// backdrop. Skia and platforms without shader image-filter support use the
-/// same geometry and tint with a normal BackdropFilter blur.
-class AppLiquidGlassSurface extends StatefulWidget {
+/// Unlike a plain [BackdropFilter], this uses the same live
+/// [LiquidGlassLens] engine as the bottom navigation. On Impeller the shader
+/// samples the current backdrop at compositing time, so a card that moves in
+/// a scroll view keeps its refraction aligned with the content behind it
+/// instead of sampling the previous frame.
+///
+/// Put many sibling surfaces under a [LiquidGlassBatch] so they share a
+/// single backdrop read. Nested glass (for example small action tiles inside
+/// a glass card) should use its own nested batch so the inner glass can still
+/// see the outer surface that has already been painted.
+class AppLiquidGlassSurface extends StatelessWidget {
   const AppLiquidGlassSurface({
     required this.child,
     super.key,
@@ -22,7 +28,16 @@ class AppLiquidGlassSurface extends StatefulWidget {
     this.themeColorAccents = true,
     this.shadow = true,
     this.clipBehavior = Clip.antiAlias,
-  }) : assert(glassOpacity == null || (glassOpacity >= 0 && glassOpacity <= 1));
+    this.interactive = false,
+    this.distortion = .045,
+    this.distortionWidth = 22,
+    this.chromaticAberration = .0025,
+    this.magnification = 1.008,
+  })  : assert(glassOpacity == null || (glassOpacity >= 0 && glassOpacity <= 1)),
+        assert(distortion >= 0),
+        assert(distortionWidth >= 0),
+        assert(chromaticAberration >= 0),
+        assert(magnification > 0);
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -30,206 +45,123 @@ class AppLiquidGlassSurface extends StatefulWidget {
   final double borderRadius;
   final Color? tint;
 
-  /// Explicit strength for a Gaussian backdrop blur. Setting it bypasses the
-  /// five-tap shader softening so the surface can match navigation blur.
+  /// Gaussian blur inside the glass. Defaults to the same deliberately light
+  /// blur range as the navigation so background structure remains visible.
   final double? blurSigma;
 
-  /// Optional alpha coverage override for all glass gradient stops.
+  /// Alpha of the material tint. Refraction is independent of this value.
   final double? glassOpacity;
 
-  /// Whether this surface adds theme-colored shadows, tint, and rim accents.
+  /// Adds a small theme-coloured contact shadow. The optical rim itself stays
+  /// neutral so every glass surface reads as the same material.
   final bool themeColorAccents;
 
   final bool shadow;
+
+  /// Retained for the solid-theme fallback. The liquid lens owns its own clip.
   final Clip clipBehavior;
 
-  @override
-  State<AppLiquidGlassSurface> createState() => _AppLiquidGlassSurfaceState();
-}
+  /// Adds the subtle press/flex response used by small glass controls.
+  final bool interactive;
 
-class _AppLiquidGlassSurfaceState extends State<AppLiquidGlassSurface> {
-  late final Future<ui.FragmentProgram?> _program = _loadProgram();
-
-  Future<ui.FragmentProgram?> _loadProgram() async {
-    if (!ui.ImageFilter.isShaderFilterSupported) return null;
-    try {
-      return await ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag');
-    } catch (_) {
-      return null;
-    }
-  }
+  /// Optical controls. Large cards use the restrained defaults; compact
+  /// controls can raise these slightly without forking the render path.
+  final double distortion;
+  final double distortionWidth;
+  final double chromaticAberration;
+  final double magnification;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<ui.FragmentProgram?>(
-      future: _program,
-      builder: (context, snapshot) {
-        return _buildSurface(context, snapshot.data);
-      },
-    );
-  }
-
-  Widget _buildSurface(BuildContext context, ui.FragmentProgram? program) {
-    final material = context.appMaterial;
     final highContrast = MediaQuery.highContrastOf(context);
-    final radius = BorderRadius.circular(widget.borderRadius);
-    final tint = widget.tint ?? context.appSurface;
-    final blurSigma = widget.blurSigma == null
-        ? (highContrast ? material.blurSigma * .62 : material.blurSigma)
-        : widget.blurSigma! * (highContrast ? 1.6 : 1);
-    final filter = widget.blurSigma != null
-        ? ui.ImageFilter.blur(
-            sigmaX: blurSigma,
-            sigmaY: blurSigma,
-            tileMode: TileMode.decal,
-          )
-        : program != null && ui.ImageFilter.isShaderFilterSupported
-        ? ui.ImageFilter.shader(program.fragmentShader())
-        : ui.ImageFilter.blur(
-            sigmaX: blurSigma,
-            sigmaY: blurSigma,
-            tileMode: TileMode.decal,
-          );
+    final effectiveTint = tint ?? context.appSurface;
+    final radius = BorderRadius.circular(borderRadius);
 
-    return Container(
-      margin: widget.margin,
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: widget.shadow
-            ? [
-                if (widget.themeColorAccents)
+    if (!context.appUsesLiquidGlass) {
+      return Container(
+        margin: margin,
+        padding: padding,
+        clipBehavior: clipBehavior,
+        decoration: BoxDecoration(
+          color: effectiveTint,
+          borderRadius: radius,
+          border: Border.all(color: context.appDivider),
+          boxShadow: shadow
+              ? const [
                   BoxShadow(
-                    color: context.appPrimary.withValues(alpha: .16),
-                    blurRadius: highContrast ? 12 : 20,
-                    spreadRadius: -5,
-                    offset: const Offset(0, 8),
+                    color: Color(0x12000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
                   ),
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: .32),
-                  blurRadius: 2,
-                  spreadRadius: -1,
-                ),
-              ]
-            : null,
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        clipBehavior: widget.clipBehavior,
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: filter,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withValues(
-                          alpha:
-                              widget.glassOpacity ?? (highContrast ? .46 : .30),
-                        ),
-                        (widget.themeColorAccents
-                                ? Color.alphaBlend(
-                                    context.appPrimary.withValues(alpha: .035),
-                                    tint,
-                                  )
-                                : tint)
-                            .withValues(
-                              alpha:
-                                  widget.glassOpacity ??
-                                  (highContrast ? .34 : .20),
-                            ),
-                        tint.withValues(
-                          alpha:
-                              widget.glassOpacity ?? (highContrast ? .28 : .13),
-                        ),
-                      ],
-                      stops: const [0, .48, 1],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            CustomPaint(
-              foregroundPainter: _LiquidGlassChromePainter(
-                radius: widget.borderRadius,
-                primary: context.appPrimary,
-                highContrast: highContrast,
-                themeColorAccents: widget.themeColorAccents,
-              ),
-              child: Padding(
-                padding: widget.padding ?? EdgeInsets.zero,
-                child: widget.child,
-              ),
-            ),
-          ],
+                ]
+              : null,
+        ),
+        child: child,
+      );
+    }
+
+    final sigma = highContrast ? (blurSigma ?? 5) * 1.6 : (blurSigma ?? 5);
+    final tintAlpha = (glassOpacity ?? (highContrast ? .74 : .26))
+        .clamp(0.0, 1.0)
+        .toDouble();
+
+    final style = LiquidGlassStyle(
+      shape: LiquidGlassShape.roundedRectangle(
+        cornerRadius: borderRadius,
+        borderWidth: highContrast ? 1.4 : .9,
+        borderColor: highContrast
+            ? context.appPrimary.withValues(alpha: .38)
+            : Colors.white.withValues(alpha: .46),
+        lightIntensity: highContrast ? 1 : 1.08,
+        lightColor: const Color(0xE6FFFFFF),
+        lightDirection: 62,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.16,
+          ambientIntensity: .96,
+          borderSolidity: .54,
+          lightSpread: .48,
         ),
       ),
+      appearance: LiquidGlassAppearance(
+        color: effectiveTint.withValues(alpha: tintAlpha),
+        blur: LiquidGlassBlur(sigmaX: sigma, sigmaY: sigma),
+        saturation: highContrast ? 1 : 1.03,
+        shadow: shadow
+            ? LiquidGlassShadow(
+                blur: highContrast ? 3 : 4.5,
+                opacity: highContrast ? .16 : .12,
+                color: themeColorAccents ? context.appPrimary : Colors.black,
+                offset: const Offset(0, 5),
+                inset: 1,
+              )
+            : null,
+      ),
+      refraction: highContrast
+          ? const LiquidGlassRefraction(
+              distortion: 0,
+              distortionWidth: 0,
+              chromaticAberration: 0,
+            )
+          : LiquidGlassRefraction(
+              distortion: distortion,
+              distortionWidth: distortionWidth,
+              magnification: magnification,
+              chromaticAberration: chromaticAberration,
+            ),
     );
-  }
-}
 
-class _LiquidGlassChromePainter extends CustomPainter {
-  const _LiquidGlassChromePainter({
-    required this.radius,
-    required this.primary,
-    required this.highContrast,
-    required this.themeColorAccents,
-  });
-
-  final double radius;
-  final Color primary;
-  final bool highContrast;
-  final bool themeColorAccents;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-
-    final rect = Offset.zero & size;
-    final outer = RRect.fromRectAndRadius(
-      rect.deflate(1),
-      Radius.circular((radius - 1).clamp(0, radius).toDouble()),
+    final lens = LiquidGlassLens(
+      style: style,
+      touch: interactive && !MediaQuery.disableAnimationsOf(context)
+          ? const LiquidGlassTouch.flexing(LiquidGlassFlex.subtle())
+          : null,
+      child: Padding(
+        padding: padding ?? EdgeInsets.zero,
+        child: child,
+      ),
     );
-    final border = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = highContrast ? 1.4 : 1
-      ..color = Colors.white.withValues(alpha: highContrast ? .94 : .78);
-    canvas.drawRRect(outer, border);
 
-    final topHighlight = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = highContrast ? 1.5 : 1.15
-      ..color = Colors.white.withValues(alpha: highContrast ? .82 : .52);
-    final highlightPath = Path()
-      ..moveTo(radius * .78, 2.2)
-      ..cubicTo(
-        size.width * .34,
-        1.2,
-        size.width * .56,
-        1.2,
-        size.width - radius * .78,
-        2.2,
-      );
-    canvas.drawPath(highlightPath, topHighlight);
-
-    if (themeColorAccents) {
-      final lowerRim = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = .85
-        ..color = primary.withValues(alpha: highContrast ? .26 : .14);
-      canvas.drawRRect(outer.deflate(.8), lowerRim);
-    }
+    if (margin == null) return lens;
+    return Padding(padding: margin!, child: lens);
   }
-
-  @override
-  bool shouldRepaint(covariant _LiquidGlassChromePainter oldDelegate) =>
-      oldDelegate.radius != radius ||
-      oldDelegate.primary != primary ||
-      oldDelegate.highContrast != highContrast ||
-      oldDelegate.themeColorAccents != themeColorAccents;
 }

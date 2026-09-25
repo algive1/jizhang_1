@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class SectionHeader extends StatelessWidget {
   const SectionHeader({required this.title, super.key, this.trailing});
@@ -36,9 +36,15 @@ class SectionLink extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(color: context.appSecondaryText),
+            ),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            Icon(
+              Icons.chevron_right,
+              color: context.appSecondaryText,
+            ),
           ],
         ),
       ),

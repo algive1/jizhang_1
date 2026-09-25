@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../membership/presentation/membership_visuals.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 
 enum LegalDocumentKind { membership, privacy }
 
@@ -15,10 +15,10 @@ class LegalDocumentPage extends StatelessWidget {
         ? _membershipDocument
         : _privacyDocument;
     return Scaffold(
-      backgroundColor: memberBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: Text(document.title),
-        backgroundColor: memberBackground,
+        backgroundColor: context.appBackground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
@@ -27,12 +27,12 @@ class LegalDocumentPage extends StatelessWidget {
         children: [
           Text(
             '好好记账 · ${document.updatedAt}',
-            style: const TextStyle(color: memberMuted, fontSize: 12),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 12),
           ),
           const SizedBox(height: 12),
           Text(
             document.intro,
-            style: const TextStyle(color: memberInk, height: 1.6, fontSize: 14),
+            style: TextStyle(color: context.appPrimaryText, height: 1.6, fontSize: 14),
           ),
           const SizedBox(height: 16),
           for (final section in document.sections) ...[
@@ -50,19 +50,23 @@ class LegalDocumentsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: memberBackground,
+    backgroundColor: context.appBackground,
     appBar: AppBar(
       title: const Text('服务协议'),
-      backgroundColor: memberBackground,
+      backgroundColor: context.appBackground,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
     ),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
       children: [
-        const Text(
+        Text(
           '请点击查看对应协议内容，阅读后点击“确定”关闭。',
-          style: TextStyle(color: memberMuted, fontSize: 13, height: 1.5),
+          style: TextStyle(
+            color: context.appSecondaryText,
+            fontSize: 13,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 12),
         _AgreementMenuCard(
@@ -96,21 +100,21 @@ class LegalDocumentsPage extends StatelessWidget {
           children: [
             Text(
               document.intro,
-              style: const TextStyle(color: memberInk, height: 1.55),
+              style: TextStyle(color: context.appPrimaryText, height: 1.55),
             ),
             const SizedBox(height: 14),
             for (final section in document.sections) ...[
               Text(
                 section.title,
-                style: const TextStyle(
-                  color: memberInk,
+                style: TextStyle(
+                  color: context.appPrimaryText,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 section.body,
-                style: const TextStyle(color: memberMuted, height: 1.55),
+                style: TextStyle(color: context.appSecondaryText, height: 1.55),
               ),
               const SizedBox(height: 12),
             ],
@@ -135,7 +139,7 @@ class _AgreementMenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFFFFEFA),
+    color: context.appSurface,
     borderRadius: BorderRadius.circular(18),
     child: InkWell(
       onTap: onTap,
@@ -144,7 +148,7 @@ class _AgreementMenuCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
         child: Row(
           children: [
-            const Icon(Icons.description_outlined, color: memberGreen),
+            Icon(Icons.description_outlined, color: context.appPrimary),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -152,8 +156,8 @@ class _AgreementMenuCard extends StatelessWidget {
                 children: [
                   Text(
                     document.title,
-                    style: const TextStyle(
-                      color: memberInk,
+                    style: TextStyle(
+                      color: context.appPrimaryText,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
@@ -161,12 +165,12 @@ class _AgreementMenuCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     document.updatedAt,
-                    style: const TextStyle(color: memberMuted, fontSize: 12),
+                    style: TextStyle(color: context.appSecondaryText, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: memberMuted),
+            Icon(Icons.chevron_right_rounded, color: context.appSecondaryText),
           ],
         ),
       ),
@@ -183,9 +187,9 @@ class _LegalSectionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFFEFA),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFF0F2EB)),
+      border: Border.all(color: context.appDivider),
       boxShadow: const [
         BoxShadow(
           color: Color(0x0C283D27),
@@ -199,8 +203,8 @@ class _LegalSectionCard extends StatelessWidget {
       children: [
         Text(
           section.title,
-          style: const TextStyle(
-            color: memberInk,
+          style: TextStyle(
+            color: context.appPrimaryText,
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
@@ -208,8 +212,8 @@ class _LegalSectionCard extends StatelessWidget {
         const SizedBox(height: 7),
         Text(
           section.body,
-          style: const TextStyle(
-            color: Color(0xFF545B53),
+          style: TextStyle(
+            color: context.appSecondaryText,
             fontSize: 13,
             height: 1.65,
           ),

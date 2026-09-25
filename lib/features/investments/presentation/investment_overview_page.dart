@@ -40,7 +40,7 @@ class _InvestmentOverviewPageState
     final portfolio = portfolioState.value;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7EE),
+      backgroundColor: context.appBackground,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -144,7 +144,7 @@ class _InvestmentTabBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(3),
     decoration: BoxDecoration(
-      color: const Color(0xFFEDEFE0),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(24),
     ),
     child: Row(
@@ -361,7 +361,7 @@ class _TrendSection extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
@@ -419,7 +419,7 @@ class _ChartSkeleton extends StatelessWidget {
     height: 90,
     margin: const EdgeInsets.symmetric(horizontal: 8),
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F2E6),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(14),
     ),
   );
@@ -440,7 +440,7 @@ class _PositionsList extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(
-      color: const Color(0xF7FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),
@@ -530,7 +530,7 @@ class _CategorySummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
@@ -589,7 +589,7 @@ class _CategorySummaryCard extends StatelessWidget {
                   size: 13,
                   color: summary.profitPercent == null
                       ? context.appSecondaryText
-                      : profitColor(summary.profit),
+                      : profitColor(summary.profit, context: context),
                 ),
               ),
               const SizedBox(width: 6),

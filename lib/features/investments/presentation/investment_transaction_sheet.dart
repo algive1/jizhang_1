@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/theme/app_theme_tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_date_picker.dart';
@@ -70,10 +71,10 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
               '记录交易 · ${holding.asset.name}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
+                color: context.appPrimaryText,
               ),
             ),
             const SizedBox(height: 4),
@@ -81,16 +82,16 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
               '当前持有 ${InvestmentTransaction.formatQuantity(holding.quantity)}'
               ' · 平均成本 '
               '¥${InvestmentInput.formatPriceLabel(holding.averageCost)}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: context.appSecondaryText,
               ),
             ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: const Color(0xFFEDEFE0),
+                color: context.appSurfaceSoft,
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
@@ -112,7 +113,7 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: _type == type
-                                  ? AppColors.primary
+                                  ? context.appPrimary
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(18),
                             ),
@@ -124,8 +125,8 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
                                     ? FontWeight.w700
                                     : FontWeight.w500,
                                 color: _type == type
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : context.appSecondaryText,
                               ),
                             ),
                           ),
@@ -217,17 +218,17 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
               decoration: const InputDecoration(labelText: '备注（可选）'),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               '投资收益不计入日常消费支出，买入属于现金资产转为投资资产。',
-              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
             ),
             const SizedBox(height: 14),
             FilledButton(
               key: const ValueKey('investment-tx-submit'),
               onPressed: _saving ? null : _save,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: context.appPrimary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 minimumSize: const Size.fromHeight(48),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),

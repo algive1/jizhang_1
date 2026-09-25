@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 import '../models/dashboard_snapshot.dart';
 import 'app_card.dart';
 
@@ -20,13 +21,17 @@ class InsightCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.eco_outlined, color: AppColors.primary, size: 20),
-                SizedBox(width: 8),
+                Icon(Icons.eco_outlined, color: context.appPrimary, size: 20),
+                const SizedBox(width: 8),
                 Text(
                   '值得关注',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: context.appPrimaryText,
+                  ),
                 ),
               ],
             ),
@@ -36,8 +41,11 @@ class InsightCard extends StatelessWidget {
                 Container(
                   width: 54,
                   height: 54,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFEBDD),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      AppColors.warning.withValues(alpha: .14),
+                      context.appSurfaceSoft,
+                    ),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -57,8 +65,8 @@ class InsightCard extends StatelessWidget {
                         child: RichText(
                           maxLines: 1,
                           text: TextSpan(
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
+                            style: TextStyle(
+                              color: context.appPrimaryText,
                               fontSize: 15,
                               height: 1.3,
                             ),
@@ -73,7 +81,7 @@ class InsightCard extends StatelessWidget {
                                     : '${insight.increasePercent! >= 0 ? '+' : ''}${insight.increasePercent!}%',
                                 style: TextStyle(
                                   color: insight.increasePercent == null
-                                      ? AppColors.textSecondary
+                                      ? context.appSecondaryText
                                       : AppColors.warning,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -87,8 +95,8 @@ class InsightCard extends StatelessWidget {
                         insight.description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appSecondaryText,
                           fontSize: 12,
                           height: 1.35,
                         ),
@@ -96,9 +104,9 @@ class InsightCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
-                  color: AppColors.textSecondary,
+                  color: context.appSecondaryText,
                   size: 26,
                 ),
               ],

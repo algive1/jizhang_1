@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../../core/models/membership.dart';
@@ -98,19 +99,53 @@ class _ThemeCard extends StatelessWidget {
     child: Ink(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: selected ? theme.primary : theme.divider, width: selected ? 2 : 1),
+        border: Border.all(
+          color: selected ? theme.primary : context.appDivider,
+          width: selected ? 2 : 1,
+        ),
       ),
       child: Row(children: [
         _ThemePreview(theme: theme),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Flexible(child: Text(theme.name, style: Theme.of(context).textTheme.titleMedium)), if (theme.premium) ...[const SizedBox(width: 6), const Icon(Icons.workspace_premium_outlined, size: 18)]]),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  theme.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: context.appPrimaryText,
+                  ),
+                ),
+              ),
+              if (theme.premium) ...[
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.workspace_premium_outlined,
+                  size: 18,
+                  color: context.appSecondaryText,
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(theme.description, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            theme.description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: context.appSecondaryText,
+            ),
+          ),
         ])),
-        if (locked) const Icon(Icons.lock_outline, size: 20) else if (selected) Icon(Icons.check_circle, color: theme.primary),
+        if (locked)
+          Icon(
+            Icons.lock_outline,
+            size: 20,
+            color: context.appSecondaryText,
+          )
+        else if (selected)
+          Icon(Icons.check_circle, color: theme.primary),
       ]),
     ),
   );

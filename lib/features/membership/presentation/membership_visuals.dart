@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../../../core/widgets/payment_brand_icon.dart';
 import '../data/membership_catalog.dart';
 import '../domain/commercial_service_contracts.dart';
@@ -21,6 +23,34 @@ const memberCardShadows = <BoxShadow>[
     offset: Offset(0, 8),
   ),
 ];
+
+Color memberGreenFor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFA8CF7B)
+        : memberGreen;
+
+Color memberAccentFor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFC3DEA0)
+        : memberAccent;
+
+Color memberInkFor(BuildContext context) => context.appPrimaryText;
+Color memberMutedFor(BuildContext context) => context.appSecondaryText;
+Color memberSurfaceFor(BuildContext context) => context.appSurface;
+Color memberBackgroundFor(BuildContext context) => context.appBackground;
+Color memberCardBorderFor(BuildContext context) => context.appDivider;
+
+List<BoxShadow> memberCardShadowsFor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const [
+            BoxShadow(
+              color: Color(0x52000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ]
+        : memberCardShadows;
+
 
 /// Brand assets are kept in the membership asset folder so the same payment
 /// marks can be reused by order history and other checkout surfaces.
@@ -87,7 +117,7 @@ class MembershipHero extends StatelessWidget {
                   Text(
                     '成为会员',
                     style: TextStyle(
-                      color: const Color(0xFF10231B),
+                      color: memberGreenFor(context),
                       fontSize: width < 350 ? 29 : 33,
                       fontWeight: FontWeight.w900,
                       height: 1.12,
@@ -99,7 +129,7 @@ class MembershipHero extends StatelessWidget {
                     child: Text(
                       '解锁更完整的记账体验',
                       style: TextStyle(
-                        color: memberInk,
+                        color: memberInkFor(context),
                         fontSize: width < 350 ? 13 : 15,
                         fontWeight: FontWeight.w800,
                         height: 1.3,
@@ -142,11 +172,11 @@ class MembershipHero extends StatelessWidget {
               width: 63,
               child: Transform.rotate(
                 angle: -.16,
-                child: const Text(
+                child: Text(
                   '好好记账\n陪你把生活\n过得更好',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: memberGreen,
+                    color: memberGreenFor(context),
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                     height: 1.65,
@@ -169,12 +199,12 @@ class _HeroSellingPoint extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Icon(icon, size: 12, color: memberGreen),
+      Icon(icon, size: 12, color: memberGreenFor(context)),
       const SizedBox(width: 3),
       Flexible(
         child: Text(
           text,
-          style: const TextStyle(color: memberGreen, fontSize: 8, height: 1.25),
+          style: TextStyle(color: memberGreenFor(context), fontSize: 8, height: 1.25),
         ),
       ),
     ],
@@ -205,10 +235,10 @@ class MemberPlanSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFEFA),
+        color: memberSurfaceFor(context),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF0F2EB)),
-        boxShadow: memberCardShadows,
+        border: Border.all(color: memberCardBorderFor(context)),
+        boxShadow: memberCardShadowsFor(context),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,10 +301,10 @@ class MembershipPlanCard extends StatelessWidget {
           child: Ink(
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 5),
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFFEEF5E5) : memberSurface,
+              color: selected ? Color.alphaBlend(memberGreenFor(context).withValues(alpha: .14), memberSurfaceFor(context)) : memberSurfaceFor(context),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: selected ? memberAccent : const Color(0xFFF0F2EB),
+                color: selected ? memberAccentFor(context) : memberCardBorderFor(context),
                 width: selected ? 1.5 : 1,
               ),
               boxShadow: selected
@@ -298,8 +328,8 @@ class MembershipPlanCard extends StatelessWidget {
                       child: Text(
                         product.title,
                         maxLines: 1,
-                        style: const TextStyle(
-                          color: memberInk,
+                        style: TextStyle(
+                          color: memberInkFor(context),
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
                         ),
@@ -313,8 +343,8 @@ class MembershipPlanCard extends StatelessWidget {
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: memberMuted,
+                        style: TextStyle(
+                          color: memberMutedFor(context),
                           fontSize: 10,
                           height: 1.25,
                         ),
@@ -334,14 +364,14 @@ class MembershipPlanCard extends StatelessWidget {
                               text: MembershipProduct.money(
                                 product.priceInCents,
                               ),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
                           ],
                         ),
-                        style: const TextStyle(color: memberInk),
+                        style: TextStyle(color: memberInkFor(context)),
                       ),
                     ),
                     const SizedBox(height: 0),
@@ -349,8 +379,8 @@ class MembershipPlanCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         '¥${dailyPrice.toStringAsFixed(2)} / 天',
-                        style: const TextStyle(
-                          color: memberMuted,
+                        style: TextStyle(
+                          color: memberMutedFor(context),
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -363,8 +393,8 @@ class MembershipPlanCard extends StatelessWidget {
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 '立省 ¥${MembershipProduct.money(saving)}',
-                                style: const TextStyle(
-                                  color: memberAccent,
+                                style: TextStyle(
+                                  color: memberAccentFor(context),
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -380,15 +410,15 @@ class MembershipPlanCard extends StatelessWidget {
                         onPressed: onPurchase,
                         style: OutlinedButton.styleFrom(
                           backgroundColor: selected
-                              ? memberGreen
+                              ? memberGreenFor(context)
                               : Colors.transparent,
                           foregroundColor: selected
                               ? Colors.white
-                              : memberGreen,
+                              : memberGreenFor(context),
                           side: BorderSide(
                             color: selected
-                                ? memberGreen
-                                : const Color(0xFFC8DBAE),
+                                ? memberGreenFor(context)
+                                : memberGreenFor(context).withValues(alpha: .45),
                           ),
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
@@ -399,7 +429,7 @@ class MembershipPlanCard extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           child: Text(
                             renewal ? '立即续费' : '立即开通',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                             ),
@@ -418,10 +448,10 @@ class MembershipPlanCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 9),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: memberAccent,
+                        color: memberAccentFor(context),
                         borderRadius: BorderRadius.circular(11),
                       ),
-                      child: const Text(
+                      child: Text(
                         '推荐',
                         style: TextStyle(
                           color: Colors.white,
@@ -478,7 +508,7 @@ class MemberBenefits extends StatelessWidget {
       title: '会员专属权益',
       action: '更多权益',
       onAction: onMore,
-      leading: const Icon(
+      leading: Icon(
         Icons.workspace_premium_rounded,
         color: Color(0xFFF0B43C),
         size: 22,
@@ -498,7 +528,7 @@ class MemberBenefits extends StatelessWidget {
         ),
         itemBuilder: (context, index) {
           final benefit = benefits[index];
-          final iconColor = _iconColors[benefit.id] ?? memberGreen;
+          final iconColor = _iconColors[benefit.id] ?? memberGreenFor(context);
           return Column(
             children: [
               Container(
@@ -523,8 +553,8 @@ class MemberBenefits extends StatelessWidget {
                     benefit.title,
                     textAlign: TextAlign.center,
                     maxLines: 2,
-                    style: const TextStyle(
-                      color: memberInk,
+                    style: TextStyle(
+                      color: memberInkFor(context),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
@@ -541,8 +571,8 @@ class MemberBenefits extends StatelessWidget {
                     benefit.subtitle,
                     textAlign: TextAlign.center,
                     maxLines: 2,
-                    style: const TextStyle(
-                      color: memberMuted,
+                    style: TextStyle(
+                      color: memberMutedFor(context),
                       fontSize: 9,
                       height: 1.2,
                     ),
@@ -567,7 +597,7 @@ class MemberTestimonials extends StatelessWidget {
     title: '他们都在用',
     action: '查看全部',
     onAction: onMore,
-    leading: const Icon(
+    leading: Icon(
       Icons.groups_rounded,
       color: Color(0xFF6F954B),
       size: 22,
@@ -614,9 +644,9 @@ class _TestimonialCard extends StatelessWidget {
     constraints: const BoxConstraints(minHeight: 94),
     padding: const EdgeInsets.all(6),
     decoration: BoxDecoration(
-      color: memberSurface,
+      color: memberSurfaceFor(context),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFF0F2EB)),
+      border: Border.all(color: memberCardBorderFor(context)),
       boxShadow: const [
         BoxShadow(
           color: Color(0x0A547341),
@@ -646,14 +676,14 @@ class _TestimonialCard extends StatelessWidget {
             Expanded(
               child: Text(
                 name,
-                style: const TextStyle(
-                  color: memberInk,
+                style: TextStyle(
+                  color: memberInkFor(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.workspace_premium_rounded,
               color: Color(0xFFF0B43C),
               size: 16,
@@ -663,10 +693,10 @@ class _TestimonialCard extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           quote,
-          style: const TextStyle(color: memberInk, fontSize: 9, height: 1.34),
+          style: TextStyle(color: memberInkFor(context), fontSize: 9, height: 1.34),
         ),
         const SizedBox(height: 1),
-        const Text(
+        Text(
           '★★★★★',
           style: TextStyle(
             color: Color(0xFFF0B43C),
@@ -694,7 +724,7 @@ class PaymentMethodSection extends StatelessWidget {
     title: '选择支付方式',
     action: '支付安全有保障',
     onAction: null,
-    actionLeading: const Icon(
+    actionLeading: Icon(
       Icons.verified_user_rounded,
       color: Color(0xFF70964F),
       size: 15,
@@ -759,10 +789,10 @@ class _PaymentMethodCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEEF5E5) : memberSurface,
+            color: selected ? Color.alphaBlend(memberGreenFor(context).withValues(alpha: .14), memberSurfaceFor(context)) : memberSurfaceFor(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected ? memberGreen : const Color(0xFFE6ECE0),
+              color: selected ? memberGreenFor(context) : memberCardBorderFor(context),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -791,8 +821,8 @@ class _PaymentMethodCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      color: memberInk,
+                    style: TextStyle(
+                      color: memberInkFor(context),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -801,7 +831,7 @@ class _PaymentMethodCard extends StatelessWidget {
               ),
               Icon(
                 selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                color: selected ? memberGreen : const Color(0xFFB5BEB0),
+                color: selected ? memberGreenFor(context) : memberMutedFor(context),
                 size: 18,
               ),
             ],
@@ -851,10 +881,10 @@ class MemberBottomPayBar extends StatelessWidget {
                     text: TextSpan(
                       style: DefaultTextStyle.of(context).style,
                       children: [
-                        const TextSpan(
+                        TextSpan(
                           text: '实付金额  ',
                           style: TextStyle(
-                            color: memberInk,
+                            color: memberInkFor(context),
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
@@ -865,8 +895,8 @@ class MemberBottomPayBar extends StatelessWidget {
                         ),
                         TextSpan(
                           text: price,
-                          style: const TextStyle(
-                            color: memberGreen,
+                          style: TextStyle(
+                            color: memberGreenFor(context),
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
                           ),
@@ -877,16 +907,16 @@ class MemberBottomPayBar extends StatelessWidget {
                   Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         '开通即表示同意',
-                        style: TextStyle(color: memberMuted, fontSize: 9),
+                        style: TextStyle(color: memberMutedFor(context), fontSize: 9),
                       ),
                       InkWell(
                         onTap: onAgreement,
-                        child: const Text(
+                        child: Text(
                           '《会员服务协议》',
                           style: TextStyle(
-                            color: memberGreen,
+                            color: memberGreenFor(context),
                             fontSize: 9,
                             decoration: TextDecoration.underline,
                           ),
@@ -905,8 +935,8 @@ class MemberBottomPayBar extends StatelessWidget {
                 key: const ValueKey('membership-pay-button'),
                 onPressed: product == null || isPaying ? null : onPay,
                 style: FilledButton.styleFrom(
-                  backgroundColor: memberGreen,
-                  disabledBackgroundColor: const Color(0xFFB8C9A6),
+                  backgroundColor: memberGreenFor(context),
+                  disabledBackgroundColor: context.appDivider,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
@@ -921,7 +951,7 @@ class MemberBottomPayBar extends StatelessWidget {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         '立即支付',
                         style: TextStyle(
                           fontSize: 15,
@@ -966,10 +996,10 @@ class MemberSectionCard extends StatelessWidget {
     width: double.infinity,
     padding: padding,
     decoration: BoxDecoration(
-      color: const Color(0xFFFFFEFA),
+      color: memberSurfaceFor(context),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xFFF0F2EB)),
-      boxShadow: memberCardShadows,
+      border: Border.all(color: memberCardBorderFor(context)),
+      boxShadow: memberCardShadowsFor(context),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -983,8 +1013,8 @@ class MemberSectionCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: memberInk,
+                  style: TextStyle(
+                    color: memberInkFor(context),
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
@@ -994,7 +1024,7 @@ class MemberSectionCard extends StatelessWidget {
                 TextButton(
                   onPressed: onAction,
                   style: TextButton.styleFrom(
-                    foregroundColor: memberGreen,
+                    foregroundColor: memberGreenFor(context),
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     minimumSize: Size(0, headerMinHeight),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1002,8 +1032,8 @@ class MemberSectionCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(action, style: const TextStyle(fontSize: 11)),
-                      const Icon(Icons.chevron_right_rounded, size: 17),
+                      Text(action, style: TextStyle(fontSize: 11)),
+                      Icon(Icons.chevron_right_rounded, size: 17),
                     ],
                   ),
                 ),
@@ -1017,7 +1047,7 @@ class MemberSectionCard extends StatelessWidget {
                     ],
                     Text(
                       action,
-                      style: const TextStyle(color: memberMuted, fontSize: 10),
+                      style: TextStyle(color: memberMutedFor(context), fontSize: 10),
                     ),
                   ],
                 ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../../../app/theme/app_colors.dart';
 import '../domain/investment_asset.dart';
 import 'investment_widgets.dart';
@@ -31,9 +33,9 @@ class InvestmentEmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
       decoration: BoxDecoration(
-        color: const Color(0xF5FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider.withValues(alpha: .7)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
       child: Column(
         children: [
@@ -41,33 +43,36 @@ class InvestmentEmptyState extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: type?.surface ?? AppColors.primarySoft,
+              color: Color.alphaBlend(
+                (type?.accent ?? context.appPrimary).withValues(alpha: .14),
+                context.appSurfaceSoft,
+              ),
               shape: BoxShape.circle,
             ),
             child: Icon(
               type?.icon ?? Icons.trending_up,
               size: 28,
-              color: type?.accent ?? AppColors.primary,
+              color: type?.accent ?? context.appPrimary,
             ),
           ),
           const SizedBox(height: 14),
           Text(
             resolvedTitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.5,
-              color: AppColors.textSecondary,
+              color: context.appSecondaryText,
             ),
           ),
           const SizedBox(height: 16),
@@ -75,8 +80,8 @@ class InvestmentEmptyState extends StatelessWidget {
             key: const ValueKey('investment-empty-add'),
             onPressed: onAdd,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: context.appPrimary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(22),
@@ -141,7 +146,7 @@ class _SkeletonBlock extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: height,
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F2E6),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(radius),
     ),
   );
@@ -165,9 +170,9 @@ class InvestmentErrorState extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: const Color(0xF5FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.divider),
+      border: Border.all(color: context.appDivider),
     ),
     child: Column(
       children: [
@@ -180,9 +185,9 @@ class InvestmentErrorState extends StatelessWidget {
         Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: AppColors.textSecondary,
+            color: context.appSecondaryText,
           ),
         ),
         const SizedBox(height: 12),
@@ -221,10 +226,10 @@ class InvestmentSectionHeader extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+              color: context.appPrimaryText,
             ),
           ),
         ),
@@ -233,7 +238,7 @@ class InvestmentSectionHeader extends StatelessWidget {
           TextButton(
             onPressed: onAction,
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
+              foregroundColor: context.appSecondaryText,
               padding: EdgeInsets.zero,
               minimumSize: const Size(0, 24),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,

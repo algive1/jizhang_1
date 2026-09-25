@@ -43,7 +43,7 @@ class _InvestmentDetailPageState extends ConsumerState<InvestmentDetailPage> {
     final position = holdingState.value;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7EE),
+      backgroundColor: context.appBackground,
       body: SafeArea(
         bottom: false,
         child: holdingState.isLoading && position == null
@@ -226,7 +226,7 @@ class _PositionHeaderCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
@@ -349,7 +349,7 @@ class _PositionHeaderCard extends StatelessWidget {
                       size: 14,
                       color: quote == null
                           ? context.appSecondaryText
-                          : profitColor(quote.change),
+                          : profitColor(quote.change, context: context),
                     ),
                     ProfitText(
                       percent: quote?.changePercent,
@@ -414,7 +414,7 @@ class _PositionHeaderCard extends StatelessWidget {
                             size: 17,
                             color: position.profitPercent == null
                                 ? context.appSecondaryText
-                                : profitColor(position.profit),
+                                : profitColor(position.profit, context: context),
                           ),
                         ),
                         const SizedBox(width: 5),
@@ -461,7 +461,7 @@ class _PositionStatsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
@@ -561,7 +561,7 @@ class _StatTile extends StatelessWidget {
     constraints: const BoxConstraints(minWidth: 104),
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7F8EE),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(14),
     ),
     child: Column(
@@ -620,7 +620,7 @@ class _TrendCard extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
@@ -694,7 +694,7 @@ class _TrendSkeleton extends StatelessWidget {
     height: 90,
     margin: const EdgeInsets.symmetric(horizontal: 8),
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F2E6),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(14),
     ),
   );
@@ -708,7 +708,7 @@ class _NoTransactions extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(vertical: 22),
     decoration: BoxDecoration(
-      color: const Color(0xF7FFFFFC),
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: context.appDivider.withValues(alpha: .7)),
     ),

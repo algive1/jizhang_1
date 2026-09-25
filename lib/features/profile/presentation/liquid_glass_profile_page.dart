@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/constants/app_assets.dart';
@@ -51,86 +52,98 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         profileQuickActionDefaults;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: _ImmersiveProfileBackground(dark: dark),
-        ),
-        SafeArea(
-          bottom: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              AppScaffold.reservedBottomInset(context),
-            ),
-            children: [
-              _Header(
-                dark: dark,
-                unread: unread,
-                onBrightnessChanged: (nextDark) {
-                  unawaited(
-                    ref.read(brightnessModeProvider.notifier).select(
-                      nextDark
-                          ? AppBrightnessPreference.dark
-                          : AppBrightnessPreference.light,
-                    ),
-                  );
-                },
-                onMessages: () async {
-                  await context.push<void>('/profile/messages');
-                  ref.invalidate(systemUnreadCountProvider);
-                },
-                onSettings: () => _showSettings(context),
-              ),
-              const SizedBox(height: 10),
-              _ProfileIdentity(
-                name: _profileName(accountSession),
-                bookkeepingDays: activity.bookkeepingDays,
-                onTap: () => _openProfile(context, accountSession),
-              ),
-              const SizedBox(height: 6),
-              _SummaryPanel(
-                loading: transactions.isLoading,
-                expense: month.expense,
-                income: month.income,
-                expenseDelta: _deltaText(month.expense, previous.expense),
-                incomeDelta: _deltaText(month.income, previous.income),
-                budgetRemaining: budget?.remaining,
-                budgetRatio: budget == null
-                    ? null
-                    : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
-                streak: activity.streak,
-              ),
-              const SizedBox(height: 8),
-              _MembershipPanel(
-                snapshot: membership,
-                onTap: () => context.push('/profile/membership'),
-              ),
-              const SizedBox(height: 10),
-              _GlassSection(
-                title: '常用功能',
-                trailing: '更多',
-                onTrailing: () => context.push('/profile/quick-actions'),
-                child: _QuickActionGrid(
-                  order: quickActionOrder,
-                  onTap: (id) => _openQuickAction(context, ref, id),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const _RecommendedAppsSection(),
-              const SizedBox(height: 10),
-              _ServicesSection(
-                onMore: () => context.push('/profile/services'),
-                onHelp: () => context.push('/profile/help'),
-                onSecurity: () => context.push('/profile/data'),
-                onAbout: () => context.push('/profile/about'),
-              ),
-            ],
+    return LiquidGlassBatch(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _ImmersiveProfileBackground(dark: dark),
           ),
-        ),
-      ],
+          SafeArea(
+            bottom: false,
+            child: ScrollConfiguration(
+              // Android's stretch overscroll temporarily moves the scroll
+              // contents into a filtered subpass. A live lens inside that
+              // subpass can no longer see the page backdrop and may flash
+              // dark at the edges, so glass lists deliberately disable the
+              // stretch while keeping the platform's normal scroll physics.
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(overscroll: false),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  AppScaffold.reservedBottomInset(context),
+                ),
+                children: [
+                  _Header(
+                    dark: dark,
+                    unread: unread,
+                    onBrightnessChanged: (nextDark) {
+                      unawaited(
+                        ref.read(brightnessModeProvider.notifier).select(
+                          nextDark
+                              ? AppBrightnessPreference.dark
+                              : AppBrightnessPreference.light,
+                        ),
+                      );
+                    },
+                    onMessages: () async {
+                      await context.push<void>('/profile/messages');
+                      ref.invalidate(systemUnreadCountProvider);
+                    },
+                    onSettings: () => _showSettings(context),
+                  ),
+                  const SizedBox(height: 10),
+                  _ProfileIdentity(
+                    name: _profileName(accountSession),
+                    bookkeepingDays: activity.bookkeepingDays,
+                    onTap: () => _openProfile(context, accountSession),
+                  ),
+                  const SizedBox(height: 6),
+                  _SummaryPanel(
+                    loading: transactions.isLoading,
+                    expense: month.expense,
+                    income: month.income,
+                    expenseDelta: _deltaText(month.expense, previous.expense),
+                    incomeDelta: _deltaText(month.income, previous.income),
+                    budgetRemaining: budget?.remaining,
+                    budgetRatio: budget == null
+                        ? null
+                        : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
+                    streak: activity.streak,
+                  ),
+                  const SizedBox(height: 8),
+                  _MembershipPanel(
+                    snapshot: membership,
+                    onTap: () => context.push('/profile/membership'),
+                  ),
+                  const SizedBox(height: 10),
+                  _GlassSection(
+                    title: '常用功能',
+                    trailing: '更多',
+                    onTrailing: () => context.push('/profile/quick-actions'),
+                    child: _QuickActionGrid(
+                      order: quickActionOrder,
+                      onTap: (id) => _openQuickAction(context, ref, id),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const _RecommendedAppsSection(),
+                  const SizedBox(height: 10),
+                  _ServicesSection(
+                    onMore: () => context.push('/profile/services'),
+                    onHelp: () => context.push('/profile/help'),
+                    onSecurity: () => context.push('/profile/data'),
+                    onAbout: () => context.push('/profile/about'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -417,84 +430,38 @@ class _Header extends StatelessWidget {
   final VoidCallback onSettings;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '你好，\n生活值得好好记录',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Kaiti SC',
-                      fontFamilyFallback: ['STKaiti', 'KaiTi', 'serif'],
-                      fontSize: 27,
-                      height: 1.08,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: .8,
-                      shadows: [
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 12,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    '让每一笔收支，都通向更好的自己',
-                    style: TextStyle(
-                      color: Color(0xF2FFFFFF),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      shadows: [
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.topRight,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HeaderIconButton(
+                  key: const ValueKey('profile-notifications'),
+                  tooltip: '通知',
+                  onTap: onMessages,
+                  badge: unread,
+                  icon: Icons.notifications_none_rounded,
+                ),
+                const SizedBox(width: 6),
+                _HeaderIconButton(
+                  key: const ValueKey('profile-settings'),
+                  tooltip: '设置',
+                  onTap: onSettings,
+                  icon: Icons.settings_outlined,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                children: [
-                  _HeaderIconButton(
-                    key: const ValueKey('profile-notifications'),
-                    tooltip: '通知',
-                    onTap: onMessages,
-                    badge: unread,
-                    icon: Icons.notifications_none_rounded,
-                  ),
-                  const SizedBox(width: 6),
-                  _HeaderIconButton(
-                    key: const ValueKey('profile-settings'),
-                    tooltip: '设置',
-                    onTap: onSettings,
-                    icon: Icons.settings_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 9),
-              _BrightnessToggle(
-                dark: dark,
-                onChanged: onBrightnessChanged,
-              ),
-            ],
-          ),
-        ],
+            const SizedBox(height: 8),
+            _BrightnessToggle(
+              dark: dark,
+              onChanged: onBrightnessChanged,
+            ),
+          ],
+        ),
       );
 }
 
@@ -623,78 +590,90 @@ class _BrightnessToggleState extends State<_BrightnessToggle> {
   Widget build(BuildContext context) {
     final disableAnimations = MediaQuery.disableAnimationsOf(context);
     return SizedBox(
-      width: 96,
-      height: 40,
+      key: const ValueKey('profile-brightness-toggle'),
+      width: 92,
+      height: 36,
       child: AppLiquidGlassSurface(
-        borderRadius: 22,
+        borderRadius: 18,
         themeColorAccents: false,
         glassOpacity: MediaQuery.highContrastOf(context) ? .78 : .24,
         shadow: false,
-        padding: const EdgeInsets.all(3),
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              left: _visualDark ? 45 : 0,
-              top: 0,
-              bottom: 0,
-              width: 45,
-              duration: disableAnimations
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _visualDark
-                      ? const Color(0xB54B4154)
-                      : const Color(0xE8FFF2DD),
-                  borderRadius: BorderRadius.circular(17),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .58),
-                  ),
-                ),
-              ),
-            ),
-            Row(
+        padding: const EdgeInsets.all(2),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final segmentWidth = constraints.maxWidth / 2;
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: !_visualDark,
-                    label: '白天模式',
-                    child: InkWell(
-                      key: const ValueKey('profile-light-mode'),
-                      onTap: () => _select(false),
-                      borderRadius: BorderRadius.circular(17),
-                      child: Icon(
-                        Icons.wb_sunny_rounded,
-                        color: _visualDark
-                            ? const Color(0xCCFFFFFF)
-                            : const Color(0xFFFF9D24),
-                        size: 19,
+                AnimatedPositioned(
+                  left: _visualDark ? segmentWidth : 0,
+                  top: 0,
+                  bottom: 0,
+                  width: segmentWidth,
+                  duration: disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  child: DecoratedBox(
+                    key: const ValueKey('profile-brightness-thumb'),
+                    decoration: BoxDecoration(
+                      color: _visualDark
+                          ? const Color(0xB54B4154)
+                          : const Color(0xE8FFF2DD),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .58),
                       ),
                     ),
                   ),
                 ),
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: _visualDark,
-                    label: '夜晚模式',
-                    child: InkWell(
-                      key: const ValueKey('profile-dark-mode'),
-                      onTap: () => _select(true),
-                      borderRadius: BorderRadius.circular(17),
-                      child: Icon(
-                        Icons.dark_mode_rounded,
-                        color: Colors.white,
-                        size: 18,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: !_visualDark,
+                        label: '白天模式',
+                        child: InkWell(
+                          key: const ValueKey('profile-light-mode'),
+                          onTap: () => _select(false),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Center(
+                            child: Icon(
+                              Icons.wb_sunny_rounded,
+                              color: _visualDark
+                                  ? const Color(0xCCFFFFFF)
+                                  : const Color(0xFFFF9D24),
+                              size: 19,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: _visualDark,
+                        label: '夜晚模式',
+                        child: InkWell(
+                          key: const ValueKey('profile-dark-mode'),
+                          onTap: () => _select(true),
+                          borderRadius: BorderRadius.circular(16),
+                          child: const Center(
+                            child: Icon(
+                              Icons.dark_mode_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -1290,23 +1269,29 @@ class _QuickActionGrid extends StatelessWidget {
           final scaledBody = MediaQuery.textScalerOf(context).scale(12);
           final textScale = (scaledBody / 12).clamp(1.0, 2.0);
           final itemHeight = 47 + (textScale - 1) * 18;
-          return GridView.builder(
-            itemCount: order.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
-              childAspectRatio: itemWidth / itemHeight,
+          return LiquidGlassBatch(
+            // These tiles sit on top of the section's own glass. Giving the
+            // sibling tiles a fresh batch lets them share one read taken
+            // after the parent panel has painted, so they can refract that
+            // panel instead of flattening into translucent white boxes.
+            child: GridView.builder(
+              itemCount: order.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+                childAspectRatio: itemWidth / itemHeight,
+              ),
+              itemBuilder: (context, index) {
+                final spec = profileQuickActionSpec(order[index]);
+                return _QuickActionTile(
+                  spec: spec,
+                  onTap: () => onTap(spec.id),
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final spec = profileQuickActionSpec(order[index]);
-              return _QuickActionTile(
-                spec: spec,
-                onTap: () => onTap(spec.id),
-              );
-            },
           );
         },
       );
@@ -1322,16 +1307,24 @@ class _QuickActionTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: Colors.white.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? .28 : .56,
-        ),
-        borderRadius: BorderRadius.circular(15),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+  Widget build(BuildContext context) => AppLiquidGlassSurface(
+        borderRadius: 15,
+        blurSigma: 3,
+        glassOpacity:
+            Theme.of(context).brightness == Brightness.dark ? .28 : .22,
+        themeColorAccents: false,
+        shadow: false,
+        interactive: true,
+        distortion: .055,
+        distortionWidth: 18,
+        chromaticAberration: .003,
+        magnification: 1.012,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(15),
             child: Row(
               children: [
                 Container(
@@ -1419,38 +1412,40 @@ class _RecommendedAppsSection extends StatelessWidget {
             ),
           ),
         ),
-        child: const Row(
-          children: [
-            Expanded(
-              child: _RecommendedApp(
-                icon: Icons.eco_rounded,
-                iconColor: Color(0xFF83D64F),
-                name: 'Forest专注森林',
-                subtitle: '专注让生活更高效',
-                action: '安装',
+        child: const LiquidGlassBatch(
+          child: Row(
+            children: [
+              Expanded(
+                child: _RecommendedApp(
+                  icon: Icons.eco_rounded,
+                  iconColor: Color(0xFF83D64F),
+                  name: 'Forest专注森林',
+                  subtitle: '专注让生活更高效',
+                  action: '安装',
+                ),
               ),
-            ),
-            SizedBox(width: 6),
-            Expanded(
-              child: _RecommendedApp(
-                icon: Icons.cloud_rounded,
-                iconColor: Color(0xFF599AF3),
-                name: '潮汐睡眠',
-                subtitle: '让身心回归平静',
-                action: '安装',
+              SizedBox(width: 6),
+              Expanded(
+                child: _RecommendedApp(
+                  icon: Icons.cloud_rounded,
+                  iconColor: Color(0xFF599AF3),
+                  name: '潮汐睡眠',
+                  subtitle: '让身心回归平静',
+                  action: '安装',
+                ),
               ),
-            ),
-            SizedBox(width: 6),
-            Expanded(
-              child: _RecommendedApp(
-                icon: Icons.check_rounded,
-                iconColor: Color(0xFFF05D70),
-                name: 'Habit习惯打卡',
-                subtitle: '小习惯成就大改变',
-                action: '打开',
+              SizedBox(width: 6),
+              Expanded(
+                child: _RecommendedApp(
+                  icon: Icons.check_rounded,
+                  iconColor: Color(0xFFF05D70),
+                  name: 'Habit习惯打卡',
+                  subtitle: '小习惯成就大改变',
+                  action: '打开',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 }
@@ -1471,16 +1466,21 @@ class _RecommendedApp extends StatelessWidget {
   final String action;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
         height: 68,
-        padding: const EdgeInsets.fromLTRB(7, 5, 7, 5),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark ? .26 : .60,
-          ),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Row(
+        child: AppLiquidGlassSurface(
+          borderRadius: 15,
+          blurSigma: 3,
+          glassOpacity:
+              Theme.of(context).brightness == Brightness.dark ? .28 : .22,
+          themeColorAccents: false,
+          shadow: false,
+          distortion: .052,
+          distortionWidth: 18,
+          chromaticAberration: .0028,
+          magnification: 1.01,
+          padding: const EdgeInsets.fromLTRB(7, 5, 7, 5),
+          child: Row(
           children: [
             Container(
               width: 34,
@@ -1542,7 +1542,8 @@ class _RecommendedApp extends StatelessWidget {
             ),
           ],
         ),
-      );
+      ),
+    );
 }
 
 class _ServicesSection extends StatelessWidget {
@@ -1707,10 +1708,15 @@ class _GlassPanel extends StatelessWidget {
         borderRadius: 22,
         themeColorAccents: false,
         glassOpacity: MediaQuery.highContrastOf(context)
-            ? .88
+            ? .82
             : Theme.of(context).brightness == Brightness.dark
-            ? .68
-            : .62,
+            ? .40
+            : .34,
+        blurSigma: 5,
+        distortion: .048,
+        distortionWidth: 22,
+        chromaticAberration: .0026,
+        magnification: 1.008,
         padding: padding,
         child: child,
       );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 import 'app_bottom_sheet.dart';
 
 /// Controlled selection; every choice uses the same accessible bottom sheet.
@@ -62,16 +62,19 @@ class AppSelect<T> extends StatelessWidget {
                             ),
                             child: Material(
                               color: item.value == initialValue
-                                  ? AppColors.primarySoft
-                                  : AppColors.surfaceSoft,
+                                  ? Color.alphaBlend(
+                                      context.appPrimary.withValues(alpha: .14),
+                                      context.appSurfaceSoft,
+                                    )
+                                  : context.appSurfaceSoft,
                               borderRadius: BorderRadius.circular(16),
                               child: ListTile(
                                 minTileHeight: 56,
                                 title: item.child,
                                 trailing: item.value == initialValue
-                                    ? const Icon(
+                                    ? Icon(
                                         Icons.check,
-                                        color: AppColors.primaryDark,
+                                        color: context.appPrimary,
                                       )
                                     : null,
                                 onTap: !item.enabled

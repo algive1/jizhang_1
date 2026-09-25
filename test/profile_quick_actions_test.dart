@@ -89,6 +89,26 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
+      for (final target in const [
+        ('/transactions', '流水'),
+        ('/analysis', '收支分析'),
+        ('/profile/quick-actions', '全部功能'),
+        ('/profile/services', '更多服务'),
+      ]) {
+        router.go(target.$1);
+        await tester.pumpAndSettle();
+        final label = find.text(target.$2);
+        expect(label, findsWidgets);
+        expect(
+          Theme.of(tester.element(label.first)).brightness,
+          Brightness.dark,
+          reason: '${target.$1} must keep the global night preference',
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      router.go('/profile');
+      await tester.pumpAndSettle();
       await tester.drag(
         find.byType(ListView).first,
         const Offset(0, -560),

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../../app/theme/app_theme_tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/startup_poster.dart';
@@ -248,7 +250,7 @@ class _LockScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF4F6EC),
+      color: context.appBackground,
       child: SafeArea(
         child: Center(
           child: Padding(
@@ -256,10 +258,10 @@ class _LockScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.lock_outline_rounded,
                   size: 56,
-                  color: Color(0xFF536A45),
+                  color: context.appPrimary,
                 ),
                 const SizedBox(height: 18),
                 const Text(
@@ -306,7 +308,7 @@ class _LockErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF4F6EC),
+      color: context.appBackground,
       child: SafeArea(
         child: Center(
           child: Padding(
@@ -316,10 +318,10 @@ class _LockErrorScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.shield_outlined,
                     size: 54,
-                    color: Color(0xFF536A45),
+                    color: context.appPrimary,
                   ),
                   const SizedBox(height: 18),
                   const Text(

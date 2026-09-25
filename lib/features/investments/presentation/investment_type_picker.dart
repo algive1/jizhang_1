@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../domain/investment_asset.dart';
 
@@ -16,8 +18,8 @@ Future<InvestmentAssetType?> showInvestmentTypePicker(
     builder: (sheetContext) => Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -25,7 +27,7 @@ Future<InvestmentAssetType?> showInvestmentTypePicker(
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF252923),
+                color: sheetContext.appPrimaryText,
               ),
             ),
           ),

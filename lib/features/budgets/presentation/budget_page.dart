@@ -429,7 +429,7 @@ class _TotalBudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final remaining = progress.remaining;
     return AppCard(
-      color: const Color(0xFFF2F5E4),
+      color: context.appSurfaceSoft,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

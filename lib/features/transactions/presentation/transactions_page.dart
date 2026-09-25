@@ -428,7 +428,7 @@ class _FilterSegment extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE3DECF)),
+        border: Border.all(color: context.appDivider),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(

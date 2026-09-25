@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../data/membership_catalog.dart';
 import '../data/payment_service.dart';
 import '../domain/commercial_service_contracts.dart';
@@ -64,7 +66,7 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.receipt_long_outlined,
             size: 44,
-            color: Colors.grey.shade400,
+            color: context.appSecondaryText.withValues(alpha: .65),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -75,7 +77,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             '完成支付后，订单状态和会员有效期会显示在这里。',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 12),
           ),
         ],
       ),
@@ -121,11 +123,11 @@ class _OrderTile extends StatelessWidget {
       PaymentOrderStatus.refunded => '已退款',
     };
     final statusColor = order.status == PaymentOrderStatus.paid
-        ? const Color(0xFF557D2D)
-        : Colors.grey.shade600;
+        ? context.appPrimary
+        : context.appSecondaryText;
     return Card(
       elevation: 0,
-      color: const Color(0xFFFEFAF1),
+      color: context.appSurface,
       child: ListTile(
         title: Text(
           productTitle,

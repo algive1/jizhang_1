@@ -551,7 +551,7 @@ class _GoalIntro extends StatelessWidget {
           height: 92,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Color(0xFFF0EBDD),
+            color: context.appSurfaceSoft,
             shape: BoxShape.circle,
           ),
           child: goal.coverPath != null && File(goal.coverPath!).existsSync()
@@ -719,7 +719,7 @@ class _NextMilestoneCard extends StatelessWidget {
         .where((item) => item.amount > goal.currentAmount)
         .firstOrNull;
     return AppCard(
-      color: const Color(0xFFF2F5E4),
+      color: context.appSurfaceSoft,
       child: Row(
         children: [
           Icon(
@@ -945,7 +945,7 @@ class _CompletedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      color: Color(0xFFE9EFD8),
+      color: context.appPrimarySoft,
       child: Row(
         children: [
           Text('🎉', style: TextStyle(fontSize: 28)),

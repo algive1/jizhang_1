@@ -22,9 +22,21 @@ class GoalProgressCard extends StatelessWidget {
     final lineProgress = amounts.length < 2
         ? 1.0
         : currentIndex / (amounts.length - 1);
+    final goalSurface = Color.alphaBlend(
+      context.appPrimary.withValues(alpha: .10),
+      context.appSurface,
+    );
+    final goalBorder = Color.alphaBlend(
+      context.appPrimary.withValues(alpha: .26),
+      context.appDivider,
+    );
+    final progressTrack = Color.alphaBlend(
+      context.appPrimary.withValues(alpha: .18),
+      context.appSurfaceSoft,
+    );
     return AppCard(
-      color: const Color(0xFFF2F5E4),
-      border: Border.all(color: const Color(0xFFCBD8AC)),
+      color: goalSurface,
+      border: Border.all(color: goalBorder),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: InkWell(
         onTap: onTap,
@@ -89,7 +101,7 @@ class GoalProgressCard extends StatelessWidget {
                         value: lineProgress,
                         minHeight: 3,
                         color: context.appPrimary,
-                        backgroundColor: const Color(0xFFDFE7CB),
+                        backgroundColor: progressTrack,
                       ),
                     ),
                     Row(

@@ -79,6 +79,11 @@ class CashflowTrendChart extends StatelessWidget {
                 totalAssetsColor: totalAssetsColor ?? AppColors.warning,
                 year: year,
                 bubbleLabel: bubbleLabel,
+                gridColor: context.appDivider,
+                labelColor: context.appSecondaryText,
+                selectionGuideColor: context.appPrimary.withValues(alpha: .25),
+                bubbleColor: context.appPrimary,
+                bubbleTextColor: Theme.of(context).colorScheme.onPrimary,
                 fontFamily: Theme.of(context).textTheme.bodySmall?.fontFamily,
               ),
             ),
@@ -102,6 +107,11 @@ class CashflowTrendPainter extends CustomPainter {
     required this.totalAssetsColor,
     required this.year,
     required this.bubbleLabel,
+    required this.gridColor,
+    required this.labelColor,
+    required this.selectionGuideColor,
+    required this.bubbleColor,
+    required this.bubbleTextColor,
     this.fontFamily,
   });
 
@@ -116,6 +126,11 @@ class CashflowTrendPainter extends CustomPainter {
   final Color totalAssetsColor;
   final bool year;
   final String? bubbleLabel;
+  final Color gridColor;
+  final Color labelColor;
+  final Color selectionGuideColor;
+  final Color bubbleColor;
+  final Color bubbleTextColor;
   final String? fontFamily;
 
   @override
@@ -158,7 +173,7 @@ class CashflowTrendPainter extends CustomPainter {
     );
 
     final grid = Paint()
-      ..color = AppColors.divider
+      ..color = gridColor
       ..strokeWidth = .8;
     for (var row = 0; row < 4; row++) {
       final y = top + row * height / 3;
@@ -217,7 +232,7 @@ class CashflowTrendPainter extends CustomPainter {
       Offset(current.dx, top),
       Offset(current.dx, bottom),
       Paint()
-        ..color = AppColors.primaryDark.withValues(alpha: .25)
+        ..color = selectionGuideColor
         ..strokeWidth = 1,
     );
     canvas.drawCircle(
@@ -239,10 +254,11 @@ class CashflowTrendPainter extends CustomPainter {
     final bubbleText = TextPainter(
       text: TextSpan(
         text: label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: bubbleTextColor,
           fontSize: 9,
-        ).copyWith(fontFamily: fontFamily),
+          fontFamily: fontFamily,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 100);
@@ -256,7 +272,7 @@ class CashflowTrendPainter extends CustomPainter {
         Rect.fromLTWH(bubbleLeft, bubbleTop, bubbleWidth, 18),
         const Radius.circular(8),
       ),
-      Paint()..color = AppColors.primaryDark,
+      Paint()..color = bubbleColor,
     );
     bubbleText.paint(canvas, Offset(bubbleLeft + 6, bubbleTop + 4));
 
@@ -316,10 +332,11 @@ class CashflowTrendPainter extends CustomPainter {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
+        style: TextStyle(
+          color: labelColor,
           fontSize: 9,
-        ).copyWith(fontFamily: fontFamily),
+          fontFamily: fontFamily,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: maxWidth);
@@ -337,6 +354,11 @@ class CashflowTrendPainter extends CustomPainter {
       oldDelegate.expenseColor != expenseColor ||
       oldDelegate.incomeColor != incomeColor ||
       oldDelegate.totalAssetsColor != totalAssetsColor ||
+      oldDelegate.gridColor != gridColor ||
+      oldDelegate.labelColor != labelColor ||
+      oldDelegate.selectionGuideColor != selectionGuideColor ||
+      oldDelegate.bubbleColor != bubbleColor ||
+      oldDelegate.bubbleTextColor != bubbleTextColor ||
       oldDelegate.year != year ||
       oldDelegate.bubbleLabel != bubbleLabel;
 
@@ -352,7 +374,7 @@ class CashflowTrendPainter extends CustomPainter {
   ) {
     final selectedIndex = selected.clamp(0, points.length - 1).toInt();
     final grid = Paint()
-      ..color = AppColors.divider
+      ..color = gridColor
       ..strokeWidth = .8;
     for (var row = 0; row < 4; row++) {
       final y = top + row * height / 3;
