@@ -31,7 +31,7 @@ class TransactionItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: const Color(0xF7FFFFFC),
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.appDivider.withValues(alpha: .7)),
       ),
