@@ -119,7 +119,6 @@ void main() {
           }
         });
         await tester.pumpAndSettle();
-
         expect(tester.takeException(), isNull);
         await _capture(tester, boundary, 'profile-$width-$scale');
         await tester.drag(find.byType(ListView).first, const Offset(0, -550));
