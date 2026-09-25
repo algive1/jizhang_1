@@ -127,7 +127,7 @@ class NumberKeyboard extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.all(3),
       child: Material(
-        color: const Color(0xFFEFEDEE),
+        color: context.appSurfaceSoft,
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: Row(
@@ -206,7 +206,7 @@ class _KeypadKey extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       )
                     : icon != null
@@ -216,7 +216,9 @@ class _KeypadKey extends StatelessWidget {
                         style: TextStyle(
                           fontSize: fontSize,
                           fontWeight: FontWeight.w500,
-                          color: primary ? Colors.white : context.appPrimaryText,
+                          color: primary
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : context.appPrimaryText,
                         ),
                       ),
               ),
