@@ -13,6 +13,7 @@ import 'support/reference_capture.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import 'package:jizhang_app/app/theme/app_theme_tokens.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
@@ -157,7 +158,7 @@ void main() {
     );
   });
 
-  testWidgets('二级分类玻璃保留透光渐变且不叠加主题色', (tester) async {
+  testWidgets('二级分类玻璃保持高透中性色并启用真实折射', (tester) async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -165,34 +166,22 @@ void main() {
     await _openCategoryPopover(tester, database, theme: theme);
 
     final bubble = find.byKey(const ValueKey('quick-subcategory-bubble'));
-    final glassDecoration = tester
-        .widgetList<DecoratedBox>(
-          find.descendant(of: bubble, matching: find.byType(DecoratedBox)),
-        )
-        .map((box) => box.decoration)
-        .whereType<BoxDecoration>()
-        .firstWhere((decoration) => decoration.gradient != null);
-    final stops = glassDecoration.gradient!.colors;
-    expect(stops, hasLength(3));
-    expect(stops.every((color) => color.a >= .94), isTrue);
-    expect(
-      stops.every((color) => color.r == color.g && color.g == color.b),
-      isTrue,
+    final surface = tester.widget<AppLiquidGlassSurface>(bubble);
+    expect(surface.tint, Colors.white);
+    expect(surface.glassOpacity, .94);
+    expect(surface.themeColorAccents, isFalse);
+
+    final lenses = tester.widgetList<LiquidGlassLens>(
+      find.descendant(of: bubble, matching: find.byType(LiquidGlassLens)),
     );
-    final glassContainer = tester
-        .widgetList<Container>(
-          find.descendant(of: bubble, matching: find.byType(Container)),
-        )
-        .first;
-    final surfaceDecoration = glassContainer.decoration! as BoxDecoration;
-    expect(
-      surfaceDecoration.boxShadow!.every(
-        (shadow) =>
-            shadow.color.r == shadow.color.g &&
-            shadow.color.g == shadow.color.b,
-      ),
-      isTrue,
-    );
+    expect(lenses, isNotEmpty);
+    final lens = lenses.first;
+    final tint = lens.style.appearance.color;
+    expect(tint.a, closeTo(.94, .001));
+    expect(tint.r, closeTo(tint.g, .001));
+    expect(tint.g, closeTo(tint.b, .001));
+    expect(lens.style.refraction.effectiveDistortion, greaterThan(0));
+    expect(lens.style.refraction.chromaticAberration, greaterThan(0));
   });
 
   testWidgets('二级分类浮层和每格布局更紧凑', (tester) async {
@@ -290,24 +279,19 @@ void main() {
     );
     expect(movingSurface.blurSigma, AppBottomNavigation.capsuleBlurSigma);
     expect(movingSurface.themeColorAccents, isFalse);
-    final movingGlassDecoration = tester
-        .widgetList<DecoratedBox>(
-          find.descendant(
-            of: find.byKey(
-              const ValueKey('quick-subcategory-liquid-pill-surface'),
-            ),
-            matching: find.byType(DecoratedBox),
-          ),
-        )
-        .map((box) => box.decoration)
-        .whereType<BoxDecoration>()
-        .firstWhere((decoration) => decoration.gradient != null);
-    expect(
-      movingGlassDecoration.gradient!.colors.every(
-        (color) => color.r == color.g && color.g == color.b,
+    final movingLens = tester.widget<LiquidGlassLens>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('quick-subcategory-liquid-pill-surface'),
+        ),
+        matching: find.byType(LiquidGlassLens),
       ),
-      isTrue,
     );
+    final movingTint = movingLens.style.appearance.color;
+    expect(movingTint.r, closeTo(movingTint.g, .001));
+    expect(movingTint.g, closeTo(movingTint.b, .001));
+    expect(movingLens.style.refraction.effectiveDistortion, greaterThan(0));
+    expect(movingLens.style.refraction.chromaticAberration, greaterThan(0));
     expect(
       find.byKey(const ValueKey('quick-subcategory-picker')),
       findsOneWidget,
