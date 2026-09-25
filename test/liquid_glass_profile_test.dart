@@ -9,6 +9,7 @@ import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/features/sharing/data/session_repository.dart';
+import 'package:jizhang_app/features/insights/application/insight_feed_provider.dart';
 
 void main() {
   testWidgets('liquid profile keeps header geometry and tracked glass stable',
@@ -22,6 +23,7 @@ void main() {
       overrides: [
         databaseProvider.overrideWithValue(db),
         sessionProvider.overrideWithValue(const AsyncData(null)),
+        confirmedInsightFeedProvider.overrideWith((ref) async => null),
       ],
     );
     addTearDown(() async {
