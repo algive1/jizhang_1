@@ -39,15 +39,16 @@ final themeCatalogProvider = FutureProvider<ThemeCatalog>((ref) async {
 
   ThemeCatalog? parseCatalog(Map<String, dynamic> data) {
     try {
-      final version = (data['version'] as num?)?.toInt() ?? 1;
       final items = (data['themes'] as List? ?? const [])
           .whereType<Map>()
           .map((e) => AppThemeDefinition.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      if (version < 2 &&
-          !items.any((e) => e.id == BuiltInThemes.liquidGlass.id)) {
-        items.add(BuiltInThemes.liquidGlass);
-      }
+      // Liquid Glass is a rendering contract, not only a catalogue palette.
+      // A stale remote/cache palette must never pull the production material
+      // back to the old cool-blue appearance while the shader/navigation use
+      // the new warm sunset tokens.
+      items.removeWhere((e) => e.id == BuiltInThemes.liquidGlass.id);
+      items.add(BuiltInThemes.liquidGlass);
       if (items.any((e) => e.id == BuiltInThemes.freshGreen.id)) {
         return ThemeCatalog(items);
       }
@@ -99,3 +100,48 @@ final effectiveThemeProvider = Provider<AppThemeDefinition>((ref) {
   // premium theme becomes effective again without silently changing preference.
   return BuiltInThemes.freshGreen;
 });
+
+
+enum AppBrightnessPreference { light, dark }
+
+const _brightnessSettingKey = 'appearance.brightness.preferred.v1';
+
+class BrightnessController
+    extends AsyncNotifier<AppBrightnessPreference> {
+  @override
+  Future<AppBrightnessPreference> build() async {
+    final raw = await ref
+        .read(appSettingsRepositoryProvider)
+        .get(_brightnessSettingKey);
+    return raw == AppBrightnessPreference.dark.name
+        ? AppBrightnessPreference.dark
+        : AppBrightnessPreference.light;
+  }
+
+  Future<void> select(AppBrightnessPreference value) async {
+    final previous = state.value ?? AppBrightnessPreference.light;
+    state = AsyncData(value);
+    try {
+      await ref
+          .read(appSettingsRepositoryProvider)
+          .set(_brightnessSettingKey, value.name);
+    } on Object {
+      state = AsyncData(previous);
+      rethrow;
+    }
+  }
+
+  Future<void> toggle() async {
+    final current = state.value ?? AppBrightnessPreference.light;
+    await select(
+      current == AppBrightnessPreference.light
+          ? AppBrightnessPreference.dark
+          : AppBrightnessPreference.light,
+    );
+  }
+}
+
+final brightnessModeProvider =
+    AsyncNotifierProvider<BrightnessController, AppBrightnessPreference>(
+      BrightnessController.new,
+    );
