@@ -52,7 +52,7 @@ class ProfitText extends StatelessWidget {
               fontWeight: weight,
               color: value == 0
                   ? context.appSecondaryText
-                  : profitColor(value),
+                  : profitColor(value, context: context),
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           );
@@ -75,10 +75,10 @@ class ProfitText extends StatelessWidget {
 
 /// Southern-market convention, matching the existing 资产总览 page: a gain is
 /// warm red, a loss is soft green.
-Color profitColor(double value) {
+Color profitColor(double value, {BuildContext? context}) {
   if (value > 0) return AppColors.expense;
   if (value < 0) return AppColors.success;
-  return AppColors.textSecondary;
+  return context?.appSecondaryText ?? AppColors.textSecondary;
 }
 
 /// Money amount with an explicit sign, reusing the app-wide privacy mask so a
