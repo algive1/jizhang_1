@@ -206,7 +206,7 @@ class _SummaryMetric extends StatelessWidget {
           currency: currency,
           color: percent == null
               ? context.appSecondaryText
-              : profitColor(percent!),
+              : profitColor(percent!, context: context),
         ),
         ProfitText(percent: percent, fontSize: 10),
       ],
