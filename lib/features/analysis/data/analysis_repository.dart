@@ -90,13 +90,22 @@ final analysisRepositoryProvider = Provider<AnalysisRepository>((ref) {
   );
 });
 
+typedef AnalysisSnapshotKey = ({AnalysisPeriod period, String currency});
+
+final analysisSnapshotForPeriodProvider =
+    Provider.family<AnalysisSnapshot, AnalysisSnapshotKey>((ref, key) {
+      return ref
+          .watch(analysisRepositoryProvider)
+          .analyze(period: key.period, currency: key.currency);
+    });
+
 final analysisSnapshotProvider = Provider<AnalysisSnapshot>((ref) {
-  return ref
-      .watch(analysisRepositoryProvider)
-      .analyze(
-        period: ref.watch(analysisPeriodProvider),
-        currency: ref.watch(analysisCurrencyProvider),
-      );
+  return ref.watch(
+    analysisSnapshotForPeriodProvider((
+      period: ref.watch(analysisPeriodProvider),
+      currency: ref.watch(analysisCurrencyProvider),
+    )),
+  );
 });
 
 class AnalysisCurrencyController extends Notifier<String> {

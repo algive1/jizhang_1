@@ -74,6 +74,8 @@ jobs:
           test/budget_and_management_test.dart
           test/budget_recommendation_service_test.dart
           test/statistical_analysis_service_test.dart
+          test/analysis_period_cache_test.dart
+          test/asset_history_performance_regression_test.dart
           test/financial_insight_engine_test.dart
           test/home_insight_drawer_test.dart
           test/home_redesign_domain_test.dart
@@ -90,6 +92,7 @@ jobs:
           test/bill_import_deduplicator_test.dart
           test/transaction_date_group_test.dart
           test/transaction_layout_test.dart
+          test/transactions_filter_performance_test.dart
           test/transaction_detail_test.dart
           test/bill_import_category_mapper_test.dart
           test/xlsx_bill_import_test.dart

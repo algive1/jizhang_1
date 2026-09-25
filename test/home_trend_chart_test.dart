@@ -100,4 +100,40 @@ void main() {
     expect(find.text('¥9,860'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('home trend keeps cashflow readable when assets are much larger', (
+    tester,
+  ) async {
+    final points = [
+      CashflowPoint(DateTime(2026, 9, 21), 120, 80, totalAssets: 880000),
+      CashflowPoint(DateTime(2026, 9, 22), 420, 260, totalAssets: 882500),
+      CashflowPoint(DateTime(2026, 9, 23), 180, 110, totalAssets: 881200),
+      CashflowPoint(DateTime(2026, 9, 24), 520, 330, totalAssets: 884000),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.only(top: 80),
+            child: SizedBox(
+              width: 357,
+              child: HomeTrendChart(
+                points: points,
+                selected: 2,
+                onSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('资产'), findsOneWidget);
+    expect(find.text('¥881,200'), findsOneWidget);
+    expect(find.text('收入'), findsOneWidget);
+    expect(find.text('支出'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }

@@ -127,9 +127,12 @@ class _HomePageState extends ConsumerState<HomePage>
     final transactions = ref.watch(transactionsProvider);
     final budgets = ref.watch(currentMonthBudgetsProvider);
     final snapshot = ref.watch(dashboardSnapshotProvider);
-    final analysis = ref
-        .watch(analysisRepositoryProvider)
-        .analyze(period: AnalysisPeriod.currentMonth);
+    final analysis = ref.watch(
+      analysisSnapshotForPeriodProvider((
+        period: AnalysisPeriod.currentMonth,
+        currency: 'CNY',
+      )),
+    );
     final insightFeed = ref.watch(insightFeedProvider);
     final insight = ref.watch(homeInsightProvider);
     final recentState = ref.watch(homeRecentTransactionsProvider);

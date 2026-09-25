@@ -30,13 +30,12 @@ class HomeExpenseTrend extends ConsumerStatefulWidget {
 
 class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
   AnalysisPeriod _period = AnalysisPeriod.currentMonth;
-  int? _selected;
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = ref
-        .watch(analysisRepositoryProvider)
-        .analyze(period: _period);
+    final snapshot = ref.watch(
+      analysisSnapshotForPeriodProvider((period: _period, currency: 'CNY')),
+    );
     final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
     final transactions =
         ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
@@ -65,6 +64,20 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
     };
     final currentCurrencyInvestment =
         currentInvestmentByCurrency[trendCurrency] ?? 0;
+    final currentAccountAssets = trendAccounts.fold<double>(
+      0,
+      (total, account) => account.balance > 0 ? total + account.balance : total,
+    );
+
+    final assetTargets = [
+      for (final point in snapshot.cashflowTrend)
+        point.date
+            .add(const Duration(days: 1))
+            .subtract(const Duration(microseconds: 1)),
+    ];
+    final historicalAccountAssets = assetHistory.hasFutureRecords
+        ? null
+        : assetHistory.positiveBalancesAt(assetTargets);
 
     double? investmentAt(DateTime date) {
       final day = DateTime(date.year, date.month, date.day);
@@ -77,63 +90,27 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
       return exact;
     }
 
-    int accountAssetsAt(DateTime date) =>
-        trendAccounts.fold<int>(0, (cents, account) {
-          final balance = assetHistory.balanceAt(date, accountId: account.id);
-          return balance > 0 ? cents + (balance * 100).round() : cents;
-        });
-
-    int currentAccountAssets() => trendAccounts.fold<int>(
-      0,
-      (cents, account) =>
-          account.balance > 0 ? cents + (account.balance * 100).round() : cents,
-    );
-
-    double? totalAssetsAt(DateTime date) {
-      final day = DateTime(date.year, date.month, date.day);
-      if (assetHistory.hasFutureRecords && day != today) return null;
-      final investments = investmentAt(date);
-      if (investments == null) return null;
-      if (assetHistory.hasFutureRecords) {
-        return currentAccountAssets() / 100 + investments;
-      }
-      final endOfDay = date
-          .add(const Duration(days: 1))
-          .subtract(const Duration(microseconds: 1));
-      return accountAssetsAt(endOfDay) / 100 + investments;
-    }
-
-    final dailyPoints = [
-      for (final point in snapshot.cashflowTrend)
+    final dailyPoints = <CashflowPoint>[
+      for (final (index, point) in snapshot.cashflowTrend.indexed)
         CashflowPoint(
           point.date,
           point.income,
           point.expense,
-          totalAssets: totalAssetsAt(point.date),
+          totalAssets: () {
+            final day = DateTime(point.date.year, point.date.month, point.date.day);
+            if (assetHistory.hasFutureRecords && day != today) return null;
+            final accountAssets = day == today
+                ? currentAccountAssets
+                : historicalAccountAssets?[index];
+            final investmentAssets = investmentAt(point.date);
+            if (accountAssets == null || investmentAssets == null) return null;
+            return accountAssets + investmentAssets;
+          }(),
         ),
     ];
     final points = _period == AnalysisPeriod.currentYear
         ? _monthlyPoints(dailyPoints)
         : dailyPoints;
-    final selected = points.isEmpty
-        ? 0
-        : (_selected ?? ((points.length - 1) / 2).round())
-              .clamp(0, math.max(0, points.length - 1))
-              .toInt();
-    final point = points.isEmpty ? null : points[selected];
-    final year = _period == AnalysisPeriod.currentYear;
-
-    double? latestAsset;
-    for (final candidate in points.reversed) {
-      if (candidate.totalAssets != null) {
-        latestAsset = candidate.totalAssets;
-        break;
-      }
-    }
-
-    String dateLabel(CashflowPoint value) => year
-        ? '${value.date.year}年${value.date.month}月'
-        : '${value.date.month}月${value.date.day}日';
 
     return HomeSurface(
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 10),
@@ -172,88 +149,23 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
                     width: 112,
                     child: _TrendPeriodControl(
                       selected: _period,
-                      onChanged: (period) => setState(() {
-                        _period = period;
-                        _selected = null;
-                      }),
+                      onChanged: (period) {
+                        if (period == _period) return;
+                        setState(() => _period = period);
+                      },
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 9),
-              if (widget.amountHidden)
-                Text(
-                  '金额已隐藏',
-                  key: const ValueKey('home-trend-value'),
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                )
-              else
-                _TrendSummaryRow(
-                  expense: snapshot.totalExpense,
-                  income: snapshot.totalIncome,
-                  average: snapshot.range.dayCount <= 0
-                      ? 0
-                      : snapshot.totalExpense / snapshot.range.dayCount,
-                  asset: latestAsset,
-                  currency: trendCurrency,
-                ),
-              const SizedBox(height: 9),
-              if (widget.amountHidden)
-                SizedBox(
-                  height: 104,
-                  child: Center(
-                    child: Text(
-                      '趋势金额已隐藏',
-                      style: TextStyle(
-                        color: context.appSecondaryText,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                )
-              else if (points.isNotEmpty)
-                Semantics(
-                  label: '收支趋势，${year ? "按月" : "按日"}查看',
-                  value:
-                      '${dateLabel(point!)}，支出 CNY ${MoneyFormatter.decimal(point.expense)}，收入 CNY ${MoneyFormatter.decimal(point.income)}，${point.totalAssets == null ? '资产暂无历史估值' : '资产 ${MoneyFormatter.decimal(point.totalAssets!)} $trendCurrency'}',
-                  increasedValue: selected < points.length - 1
-                      ? dateLabel(points[selected + 1])
-                      : null,
-                  decreasedValue: selected > 0
-                      ? dateLabel(points[selected - 1])
-                      : null,
-                  onIncrease: selected < points.length - 1
-                      ? () => setState(() => _selected = selected + 1)
-                      : null,
-                  onDecrease: selected > 0
-                      ? () => setState(() => _selected = selected - 1)
-                      : null,
-                  child: HomeTrendChart(
-                    key: const ValueKey('home-trend-chart'),
-                    points: points,
-                    selected: selected,
-                    year: year,
-                    currency: trendCurrency,
-                    onSelected: (index) => setState(() => _selected = index),
-                  ),
-                )
-              else
-                SizedBox(
-                  height: 104,
-                  child: Center(
-                    child: Text(
-                      '这段时间还没有流水',
-                      style: TextStyle(
-                        color: context.appSecondaryText,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ),
+              _InteractiveTrendContent(
+                key: ValueKey('home-trend-content-${_period.name}'),
+                period: _period,
+                snapshot: snapshot,
+                points: points,
+                currency: trendCurrency,
+                amountHidden: widget.amountHidden,
+              ),
             ],
           ),
         ],
@@ -283,6 +195,149 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
           ),
         )
         .toList();
+  }
+}
+
+class _InteractiveTrendContent extends StatefulWidget {
+  const _InteractiveTrendContent({
+    required this.period,
+    required this.snapshot,
+    required this.points,
+    required this.currency,
+    required this.amountHidden,
+    super.key,
+  });
+
+  final AnalysisPeriod period;
+  final AnalysisSnapshot snapshot;
+  final List<CashflowPoint> points;
+  final String currency;
+  final bool amountHidden;
+
+  @override
+  State<_InteractiveTrendContent> createState() =>
+      _InteractiveTrendContentState();
+}
+
+class _InteractiveTrendContentState extends State<_InteractiveTrendContent> {
+  int? _selected;
+
+  int get _selectedIndex => widget.points.isEmpty
+      ? 0
+      : (_selected ?? ((widget.points.length - 1) / 2).round())
+            .clamp(0, math.max(0, widget.points.length - 1))
+            .toInt();
+
+  @override
+  void didUpdateWidget(covariant _InteractiveTrendContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.points.length != widget.points.length &&
+        _selected != null &&
+        widget.points.isNotEmpty) {
+      _selected = _selected!.clamp(0, widget.points.length - 1).toInt();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final points = widget.points;
+    final selected = _selectedIndex;
+    final point = points.isEmpty ? null : points[selected];
+    final year = widget.period == AnalysisPeriod.currentYear;
+
+    double? latestAsset;
+    for (final candidate in points.reversed) {
+      if (candidate.totalAssets != null) {
+        latestAsset = candidate.totalAssets;
+        break;
+      }
+    }
+
+    String dateLabel(CashflowPoint value) => year
+        ? '${value.date.year}年${value.date.month}月'
+        : '${value.date.month}月${value.date.day}日';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.amountHidden)
+          Text(
+            '金额已隐藏',
+            key: const ValueKey('home-trend-value'),
+            style: TextStyle(
+              color: context.appSecondaryText,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          )
+        else
+          _TrendSummaryRow(
+            expense: widget.snapshot.totalExpense,
+            income: widget.snapshot.totalIncome,
+            average: widget.snapshot.range.dayCount <= 0
+                ? 0
+                : widget.snapshot.totalExpense / widget.snapshot.range.dayCount,
+            asset: latestAsset,
+            currency: widget.currency,
+          ),
+        const SizedBox(height: 9),
+        if (widget.amountHidden)
+          SizedBox(
+            height: 104,
+            child: Center(
+              child: Text(
+                '趋势金额已隐藏',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          )
+        else if (points.isNotEmpty)
+          Semantics(
+            label: '收支趋势，${year ? "按月" : "按日"}查看',
+            value:
+                '${dateLabel(point!)}，支出 CNY ${MoneyFormatter.decimal(point.expense)}，收入 CNY ${MoneyFormatter.decimal(point.income)}，${point.totalAssets == null ? '资产暂无历史估值' : '资产 ${MoneyFormatter.decimal(point.totalAssets!)} ${widget.currency}'}',
+            increasedValue: selected < points.length - 1
+                ? dateLabel(points[selected + 1])
+                : null,
+            decreasedValue: selected > 0
+                ? dateLabel(points[selected - 1])
+                : null,
+            onIncrease: selected < points.length - 1
+                ? () => setState(() => _selected = selected + 1)
+                : null,
+            onDecrease: selected > 0
+                ? () => setState(() => _selected = selected - 1)
+                : null,
+            child: HomeTrendChart(
+              key: const ValueKey('home-trend-chart'),
+              points: points,
+              selected: selected,
+              year: year,
+              currency: widget.currency,
+              onSelected: (index) {
+                if (index == selected) return;
+                setState(() => _selected = index);
+              },
+            ),
+          )
+        else
+          SizedBox(
+            height: 104,
+            child: Center(
+              child: Text(
+                '这段时间还没有流水',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -323,26 +378,26 @@ class _TrendPeriodControl extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => onChanged(item.$1),
                   child: AnimatedContainer(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: item.$1 == selected
-                        ? context.appPrimary
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: item.$1 == selected
-                        ? [
-                            BoxShadow(
-                              color: context.appPrimary.withValues(alpha: .18),
-                              blurRadius: 5,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  alignment: Alignment.center,
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
+                      color: item.$1 == selected
+                          ? context.appPrimary
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: item.$1 == selected
+                          ? [
+                              BoxShadow(
+                                color: context.appPrimary.withValues(alpha: .18),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    alignment: Alignment.center,
                     child: Text(
                       item.$2,
                       style: TextStyle(
@@ -418,21 +473,21 @@ class _TrendSummaryRow extends StatelessWidget {
   }
 
   Widget _metric(String text, Color color) => Text(
-    text,
-    style: TextStyle(
-      color: color,
-      fontSize: 10.5,
-      height: 1,
-      fontWeight: FontWeight.w800,
-    ),
-  );
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10.5,
+          height: 1,
+          fontWeight: FontWeight.w800,
+        ),
+      );
 
   Widget _divider(BuildContext context) => Container(
-    width: 1,
-    height: 13,
-    margin: const EdgeInsets.symmetric(horizontal: 8),
-    color: context.appSecondaryText.withValues(alpha: .38),
-  );
+        width: 1,
+        height: 13,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        color: context.appSecondaryText.withValues(alpha: .38),
+      );
 }
 
 String _currencySymbol(String currency) => switch (currency.toUpperCase()) {

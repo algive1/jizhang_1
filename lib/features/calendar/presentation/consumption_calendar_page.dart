@@ -40,6 +40,16 @@ class _ConsumptionCalendarPageState
   String? _bookFilterId;
   _CalendarViewMode _viewMode = _CalendarViewMode.month;
 
+  List<TransactionRecord>? _cachedMonthSource;
+  String? _cachedMonthBookFilter;
+  int? _cachedMonthKey;
+  int? _cachedClockMinute;
+  _CalendarMonthData? _cachedMonthData;
+
+  List<TransactionRecord>? _cachedWeekSource;
+  int? _cachedWeekStartKey;
+  _CalendarWeekData? _cachedWeekData;
+
   @override
   void initState() {
     super.initState();
@@ -64,85 +74,17 @@ class _ConsumptionCalendarPageState
       for (final account in calendarAccounts) account.id: account.displayName,
     };
     final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
-    final filtered = effectiveBookFilterId == null
-        ? all
-        : all.where((item) => item.bookId == effectiveBookFilterId).toList();
-    final monthTransactions = filtered.where((item) {
-      final date = item.occurredAt;
-      return item.deletedAt == null &&
-          date.year == _month.year &&
-          date.month == _month.month &&
-          !_isFutureDate(date);
-    }).toList();
-
-    final dailyExpense = <int, double>{};
-    final dailyIncome = <int, double>{};
-    final dailyExpenseCents = <int, int>{};
-    final dailyOther = <int>{};
-    for (final item in monthTransactions) {
-      final day = item.occurredAt.day;
-      if (_isConsumption(item)) {
-        final cents = (item.netExpenseAmount * 100).round();
-        dailyExpense.update(
-          day,
-          (value) => value + item.netExpenseAmount,
-          ifAbsent: () => item.netExpenseAmount,
-        );
-        dailyExpenseCents.update(
-          day,
-          (value) => value + cents,
-          ifAbsent: () => cents,
-        );
-      } else if (item.isIncome) {
-        dailyIncome.update(
-          day,
-          (value) => value + item.amount,
-          ifAbsent: () => item.amount,
-        );
-      } else {
-        dailyOther.add(day);
-      }
-    }
-
+    final monthData = _monthData(all, effectiveBookFilterId);
     final selected = _selectedDay == null
         ? const <TransactionRecord>[]
-        : (monthTransactions
-              .where((item) => item.occurredAt.day == _selectedDay)
-              .toList()
-            ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt)));
-
-    final recordMonths =
-        filtered
-            .where(
-              (item) =>
-                  item.deletedAt == null && !_isFutureDate(item.occurredAt),
-            )
-            .map(
-              (item) => DateTime(item.occurredAt.year, item.occurredAt.month),
-            )
-            .toSet()
-            .toList()
-          ..sort();
-    final previousRecorded = recordMonths
-        .where((item) => item.isBefore(_month))
-        .lastOrNull;
-    final nextRecorded = recordMonths
-        .where((item) => item.isAfter(_month))
-        .firstOrNull;
-
-    final totalExpense = monthTransactions
-        .where(_isConsumption)
-        .fold<double>(0, (sum, item) => sum + item.netExpenseAmount);
-    final totalIncome = monthTransactions
-        .where((item) => item.isIncome)
-        .fold<double>(0, (sum, item) => sum + item.amount);
+        : monthData.transactionsByDay[_selectedDay] ??
+            const <TransactionRecord>[];
+    final previousRecorded = monthData.previousRecorded;
+    final nextRecorded = monthData.nextRecorded;
+    final totalExpense = monthData.totalExpense;
+    final totalIncome = monthData.totalIncome;
     final balance = totalIncome - totalExpense;
-    final highest = dailyExpenseCents.entries.isEmpty
-        ? null
-        : dailyExpenseCents.entries.reduce((a, b) {
-            if (a.value != b.value) return a.value > b.value ? a : b;
-            return a.key < b.key ? a : b;
-          });
+    final highest = monthData.highestExpense;
 
     final selectedDate = _selectedDay == null
         ? null
@@ -150,42 +92,14 @@ class _ConsumptionCalendarPageState
     final calendarDates = _viewMode == _CalendarViewMode.week
         ? _weekDates(selectedDate)
         : _monthDates(_month);
-    var calendarExpense = dailyExpense;
-    var calendarIncome = dailyIncome;
-    var calendarOther = dailyOther;
-    if (_viewMode == _CalendarViewMode.week) {
-      final visibleDateKeys = calendarDates.map(_dateKey).toSet();
-      calendarExpense = <int, double>{};
-      calendarIncome = <int, double>{};
-      calendarOther = <int>{};
-      for (final item in filtered) {
-        if (item.deletedAt != null ||
-            _isFutureDate(item.occurredAt) ||
-            !visibleDateKeys.contains(_dateKey(item.occurredAt))) {
-          continue;
-        }
-        final day = item.occurredAt.day;
-        if (_isConsumption(item)) {
-          calendarExpense.update(
-            day,
-            (value) => value + item.netExpenseAmount,
-            ifAbsent: () => item.netExpenseAmount,
-          );
-        } else if (item.isIncome) {
-          calendarIncome.update(
-            day,
-            (value) => value + item.amount,
-            ifAbsent: () => item.amount,
-          );
-        } else {
-          calendarOther.add(day);
-        }
-      }
-    }
-    final calendarMaxDailyExpense = calendarExpense.values.fold<double>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
+    final weekData = _viewMode == _CalendarViewMode.week
+        ? _weekData(monthData.filtered, calendarDates)
+        : null;
+    final calendarExpense = weekData?.dailyExpense ?? monthData.dailyExpense;
+    final calendarIncome = weekData?.dailyIncome ?? monthData.dailyIncome;
+    final calendarOther = weekData?.dailyOther ?? monthData.dailyOther;
+    final calendarMaxDailyExpense =
+        weekData?.maxDailyExpense ?? monthData.maxDailyExpense;
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -203,7 +117,7 @@ class _ConsumptionCalendarPageState
                 totalExpense: totalExpense,
                 totalIncome: totalIncome,
                 balance: balance,
-                consumptionDays: dailyExpenseCents.length,
+                consumptionDays: monthData.consumptionDays,
               ),
             ),
           ),
@@ -272,7 +186,7 @@ class _ConsumptionCalendarPageState
                           totalExpense: totalExpense,
                           totalIncome: totalIncome,
                           balance: balance,
-                          consumptionDays: dailyExpenseCents.length,
+                          consumptionDays: monthData.consumptionDays,
                           highestExpenseDay: highest?.key,
                           highestExpenseCents: highest?.value,
                         ),
@@ -303,6 +217,164 @@ class _ConsumptionCalendarPageState
         ],
       ),
     );
+  }
+
+  _CalendarMonthData _monthData(
+    List<TransactionRecord> all,
+    String? effectiveBookFilterId,
+  ) {
+    final clock = _today;
+    final monthKey = _month.year * 100 + _month.month;
+    final clockMinute = clock.millisecondsSinceEpoch ~/ 60000;
+    if (identical(_cachedMonthSource, all) &&
+        _cachedMonthBookFilter == effectiveBookFilterId &&
+        _cachedMonthKey == monthKey &&
+        _cachedClockMinute == clockMinute &&
+        _cachedMonthData != null) {
+      return _cachedMonthData!;
+    }
+
+    final filtered = effectiveBookFilterId == null
+        ? all
+        : all
+            .where((item) => item.bookId == effectiveBookFilterId)
+            .toList(growable: false);
+    final transactionsByDay = <int, List<TransactionRecord>>{};
+    final dailyExpense = <int, double>{};
+    final dailyIncome = <int, double>{};
+    final dailyExpenseCents = <int, int>{};
+    final dailyOther = <int>{};
+    final recordedMonths = <DateTime>{};
+    var totalExpenseCents = 0;
+    var totalIncomeCents = 0;
+
+    for (final item in filtered) {
+      if (item.deletedAt != null || item.occurredAt.isAfter(clock)) continue;
+      final date = item.occurredAt;
+      recordedMonths.add(DateTime(date.year, date.month));
+      if (date.year != _month.year || date.month != _month.month) continue;
+
+      transactionsByDay.putIfAbsent(date.day, () => []).add(item);
+      if (_isConsumption(item)) {
+        final cents = (item.netExpenseAmount * 100).round();
+        totalExpenseCents += cents;
+        dailyExpense.update(
+          date.day,
+          (value) => value + item.netExpenseAmount,
+          ifAbsent: () => item.netExpenseAmount,
+        );
+        dailyExpenseCents.update(
+          date.day,
+          (value) => value + cents,
+          ifAbsent: () => cents,
+        );
+      } else if (item.isIncome) {
+        final cents = (item.amount * 100).round();
+        totalIncomeCents += cents;
+        dailyIncome.update(
+          date.day,
+          (value) => value + item.amount,
+          ifAbsent: () => item.amount,
+        );
+      } else {
+        dailyOther.add(date.day);
+      }
+    }
+
+    for (final values in transactionsByDay.values) {
+      values.sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+    }
+    final recordMonths = recordedMonths.toList()..sort();
+    final previousRecorded =
+        recordMonths.where((item) => item.isBefore(_month)).lastOrNull;
+    final nextRecorded =
+        recordMonths.where((item) => item.isAfter(_month)).firstOrNull;
+    final highest = dailyExpenseCents.entries.isEmpty
+        ? null
+        : dailyExpenseCents.entries.reduce((a, b) {
+            if (a.value != b.value) return a.value > b.value ? a : b;
+            return a.key < b.key ? a : b;
+          });
+    final maxDailyExpense = dailyExpense.values.fold<double>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
+
+    final data = _CalendarMonthData(
+      filtered: filtered,
+      transactionsByDay: transactionsByDay,
+      dailyExpense: dailyExpense,
+      dailyIncome: dailyIncome,
+      dailyOther: dailyOther,
+      totalExpense: totalExpenseCents / 100,
+      totalIncome: totalIncomeCents / 100,
+      consumptionDays: dailyExpenseCents.length,
+      highestExpense: highest,
+      maxDailyExpense: maxDailyExpense,
+      previousRecorded: previousRecorded,
+      nextRecorded: nextRecorded,
+    );
+    _cachedMonthSource = all;
+    _cachedMonthBookFilter = effectiveBookFilterId;
+    _cachedMonthKey = monthKey;
+    _cachedClockMinute = clockMinute;
+    _cachedMonthData = data;
+    _cachedWeekSource = null;
+    _cachedWeekStartKey = null;
+    _cachedWeekData = null;
+    return data;
+  }
+
+  _CalendarWeekData _weekData(
+    List<TransactionRecord> filtered,
+    List<DateTime> dates,
+  ) {
+    final startKey = dates.isEmpty ? 0 : _dateKey(dates.first);
+    if (identical(_cachedWeekSource, filtered) &&
+        _cachedWeekStartKey == startKey &&
+        _cachedWeekData != null) {
+      return _cachedWeekData!;
+    }
+    final visibleDateKeys = dates.map(_dateKey).toSet();
+    final dailyExpense = <int, double>{};
+    final dailyIncome = <int, double>{};
+    final dailyOther = <int>{};
+    for (final item in filtered) {
+      if (item.deletedAt != null ||
+          _isFutureDate(item.occurredAt) ||
+          !visibleDateKeys.contains(_dateKey(item.occurredAt))) {
+        continue;
+      }
+      final day = item.occurredAt.day;
+      if (_isConsumption(item)) {
+        dailyExpense.update(
+          day,
+          (value) => value + item.netExpenseAmount,
+          ifAbsent: () => item.netExpenseAmount,
+        );
+      } else if (item.isIncome) {
+        dailyIncome.update(
+          day,
+          (value) => value + item.amount,
+          ifAbsent: () => item.amount,
+        );
+      } else {
+        dailyOther.add(day);
+      }
+    }
+    final data = _CalendarWeekData(
+      dailyExpense: dailyExpense,
+      dailyIncome: dailyIncome,
+      dailyOther: dailyOther,
+      maxDailyExpense: dailyExpense.values.fold<double>(
+        0,
+        (max, value) => value > max ? value : max,
+      ),
+    );
+    _cachedWeekSource = filtered;
+    _cachedWeekStartKey = startKey;
+    _cachedWeekData = data;
+    return data;
   }
 
   bool get _isCurrentMonth {
@@ -451,6 +523,50 @@ class _ConsumptionCalendarPageState
   }
 
   static const _allBooksFilterValue = '__all_books__';
+}
+
+class _CalendarMonthData {
+  const _CalendarMonthData({
+    required this.filtered,
+    required this.transactionsByDay,
+    required this.dailyExpense,
+    required this.dailyIncome,
+    required this.dailyOther,
+    required this.totalExpense,
+    required this.totalIncome,
+    required this.consumptionDays,
+    required this.highestExpense,
+    required this.maxDailyExpense,
+    required this.previousRecorded,
+    required this.nextRecorded,
+  });
+
+  final List<TransactionRecord> filtered;
+  final Map<int, List<TransactionRecord>> transactionsByDay;
+  final Map<int, double> dailyExpense;
+  final Map<int, double> dailyIncome;
+  final Set<int> dailyOther;
+  final double totalExpense;
+  final double totalIncome;
+  final int consumptionDays;
+  final MapEntry<int, int>? highestExpense;
+  final double maxDailyExpense;
+  final DateTime? previousRecorded;
+  final DateTime? nextRecorded;
+}
+
+class _CalendarWeekData {
+  const _CalendarWeekData({
+    required this.dailyExpense,
+    required this.dailyIncome,
+    required this.dailyOther,
+    required this.maxDailyExpense,
+  });
+
+  final Map<int, double> dailyExpense;
+  final Map<int, double> dailyIncome;
+  final Set<int> dailyOther;
+  final double maxDailyExpense;
 }
 
 class _CalendarHeroHeader extends StatelessWidget {

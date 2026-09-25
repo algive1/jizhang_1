@@ -61,18 +61,14 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         )
         .toList();
 
+    final groups = _groupTransactions(transactions);
+    final summary = _monthlySummary(all);
+
     return SafeArea(
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            // Leaves the floating glass bar's whole footprint clear so the
-            // last transaction can scroll out from under it.
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              AppScaffold.reservedBottomInset(context),
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _TransactionsHeader(
@@ -93,7 +89,11 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                 _TransactionsToolbar(
                   selectedIndex: _typeFilter,
                   hasCategoryFilter: _categoryFilter != null,
-                  onTypeChanged: (value) => setState(() => _typeFilter = value),
+                  onTypeChanged: (value) {
+                    if (value != _typeFilter) {
+                      setState(() => _typeFilter = value);
+                    }
+                  },
                   onSearch: () => context.push(
                     '/transactions/search${widget.month == null ? '' : '?month=${widget.month!.year}-${widget.month!.month.toString().padLeft(2, '0')}'}',
                   ),
@@ -107,11 +107,11 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   periodLabel: widget.month == null
                       ? '本月'
                       : '${widget.month!.month}月',
-                  spending: _monthlyTotal(all, expense: true),
-                  income: _monthlyTotal(all, expense: false),
+                  spending: summary.expense,
+                  income: summary.income,
                 ),
                 Padding(
-                  padding: EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     '月度汇总为 CNY · 全部分类 · 截至当前',
                     style: TextStyle(
@@ -129,58 +129,102 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                         label: Text(_categoryFilter!),
                         selected: true,
                         selectedColor: context.appPrimarySoft,
-                        labelStyle: TextStyle(
-                          color: context.appPrimary,
-                        ),
+                        labelStyle: TextStyle(color: context.appPrimary),
                         side: BorderSide.none,
                         onDeleted: () => setState(() => _categoryFilter = null),
                       ),
                     ),
                   ),
                 const SizedBox(height: 18),
-                if (transactions.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(
-                      child: Text(
-                        '没有找到匹配的记录',
-                        style: TextStyle(color: context.appSecondaryText),
-                      ),
-                    ),
-                  )
-                else
-                  ..._buildGroups(transactions, accountNames),
               ]),
             ),
           ),
+          if (groups.isEmpty)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                AppScaffold.reservedBottomInset(context),
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 48),
+                  child: Center(
+                    child: Text(
+                      '没有找到匹配的记录',
+                      style: TextStyle(color: context.appSecondaryText),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                AppScaffold.reservedBottomInset(context),
+              ),
+              sliver: SliverList.builder(
+                itemCount: groups.length,
+                itemBuilder: (context, index) {
+                  final entry = groups[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TransactionDateGroup(
+                      dateLabel: TransactionDateFormatter.groupLabel(entry.date),
+                      transactions: entry.transactions,
+                      accountNames: accountNames,
+                      onTransactionTap: (transaction) =>
+                          openTransactionDetail(context, transaction),
+                      onTransactionLongPress: _showTransactionActions,
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildGroups(
-    List<TransactionRecord> transactions,
-    Map<String, String> accountNames,
-  ) {
+  List<({DateTime date, List<TransactionRecord> transactions})>
+      _groupTransactions(List<TransactionRecord> transactions) {
     final groups = <DateTime, List<TransactionRecord>>{};
     for (final transaction in transactions) {
       final date = DateUtils.dateOnly(transaction.occurredAt);
       groups.putIfAbsent(date, () => []).add(transaction);
     }
-    return groups.entries.map((entry) {
-      final label = TransactionDateFormatter.groupLabel(entry.key);
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: TransactionDateGroup(
-          dateLabel: label,
-          transactions: entry.value,
-          accountNames: accountNames,
-          onTransactionTap: (transaction) =>
-              openTransactionDetail(context, transaction),
-          onTransactionLongPress: _showTransactionActions,
-        ),
-      );
-    }).toList();
+    return [
+      for (final entry in groups.entries)
+        (date: entry.key, transactions: entry.value),
+    ];
+  }
+
+  ({double expense, double income}) _monthlySummary(
+    List<TransactionRecord> transactions,
+  ) {
+    final now = DateTime.now();
+    final target = widget.month ?? now;
+    var expenseCents = 0;
+    var incomeCents = 0;
+    for (final item in transactions) {
+      if (item.currency.toUpperCase() != 'CNY' ||
+          item.deletedAt != null ||
+          item.occurredAt.isAfter(now) ||
+          item.occurredAt.year != target.year ||
+          item.occurredAt.month != target.month) {
+        continue;
+      }
+      if (item.isExpense) {
+        expenseCents += (item.netExpenseAmount * 100).round();
+      } else if (item.isIncome) {
+        incomeCents += (item.amount * 100).round();
+      }
+    }
+    return (expense: expenseCents / 100, income: incomeCents / 100);
   }
 
   Future<void> _showTransactionActions(TransactionRecord transaction) {
@@ -260,30 +304,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     setState(() => _categoryFilter = selected == '全部' ? null : selected);
   }
 
-  double _monthlyTotal(
-    List<TransactionRecord> transactions, {
-    required bool expense,
-  }) {
-    final now = DateTime.now();
-    return transactions
-            .where(
-              (item) =>
-                  item.currency.toUpperCase() == 'CNY' &&
-                  item.deletedAt == null &&
-                  !item.occurredAt.isAfter(now) &&
-                  item.occurredAt.year == (widget.month ?? now).year &&
-                  item.occurredAt.month == (widget.month ?? now).month &&
-                  (expense ? item.isExpense : item.isIncome),
-            )
-            .fold<int>(
-              0,
-              (total, item) =>
-                  total +
-                  ((expense ? item.netExpenseAmount : item.amount) * 100)
-                      .round(),
-            ) /
-        100;
-  }
+
 }
 
 class _TransactionsHeader extends StatelessWidget {
@@ -415,6 +436,7 @@ class _FilterSegment extends StatelessWidget {
           final selected = entry.key == selectedIndex;
           return Expanded(
             child: GestureDetector(
+              key: ValueKey('transactions-filter-${entry.key}'),
               onTap: () => onChanged(entry.key),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
