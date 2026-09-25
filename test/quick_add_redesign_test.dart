@@ -415,7 +415,7 @@ void main() {
         expect(
           find.descendant(
             of: find.byKey(const ValueKey('quick-subcategory-bubble')),
-            matching: find.byType(BackdropFilter),
+            matching: find.byType(LiquidGlassLens),
           ),
           findsWidgets,
         );
