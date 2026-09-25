@@ -581,7 +581,8 @@ class _ProfileIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badge = 'Lv.' + ((bookkeepingDays ~/ 7) + 1).clamp(1, 99).toString();
+    final level = ((bookkeepingDays ~/ 7) + 1).clamp(1, 99);
+    final badge = 'Lv.$level';
 
     return InkWell(
       onTap: onTap,
