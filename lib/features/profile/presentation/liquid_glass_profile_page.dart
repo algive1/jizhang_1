@@ -763,6 +763,7 @@ class _ProfileIdentity extends StatelessWidget {
     required this.name,
     required this.bookkeepingDays,
     required this.onTap,
+    super.key,
   });
 
   final String name;
