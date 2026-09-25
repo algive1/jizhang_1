@@ -9,7 +9,7 @@ import '../../../core/widgets/monotone_smooth_path.dart';
 
 const homeTrendExpenseColor = Color(0xFFFF7600);
 const homeTrendIncomeColor = Color(0xFF63A72F);
-const homeTrendAssetColor = Color(0xFFFF2525);
+const homeTrendAssetColor = Color(0xFFE66C6C);
 const homeTrendSelectionColor = Color(0xFF9BC879);
 
 class HomeTrendChart extends StatelessWidget {
@@ -30,8 +30,8 @@ class HomeTrendChart extends StatelessWidget {
   final String currency;
   final double height;
 
-  static const double _plotLeft = 28;
-  static const double _plotRight = 4;
+  static const double _plotLeft = 31;
+  static const double _plotRight = 38;
 
   @override
   Widget build(BuildContext context) {
@@ -52,10 +52,11 @@ class HomeTrendChart extends StatelessWidget {
         void select(double dx) {
           if (onSelected == null) return;
           final ratio = ((dx - _plotLeft) / chartWidth).clamp(0.0, 1.0);
-          onSelected!((ratio * (points.length - 1)).round());
+          final next = (ratio * (points.length - 1)).round();
+          if (next != selectedIndex) onSelected!(next);
         }
 
-        const tooltipWidth = 80.0;
+        const tooltipWidth = 84.0;
         final tooltipLeft = (xFor(selectedIndex) - tooltipWidth / 2)
             .clamp(0.0, math.max(0.0, constraints.maxWidth - tooltipWidth))
             .toDouble();
@@ -78,14 +79,17 @@ class HomeTrendChart extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: _HomeTrendPainter(
-                      points: points,
-                      selected: selectedIndex,
-                      year: year,
-                      axisTextColor: context.appSecondaryText,
-                      gridColor: context.appDivider,
-                      surfaceColor: context.appSurface,
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _HomeTrendPainter(
+                        points: points,
+                        selected: selectedIndex,
+                        year: year,
+                        currency: currency,
+                        axisTextColor: context.appSecondaryText,
+                        gridColor: context.appDivider,
+                        surfaceColor: context.appSurface,
+                      ),
                     ),
                   ),
                 ),
@@ -97,6 +101,7 @@ class HomeTrendChart extends StatelessWidget {
                     child: _TrendTooltip(
                       point: points[selectedIndex],
                       currency: currency,
+                      year: year,
                     ),
                   ),
                 ),
@@ -110,16 +115,22 @@ class HomeTrendChart extends StatelessWidget {
 }
 
 class _TrendTooltip extends StatelessWidget {
-  const _TrendTooltip({required this.point, required this.currency});
+  const _TrendTooltip({
+    required this.point,
+    required this.currency,
+    required this.year,
+  });
 
   final CashflowPoint point;
   final String currency;
+  final bool year;
 
   @override
   Widget build(BuildContext context) {
     final date = point.date;
-    final title =
-        '${date.month}/${date.day}（${_weekdayLabel(date.weekday)}）';
+    final title = year
+        ? '${date.year}年${date.month}月'
+        : '${date.month}/${date.day}（${_weekdayLabel(date.weekday)}）';
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       decoration: BoxDecoration(
@@ -189,29 +200,15 @@ class _TooltipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    children: [
-      Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-      const SizedBox(width: 6),
-      Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 8.5,
-          height: 1,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      const Spacer(),
-      Flexible(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerRight,
-          child: Text(
-            amount,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
             style: TextStyle(
               color: color,
               fontSize: 8.5,
@@ -219,10 +216,24 @@ class _TooltipRow extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-        ),
-      ),
-    ],
-  );
+          const Spacer(),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                amount,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 8.5,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _HomeTrendPainter extends CustomPainter {
@@ -230,6 +241,7 @@ class _HomeTrendPainter extends CustomPainter {
     required this.points,
     required this.selected,
     required this.year,
+    required this.currency,
     required this.axisTextColor,
     required this.gridColor,
     required this.surfaceColor,
@@ -238,6 +250,7 @@ class _HomeTrendPainter extends CustomPainter {
   final List<CashflowPoint> points;
   final int selected;
   final bool year;
+  final String currency;
   final Color axisTextColor;
   final Color gridColor;
   final Color surfaceColor;
@@ -259,8 +272,15 @@ class _HomeTrendPainter extends CustomPainter {
         _left +
         plotWidth * (points.length == 1 ? .5 : index / (points.length - 1));
 
-    final labelIndices = _labelIndices(points.length, 7);
+    final maxFlow = points.fold<double>(
+      0,
+      (value, point) => math.max(value, math.max(point.income, point.expense)),
+    );
+    final flowCeiling = _niceCeiling(math.max(1, maxFlow * 1.12));
+    final assetValues = points.map<double?>((p) => p.totalAssets).toList();
+    final assetScale = _assetScale(assetValues);
 
+    final labelIndices = _labelIndices(points.length, 7);
     _drawGrid(
       canvas,
       size,
@@ -268,32 +288,29 @@ class _HomeTrendPainter extends CustomPainter {
       plotHeight,
       xFor,
       labelIndices,
+      flowCeiling: flowCeiling,
+      assetScale: assetScale,
     );
 
-    final expenseValues = points.map<double?>((p) => p.expense).toList();
-    final incomeValues = points.map<double?>((p) => p.income).toList();
-    final assetValues = points.map<double?>((p) => p.totalAssets).toList();
+    List<Offset?> flowPositions(Iterable<double> values) => [
+          for (final (index, value) in values.indexed)
+            Offset(
+              xFor(index),
+              _top +
+                  plotHeight *
+                      (1 - (value / flowCeiling).clamp(0.0, 1.0)),
+            ),
+        ];
 
-    final assetPositions = _seriesPositions(
+    final incomeValues = points.map((p) => p.income).toList(growable: false);
+    final expenseValues = points.map((p) => p.expense).toList(growable: false);
+    final incomePositions = flowPositions(incomeValues);
+    final expensePositions = flowPositions(expenseValues);
+    final assetPositions = _assetPositions(
       assetValues,
       xFor,
       plotHeight,
-      .08,
-      .35,
-    );
-    final incomePositions = _seriesPositions(
-      incomeValues,
-      xFor,
-      plotHeight,
-      .40,
-      .69,
-    );
-    final expensePositions = _seriesPositions(
-      expenseValues,
-      xFor,
-      plotHeight,
-      .69,
-      .92,
+      assetScale,
     );
 
     _drawSeries(
@@ -301,24 +318,33 @@ class _HomeTrendPainter extends CustomPainter {
       size,
       assetValues,
       assetPositions,
-      homeTrendAssetColor,
+      homeTrendAssetColor.withValues(alpha: .58),
       plotBottom,
+      strokeWidth: 1.45,
+      fillAlpha: 0,
+      drawPoints: false,
     );
     _drawSeries(
       canvas,
       size,
-      incomeValues,
+      incomeValues.map<double?>((v) => v).toList(),
       incomePositions,
       homeTrendIncomeColor,
       plotBottom,
+      strokeWidth: 2,
+      fillAlpha: .07,
+      drawPoints: points.length <= 36,
     );
     _drawSeries(
       canvas,
       size,
-      expenseValues,
+      expenseValues.map<double?>((v) => v).toList(),
       expensePositions,
       homeTrendExpenseColor,
       plotBottom,
+      strokeWidth: 2,
+      fillAlpha: .07,
+      drawPoints: points.length <= 36,
     );
 
     final selectedX = xFor(selectedIndex);
@@ -336,7 +362,8 @@ class _HomeTrendPainter extends CustomPainter {
     _drawSelection(
       canvas,
       assetPositions[selectedIndex],
-      homeTrendAssetColor,
+      homeTrendAssetColor.withValues(alpha: .74),
+      radius: 4.6,
     );
     _drawSelection(
       canvas,
@@ -362,19 +389,17 @@ class _HomeTrendPainter extends CustomPainter {
     double plotBottom,
     double plotHeight,
     double Function(int index) xFor,
-    List<int> labelIndices,
-  ) {
-    final maxFlow = points.fold<double>(
-      0,
-      (value, point) => math.max(value, math.max(point.income, point.expense)),
-    );
-    final ceiling = _niceCeiling(math.max(800, maxFlow * 1.15));
+    List<int> labelIndices, {
+    required double flowCeiling,
+    required ({double min, double max})? assetScale,
+  }) {
     final gridPaint = Paint()
-      ..color = gridColor.withValues(alpha: .82)
+      ..color = gridColor.withValues(alpha: .72)
       ..strokeWidth = .8;
 
     for (var row = 0; row < 5; row++) {
-      final y = _top + row * plotHeight / 4;
+      final ratio = row / 4;
+      final y = _top + ratio * plotHeight;
       _drawDashedLine(
         canvas,
         Offset(_left, y),
@@ -383,14 +408,24 @@ class _HomeTrendPainter extends CustomPainter {
         dash: 4,
         gap: 4,
       );
-      final amount = ceiling * (1 - row / 4);
       _label(
         canvas,
-        '¥${MoneyFormatter.whole(amount)}',
+        '¥${_compactAxisMoney(flowCeiling * (1 - ratio))}',
         Offset(0, y - 5.5),
         maxWidth: _left - 3,
         align: TextAlign.right,
       );
+      if (assetScale != null) {
+        final assetValue =
+            assetScale.max - (assetScale.max - assetScale.min) * ratio;
+        _label(
+          canvas,
+          _compactAxisMoney(assetValue, currency: currency),
+          Offset(size.width - _right + 3, y - 5.5),
+          maxWidth: _right - 3,
+          color: homeTrendAssetColor.withValues(alpha: .72),
+        );
+      }
     }
 
     for (final index in labelIndices) {
@@ -409,7 +444,7 @@ class _HomeTrendPainter extends CustomPainter {
         canvas,
         text,
         Offset(
-          (x - 14).clamp(_left - 5, size.width - 31).toDouble(),
+          (x - 14).clamp(_left - 5, size.width - _right - 27).toDouble(),
           plotBottom + 8,
         ),
         maxWidth: 32,
@@ -418,9 +453,18 @@ class _HomeTrendPainter extends CustomPainter {
     }
 
     final axis = Paint()
-      ..color = axisTextColor.withValues(alpha: .34)
+      ..color = axisTextColor.withValues(alpha: .30)
       ..strokeWidth = .8;
     canvas.drawLine(Offset(_left, _top), Offset(_left, plotBottom), axis);
+    if (assetScale != null) {
+      canvas.drawLine(
+        Offset(size.width - _right, _top),
+        Offset(size.width - _right, plotBottom),
+        Paint()
+          ..color = homeTrendAssetColor.withValues(alpha: .25)
+          ..strokeWidth = .8,
+      );
+    }
     canvas.drawLine(
       Offset(_left, plotBottom),
       Offset(size.width - _right, plotBottom),
@@ -428,24 +472,32 @@ class _HomeTrendPainter extends CustomPainter {
     );
   }
 
-  List<Offset?> _seriesPositions(
+  ({double min, double max})? _assetScale(List<double?> values) {
+    final known = values.whereType<double>().toList(growable: false);
+    if (known.isEmpty) return null;
+    final minimum = known.reduce(math.min);
+    final maximum = known.reduce(math.max);
+    if (minimum == maximum) {
+      final padding = math.max(1.0, minimum.abs() * .01);
+      return (min: minimum - padding, max: maximum + padding);
+    }
+    final padding = (maximum - minimum) * .12;
+    return (min: minimum - padding, max: maximum + padding);
+  }
+
+  List<Offset?> _assetPositions(
     List<double?> values,
     double Function(int index) xFor,
     double plotHeight,
-    double bandTop,
-    double bandBottom,
+    ({double min, double max})? scale,
   ) {
-    final known = values.whereType<double>().toList(growable: false);
-    if (known.isEmpty) return List<Offset?>.filled(values.length, null);
-    final minimum = known.reduce(math.min);
-    final maximum = known.reduce(math.max);
-    final span = maximum - minimum;
+    if (scale == null) return List<Offset?>.filled(values.length, null);
+    final span = math.max(1e-9, scale.max - scale.min);
     return List<Offset?>.generate(values.length, (index) {
       final value = values[index];
       if (value == null) return null;
-      final normalized = span == 0 ? .5 : (value - minimum) / span;
-      final bandY = bandBottom - normalized * (bandBottom - bandTop);
-      return Offset(xFor(index), _top + plotHeight * bandY);
+      final normalized = ((value - scale.min) / span).clamp(0.0, 1.0);
+      return Offset(xFor(index), _top + plotHeight * (1 - normalized));
     });
   }
 
@@ -455,16 +507,18 @@ class _HomeTrendPainter extends CustomPainter {
     List<double?> values,
     List<Offset?> positions,
     Color color,
-    double plotBottom,
-  ) {
+    double plotBottom, {
+    required double strokeWidth,
+    required double fillAlpha,
+    required bool drawPoints,
+  }) {
     var start = -1;
     var segmentValues = <double>[];
 
     void paintSegment() {
       if (segmentValues.isEmpty || start < 0) return;
       if (segmentValues.length == 1) {
-        final point = positions[start]!;
-        _drawPoint(canvas, point, color);
+        if (drawPoints) _drawPoint(canvas, positions[start]!, color);
         segmentValues = [];
         start = -1;
         return;
@@ -473,34 +527,38 @@ class _HomeTrendPainter extends CustomPainter {
         values: segmentValues,
         position: (_, localIndex) => positions[start + localIndex]!,
       );
-      final first = line.coordinates.first;
-      final last = line.coordinates.last;
-      final fill = Path.from(line.path)
-        ..lineTo(last.dx, plotBottom)
-        ..lineTo(first.dx, plotBottom)
-        ..close();
-      canvas.drawPath(
-        fill,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              color.withValues(alpha: .10),
-              color.withValues(alpha: .012),
-            ],
-          ).createShader(Rect.fromLTWH(0, _top, size.width, plotBottom - _top)),
-      );
+      if (fillAlpha > 0) {
+        final first = line.coordinates.first;
+        final last = line.coordinates.last;
+        final fill = Path.from(line.path)
+          ..lineTo(last.dx, plotBottom)
+          ..lineTo(first.dx, plotBottom)
+          ..close();
+        canvas.drawPath(
+          fill,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                color.withValues(alpha: fillAlpha),
+                color.withValues(alpha: .008),
+              ],
+            ).createShader(
+              Rect.fromLTWH(0, _top, size.width, plotBottom - _top),
+            ),
+        );
+      }
       canvas.drawPath(
         line.path,
         Paint()
           ..color = color
-          ..strokeWidth = 2
+          ..strokeWidth = strokeWidth
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
-      if (points.length <= 36) {
+      if (drawPoints) {
         for (final point in line.coordinates) {
           _drawPoint(canvas, point, color);
         }
@@ -533,21 +591,26 @@ class _HomeTrendPainter extends CustomPainter {
     );
   }
 
-  void _drawSelection(Canvas canvas, Offset? point, Color color) {
+  void _drawSelection(
+    Canvas canvas,
+    Offset? point,
+    Color color, {
+    double radius = 5.2,
+  }) {
     if (point == null) return;
     canvas.drawCircle(
       point,
-      7,
-      Paint()..color = color.withValues(alpha: .18),
+      radius + 1.8,
+      Paint()..color = color.withValues(alpha: .16),
     );
-    canvas.drawCircle(point, 5.2, Paint()..color = color);
+    canvas.drawCircle(point, radius, Paint()..color = color);
     canvas.drawCircle(
       point,
-      5.2,
+      radius,
       Paint()
         ..color = surfaceColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8,
+        ..strokeWidth = 1.6,
     );
   }
 
@@ -580,13 +643,14 @@ class _HomeTrendPainter extends CustomPainter {
     Offset offset, {
     required double maxWidth,
     TextAlign align = TextAlign.left,
+    Color? color,
   }) {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
-          color: axisTextColor,
-          fontSize: 8,
+          color: color ?? axisTextColor,
+          fontSize: 7.5,
           height: 1,
           fontWeight: FontWeight.w500,
         ),
@@ -602,6 +666,7 @@ class _HomeTrendPainter extends CustomPainter {
       oldDelegate.points != points ||
       oldDelegate.selected != selected ||
       oldDelegate.year != year ||
+      oldDelegate.currency != currency ||
       oldDelegate.axisTextColor != axisTextColor ||
       oldDelegate.gridColor != gridColor ||
       oldDelegate.surfaceColor != surfaceColor;
@@ -618,8 +683,9 @@ List<int> _labelIndices(int count, int requested) {
 }
 
 double _niceCeiling(double value) {
-  if (value <= 0) return 800;
-  final magnitude = math.pow(10, (math.log(value) / math.ln10).floor()).toDouble();
+  if (value <= 0) return 1;
+  final magnitude =
+      math.pow(10, (math.log(value) / math.ln10).floor()).toDouble();
   final scaled = value / magnitude;
   final factor = scaled <= 1
       ? 1
@@ -634,6 +700,25 @@ double _niceCeiling(double value) {
       : 10;
   return factor * magnitude;
 }
+
+String _compactAxisMoney(double value, {String currency = 'CNY'}) {
+  final absolute = value.abs();
+  final prefix = currency == 'CNY' ? '' : _currencySymbol(currency);
+  final sign = value < 0 ? '-' : '';
+  if (absolute >= 100000000) {
+    return '$sign$prefix${_trimAxis(absolute / 100000000)}亿';
+  }
+  if (absolute >= 10000) {
+    return '$sign$prefix${_trimAxis(absolute / 10000)}万';
+  }
+  if (absolute >= 1000) {
+    return '$sign$prefix${_trimAxis(absolute / 1000)}k';
+  }
+  return '$sign$prefix${MoneyFormatter.whole(absolute)}';
+}
+
+String _trimAxis(double value) =>
+    value >= 10 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
 
 String _weekdayLabel(int weekday) => switch (weekday) {
   DateTime.monday => '周一',

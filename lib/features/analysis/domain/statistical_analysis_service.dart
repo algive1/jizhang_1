@@ -157,8 +157,18 @@ class StatisticalAnalysisService {
     final previous = expenses
         .where((item) => previousRange.contains(item.occurredAt))
         .toList();
-    final currentRegular = _regularTransactions(current, expenses);
-    final previousRegular = _regularTransactions(previous, expenses);
+    final distributionThreshold = largeDetector.distributionThreshold(expenses);
+    final currentRegular = _regularTransactions(
+      current,
+      expenses,
+      threshold: distributionThreshold,
+    );
+    final previousRegular = _regularTransactions(
+      previous,
+      expenses,
+      threshold: distributionThreshold,
+    );
+    final categoryTrends = _categoryTrends(currentRegular, previousRegular);
     final total = _sum(current);
     final regular = _sum(currentRegular);
     final previousRegularAmount = _sum(previousRegular);
@@ -185,17 +195,23 @@ class StatisticalAnalysisService {
       transactionCount: currentRegular.length,
       heatmap: _heatmap(currentRegular),
       segmentAmounts: _segmentAmounts(currentRegular),
-      categoryTrends: _categoryTrends(currentRegular, previousRegular),
+      categoryTrends: categoryTrends,
       insights: _insights(
         currentRegular,
         previousRegular,
+        trends: categoryTrends,
         period: period,
         generatedAt: clock,
         currency: currency,
       ),
       baselines: [
         for (final days in const [7, 30, 90, 180])
-          _baseline(expenses, clock, days),
+          _baseline(
+            expenses,
+            clock,
+            days,
+            threshold: distributionThreshold,
+          ),
       ],
     );
   }
@@ -288,9 +304,11 @@ class StatisticalAnalysisService {
 
   List<TransactionRecord> _regularTransactions(
     List<TransactionRecord> candidates,
-    List<TransactionRecord> history,
-  ) {
-    final threshold = largeDetector.distributionThreshold(history);
+    List<TransactionRecord> history, {
+    double? threshold,
+  }) {
+    final effectiveThreshold =
+        threshold ?? largeDetector.distributionThreshold(history);
     return candidates
         .where((item) {
           final behavior = features.behaviorFor(
@@ -298,7 +316,7 @@ class StatisticalAnalysisService {
             distributionOutlier: largeDetector.isLarge(
               item,
               history,
-              threshold: threshold,
+              threshold: effectiveThreshold,
             ),
           );
           return behavior != TransactionBehaviorType.largeOneTime &&
@@ -390,12 +408,12 @@ class StatisticalAnalysisService {
   List<AnalysisInsight> _insights(
     List<TransactionRecord> current,
     List<TransactionRecord> previous, {
+    required List<CategoryTrend> trends,
     required AnalysisPeriod period,
     required DateTime generatedAt,
     required String currency,
   }) {
     final insights = <AnalysisInsight>[];
-    final trends = _categoryTrends(current, previous);
     for (final trend in trends) {
       if (trend.amountDelta < 100 ||
           trend.previousAmount == 0 ||
@@ -500,8 +518,9 @@ class StatisticalAnalysisService {
   BehaviorBaseline _baseline(
     List<TransactionRecord> expenses,
     DateTime now,
-    int days,
-  ) {
+    int days, {
+    required double threshold,
+  }) {
     // A baseline describes prior behavior. Exclude today's partial data so a
     // spike on the current day cannot raise its own comparison bar.
     final end = DateTime(now.year, now.month, now.day);
@@ -512,7 +531,11 @@ class StatisticalAnalysisService {
               !item.occurredAt.isBefore(start) && item.occurredAt.isBefore(end),
         )
         .toList();
-    final regular = _regularTransactions(values, expenses);
+    final regular = _regularTransactions(
+      values,
+      expenses,
+      threshold: threshold,
+    );
     final weekendDays = List.generate(
       days,
       (index) => start.add(Duration(days: index)),

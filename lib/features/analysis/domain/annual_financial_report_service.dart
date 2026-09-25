@@ -104,46 +104,66 @@ class AnnualFinancialReportService {
           !item.occurredAt.isAfter(clock),
     );
 
-    final current = usable.where((item) => item.occurredAt.year == year).toList();
-    final previous = usable
-        .where((item) => item.occurredAt.year == year - 1)
-        .toList();
+    final current = <TransactionRecord>[];
+    final previous = <TransactionRecord>[];
+    for (final item in usable) {
+      if (item.occurredAt.year == year) {
+        current.add(item);
+      } else if (item.occurredAt.year == year - 1) {
+        previous.add(item);
+      }
+    }
+
+    final monthlyIncomeCents = List<int>.filled(13, 0);
+    final monthlyExpenseCents = List<int>.filled(13, 0);
+    final categoryAmountCents = <String, int>{};
+    final categoryCounts = <String, int>{};
+    var totalIncomeCents = 0;
+    var totalExpenseCents = 0;
+
+    for (final item in current) {
+      final month = item.occurredAt.month;
+      if (item.isIncome) {
+        final cents = (item.amount * 100).round();
+        totalIncomeCents += cents;
+        monthlyIncomeCents[month] += cents;
+      }
+      if (item.isExpense) {
+        final cents = (item.netExpenseAmount * 100).round();
+        totalExpenseCents += cents;
+        monthlyExpenseCents[month] += cents;
+        final rawName = item.categoryName?.trim();
+        final name = rawName == null || rawName.isEmpty ? '未分类' : rawName;
+        categoryAmountCents.update(
+          name,
+          (value) => value + cents,
+          ifAbsent: () => cents,
+        );
+        categoryCounts.update(name, (value) => value + 1, ifAbsent: () => 1);
+      }
+    }
 
     final months = [
       for (var month = 1; month <= 12; month++)
         AnnualMonthSummary(
           month: month,
-          income: _income(
-            current.where((item) => item.occurredAt.month == month),
-          ),
-          expense: _expense(
-            current.where((item) => item.occurredAt.month == month),
-          ),
+          income: monthlyIncomeCents[month] / 100,
+          expense: monthlyExpenseCents[month] / 100,
         ),
     ];
-    final totalIncome = _income(current);
-    final totalExpense = _expense(current);
+    final totalIncome = totalIncomeCents / 100;
+    final totalExpense = totalExpenseCents / 100;
     final netCashflow = totalIncome - totalExpense;
     final savingsRate = totalIncome <= 0 ? null : netCashflow / totalIncome;
     final active = months.where((item) => item.hasActivity).toList();
     final positiveMonths = active.where((item) => item.net >= 0).length;
 
-    final categoryGroups = <String, List<TransactionRecord>>{};
-    for (final item in current.where((item) => item.isExpense)) {
-      final name = item.categoryName?.trim();
-      categoryGroups
-          .putIfAbsent(
-            name == null || name.isEmpty ? '未分类' : name,
-            () => <TransactionRecord>[],
-          )
-          .add(item);
-    }
-    final categories = categoryGroups.entries
+    final categories = categoryAmountCents.entries
         .map(
           (entry) => AnnualCategorySummary(
             name: entry.key,
-            amount: _expense(entry.value),
-            count: entry.value.length,
+            amount: entry.value / 100,
+            count: categoryCounts[entry.key] ?? 0,
           ),
         )
         .toList()
