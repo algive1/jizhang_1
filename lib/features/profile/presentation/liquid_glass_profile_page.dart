@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/constants/app_assets.dart';
@@ -51,86 +52,98 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         profileQuickActionDefaults;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: _ImmersiveProfileBackground(dark: dark),
-        ),
-        SafeArea(
-          bottom: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              AppScaffold.reservedBottomInset(context),
-            ),
-            children: [
-              _Header(
-                dark: dark,
-                unread: unread,
-                onBrightnessChanged: (nextDark) {
-                  unawaited(
-                    ref.read(brightnessModeProvider.notifier).select(
-                      nextDark
-                          ? AppBrightnessPreference.dark
-                          : AppBrightnessPreference.light,
-                    ),
-                  );
-                },
-                onMessages: () async {
-                  await context.push<void>('/profile/messages');
-                  ref.invalidate(systemUnreadCountProvider);
-                },
-                onSettings: () => _showSettings(context),
-              ),
-              const SizedBox(height: 10),
-              _ProfileIdentity(
-                name: _profileName(accountSession),
-                bookkeepingDays: activity.bookkeepingDays,
-                onTap: () => _openProfile(context, accountSession),
-              ),
-              const SizedBox(height: 6),
-              _SummaryPanel(
-                loading: transactions.isLoading,
-                expense: month.expense,
-                income: month.income,
-                expenseDelta: _deltaText(month.expense, previous.expense),
-                incomeDelta: _deltaText(month.income, previous.income),
-                budgetRemaining: budget?.remaining,
-                budgetRatio: budget == null
-                    ? null
-                    : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
-                streak: activity.streak,
-              ),
-              const SizedBox(height: 8),
-              _MembershipPanel(
-                snapshot: membership,
-                onTap: () => context.push('/profile/membership'),
-              ),
-              const SizedBox(height: 10),
-              _GlassSection(
-                title: '常用功能',
-                trailing: '更多',
-                onTrailing: () => context.push('/profile/quick-actions'),
-                child: _QuickActionGrid(
-                  order: quickActionOrder,
-                  onTap: (id) => _openQuickAction(context, ref, id),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const _RecommendedAppsSection(),
-              const SizedBox(height: 10),
-              _ServicesSection(
-                onMore: () => context.push('/profile/services'),
-                onHelp: () => context.push('/profile/help'),
-                onSecurity: () => context.push('/profile/data'),
-                onAbout: () => context.push('/profile/about'),
-              ),
-            ],
+    return LiquidGlassBatch(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _ImmersiveProfileBackground(dark: dark),
           ),
-        ),
-      ],
+          SafeArea(
+            bottom: false,
+            child: ScrollConfiguration(
+              // Android's stretch overscroll temporarily moves the scroll
+              // contents into a filtered subpass. A live lens inside that
+              // subpass can no longer see the page backdrop and may flash
+              // dark at the edges, so glass lists deliberately disable the
+              // stretch while keeping the platform's normal scroll physics.
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(overscroll: false),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  AppScaffold.reservedBottomInset(context),
+                ),
+                children: [
+                  _Header(
+                    dark: dark,
+                    unread: unread,
+                    onBrightnessChanged: (nextDark) {
+                      unawaited(
+                        ref.read(brightnessModeProvider.notifier).select(
+                          nextDark
+                              ? AppBrightnessPreference.dark
+                              : AppBrightnessPreference.light,
+                        ),
+                      );
+                    },
+                    onMessages: () async {
+                      await context.push<void>('/profile/messages');
+                      ref.invalidate(systemUnreadCountProvider);
+                    },
+                    onSettings: () => _showSettings(context),
+                  ),
+                  const SizedBox(height: 10),
+                  _ProfileIdentity(
+                    name: _profileName(accountSession),
+                    bookkeepingDays: activity.bookkeepingDays,
+                    onTap: () => _openProfile(context, accountSession),
+                  ),
+                  const SizedBox(height: 6),
+                  _SummaryPanel(
+                    loading: transactions.isLoading,
+                    expense: month.expense,
+                    income: month.income,
+                    expenseDelta: _deltaText(month.expense, previous.expense),
+                    incomeDelta: _deltaText(month.income, previous.income),
+                    budgetRemaining: budget?.remaining,
+                    budgetRatio: budget == null
+                        ? null
+                        : (1 - budget.percentage).clamp(0.0, 1.0).toDouble(),
+                    streak: activity.streak,
+                  ),
+                  const SizedBox(height: 8),
+                  _MembershipPanel(
+                    snapshot: membership,
+                    onTap: () => context.push('/profile/membership'),
+                  ),
+                  const SizedBox(height: 10),
+                  _GlassSection(
+                    title: '常用功能',
+                    trailing: '更多',
+                    onTrailing: () => context.push('/profile/quick-actions'),
+                    child: _QuickActionGrid(
+                      order: quickActionOrder,
+                      onTap: (id) => _openQuickAction(context, ref, id),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const _RecommendedAppsSection(),
+                  const SizedBox(height: 10),
+                  _ServicesSection(
+                    onMore: () => context.push('/profile/services'),
+                    onHelp: () => context.push('/profile/help'),
+                    onSecurity: () => context.push('/profile/data'),
+                    onAbout: () => context.push('/profile/about'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
