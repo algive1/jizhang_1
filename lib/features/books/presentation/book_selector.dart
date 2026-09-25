@@ -180,7 +180,12 @@ class _BookChoiceRow extends StatelessWidget {
       selected: selected,
       label: '${book.name}，${book.type.label}${selected ? '，当前账本' : ''}',
       child: Material(
-        color: selected ? const Color(0xFFE4F5EF) : Colors.white,
+        color: selected
+            ? Color.alphaBlend(
+                context.appPrimary.withValues(alpha: .12),
+                context.appSurface,
+              )
+            : context.appSurface,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
