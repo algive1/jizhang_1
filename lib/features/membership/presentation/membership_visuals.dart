@@ -881,7 +881,7 @@ class MemberBottomPayBar extends StatelessWidget {
                     text: TextSpan(
                       style: DefaultTextStyle.of(context).style,
                       children: [
-                        const TextSpan(
+                        TextSpan(
                           text: '实付金额  ',
                           style: TextStyle(
                             color: memberInkFor(context),
