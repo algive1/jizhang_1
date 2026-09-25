@@ -33,17 +33,18 @@ class InvestmentSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = portfolio.todayProfit;
     final total = portfolio.totalProfit;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFCEF),
+        color: context.appSurface,
         image: const DecorationImage(
           image: AssetImage(AppAssets.homeAssetScene),
           fit: BoxFit.cover,
           alignment: Alignment.topCenter,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0x80E6EAD8)),
+        border: Border.all(color: context.appDivider.withValues(alpha: .72)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0C65713F),
@@ -60,11 +61,17 @@ class InvestmentSummaryCard extends StatelessWidget {
                 gradient: RadialGradient(
                   center: const Alignment(-.6, .05),
                   radius: .95,
-                  colors: [
-                    const Color(0xFFFFFEF8).withValues(alpha: .86),
-                    const Color(0xFFFFFEF8).withValues(alpha: .5),
-                    const Color(0x00FFFEF8),
-                  ],
+                  colors: dark
+                      ? [
+                          context.appSurface.withValues(alpha: .92),
+                          context.appSurface.withValues(alpha: .58),
+                          context.appSurface.withValues(alpha: .08),
+                        ]
+                      : const [
+                          Color(0xDBFFFEF8),
+                          Color(0x80FFFEF8),
+                          Color(0x00FFFEF8),
+                        ],
                   stops: const [0, .4, 1],
                 ),
               ),
