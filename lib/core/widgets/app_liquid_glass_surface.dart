@@ -101,8 +101,9 @@ class AppLiquidGlassSurface extends StatelessWidget {
     }
 
     final sigma = highContrast ? (blurSigma ?? 5) * 1.6 : (blurSigma ?? 5);
-    final tintAlpha =
-        (glassOpacity ?? (highContrast ? .74 : .26)).clamp(0.0, 1.0);
+    final tintAlpha = (glassOpacity ?? (highContrast ? .74 : .26))
+        .clamp(0.0, 1.0)
+        .toDouble();
 
     final style = LiquidGlassStyle(
       shape: LiquidGlassShape.roundedRectangle(
