@@ -141,7 +141,7 @@ class _SkeletonBlock extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: height,
     decoration: BoxDecoration(
-      color: const Color(0xFFF1F2E6),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(radius),
     ),
   );
