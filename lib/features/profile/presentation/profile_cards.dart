@@ -145,11 +145,16 @@ class ProfileMembershipCard extends StatelessWidget {
         ? 0.0
         : (sub!.expiresAt.difference(now).inSeconds / duration).clamp(0.0, 1.0);
     final plan = snapshot?.membership.plan;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final memberText = dark ? context.appPrimaryText : const Color(0xFF67512A);
+    final memberMuted = dark ? context.appSecondaryText : const Color(0xFF77633D);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEFD9A5), Color(0xFFFCF4DE)],
+        gradient: LinearGradient(
+          colors: dark
+              ? [context.appSurfaceSoft, context.appSurface]
+              : const [Color(0xFFEFD9A5), Color(0xFFFCF4DE)],
         ),
         boxShadow: const [
           BoxShadow(
@@ -200,23 +205,27 @@ class ProfileMembershipCard extends StatelessWidget {
                                 : plan == MembershipPlan.free
                                 ? '普通会员'
                                 : '${plan.label} 会员',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF67512A),
+                              color: memberText,
                             ),
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.chevron_right,
                           size: 18,
-                          color: Color(0xFF67512A),
+                          color: memberText,
                         ),
                         TextButton(
                           onPressed: onTap,
                           style: TextButton.styleFrom(
-                            backgroundColor: const Color(0xFF735C30),
-                            foregroundColor: Colors.white,
+                            backgroundColor: dark
+                                ? context.appPrimary
+                                : const Color(0xFF735C30),
+                            foregroundColor: dark
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 15),
                             minimumSize: const Size(0, 30),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -231,9 +240,9 @@ class ProfileMembershipCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const Text(
+                    Text(
                       '解锁更多高级功能，让记账更简单',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF77633D)),
+                      style: TextStyle(fontSize: 11, color: memberMuted),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -242,7 +251,7 @@ class ProfileMembershipCard extends StatelessWidget {
                           : '${DateFormat('yyyy-MM-dd').format(sub.expiresAt)} 到期 · ${active ? '还有 $days 天' : '已到期'}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF77633D),
+                        color: memberMuted,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -251,7 +260,7 @@ class ProfileMembershipCard extends StatelessWidget {
                       minHeight: 4,
                       borderRadius: BorderRadius.circular(8),
                       color: context.appPrimary,
-                      backgroundColor: const Color(0xFFFBF6E7),
+                      backgroundColor: dark ? context.appSurfaceRaised : const Color(0xFFFBF6E7),
                     ),
                   ],
                 ),
