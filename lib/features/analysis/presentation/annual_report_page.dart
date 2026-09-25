@@ -257,7 +257,7 @@ class _AnnualReportCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AppCard(
-            color: const Color(0xFFF2F5E4),
+            color: context.appSurfaceSoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
