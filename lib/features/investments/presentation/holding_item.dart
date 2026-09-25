@@ -112,7 +112,7 @@ class HoldingItem extends StatelessWidget {
                         weight: FontWeight.w600,
                         color: percent == null
                             ? context.appSecondaryText
-                            : profitColor(percent),
+                            : profitColor(percent, context: context),
                       ),
                       ProfitText(
                         percent: percent,
