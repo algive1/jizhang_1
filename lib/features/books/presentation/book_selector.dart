@@ -446,7 +446,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
                                       alignment: Alignment.centerLeft,
-                                      child: const Text(
+                                      child: Text(
                                         '选择账本',
                                         maxLines: 1,
                                         style: TextStyle(
@@ -553,7 +553,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  const Expanded(
+                                  Expanded(
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
                                       alignment: Alignment.centerLeft,
