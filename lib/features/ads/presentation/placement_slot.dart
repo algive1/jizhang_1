@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/models/placement.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/placement_repository.dart';
@@ -33,14 +33,14 @@ class _PlacementSlotState extends ConsumerState<PlacementSlot> {
           padding: const EdgeInsets.only(bottom: 14),
           child: AppCard(
             padding: const EdgeInsets.all(15),
-            color: AppColors.surfaceSoft,
+            color: context.appSurfaceSoft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '推广 · 好好记账',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appSecondaryText,
                     fontSize: 11,
                     letterSpacing: .5,
                   ),
@@ -56,8 +56,8 @@ class _PlacementSlotState extends ConsumerState<PlacementSlot> {
                 const SizedBox(height: 4),
                 Text(
                   value.description,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appSecondaryText,
                     height: 1.4,
                   ),
                 ),
