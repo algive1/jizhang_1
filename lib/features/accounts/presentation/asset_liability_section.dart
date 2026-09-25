@@ -86,7 +86,10 @@ class AssetLiabilitySection extends StatelessWidget {
                           value: ratio,
                           minHeight: 6,
                           color: assetCoral,
-                          backgroundColor: const Color(0xfffaeae4),
+                          backgroundColor: Color.alphaBlend(
+                            assetCoral.withValues(alpha: .16),
+                            context.appSurfaceSoft,
+                          ),
                         ),
                       ),
                     ),
