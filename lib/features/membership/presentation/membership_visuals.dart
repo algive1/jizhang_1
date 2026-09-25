@@ -117,7 +117,7 @@ class MembershipHero extends StatelessWidget {
                   Text(
                     '成为会员',
                     style: TextStyle(
-                      color: const Color(0xFF10231B),
+                      color: memberGreenFor(context),
                       fontSize: width < 350 ? 29 : 33,
                       fontWeight: FontWeight.w900,
                       height: 1.12,
@@ -936,7 +936,7 @@ class MemberBottomPayBar extends StatelessWidget {
                 onPressed: product == null || isPaying ? null : onPay,
                 style: FilledButton.styleFrom(
                   backgroundColor: memberGreenFor(context),
-                  disabledBackgroundColor: const Color(0xFFB8C9A6),
+                  disabledBackgroundColor: context.appDivider,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
