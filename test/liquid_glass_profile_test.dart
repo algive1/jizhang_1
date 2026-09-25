@@ -86,11 +86,26 @@ void main() {
       lessThan(.01),
     );
 
-    // The page owns one outer batch and nested batches for glass-on-glass
-    // action groups. Every visible panel/control is rendered by the tracked
-    // lens engine rather than the old standalone BackdropFilter surface.
-    expect(find.byType(LiquidGlassBatch), findsWidgets);
+    final glassView = tester.widget<LiquidGlassView>(
+      find.byKey(const ValueKey('profile-glass-view-false')),
+    );
+    expect(glassView.useImpellerBackdrop, isFalse);
+    expect(glassView.realTimeCapture, isFalse);
+    expect(glassView.batch, isFalse);
     expect(find.byType(LiquidGlassLens), findsWidgets);
+
+    final topArea = find.byKey(const ValueKey('profile-top-area'));
+    final identity = find.byKey(const ValueKey('profile-identity'));
+    expect(tester.getSize(topArea).height, 116);
+    expect(
+      tester.getRect(identity).overlaps(tester.getRect(brightnessToggle)),
+      isFalse,
+    );
+    expect(
+      tester.getTopLeft(identity).dy,
+      lessThan(tester.getBottomLeft(brightnessToggle).dy),
+      reason: 'identity should use the freed left-side header space',
+    );
 
     // Exercise both ordinary scrolling and the top edge. The glass renderer
     // must stay attached to the moving list without throwing during either.
