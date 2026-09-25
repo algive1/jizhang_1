@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
 
-import '../../membership/presentation/membership_visuals.dart';
-
 enum LegalDocumentKind { membership, privacy }
 
 class LegalDocumentPage extends StatelessWidget {
@@ -150,7 +148,7 @@ class _AgreementMenuCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
         child: Row(
           children: [
-            const Icon(Icons.description_outlined, color: memberGreen),
+            Icon(Icons.description_outlined, color: context.appPrimary),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
