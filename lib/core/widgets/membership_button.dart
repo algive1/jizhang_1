@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_tokens.dart';
 
 class MembershipButton extends StatelessWidget {
   const MembershipButton({required this.onPressed, super.key});
@@ -15,9 +15,16 @@ class MembershipButton extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 36, height: 36),
       padding: EdgeInsets.zero,
       style: IconButton.styleFrom(
-        backgroundColor: AppColors.primarySoft,
-        foregroundColor: AppColors.primaryDark,
-        shape: const CircleBorder(side: BorderSide(color: Color(0xFFDCE8BF))),
+        backgroundColor: context.appPrimarySoft,
+        foregroundColor: context.appPrimary,
+        shape: CircleBorder(
+          side: BorderSide(
+            color: Color.alphaBlend(
+              context.appPrimary.withValues(alpha: .22),
+              context.appDivider,
+            ),
+          ),
+        ),
       ),
       icon: const Icon(Icons.workspace_premium_outlined, size: 21),
     );
