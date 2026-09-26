@@ -2082,7 +2082,9 @@ class _ProfileStaticGlassTile extends StatelessWidget {
         ),
         border: Border.all(
           color: Colors.white.withValues(
-            alpha: (.20 + tuning.borderHighlight * .30)\n                .clamp(0.0, .62)\n                .toDouble(),
+            alpha: (.20 + tuning.borderHighlight * .30)
+                .clamp(0.0, .62)
+                .toDouble(),
           ),
           width: .9,
         ),
@@ -2132,7 +2134,9 @@ class _GlassPanel extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [
               Colors.white.withValues(
-                alpha: (opacity + (dark ? .02 : .16))\n                    .clamp(0.0, .96)\n                    .toDouble(),
+                alpha: (opacity + (dark ? .02 : .16))
+                    .clamp(0.0, .96)
+                    .toDouble(),
               ),
               context.appSurface.withValues(alpha: opacity),
               context.appSurface.withValues(
@@ -2202,7 +2206,9 @@ class _ProfileGlassBorderPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(
       rect.deflate(.65),
-      Radius.circular(\n        (radius - .65).clamp(0.0, radius).toDouble(),\n      ),
+      Radius.circular(
+        (radius - .65).clamp(0.0, radius).toDouble(),
+      ),
     );
     final paint = Paint()
       ..style = PaintingStyle.stroke
