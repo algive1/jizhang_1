@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -52,7 +53,8 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         profileQuickActionDefaults;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return LiquidGlassView(
+    return _ProfileGlassDebugHost(
+      child: LiquidGlassView(
       key: ValueKey('profile-glass-view-$dark'),
       // The profile background is static within a brightness mode. Capturing
       // it once gives every scrolling lens one stable coordinate space and
@@ -137,6 +139,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -325,6 +328,302 @@ class LiquidGlassProfilePage extends ConsumerWidget {
             ],
           ),
         ),
+      );
+}
+
+
+@immutable
+class _ProfileGlassTuning {
+  const _ProfileGlassTuning({
+    this.opacity = .56,
+    this.blurSigma = 12,
+    this.borderHighlight = .72,
+    this.shadowStrength = .12,
+  });
+
+  final double opacity;
+  final double blurSigma;
+  final double borderHighlight;
+  final double shadowStrength;
+
+  static const defaults = _ProfileGlassTuning();
+
+  _ProfileGlassTuning copyWith({
+    double? opacity,
+    double? blurSigma,
+    double? borderHighlight,
+    double? shadowStrength,
+  }) =>
+      _ProfileGlassTuning(
+        opacity: opacity ?? this.opacity,
+        blurSigma: blurSigma ?? this.blurSigma,
+        borderHighlight: borderHighlight ?? this.borderHighlight,
+        shadowStrength: shadowStrength ?? this.shadowStrength,
+      );
+}
+
+class _ProfileGlassDebugScope extends InheritedWidget {
+  const _ProfileGlassDebugScope({
+    required this.tuning,
+    required super.child,
+  });
+
+  final _ProfileGlassTuning tuning;
+
+  static _ProfileGlassTuning of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_ProfileGlassDebugScope>()
+          ?.tuning ??
+      _ProfileGlassTuning.defaults;
+
+  @override
+  bool updateShouldNotify(_ProfileGlassDebugScope oldWidget) =>
+      oldWidget.tuning != tuning;
+}
+
+class _ProfileGlassDebugHost extends StatefulWidget {
+  const _ProfileGlassDebugHost({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ProfileGlassDebugHost> createState() => _ProfileGlassDebugHostState();
+}
+
+class _ProfileGlassDebugHostState extends State<_ProfileGlassDebugHost> {
+  _ProfileGlassTuning _tuning = _ProfileGlassTuning.defaults;
+  bool _expanded = false;
+
+  bool get _showDebugControls => kDebugMode || kProfileMode;
+
+  void _update(_ProfileGlassTuning next) {
+    if (_tuning == next) return;
+    setState(() => _tuning = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final content = _ProfileGlassDebugScope(
+      tuning: _tuning,
+      child: widget.child,
+    );
+    if (!_showDebugControls) return content;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        content,
+        Positioned(
+          right: 12,
+          bottom: AppScaffold.reservedBottomInset(context) + 12,
+          child: _expanded
+              ? _ProfileGlassDebugPanel(
+                  tuning: _tuning,
+                  onChanged: _update,
+                  onReset: () => _update(_ProfileGlassTuning.defaults),
+                  onHide: () => setState(() => _expanded = false),
+                )
+              : _ProfileGlassDebugButton(
+                  onTap: () => setState(() => _expanded = true),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileGlassDebugButton extends StatelessWidget {
+  const _ProfileGlassDebugButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        key: const ValueKey('profile-glass-debug-button'),
+        color: const Color(0xFF2F80ED),
+        shape: const CircleBorder(),
+        elevation: 6,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+          ),
+        ),
+      );
+}
+
+class _ProfileGlassDebugPanel extends StatelessWidget {
+  const _ProfileGlassDebugPanel({
+    required this.tuning,
+    required this.onChanged,
+    required this.onReset,
+    required this.onHide,
+  });
+
+  final _ProfileGlassTuning tuning;
+  final ValueChanged<_ProfileGlassTuning> onChanged;
+  final VoidCallback onReset;
+  final VoidCallback onHide;
+
+  @override
+  Widget build(BuildContext context) {
+    final width =
+        (MediaQuery.sizeOf(context).width - 24).clamp(260.0, 320.0).toDouble();
+    return Material(
+      key: const ValueKey('profile-glass-debug-panel'),
+      color: const Color(0xF022211F),
+      elevation: 10,
+      borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '玻璃效果调试',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('profile-glass-debug-close'),
+                    onPressed: onHide,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xCCFFFFFF),
+                      size: 19,
+                    ),
+                  ),
+                ],
+              ),
+              _ProfileGlassDebugSlider(
+                label: '全局不透明度',
+                valueLabel: tuning.opacity.toStringAsFixed(2),
+                value: tuning.opacity,
+                min: .30,
+                max: .82,
+                onChanged: (value) =>
+                    onChanged(tuning.copyWith(opacity: value)),
+              ),
+              _ProfileGlassDebugSlider(
+                label: '毛玻璃模糊',
+                valueLabel: tuning.blurSigma.toStringAsFixed(0),
+                value: tuning.blurSigma,
+                min: 0,
+                max: 24,
+                onChanged: (value) =>
+                    onChanged(tuning.copyWith(blurSigma: value)),
+              ),
+              _ProfileGlassDebugSlider(
+                label: '边框高光',
+                valueLabel: tuning.borderHighlight.toStringAsFixed(2),
+                value: tuning.borderHighlight,
+                min: 0,
+                max: 1,
+                onChanged: (value) =>
+                    onChanged(tuning.copyWith(borderHighlight: value)),
+              ),
+              _ProfileGlassDebugSlider(
+                label: '阴影强度',
+                valueLabel: tuning.shadowStrength.toStringAsFixed(2),
+                value: tuning.shadowStrength,
+                min: 0,
+                max: .24,
+                onChanged: (value) =>
+                    onChanged(tuning.copyWith(shadowStrength: value)),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('profile-glass-debug-reset'),
+                      onPressed: onReset,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0x55FFFFFF)),
+                      ),
+                      child: const Text('重置'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onHide,
+                      child: const Text('隐藏'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileGlassDebugSlider extends StatelessWidget {
+  const _ProfileGlassDebugSlider({
+    required this.label,
+    required this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xEFFFFFFF),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Text(
+                valueLabel,
+                style: const TextStyle(
+                  color: Color(0xCCFFFFFF),
+                  fontSize: 11,
+                  fontFeatures: [ui.FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max).toDouble(),
+            min: min,
+            max: max,
+            onChanged: onChanged,
+          ),
+        ],
       );
 }
 
@@ -1348,29 +1647,24 @@ class _QuickActionGrid extends StatelessWidget {
           final scaledBody = MediaQuery.textScalerOf(context).scale(12);
           final textScale = (scaledBody / 12).clamp(1.0, 2.0);
           final itemHeight = 47 + (textScale - 1) * 18;
-          return LiquidGlassBatch(
-            // These tiles sit on top of the section's own glass. Giving the
-            // sibling tiles a fresh batch lets them share one read taken
-            // after the parent panel has painted, so they can refract that
-            // panel instead of flattening into translucent white boxes.
-            child: GridView.builder(
-              itemCount: order.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-                childAspectRatio: itemWidth / itemHeight,
-              ),
-              itemBuilder: (context, index) {
-                final spec = profileQuickActionSpec(order[index]);
-                return _QuickActionTile(
-                  spec: spec,
-                  onTap: () => onTap(spec.id),
-                );
-              },
+          return GridView.builder(
+            key: const ValueKey('profile-quick-actions-grid'),
+            itemCount: order.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              childAspectRatio: itemWidth / itemHeight,
             ),
+            itemBuilder: (context, index) {
+              final spec = profileQuickActionSpec(order[index]);
+              return _QuickActionTile(
+                spec: spec,
+                onTap: () => onTap(spec.id),
+              );
+            },
           );
         },
       );
@@ -1386,18 +1680,8 @@ class _QuickActionTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => AppLiquidGlassSurface(
+  Widget build(BuildContext context) => _ProfileStaticGlassTile(
         borderRadius: 15,
-        blurSigma: 3,
-        glassOpacity:
-            Theme.of(context).brightness == Brightness.dark ? .28 : .22,
-        themeColorAccents: false,
-        shadow: false,
-        interactive: true,
-        distortion: .055,
-        distortionWidth: 18,
-        chromaticAberration: .003,
-        magnification: 1.012,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         child: Material(
           type: MaterialType.transparency,
@@ -1491,40 +1775,38 @@ class _RecommendedAppsSection extends StatelessWidget {
             ),
           ),
         ),
-        child: const LiquidGlassBatch(
-          child: Row(
-            children: [
-              Expanded(
-                child: _RecommendedApp(
-                  icon: Icons.eco_rounded,
-                  iconColor: Color(0xFF83D64F),
-                  name: 'Forest专注森林',
-                  subtitle: '专注让生活更高效',
-                  action: '安装',
-                ),
+        child: const Row(
+          children: [
+            Expanded(
+              child: _RecommendedApp(
+                icon: Icons.eco_rounded,
+                iconColor: Color(0xFF83D64F),
+                name: 'Forest专注森林',
+                subtitle: '专注让生活更高效',
+                action: '安装',
               ),
-              SizedBox(width: 6),
-              Expanded(
-                child: _RecommendedApp(
-                  icon: Icons.cloud_rounded,
-                  iconColor: Color(0xFF599AF3),
-                  name: '潮汐睡眠',
-                  subtitle: '让身心回归平静',
-                  action: '安装',
-                ),
+            ),
+            SizedBox(width: 6),
+            Expanded(
+              child: _RecommendedApp(
+                icon: Icons.cloud_rounded,
+                iconColor: Color(0xFF599AF3),
+                name: '潮汐睡眠',
+                subtitle: '让身心回归平静',
+                action: '安装',
               ),
-              SizedBox(width: 6),
-              Expanded(
-                child: _RecommendedApp(
-                  icon: Icons.check_rounded,
-                  iconColor: Color(0xFFF05D70),
-                  name: 'Habit习惯打卡',
-                  subtitle: '小习惯成就大改变',
-                  action: '打开',
-                ),
+            ),
+            SizedBox(width: 6),
+            Expanded(
+              child: _RecommendedApp(
+                icon: Icons.check_rounded,
+                iconColor: Color(0xFFF05D70),
+                name: 'Habit习惯打卡',
+                subtitle: '小习惯成就大改变',
+                action: '打开',
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
 }
@@ -1547,17 +1829,8 @@ class _RecommendedApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
         height: 68,
-        child: AppLiquidGlassSurface(
+        child: _ProfileStaticGlassTile(
           borderRadius: 15,
-          blurSigma: 3,
-          glassOpacity:
-              Theme.of(context).brightness == Brightness.dark ? .28 : .22,
-          themeColorAccents: false,
-          shadow: false,
-          distortion: .052,
-          distortionWidth: 18,
-          chromaticAberration: .0028,
-          magnification: 1.01,
           padding: const EdgeInsets.fromLTRB(7, 5, 7, 5),
           child: Row(
           children: [
@@ -1773,6 +2046,57 @@ class _ServiceRow extends StatelessWidget {
       );
 }
 
+class _ProfileStaticGlassTile extends StatelessWidget {
+  const _ProfileStaticGlassTile({
+    required this.child,
+    required this.padding,
+    this.borderRadius = 15,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final tuning = _ProfileGlassDebugScope.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(borderRadius);
+    final fillAlpha =
+        (tuning.opacity + (dark ? .02 : .10)).clamp(.36, .90).toDouble();
+    final topAlpha =
+        (fillAlpha + .12).clamp(.42, .96).toDouble();
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: dark ? .10 : .18),
+            context.appSurface.withValues(alpha: topAlpha),
+            context.appSurface.withValues(alpha: fillAlpha),
+          ],
+          stops: const [0, .38, 1],
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(
+            alpha: (.20 + tuning.borderHighlight * .30)
+                .clamp(0.0, .62)
+                .toDouble(),
+          ),
+          width: .9,
+        ),
+      ),
+      child: Padding(
+        padding: padding,
+        child: child,
+      ),
+    );
+  }
+}
+
 class _GlassPanel extends StatelessWidget {
   const _GlassPanel({
     required this.child,
@@ -1783,20 +2107,137 @@ class _GlassPanel extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) => AppLiquidGlassSurface(
-        borderRadius: 22,
-        themeColorAccents: false,
-        glassOpacity: MediaQuery.highContrastOf(context)
-            ? .82
-            : Theme.of(context).brightness == Brightness.dark
-            ? .40
-            : .34,
-        blurSigma: 5,
-        distortion: .048,
-        distortionWidth: 22,
-        chromaticAberration: .0026,
-        magnification: 1.008,
-        padding: padding,
-        child: child,
+  Widget build(BuildContext context) {
+    final tuning = _ProfileGlassDebugScope.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final highContrast = MediaQuery.highContrastOf(context);
+    final radius = BorderRadius.circular(22);
+    final opacity = highContrast
+        ? .88
+        : (tuning.opacity + (dark ? .04 : 0)).clamp(.34, .90).toDouble();
+    final highlight =
+        (tuning.borderHighlight * (highContrast ? 1.15 : 1))
+            .clamp(0.0, 1.0)
+            .toDouble();
+
+    Widget surface = CustomPaint(
+      foregroundPainter: _ProfileGlassBorderPainter(
+        radius: 22,
+        highlight: highlight,
+        dark: dark,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(
+                alpha: (opacity + (dark ? .02 : .16))
+                    .clamp(0.0, .96)
+                    .toDouble(),
+              ),
+              context.appSurface.withValues(alpha: opacity),
+              context.appSurface.withValues(
+                alpha: (opacity - .07).clamp(.28, .90).toDouble(),
+              ),
+            ],
+            stops: const [0, .44, 1],
+          ),
+        ),
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+
+    if (tuning.blurSigma > .01 && !highContrast) {
+      surface = BackdropFilter(
+        filter: ui.ImageFilter.blur(
+          sigmaX: tuning.blurSigma,
+          sigmaY: tuning.blurSigma,
+          tileMode: TileMode.decal,
+        ),
+        child: surface,
       );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: tuning.shadowStrength <= .001
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: tuning.shadowStrength * (dark ? 1.25 : 1),
+                  ),
+                  blurRadius: 22,
+                  spreadRadius: -5,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: surface,
+      ),
+    );
+  }
+}
+
+class _ProfileGlassBorderPainter extends CustomPainter {
+  const _ProfileGlassBorderPainter({
+    required this.radius,
+    required this.highlight,
+    required this.dark,
+  });
+
+  final double radius;
+  final double highlight;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || highlight <= .001) return;
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(.65),
+      Radius.circular(
+        (radius - .65).clamp(0.0, radius).toDouble(),
+      ),
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.05
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(
+            alpha: highlight * (dark ? .50 : .82),
+          ),
+          const Color(0xFFFFF1DF).withValues(alpha: highlight * .48),
+          Colors.white.withValues(alpha: highlight * .15),
+          Colors.black.withValues(alpha: highlight * (dark ? .22 : .08)),
+        ],
+        stops: const [0, .28, .72, 1],
+      ).createShader(rect);
+    canvas.drawRRect(rrect, paint);
+
+    final topGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = .55
+      ..color = Colors.white.withValues(alpha: highlight * .34);
+    canvas.drawRRect(rrect.deflate(1.05), topGlow);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProfileGlassBorderPainter oldDelegate) =>
+      oldDelegate.radius != radius ||
+      oldDelegate.highlight != highlight ||
+      oldDelegate.dark != dark;
 }
