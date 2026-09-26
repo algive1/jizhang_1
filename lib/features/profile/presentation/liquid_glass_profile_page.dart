@@ -612,7 +612,7 @@ class _ProfileGlassDebugSlider extends StatelessWidget {
                 style: const TextStyle(
                   color: Color(0xCCFFFFFF),
                   fontSize: 11,
-                  fontFeatures: [FontFeature.tabularFigures()],
+                  fontFeatures: [ui.FontFeature.tabularFigures()],
                 ),
               ),
             ],
@@ -2082,7 +2082,7 @@ class _ProfileStaticGlassTile extends StatelessWidget {
         ),
         border: Border.all(
           color: Colors.white.withValues(
-            alpha: (.20 + tuning.borderHighlight * .30).clamp(0.0, .62),
+            alpha: (.20 + tuning.borderHighlight * .30)\n                .clamp(0.0, .62)\n                .toDouble(),
           ),
           width: .9,
         ),
@@ -2132,11 +2132,11 @@ class _GlassPanel extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [
               Colors.white.withValues(
-                alpha: (opacity + (dark ? .02 : .16)).clamp(0.0, .96),
+                alpha: (opacity + (dark ? .02 : .16))\n                    .clamp(0.0, .96)\n                    .toDouble(),
               ),
               context.appSurface.withValues(alpha: opacity),
               context.appSurface.withValues(
-                alpha: (opacity - .07).clamp(.28, .90),
+                alpha: (opacity - .07).clamp(.28, .90).toDouble(),
               ),
             ],
             stops: const [0, .44, 1],
@@ -2203,7 +2203,7 @@ class _ProfileGlassBorderPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(
       rect.deflate(.65),
-      Radius.circular((radius - .65).clamp(0.0, radius)),
+      Radius.circular(\n        (radius - .65).clamp(0.0, radius).toDouble(),\n      ),
     );
     final paint = Paint()
       ..style = PaintingStyle.stroke
