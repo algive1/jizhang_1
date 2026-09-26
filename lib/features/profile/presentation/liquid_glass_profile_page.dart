@@ -2161,7 +2161,6 @@ class _GlassPanel extends StatelessWidget {
     }
 
     return Container(
-      key: const ValueKey('profile-frosted-panel'),
       decoration: BoxDecoration(
         borderRadius: radius,
         boxShadow: tuning.shadowStrength <= .001
