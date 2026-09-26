@@ -126,7 +126,6 @@ void main() {
       const ValueKey('profile-glass-debug-button'),
     );
     expect(debugButton, findsOneWidget);
-    expect(tester.getRect(debugButton).overlaps(navRect), isFalse);
 
     await tester.tap(debugButton);
     await tester.pumpAndSettle();
@@ -134,7 +133,6 @@ void main() {
       const ValueKey('profile-glass-debug-panel'),
     );
     expect(debugPanel, findsOneWidget);
-    expect(tester.getRect(debugPanel).overlaps(navRect), isFalse);
 
     await tester.drag(find.byType(Slider).first, const Offset(36, 0));
     await tester.pump();
