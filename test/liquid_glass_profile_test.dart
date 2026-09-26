@@ -86,13 +86,65 @@ void main() {
       lessThan(.01),
     );
 
-    final glassView = tester.widget<LiquidGlassView>(
-      find.byKey(const ValueKey('profile-glass-view-false')),
+    final glassViewFinder = find.byKey(
+      const ValueKey('profile-glass-view-false'),
     );
+    final glassView = tester.widget<LiquidGlassView>(glassViewFinder);
     expect(glassView.useImpellerBackdrop, isFalse);
     expect(glassView.realTimeCapture, isFalse);
     expect(glassView.batch, isFalse);
-    expect(find.byType(LiquidGlassLens), findsWidgets);
+
+    // Scrolling content keeps only the tiny brightness toggle as a real
+    // refracting lens. Quick actions and recommendation tiles are static
+    // translucent surfaces, so dragging the page no longer drives a field of
+    // independent liquid-glass shaders.
+    expect(
+      find.descendant(
+        of: glassViewFinder,
+        matching: find.byType(LiquidGlassLens),
+      ),
+      findsOneWidget,
+    );
+    final quickGrid = find.byKey(
+      const ValueKey('profile-quick-actions-grid'),
+    );
+    expect(
+      find.descendant(
+        of: quickGrid,
+        matching: find.byType(LiquidGlassLens),
+      ),
+      findsNothing,
+    );
+
+    // The debug tuner is an overlay owned by the profile page only. Opening
+    // and changing it must neither move nor cover the app-level navigation.
+    final navBar = find.byKey(
+      const ValueKey('app-bottom-navigation-bar'),
+    );
+    final navRect = tester.getRect(navBar);
+    final debugButton = find.byKey(
+      const ValueKey('profile-glass-debug-button'),
+    );
+    expect(debugButton, findsOneWidget);
+    expect(tester.getRect(debugButton).overlaps(navRect), isFalse);
+
+    await tester.tap(debugButton);
+    await tester.pumpAndSettle();
+    final debugPanel = find.byKey(
+      const ValueKey('profile-glass-debug-panel'),
+    );
+    expect(debugPanel, findsOneWidget);
+    expect(tester.getRect(debugPanel).overlaps(navRect), isFalse);
+
+    await tester.drag(find.byType(Slider).first, const Offset(36, 0));
+    await tester.pump();
+    expect(tester.getRect(navBar), navRect);
+
+    await tester.tap(
+      find.byKey(const ValueKey('profile-glass-debug-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(debugPanel, findsNothing);
 
     final topArea = find.byKey(const ValueKey('profile-top-area'));
     final identity = find.byKey(const ValueKey('profile-identity'));
