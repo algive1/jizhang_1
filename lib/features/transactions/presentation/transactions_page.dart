@@ -31,15 +31,17 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final transactionState = widget.month == null
+        ? ref.watch(transactionsProvider)
+        : ref.watch(
+            transactionsForMonthProvider((
+              year: widget.month!.year,
+              month: widget.month!.month,
+            )),
+          );
     final all =
-        (ref.watch(transactionsProvider).value ?? const <TransactionRecord>[])
-            .where(
-              (t) =>
-                  widget.month == null ||
-                  (t.occurredAt.year == widget.month!.year &&
-                      t.occurredAt.month == widget.month!.month &&
-                      !t.occurredAt.isAfter(DateTime.now())),
-            )
+        (transactionState.value ?? const <TransactionRecord>[])
+            .where((t) => !t.occurredAt.isAfter(DateTime.now()))
             .toList();
     final categories = ref.watch(categoriesProvider).value ?? const [];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
