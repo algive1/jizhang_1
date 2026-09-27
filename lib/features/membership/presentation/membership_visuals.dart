@@ -84,7 +84,6 @@ class MembershipHero extends StatelessWidget {
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomCenter,
                 cacheWidth: (width * .37 * pixelRatio).ceil(),
-                cacheHeight: (153 * pixelRatio).ceil(),
               ),
             ),
             Positioned(
@@ -97,7 +96,6 @@ class MembershipHero extends StatelessWidget {
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
                   cacheWidth: (85 * pixelRatio).ceil(),
-                  cacheHeight: (65 * pixelRatio).ceil(),
                 ),
               ),
             ),
@@ -111,7 +109,6 @@ class MembershipHero extends StatelessWidget {
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
                   cacheWidth: (24 * pixelRatio).ceil(),
-                  cacheHeight: (25 * pixelRatio).ceil(),
                 ),
               ),
             ),
