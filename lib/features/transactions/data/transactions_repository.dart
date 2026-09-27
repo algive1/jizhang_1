@@ -12,6 +12,10 @@ import '../../books/data/book_repository.dart';
 abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchAll();
   Stream<List<TransactionRecord>> watchRecent({int limit = 10});
+  Stream<List<TransactionRecord>> watchRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  });
   Future<List<TransactionRecord>> getAll();
   Future<List<TransactionRecord>> getRecent({int limit = 10});
   Future<TransactionRecord?> getById(String id);
@@ -48,6 +52,24 @@ class DriftTransactionRepository implements TransactionRepository {
     _validateRecentLimit(limit);
     return _database.transactionDao
         .watchActive(bookId: bookId, limit: limit, onlyOccurred: true)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  }) {
+    if (!start.isBefore(endExclusive)) {
+      throw ArgumentError('Transaction range start must be before end');
+    }
+    return _database.transactionDao
+        .watchActive(
+          bookId: bookId,
+          onlyOccurred: true,
+          occurredFrom: start,
+          occurredBefore: endExclusive,
+        )
         .asyncMap(_mapEntities);
   }
 
