@@ -9,6 +9,7 @@ import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_theme_definition.dart';
 import '../core/database/database_provider.dart';
 import '../core/widgets/startup_poster.dart';
 import '../features/sharing/application/shared_book_sync_service.dart';
@@ -29,16 +30,6 @@ import '../features/budgets/application/budget_alert_notification_service.dart';
 import '../features/budgets/data/budget_repository.dart';
 import '../features/settings/application/theme_controller.dart';
 
-final startupVisualWarmupProvider = FutureProvider<void>((ref) async {
-  try {
-    await LiquidGlassShaders.ensureLoaded();
-  } on Object {
-    // Liquid glass has a frosted fallback. Shader warm-up must never prevent
-    // startup, but doing it behind the Flutter poster avoids extending the
-    // Android/iOS native launch screen while still preparing the first lens.
-  }
-});
-
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
 
@@ -58,6 +49,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   late final SessionRepository _sessionRepository;
   bool _updateDialogVisible = false;
   bool _initialUpdateCheckScheduled = false;
+  bool _liquidGlassWarmupScheduled = false;
 
   @override
   void initState() {
@@ -400,9 +392,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       PlatformDispatcher.instance.defaultRouteName,
     );
     final databaseBootstrap = ref.watch(databaseBootstrapProvider);
-    final visualWarmup = ref.watch(startupVisualWarmupProvider);
     if (databaseBootstrap.isLoading ||
-        visualWarmup.isLoading ||
         (!overlayHost && !_startupPosterElapsed)) {
       if (overlayHost) {
         return MaterialApp(
@@ -523,6 +513,20 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     }
 
     final appearance = ref.watch(effectiveThemeProvider);
+    if (appearance.style == AppThemeStyle.liquidGlass &&
+        !_liquidGlassWarmupScheduled) {
+      _liquidGlassWarmupScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(() async {
+          try {
+            await LiquidGlassShaders.ensureLoaded();
+          } on Object {
+            // The liquid-glass widgets already provide a frosted fallback.
+            // Warm-up is opportunistic and must not delay first interaction.
+          }
+        }());
+      });
+    }
     final disableThemeAnimations =
         MediaQueryData.fromView(View.of(context)).disableAnimations;
     final brightnessPreference =
