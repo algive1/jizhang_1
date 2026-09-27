@@ -497,6 +497,22 @@ final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   ).watchAll();
 });
 
+typedef TransactionMonthKey = ({int year, int month});
+
+final transactionsForMonthProvider =
+    StreamProvider.family<List<TransactionRecord>, TransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final start = DateTime(key.year, key.month);
+      final endExclusive = DateTime(key.year, key.month + 1);
+      yield* ref.watch(transactionRepositoryProvider).watchRange(
+        start: start,
+        endExclusive: endExclusive,
+      );
+    });
+
 /// All active transactions visible to the current user, across every ledger.
 ///
 /// Most pages intentionally scope their data to [activeBookIdProvider]. The
