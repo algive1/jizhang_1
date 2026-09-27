@@ -17,7 +17,9 @@ class DatabaseSeeder {
   DatabaseSeeder(this._database);
 
   static const currentSeedVersion = 5;
+  static const currentBookDefaultsVersion = 1;
   static const _seedVersionKey = 'seed_version';
+  static const _bookDefaultsVersionKey = 'book_defaults_version';
 
   final AppDatabase _database;
 
@@ -29,8 +31,14 @@ class DatabaseSeeder {
     final storedVersion = int.tryParse(
       await _database.appSettingsDao.getValue(_seedVersionKey) ?? '0',
     );
+    final storedBookDefaultsVersion = int.tryParse(
+      await _database.appSettingsDao.getValue(_bookDefaultsVersionKey) ?? '0',
+    );
     if ((storedVersion ?? 0) >= currentSeedVersion && !includeDemoData) {
-      await ensureExistingBookDefaults();
+      if ((storedBookDefaultsVersion ?? 0) < currentBookDefaultsVersion) {
+        await ensureExistingBookDefaults();
+        await _markBookDefaultsCurrent();
+      }
       return;
     }
 
@@ -62,6 +70,15 @@ class DatabaseSeeder {
       );
     });
     await ensureExistingBookDefaults();
+    await _markBookDefaultsCurrent();
+  }
+
+  Future<void> _markBookDefaultsCurrent() {
+    return _database.appSettingsDao.setValue(
+      _bookDefaultsVersionKey,
+      currentBookDefaultsVersion.toString(),
+      DateTime.now(),
+    );
   }
 
   Future<void> seedBookDefaults(String bookId, {required BookType type}) async {
