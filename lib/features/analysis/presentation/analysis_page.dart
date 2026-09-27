@@ -30,16 +30,30 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
 
   @override
   Widget build(BuildContext context) {
+    final period = ref.watch(analysisPeriodProvider);
     final snapshot = widget.month == null
         ? ref.watch(analysisSnapshotProvider)
         : ref
-              .watch(analysisRepositoryProvider)
+              .watch(
+                analysisRepositoryForKeyProvider((
+                  period: period,
+                  month: widget.month,
+                )),
+              )
               .analyze(
-                period: ref.watch(analysisPeriodProvider),
+                period: period,
                 month: widget.month,
                 currency: ref.watch(analysisCurrencyProvider),
               );
-    final transactions = ref.watch(analysisTransactionsProvider);
+    final transactions = widget.month == null
+        ? ref.watch(analysisTransactionsProvider)
+        : ref.watch(
+            analysisTransactionsForKeyProvider((
+              scope: ref.watch(analysisScopeProvider),
+              period: period,
+              month: widget.month,
+            )),
+          );
     final scope = ref.watch(analysisScopeProvider);
     final currencies = {
       'CNY',
