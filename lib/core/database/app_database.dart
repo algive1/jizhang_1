@@ -1726,6 +1726,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     String? bookId,
     int? limit,
     bool onlyOccurred = false,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
   }) {
     // Evaluate the time cutoff in SQLite on every stream refresh. Capturing
     // DateTime.now() here would hide transactions saved after subscribing.
@@ -1741,7 +1743,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
                 ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
-                : const Constant(true)),
+                : const Constant(true)) &
+            (occurredFrom == null
+                ? const Constant(true)
+                : row.occurredAt.isBiggerOrEqualValue(occurredFrom)) &
+            (occurredBefore == null
+                ? const Constant(true)
+                : row.occurredAt.isSmallerThanValue(occurredBefore)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -1756,6 +1764,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     String? bookId,
     int? limit,
     bool onlyOccurred = false,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
   }) {
     final query = select(transactionEntries)
       ..where(
@@ -1769,7 +1779,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
                 ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
-                : const Constant(true)),
+                : const Constant(true)) &
+            (occurredFrom == null
+                ? const Constant(true)
+                : row.occurredAt.isBiggerOrEqualValue(occurredFrom)) &
+            (occurredBefore == null
+                ? const Constant(true)
+                : row.occurredAt.isSmallerThanValue(occurredBefore)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
