@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/database/database_provider.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -59,51 +58,11 @@ final analysisScopeProvider =
       AnalysisScopeController.new,
     );
 
-typedef AnalysisDataKey = ({
-  AnalysisScope scope,
-  AnalysisPeriod period,
-  DateTime? month,
-});
-
-final analysisTransactionsForKeyProvider =
-    StreamProvider.family<List<TransactionRecord>, AnalysisDataKey>((
-      ref,
-      key,
-    ) async* {
-      await ref.watch(databaseBootstrapProvider.future);
-      final now = DateTime.now();
-      var start = DateTime(now.year - 1);
-      final selectedMonth = key.month;
-      if (selectedMonth != null) {
-        final comparisonStart = DateTime(
-          selectedMonth.year,
-          selectedMonth.month - 1,
-        );
-        if (comparisonStart.isBefore(start)) start = comparisonStart;
-      }
-      final endExclusive = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).add(const Duration(days: 1));
-      final repository = key.scope == AnalysisScope.allBooks
-          ? DriftTransactionRepository(ref.watch(databaseProvider))
-          : ref.watch(transactionRepositoryProvider);
-      yield* repository.watchRange(
-        start: start,
-        endExclusive: endExclusive,
-      );
-    });
-
 final analysisTransactionsProvider =
     Provider<AsyncValue<List<TransactionRecord>>>((ref) {
-      return ref.watch(
-        analysisTransactionsForKeyProvider((
-          scope: ref.watch(analysisScopeProvider),
-          period: ref.watch(analysisPeriodProvider),
-          month: null,
-        )),
-      );
+      return ref.watch(analysisScopeProvider) == AnalysisScope.allBooks
+          ? ref.watch(allTransactionsProvider)
+          : ref.watch(transactionsProvider);
     });
 
 class AnalysisPeriodController extends Notifier<AnalysisPeriod> {
@@ -122,36 +81,12 @@ final statisticalAnalysisServiceProvider = Provider(
   (ref) => const StatisticalAnalysisService(),
 );
 
-typedef AnalysisRepositoryKey = ({
-  AnalysisPeriod period,
-  DateTime? month,
-});
-
-final analysisRepositoryForKeyProvider =
-    Provider.family<AnalysisRepository, AnalysisRepositoryKey>((ref, key) {
-      final transactions =
-          ref
-              .watch(
-                analysisTransactionsForKeyProvider((
-                  scope: ref.watch(analysisScopeProvider),
-                  period: key.period,
-                  month: key.month,
-                )),
-              )
-              .value ??
-          const <TransactionRecord>[];
-      return LocalAnalysisRepository(
-        transactions,
-        ref.watch(statisticalAnalysisServiceProvider),
-      );
-    });
-
 final analysisRepositoryProvider = Provider<AnalysisRepository>((ref) {
-  return ref.watch(
-    analysisRepositoryForKeyProvider((
-      period: ref.watch(analysisPeriodProvider),
-      month: null,
-    )),
+  final transactions =
+      ref.watch(analysisTransactionsProvider).value ?? const <TransactionRecord>[];
+  return LocalAnalysisRepository(
+    transactions,
+    ref.watch(statisticalAnalysisServiceProvider),
   );
 });
 
@@ -160,12 +95,7 @@ typedef AnalysisSnapshotKey = ({AnalysisPeriod period, String currency});
 final analysisSnapshotForPeriodProvider =
     Provider.family<AnalysisSnapshot, AnalysisSnapshotKey>((ref, key) {
       return ref
-          .watch(
-            analysisRepositoryForKeyProvider((
-              period: key.period,
-              month: null,
-            )),
-          )
+          .watch(analysisRepositoryProvider)
           .analyze(period: key.period, currency: key.currency);
     });
 
