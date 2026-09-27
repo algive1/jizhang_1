@@ -10,6 +10,44 @@ import 'package:jizhang_app/features/transactions/data/transactions_repository.d
 import 'package:jizhang_app/features/transactions/presentation/transactions_page.dart';
 
 void main() {
+  test('transaction range query excludes rows outside the requested month', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    for (final entry in <({String id, DateTime occurredAt})>[
+      (id: 'range-before', occurredAt: DateTime(2026, 7, 31, 23, 59)),
+      (id: 'range-inside', occurredAt: DateTime(2026, 8, 15, 12)),
+      (id: 'range-after', occurredAt: DateTime(2026, 9, 1)),
+    ]) {
+      await repository.create(
+        TransactionRecord(
+          id: entry.id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 12,
+          accountId: SeedIds.bankAccount,
+          occurredAt: entry.occurredAt,
+          createdAt: entry.occurredAt,
+          updatedAt: entry.occurredAt,
+        ),
+      );
+    }
+
+    final rows = await repository
+        .watchRange(
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+        )
+        .first;
+
+    expect(rows.map((item) => item.id), ['range-inside']);
+  });
+
   testWidgets('transactions page lazily builds date groups and switches filters', (
     tester,
   ) async {
