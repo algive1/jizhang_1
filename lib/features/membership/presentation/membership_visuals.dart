@@ -64,7 +64,9 @@ class MembershipHero extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth;
-      final scale = MediaQuery.textScalerOf(context).scale(1);
+      final media = MediaQuery.of(context);
+      final scale = media.textScaler.scale(1);
+      final pixelRatio = media.devicePixelRatio;
       final height = 120.0 + (scale - 1) * 90;
       return SizedBox(
         key: const ValueKey('membership-hero'),
@@ -81,6 +83,8 @@ class MembershipHero extends StatelessWidget {
                 '${memberAssets}hero-mascot.png',
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomCenter,
+                cacheWidth: (width * .37 * pixelRatio).ceil(),
+                cacheHeight: (153 * pixelRatio).ceil(),
               ),
             ),
             Positioned(
@@ -92,6 +96,8 @@ class MembershipHero extends StatelessWidget {
                 child: Image.asset(
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
+                  cacheWidth: (85 * pixelRatio).ceil(),
+                  cacheHeight: (65 * pixelRatio).ceil(),
                 ),
               ),
             ),
@@ -104,6 +110,8 @@ class MembershipHero extends StatelessWidget {
                 child: Image.asset(
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
+                  cacheWidth: (24 * pixelRatio).ceil(),
+                  cacheHeight: (25 * pixelRatio).ceil(),
                 ),
               ),
             ),
