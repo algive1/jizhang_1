@@ -33,28 +33,39 @@ void main() {
   });
 
 
-  test('current seed repairs a missing default personal book', () async {
-    final database = createMemoryDatabase();
-    addTearDown(database.close);
-    final seeder = DatabaseSeeder(database);
-    await seeder.seedIfNeeded();
+  test(
+    'current seed skips repeated default repair until explicitly requested',
+    () async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      final seeder = DatabaseSeeder(database);
+      await seeder.seedIfNeeded();
 
-    await database.customStatement(
-      'DELETE FROM books WHERE id=?',
-      [SeedIds.personalBook],
-    );
-    expect(await database.familyDao.findBook(SeedIds.personalBook), isNull);
+      expect(
+        await database.appSettingsDao.getValue('book_defaults_version'),
+        DatabaseSeeder.currentBookDefaultsVersion.toString(),
+      );
 
-    await seeder.seedIfNeeded();
+      await database.customStatement(
+        'DELETE FROM books WHERE id=?',
+        [SeedIds.personalBook],
+      );
+      expect(await database.familyDao.findBook(SeedIds.personalBook), isNull);
 
-    final repaired = await database.familyDao.findBook(SeedIds.personalBook);
-    expect(repaired, isNotNull);
-    expect(repaired!.name, '个人账本');
-    expect(
-      await database.accountDao.getActive(bookId: SeedIds.personalBook),
-      isNotEmpty,
-    );
-  });
+      await seeder.seedIfNeeded();
+      expect(await database.familyDao.findBook(SeedIds.personalBook), isNull);
+
+      await seeder.ensureExistingBookDefaults();
+
+      final repaired = await database.familyDao.findBook(SeedIds.personalBook);
+      expect(repaired, isNotNull);
+      expect(repaired!.name, '个人账本');
+      expect(
+        await database.accountDao.getActive(bookId: SeedIds.personalBook),
+        isNotEmpty,
+      );
+    },
+  );
 
   test(
     'seed migration removes legacy demo data from existing local databases',
