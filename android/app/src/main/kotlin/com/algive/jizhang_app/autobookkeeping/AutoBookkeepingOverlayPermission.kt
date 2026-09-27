@@ -19,4 +19,11 @@ object AutoBookkeepingOverlayPermission {
             ) == AppOpsManager.MODE_ALLOWED
         }.getOrDefault(false)
     }
+
+    fun isMiuiFamilyDevice(): Boolean =
+        listOf(Build.MANUFACTURER, Build.BRAND).any { value ->
+            value.equals("xiaomi", ignoreCase = true) ||
+                value.equals("redmi", ignoreCase = true) ||
+                value.equals("poco", ignoreCase = true)
+        }
 }

@@ -6,6 +6,14 @@ import com.algive.jizhang_app.autobookkeeping.parser.MeituanPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
 import com.algive.jizhang_app.autobookkeeping.parser.TransactionStatusParser
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiProfilePageParserRegistry
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiWechatPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiAlipayPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiPddPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiDouyinPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiUnionpayPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiJingDongPageParser
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiMeituanPageParser
 import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import com.algive.jizhang_app.autobookkeeping.rules.PaymentParserKind
 import com.algive.jizhang_app.autobookkeeping.rules.PaymentRule
@@ -21,6 +29,17 @@ class PaymentSceneDetector(
     private val transactionStatusParser: TransactionStatusParser =
         TransactionStatusParser(registry),
 ) {
+    private val qianjiPageParsers = QianjiProfilePageParserRegistry(
+        listOf(
+            QianjiWechatPageParser(),
+            QianjiAlipayPageParser(),
+            QianjiPddPageParser(),
+            QianjiDouyinPageParser(),
+            QianjiUnionpayPageParser(),
+            QianjiJingDongPageParser(),
+            QianjiMeituanPageParser(),
+        ),
+    )
     private val weChatRule =
         registry.ruleForKind(PaymentParserKind.WECHAT)
             ?: error("Missing WeChat payment rule")
@@ -41,9 +60,37 @@ class PaymentSceneDetector(
         packageName: String,
         nodes: List<ScreenNode>,
         timestamp: Long = System.currentTimeMillis(),
+        activityClassName: String? = null,
     ): PaymentDetectionResult {
         if (registry.ruleFor(packageName) == null) {
             return PaymentDetectionResult(null, "UNSUPPORTED_PACKAGE")
+        }
+
+        // A legacy WeChat confirmation layout carries a transfer recipient but
+        // also the generic 支付成功 label. Preserve its specific transfer result
+        // before the Qianji payment-success page can claim that sparse layout.
+        if (
+            packageName == "com.tencent.mm" &&
+            nodes.any { it.label.contains("确认收款") } &&
+            nodes.any { it.label == "支付成功" }
+        ) {
+            transactionStatusParser.parse(packageName, nodes, timestamp)?.let {
+                return PaymentDetectionResult(it, null)
+            }
+        }
+
+        val qianjiResult = qianjiPageParsers.inspect(
+            packageName = packageName,
+            nodes = nodes,
+            observedAt = timestamp,
+            activityClassName = activityClassName,
+        )
+        if (qianjiResult?.blocksLegacyFallback == true) {
+            return PaymentDetectionResult(
+                qianjiResult.candidate,
+                qianjiResult.rejectionReason
+                    ?: if (qianjiResult.candidate == null) "QIANJI_PAGE_REJECTED" else null,
+            )
         }
 
         val typedCandidate =

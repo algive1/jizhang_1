@@ -1,5 +1,6 @@
 package com.algive.jizhang_app.autobookkeeping
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.Notification
@@ -47,6 +48,7 @@ object AutoBookkeepingNotificationController {
         return true
     }
 
+    @SuppressLint("MissingPermission") // statusNotificationsAvailable checks POST_NOTIFICATIONS; notify is guarded for revocation races.
     fun sync(context: Context) {
         if (
             !AutoBookkeepingSettings.enabled(context) ||
@@ -56,8 +58,16 @@ object AutoBookkeepingNotificationController {
             cancelStatus(context)
             return
         }
-        NotificationManagerCompat.from(context)
-            .notify(NOTIFICATION_ID, buildNotification(context))
+        runCatching {
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_ID, buildNotification(context))
+        }.onFailure { error ->
+            AutoBookkeepingLogStore.record(
+                context,
+                "status_notification_failed",
+                error.javaClass.simpleName,
+            )
+        }
     }
 
     fun cancelStatus(context: Context) {
@@ -151,9 +161,12 @@ object AutoBookkeepingNotificationController {
         val openIntent = PendingIntent.getActivity(
             context,
             3,
-            Intent(context, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra(MainActivity.OPEN_ROUTE_EXTRA, "/profile/autobookkeeping/confirm")
+            Intent(context, AutoBookkeepingConfirmActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(
+                    AutoBookkeepingConfirmActivity.EXTRA_BACKGROUND_MODE,
+                    AutoBookkeepingConfirmActivity.BACKGROUND_MODE_TRANSPARENT,
+                )
             },
             pendingFlags(),
         )

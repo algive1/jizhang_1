@@ -354,3 +354,91 @@
 
 ### 不允许修改范围
 - 数据库、账务服务、路由结构、全局导航/FAB 几何、第三方库、资产文件及与本任务无关的页面。
+
+# 2026-09-27 真机微信付款无浮层
+目标：修复已连接真机微信支付成功页未生成候选的问题。现象：无障碍与浮层服务运行，但扫描 windows=0/无可解析根；真实页为 UIPageFragmentActivity，含支付成功、独立收款方、¥1.00、完成。
+方案：主审检查窗口/事件源读取及服务生命周期；执行代理只修改微信支付成功 parser 和相关测试，验证无标签收款方的真实布局。先复现、再最小修复、编译安装、在保留的真实页面确认浮层及 pending。
+范围：自动记账 Kotlin、相关测试和任务文档。不得提交真实收款方隐私、修改账本或主动发起付款；保留用户现有改动。根文档历史内容保留，本节为当前任务。
+# 2026-09-27 跨应用 60% 自动记账确认浮层
+
+## 任务目标
+- 保留现有“付款识别 → 顶部文字提示 → 去确认”链路。
+- 用户点击“去确认”后，不切入普通全屏 App 页面；在当前付款 App 上方显示底部约占可用屏幕 60% 的“记一笔”确认浮层。
+- 浮层复用现有记账视觉和自动记账保存语义，但不显示数字键盘区、不自动弹出系统键盘。
+- 自动截图开关开启时，继续把付款页面截图自动附加到本笔流水；关闭时不附加。截图失败不得阻断确认或保存。
+
+## 当前问题
+- `AutoBillOverlayService.openConfirmation` 当前启动 `MainActivity` 的 `/profile/autobookkeeping/confirm` 路由，视觉上进入普通全屏页面，而不是覆盖在第三方 App 上的底部浮层。
+- `AutoBookkeepingConfirmPage` 是纵向全屏表单，与现有“记一笔”页面布局不同，并显示截图预览/单笔截图开关；用户要求截图由总开关决定并自动附加。
+- 跨应用展示需要透明窗口、正确的 Activity 关闭语义和系统栏/安全区适配；普通 Activity 的不透明背景会遮住付款 App。
+
+## 涉及模块
+- Android：`AutoBillOverlayService.kt`、新增或调整自动记账确认 Activity、`AndroidManifest.xml`、`styles.xml`。
+- Flutter：`auto_bookkeeping_confirm_page.dart`、路由参数/确认页入口，以及必要的记一笔公共组件复用。
+- 测试：`test/autobookkeeping_page_test.dart`、相关 Android 单元测试/构建检查。
+
+## 修改方案
+1. 新增透明、独立的自动记账确认 Activity，继承现有 Flutter 平台通道能力；由顶部文字浮窗的“去确认”启动。透明 Activity 退出后直接回到原付款 App。
+2. 为确认页增加明确的 overlay 模式；overlay 模式使用透明全屏承载层和底部 60% 高度的 Material/主题表面，处理状态栏、导航栏与小屏安全区。
+3. overlay 模式按现有“记一笔”视觉组织类型、分类、账户、金额、备注和取消/保存；不构建 `NumberKeyboard`，所有文本输入默认不请求焦点。
+4. 保留现有候选读取、账户/分类推荐、退款/转账处理、去重、学习和保存逻辑；不修改 parser 与付款识别。
+5. 移除 overlay 模式中的支付截图预览及单笔保存开关。候选已有截图时默认随成功流水自动转存；截图捕获仍发生在顶部提示和确认浮层出现之前。
+6. 外部通知/浮窗入口采用跨应用模式；应用内普通确认路由保留为降级路径。
+
+## 开发顺序
+1. 添加结构测试，锁定透明 Activity 入口、60% 高度、底部对齐、无数字键盘和关闭行为。
+2. 实现 Android 透明确认入口与 Flutter overlay 参数。
+3. 重构确认页的 overlay 布局，复用现有组件和保存逻辑。
+4. 运行格式化、Flutter 定向测试/analyze、Android 单测/lint/build。
+5. 指挥层检查 `git diff`、`git status`；在可用模拟器/设备上安装并从其他 App 场景验证截图和浮层。
+
+## 风险和避坑点
+- 透明 Activity 必须使用独立任务/关闭语义，不能在保存或取消后露出好好记账主页。
+- Flutter 第一帧和 Android launch theme 都必须透明，避免闪白或短暂遮住付款 App。
+- 60% 指可用窗口高度；小屏、横屏、大字体时内容应滚动，底部操作保持可达，不能裁切在导航栏下。
+- 不为满足高度删除账户、分类、转账/退款等必要确认能力；采用滚动和紧凑布局。
+- 不重新截图确认浮层；截图必须是付款 App 页面，且只与当前候选绑定。
+- 不修改钱迹 parser、付款检测、数据库 schema、主记一笔键盘行为或用户其它未提交改动。
+# 2026-09-28 自动记账悬浮窗权限误报
+
+## 任务目标
+
+修复用户已在系统设置打开“悬浮窗权限”后，自动记账页面仍显示“未读取到/未授权悬浮窗权限”的问题；同时保持真实悬浮窗添加失败时仍能降级到通知和应用内待确认列表。
+
+## 当前问题与证据
+
+- `AutoBookkeepingOverlayPermission.isGranted()` 在 Xiaomi/Redmi/POCO 上将公开 `SYSTEM_ALERT_WINDOW` 结果与私有 AppOps 10008、10053 强制 AND。
+- 当前连接的 Xiaomi 23116PN5BC（Android API 36）中 `SYSTEM_ALERT_WINDOW: allow`，而两个私有 AppOps 返回 `ignore`；因此系统设置已开启时应用仍返回 false。
+- 私有 AppOps 不属于 Android 公共权限契约，未必由用户可见的“悬浮窗”开关同步，也可能在不同 HyperOS 版本不存在/不可查询。
+
+## 涉及模块
+
+- `android/app/src/main/kotlin/com/algive/jizhang_app/autobookkeeping/AutoBookkeepingOverlayPermission.kt`
+- `android/app/src/main/kotlin/com/algive/jizhang_app/MainActivity.kt`（仅必要时调整设置入口）
+- `android/app/src/test/kotlin/com/algive/jizhang_app/autobookkeeping/`（原生权限判断回归测试，若当前测试基础支持）
+- `.agent/ACCEPTANCE.md`、`.agent/PROGRESS.md`
+
+## 修改方案
+
+1. 以 `Settings.canDrawOverlays(context)` / 公共 `SYSTEM_ALERT_WINDOW` AppOps 作为“悬浮窗权限已授权”的唯一状态来源。
+2. 不再让未公开、不可稳定读取的 MIUI 私有 AppOps 否决权限状态；保留 `TYPE_APPLICATION_OVERLAY` 的真实 `addView()` 失败日志与通知降级。
+3. 保留现有 MIUI 设置页优先级和非 MIUI fallback，不扩大权限范围、不新增依赖。
+4. 增加可验证的纯 Kotlin 测试或最小测试接缝，覆盖公共权限通过时不被厂商私有状态误报为 false；若当前 Android 单测无法模拟系统 Context，则通过构建、设备 `cmd appops` 与运行日志验收。
+
+## 开发顺序
+
+1. 建立当前设备证据和目标回归断言。
+2. 做最小原生权限判定修改，保留真实窗口失败降级路径。
+3. 运行 Kotlin 单测、Flutter 自动记账定向测试、analyze、Debug APK 构建与 `git diff --check`。
+4. 安装到 Xiaomi 设备，确认设置页状态不再误报，并检查自动记账运行状态/日志。
+5. 指挥层独立审查 `git diff`、`git status` 与验收清单。
+
+## 风险和避坑点
+
+- 不执行 `git reset --hard`、`git clean`，不覆盖工作区既有自动记账 parser、浮层 Activity、Flutter UI 等未提交改动。
+- 不把“检测为已授权”误写成“厂商一定允许后台弹窗”；真实 `addView()` 失败仍必须记录并走通知/待确认降级。
+- 不修改无障碍、通知读取、账本保存、浮层视觉和支付解析逻辑。
+
+## 不允许修改范围
+
+除上述权限判定、必要测试和三份任务文档外，不修改 Flutter 业务、分类/账本数据、支付解析器、数据库 schema、第三方依赖或全局主题。

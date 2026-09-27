@@ -31,7 +31,7 @@ import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingS
 import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
 import java.io.File
 
-class MainActivity : FlutterFragmentActivity() {
+open class MainActivity : FlutterFragmentActivity() {
     private val channelName = "jizhang/payment_notifications"
     private val fileChannelName = "jizhang/file_opener"
     private var navigationChannel: MethodChannel? = null
@@ -788,17 +788,28 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun openOverlaySettings(result: MethodChannel.Result) {
+        val miuiPermissionEditor = Intent("miui.intent.action.APP_PERM_EDITOR")
+            .setClassName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.permissions.PermissionsEditorActivity",
+            )
+            .putExtra("extra_pkgname", packageName)
         openSystemSettings(
             result,
-            Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"),
-            ),
-            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
-            Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:$packageName"),
-            ),
+            *listOfNotNull(
+                miuiPermissionEditor.takeIf {
+                    AutoBookkeepingOverlayPermission.isMiuiFamilyDevice()
+                },
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName"),
+                ),
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName"),
+                ),
+            ).toTypedArray(),
         )
     }
 

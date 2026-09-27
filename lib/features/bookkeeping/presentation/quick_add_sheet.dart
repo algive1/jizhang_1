@@ -62,6 +62,54 @@ import '../../bookkeeping_templates/data/bookkeeping_template_repository.dart';
 /// existing borrowing/lending/repayment types through [_keypadType].
 enum _EntryTab { expense, income, transfer, debt }
 
+/// The values required by an external confirmation flow when the shared
+/// bookkeeping form is used without its normal save action.
+class QuickAddReviewDraft {
+  const QuickAddReviewDraft({
+    required this.bookId,
+    required this.type,
+    required this.amountInCents,
+    required this.note,
+    required this.occurredAt,
+    required this.accounts,
+    required this.categories,
+    required this.categoryId,
+    required this.accountId,
+    required this.destinationAccountId,
+    required this.subcategoryId,
+    required this.reimbursementStatus,
+    required this.reimbursementNote,
+    required this.attachmentPaths,
+    required this.tags,
+    required this.payerUserId,
+    required this.recurringDraft,
+    required this.isPlanned,
+    required this.isOneTime,
+    required this.isRecurring,
+  });
+
+  final String bookId;
+  final TransactionType type;
+  final int amountInCents;
+  final String note;
+  final DateTime occurredAt;
+  final List<Account> accounts;
+  final List<Category> categories;
+  final String? categoryId;
+  final String? accountId;
+  final String? destinationAccountId;
+  final String? subcategoryId;
+  final ReimbursementStatus reimbursementStatus;
+  final String reimbursementNote;
+  final List<String> attachmentPaths;
+  final List<String> tags;
+  final String? payerUserId;
+  final RecurringBill? recurringDraft;
+  final bool isPlanned;
+  final bool isOneTime;
+  final bool isRecurring;
+}
+
 class QuickAddSheet extends ConsumerStatefulWidget {
   const QuickAddSheet({
     super.key,
@@ -70,6 +118,22 @@ class QuickAddSheet extends ConsumerStatefulWidget {
     this.initialType = TransactionType.expense,
     this.initialOccurredAt,
     this.initialBookId,
+    this.initialAmountInCents,
+    this.initialNote,
+    this.initialCategoryId,
+    this.initialSubcategoryId,
+    this.initialAccountId,
+    this.initialDestinationAccountId,
+    this.reviewMode = false,
+    this.reviewBooks,
+    this.reviewAccounts,
+    this.reviewCategories,
+    this.reviewMessage,
+    this.reviewScreenshotAvailable = false,
+    this.reviewScreenshotEnabled = false,
+    this.onReviewCancel,
+    this.onReviewComplete,
+    this.onReviewScreenshotChanged,
   });
 
   final TransactionType initialType;
@@ -78,6 +142,24 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   final TransactionRecord? copyFrom;
   final DateTime? initialOccurredAt;
   final String? initialBookId;
+  final int? initialAmountInCents;
+  final String? initialNote;
+  final String? initialCategoryId;
+  final String? initialSubcategoryId;
+  final String? initialAccountId;
+  final String? initialDestinationAccountId;
+
+  /// Reuses the quick-add form as an externally managed review sheet.
+  final bool reviewMode;
+  final List<LedgerBook>? reviewBooks;
+  final List<Account>? reviewAccounts;
+  final List<Category>? reviewCategories;
+  final String? reviewMessage;
+  final bool reviewScreenshotAvailable;
+  final bool reviewScreenshotEnabled;
+  final Future<void> Function()? onReviewCancel;
+  final Future<bool> Function(QuickAddReviewDraft draft)? onReviewComplete;
+  final ValueChanged<bool>? onReviewScreenshotChanged;
 
   @override
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
@@ -147,12 +229,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   bool _attachmentsBusy = false;
   Future<void>? _attachmentsLoad;
   final List<StoredAttachment> _attachments = [];
+  late List<Account> _reviewAccounts;
+  late List<Category> _reviewCategories;
+  bool _reviewBookLoading = false;
+  String? _reviewMessage;
 
   bool get _isEditing => widget.initialTransaction != null;
 
   @override
   void initState() {
     super.initState();
+    _reviewAccounts = widget.reviewAccounts ?? const <Account>[];
+    _reviewCategories = widget.reviewCategories ?? const <Category>[];
     final transaction = widget.initialTransaction ?? widget.copyFrom;
     _type = widget.initialType;
     if (_type == TransactionType.borrow ||
@@ -167,14 +255,29 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     if (transaction == null) {
       final initialDate = widget.initialOccurredAt;
       if (initialDate != null) {
-        final now = DateTime.now();
-        _occurredAt = DateTime(
-          initialDate.year,
-          initialDate.month,
-          initialDate.day,
-          now.hour,
-          now.minute,
-        );
+        if (widget.reviewMode) {
+          _occurredAt = initialDate;
+        } else {
+          final now = DateTime.now();
+          _occurredAt = DateTime(
+            initialDate.year,
+            initialDate.month,
+            initialDate.day,
+            now.hour,
+            now.minute,
+          );
+        }
+      }
+      if (widget.reviewMode) {
+        _categoryId = widget.initialCategoryId;
+        _subcategoryId = widget.initialSubcategoryId;
+        _accountId = widget.initialAccountId;
+        _destinationAccountId = widget.initialDestinationAccountId;
+        final amountInCents = widget.initialAmountInCents;
+        if (amountInCents != null && amountInCents > 0) {
+          _amount = AmountInput((amountInCents / 100).toStringAsFixed(2));
+        }
+        _noteController.text = widget.initialNote ?? '';
       }
       return;
     }
@@ -228,6 +331,19 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
     _attachmentsLoad = _loadExistingAttachments(transaction);
     unawaited(_attachmentsLoad!);
+  }
+
+  @override
+  void didUpdateWidget(covariant QuickAddSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reviewMode &&
+        oldWidget.reviewAccounts != widget.reviewAccounts) {
+      _reviewAccounts = widget.reviewAccounts ?? const <Account>[];
+    }
+    if (widget.reviewMode &&
+        oldWidget.reviewCategories != widget.reviewCategories) {
+      _reviewCategories = widget.reviewCategories ?? const <Category>[];
+    }
   }
 
   Future<void> _loadExistingAttachments(TransactionRecord transaction) async {
@@ -284,15 +400,22 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   /// The header tab the current type belongs to, or null for the legacy types
   /// that have no tab (退款 / 报销回款 / 资产购买 / 余额校准). Those keep their
   /// persisted type untouched so editing an old record cannot rewrite it.
-  _EntryTab? get _tab => switch (_type) {
-    TransactionType.expense => _EntryTab.expense,
-    TransactionType.income => _EntryTab.income,
-    TransactionType.transfer => _EntryTab.transfer,
-    TransactionType.borrow ||
-    TransactionType.lend ||
-    TransactionType.repayment => _EntryTab.debt,
-    _ => null,
-  };
+  _EntryTab? get _tab {
+    if (widget.reviewMode &&
+        (_type == TransactionType.refund ||
+            _type == TransactionType.reimbursement)) {
+      return _EntryTab.income;
+    }
+    return switch (_type) {
+      TransactionType.expense => _EntryTab.expense,
+      TransactionType.income => _EntryTab.income,
+      TransactionType.transfer => _EntryTab.transfer,
+      TransactionType.borrow ||
+      TransactionType.lend ||
+      TransactionType.repayment => _EntryTab.debt,
+      _ => null,
+    };
+  }
 
   /// 转账 and 还款 move money between two accounts and carry no category.
   bool get _usesAccountPair =>
@@ -307,15 +430,21 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Widget build(BuildContext context) {
     final activeBookId = ref.watch(activeBookIdProvider);
     final selectedBookId = _bookId ?? activeBookId;
-    final books = ref.watch(booksProvider).value ?? const <LedgerBook>[];
+    final books = widget.reviewMode
+        ? widget.reviewBooks ?? const <LedgerBook>[]
+        : ref.watch(booksProvider).value ?? const <LedgerBook>[];
     final selectedBook = books
         .where((book) => book.id == selectedBookId)
         .firstOrNull;
-    var accounts = selectedBookId == activeBookId
+    var accounts = widget.reviewMode
+        ? _reviewAccounts
+        : selectedBookId == activeBookId
         ? ref.watch(accountsProvider).value ?? const <Account>[]
         : ref.watch(accountsByBookProvider(selectedBookId)).value ??
               const <Account>[];
-    var categories = selectedBookId == activeBookId
+    var categories = widget.reviewMode
+        ? _reviewCategories
+        : selectedBookId == activeBookId
         ? ref.watch(categoriesProvider).value ?? const <Category>[]
         : ref.watch(categoriesByBookProvider(selectedBookId)).value ??
               const <Category>[];
@@ -386,7 +515,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     child: Row(
                       children: [
                         IconButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: widget.reviewMode
+                              ? () => unawaited(
+                                  widget.onReviewCancel?.call() ??
+                                      Future<void>.value(),
+                                )
+                              : () => Navigator.pop(context),
                           tooltip: '返回',
                           constraints: const BoxConstraints.tightFor(
                             width: 48,
@@ -405,7 +539,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             onChanged: _changeTab,
                           ),
                         ),
-                        if (!_isEditing)
+                        if (!_isEditing && !widget.reviewMode)
                           IconButton(
                             key: const ValueKey('quick-templates'),
                             tooltip: '常用模板',
@@ -428,7 +562,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             ),
                           ),
                         SizedBox(
-                          width: 52,
+                          width: widget.reviewMode ? 106 : 52,
                           child: Center(child: _headerNote()),
                         ),
                       ],
@@ -495,15 +629,81 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               context,
                               input: input,
                               accounts: accounts,
+                              books: books,
                               selectedBook: selectedBook,
                               sourceAccount: sourceAccount,
                             ),
+                            if (widget.reviewMode &&
+                                (widget.reviewMessage != null ||
+                                    _reviewMessage != null)) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.reviewMessage ?? _reviewMessage!,
+                                key: const ValueKey('quick-review-message'),
+                                style: const TextStyle(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
                   ),
-                  if (!keyboardVisible)
+                  if (widget.reviewMode)
+                    SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                key: const ValueKey('quick-review-cancel'),
+                                onPressed: _isSaving || _reviewBookLoading
+                                    ? null
+                                    : () => unawaited(
+                                        widget.onReviewCancel?.call() ??
+                                            Future<void>.value(),
+                                      ),
+                                child: const Text('取消'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton.icon(
+                                key: const ValueKey('quick-review-complete'),
+                                onPressed: _isSaving || _reviewBookLoading
+                                    ? null
+                                    : () => unawaited(
+                                        _completeReview(
+                                          bookId: selectedBookId,
+                                          accounts: accounts,
+                                          categories: categories,
+                                          sourceAccount: sourceAccount,
+                                          destinationAccount:
+                                              destinationAccount,
+                                          selectedCategory: selectedCategory,
+                                          subcategoryId: effectiveSubcategoryId,
+                                        ),
+                                      ),
+                                icon: _isSaving
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.check_rounded),
+                                label: Text(_isSaving ? '完成中…' : '完成'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (!keyboardVisible)
                     SafeArea(
                       top: false,
                       child: NumberKeyboard(
@@ -545,6 +745,38 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   );
 
   Widget _headerNote() {
+    if (widget.reviewMode) {
+      if (_reviewBookLoading) {
+        return const SizedBox.square(
+          dimension: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      }
+      return Tooltip(
+        message: widget.reviewScreenshotAvailable
+            ? '是否将识别时截取的页面保存为本条账单附件'
+            : '本笔没有可保存的支付截图',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('自动截图', style: TextStyle(fontSize: 11)),
+            SizedBox(
+              width: 48,
+              child: Semantics(
+                label: '自动保存支付截图',
+                child: Switch(
+                  key: const ValueKey('quick-review-screenshot-toggle'),
+                  value: widget.reviewScreenshotEnabled,
+                  onChanged: widget.reviewScreenshotAvailable
+                      ? widget.onReviewScreenshotChanged
+                      : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     if (_tab == null) {
       return Text(
         _transactionTypeLabel(_type),
@@ -589,10 +821,111 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     );
   }
 
+  Future<void> _editReviewAmount() async {
+    final value = await showDialog<String>(
+      context: context,
+      builder: (_) => _ReviewAmountDialog(initialValue: _amount.value),
+    );
+    if (value == null || !mounted) return;
+    final edited = AmountInput(value.replaceAll(',', '').trim());
+    if (!edited.isValid) {
+      setState(() => _amountError = true);
+      _showMessage(edited.isComplete ? '金额需大于 0' : '请输入有效金额');
+      return;
+    }
+    setState(() {
+      _amount = edited;
+      _amountError = false;
+    });
+  }
+
+  Future<void> _completeReview({
+    required String bookId,
+    required List<Account> accounts,
+    required List<Category> categories,
+    required Account? sourceAccount,
+    required Account? destinationAccount,
+    required Category? selectedCategory,
+    required String? subcategoryId,
+  }) async {
+    if (_isSaving || _reviewBookLoading) return;
+    if (_attachmentsBusy) {
+      _showMessage('附件仍在保存，请稍候');
+      return;
+    }
+    if (_attachments.any(
+      (item) => item.status == AttachmentUploadStatus.failed,
+    )) {
+      _showMessage('有附件保存失败，请重试或移除后再完成');
+      return;
+    }
+    if (!_amount.isValid) {
+      setState(() => _amountError = true);
+      _showMessage(_amount.isComplete ? '金额需大于 0' : '请先完成金额');
+      return;
+    }
+    if (sourceAccount == null) {
+      _showMessage('请选择账户');
+      return;
+    }
+    if (_usesAccountPair && destinationAccount == null) {
+      _showMessage(_type == TransactionType.repayment ? '请选择债务账户' : '请选择转入账户');
+      return;
+    }
+    if (!_usesAccountPair && selectedCategory == null) {
+      _showMessage('请选择分类');
+      return;
+    }
+    final onComplete = widget.onReviewComplete;
+    if (onComplete == null) {
+      _showMessage('确认页面暂时无法保存，请稍后重试');
+      return;
+    }
+
+    final tags = _tagsController.text
+        .split(RegExp(r'[,，]'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+    final draft = QuickAddReviewDraft(
+      bookId: bookId,
+      type: _type,
+      amountInCents: (_amount.amount! * 100).round(),
+      note: _noteController.text.trim(),
+      occurredAt: _occurredAt,
+      accounts: accounts,
+      categories: categories,
+      categoryId: _usesAccountPair ? null : selectedCategory!.id,
+      accountId: sourceAccount.id,
+      destinationAccountId: _usesAccountPair ? destinationAccount!.id : null,
+      subcategoryId: _usesAccountPair ? null : subcategoryId,
+      reimbursementStatus: _reimbursementStatus,
+      reimbursementNote: _reimbursementNoteController.text.trim(),
+      attachmentPaths: _attachments.map((item) => item.path).toList(),
+      tags: tags,
+      payerUserId: _payerUserId,
+      recurringDraft: _recurringDraft,
+      isPlanned: _isPlanned,
+      isOneTime: _isOneTime,
+      isRecurring: _isRecurring,
+    );
+    setState(() => _isSaving = true);
+    try {
+      final saved = await onComplete(draft);
+      if (!saved && mounted) setState(() => _isSaving = false);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showMessage('保存失败：$error');
+    }
+  }
+
   Widget _buildDetailCard(
     BuildContext context, {
     required AmountInput input,
     required List<Account> accounts,
+    required List<LedgerBook> books,
     required LedgerBook? selectedBook,
     required Account? sourceAccount,
   }) {
@@ -616,6 +949,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           AmountInputView(
             input: input,
             currency: _currencySymbol(sourceAccount),
+            onTap: widget.reviewMode ? _editReviewAmount : null,
           ),
           if (_amountError)
             const Padding(
@@ -681,8 +1015,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
                   showChevron: true,
-                  onTap: () =>
-                      _chooseBook(ref.read(booksProvider).value ?? const []),
+                  onTap: () => _chooseBook(books),
                 )
               else
                 _QuickChip(
@@ -1391,6 +1724,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               category.type == desiredType && category.parentId == null,
         )
         .toList();
+    // The auto-bookkeeping review uses the order already presented by its
+    // category repository; the manual quick-add screen keeps its own ordering.
+    if (widget.reviewMode) return result;
     bool isOtherCategory(Category category) =>
         category.id == 'expense-other' ||
         category.id == 'income-other' ||
@@ -1482,6 +1818,43 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       selectedId: _bookId ?? ref.read(activeBookIdProvider),
     );
     if (selected == null || !mounted) return;
+    if (widget.reviewMode) {
+      setState(() {
+        _reviewBookLoading = true;
+        _reviewMessage = null;
+      });
+      try {
+        final database = ref.read(databaseProvider);
+        final accounts = await DriftAccountRepository(
+          database,
+          bookId: selected.assetBookId,
+        ).getActive();
+        final categories = await DriftCategoryRepository(
+          database,
+          bookId: selected.id,
+        ).getActive();
+        if (!mounted) return;
+        setState(() {
+          _reviewAccounts = accounts;
+          _reviewCategories = categories;
+          _bookId = selected.id;
+          _categoryId = null;
+          _subcategoryId = null;
+          _accountId = null;
+          _destinationAccountId = null;
+          _payerUserId = null;
+          _payerLabel = null;
+          _reviewBookLoading = false;
+        });
+      } on Object catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _reviewBookLoading = false;
+          _reviewMessage = '无法读取所选账本的账户和分类：$error';
+        });
+      }
+      return;
+    }
     setState(() {
       _invoiceController.clear();
       _customerController.clear();
@@ -1560,11 +1933,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
     final activeBookId = ref.read(activeBookIdProvider);
     final selectedBookId = _bookId ?? activeBookId;
-    final accounts = selectedBookId == activeBookId
+    final accounts = widget.reviewMode
+        ? _reviewAccounts
+        : selectedBookId == activeBookId
         ? ref.read(accountsProvider).value ?? const <Account>[]
         : ref.read(accountsByBookProvider(selectedBookId)).value ??
               const <Account>[];
-    final categories = selectedBookId == activeBookId
+    final categories = widget.reviewMode
+        ? _reviewCategories
+        : selectedBookId == activeBookId
         ? ref.read(categoriesProvider).value ?? const <Category>[]
         : ref.read(categoriesByBookProvider(selectedBookId)).value ??
               const <Category>[];
@@ -2876,6 +3253,50 @@ class _AccountPairButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ReviewAmountDialog extends StatefulWidget {
+  const _ReviewAmountDialog({required this.initialValue});
+
+  final String initialValue;
+
+  @override
+  State<_ReviewAmountDialog> createState() => _ReviewAmountDialogState();
+}
+
+class _ReviewAmountDialogState extends State<_ReviewAmountDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('金额'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.done,
+      decoration: const InputDecoration(hintText: '输入金额'),
+      onSubmitted: (_) => Navigator.pop(context, _controller.text),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text),
+        child: const Text('确定'),
+      ),
+    ],
+  );
 }
 
 /// 备注行：常规字号下是「备注 + AI + 麦克风」一行；

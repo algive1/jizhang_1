@@ -36,6 +36,20 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".autobookkeeping.AutoBookkeepingConfirmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="${applicationId}.autobookkeeping.confirm"
+            android:theme="@style/AutoBookkeepingConfirmTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/AutoBookkeepingConfirmTheme" />
+        </activity>
         <service
             android:name=".HaoHaoFirebaseMessagingService"
             android:exported="false">

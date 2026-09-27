@@ -16,7 +16,8 @@ class PaymentEngineTest {
     private fun nodes(vararg text: String) = text.map { ScreenNode(text = it) }
     private fun parse(vararg text: String) = WeChatPaymentParser().parse(nodes(*text), 100000)
     @Test fun fixtures() {
-        val fixtures = javaClass.getResourceAsStream("/wechat/payments.txt")!!.bufferedReader().readText().trim().split("\n\n")
+        val fixtures = javaClass.getResourceAsStream("/wechat/payments.txt")!!.bufferedReader().readText()
+            .replace("\r\n", "\n").trim().split("\n\n")
         fixtures.forEach { fixture ->
             val lines = fixture.lines()
             val expected = lines.first().toLong()

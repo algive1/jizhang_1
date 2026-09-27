@@ -433,3 +433,80 @@
 #### Quality review Minor 返修：测试格式
 - 按 `git diff HEAD -- test/home_asset_scope_test.dart` 定位本次新增 provider 测试中长 `test(...)` 声明、provider override 与 listen 调用的 formatter 换行，并仅修正新增块；未对整个文件运行写入式 format，既有账本作用域测试未改动。
 - 重跑 Task 2 四个目标测试文件共 43 项通过；7 个范围 Dart 文件 analyze 输出 `No issues found!`；`git diff --check` 退出码 0。
+
+# 2026-09-27 真机微信付款修复进度
+已读取真机无障碍配置和日志；自动记账开启，权限存在，浮层服务已运行。取得 UIPageFragmentActivity 的付款成功页节点，仅四个可见文本，无显式商户字段标签。扫描存在 windows=0；正在分析窗口读取和无标签商户解析两个环节。
+# 2026-09-27 跨应用 60% 自动记账确认浮层
+
+## 当前进行
+- 已确认付款检测、顶部文字提示和自动截图捕获时序可复用；当前根因是“去确认”启动普通 `MainActivity` 全屏路由。
+- 已确定采用透明专用 Activity + Flutter overlay 模式，保留普通应用内确认页作为降级入口。
+- 正在补充测试并实现 60% 无键盘记账浮层。
+
+## 已检查文件
+- `android/app/src/main/kotlin/com/algive/jizhang_app/autobookkeeping/overlay/AutoBillOverlayService.kt`
+- `android/app/src/main/kotlin/com/algive/jizhang_app/MainActivity.kt`
+- `android/app/src/main/kotlin/com/algive/jizhang_app/autobookkeeping/accessibility/AutoBookkeepingScreenshotCapture.kt`
+- `android/app/src/main/AndroidManifest.xml`
+- `lib/features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart`
+- `lib/features/bookkeeping/presentation/quick_add_sheet.dart`
+
+## 初始结论
+- 截图在 `offerCandidate` 之前捕获，API 34+ 优先截付款 App 自身窗口，满足“不把浮层截进去”的前提。
+- 当前确认页已有完整保存、附件转存、退款/转账和学习逻辑，实施时只重构入口与 overlay UI，不另建保存链。
+
+### Android 跨应用确认入口执行记录
+- 修改文件：`android/app/src/main/kotlin/com/algive/jizhang_app/autobookkeeping/AutoBookkeepingConfirmActivity.kt`（新增，继承 `MainActivity`，Flutter `getInitialRoute()` 直接返回 `/profile/autobookkeeping/confirm?overlay=1`）；`MainActivity.kt`（开放继承以复用原平台通道）；`AndroidManifest.xml`、`res/values/styles.xml`（注册独立、排除最近任务、独立 taskAffinity 的透明 Activity 和透明首帧/NormalTheme）；`AutoBillOverlayService.kt`（顶部浮窗确认启动该 Activity）；`AutoBookkeepingNotificationController.kt`（待确认通知改走同一 Activity，状态通知和记账成功通知入口保持原样）。
+- Activity 未附带 `OPEN_ROUTE_EXTRA`，因此基类 `dispatchPendingRoute()` 不会再发出第二次 go；overlay 路由依靠 Flutter 首始路由加载。
+- 校验：`compileDebugKotlin`、`processDebugMainManifest` 和 `testDebugUnitTest` 通过（命令跳过 `compileFlutterBuildDebug`）。合并 Manifest 已包含非导出的专用 Activity、独立 taskAffinity 与主题声明；相关 Android 文件 `git diff --check` 通过。
+- 组合构建被并行进行的 Flutter 确认页编译挡住：`auto_bookkeeping_confirm_page.dart:459` 将 `ListView.children` 当作属性读取、`491` 把 `List<dynamic>` 传给 `List<Widget>`。本子任务未改 Flutter 文件，已通知指挥层。
+- 剩余风险：尚未在微信/支付宝等第三方 App 上实机确认透明首帧、浮层呈现及 `SystemNavigator.pop` 后返回原 App；需要主任务 Flutter 修复后安装验收。
+
+### Flutter 确认浮层执行记录
+- 修改文件：`lib/features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart`（新增 `overlayMode`；跨应用透明承载、SafeArea 内可用高度 60% 底部面板；固定取消/保存栏；复用现有金额、账本/账户选择、推荐/学习与保存流程；复用 `CategoryGrid`；浮层不显示截图预览/开关，候选截图继续默认随流水保存；系统返回、取消、保存后调用 `SystemNavigator.pop`）；`lib/app/router/app_router.dart`（解析 `overlay=1`，GoRouter 从平台初始路由加载专用页面）；`lib/app/app.dart`（浮层主机跳过 StartupPoster 延迟、启动暖机期间仅透明底部加载提示、错误态透明、router builder 取消全屏背景与锁屏包装）；`test/autobookkeeping_page_test.dart`（平台初始路由判定与 60% / 无 EditableText widget 测试）。
+- TDD RED：先添加 overlayMode 面板测试，旧确认页编译失败并明确报告 `overlayMode` 构造参数不存在。
+- GREEN：`flutter test --no-pub test/autobookkeeping_page_test.dart` 通过（5 项）；4 个目标 Dart 文件 `flutter analyze --no-pub` 输出 `No issues found!`；`git diff --check` 通过。
+- 需要主审注意：当前自动记账浮层分类网格使用共享 `CategoryGrid` 的一级分类；确认前的二级分类交互尚未纳入本轮实现。测试覆盖空候选面板尺寸和无键盘区，尚未对含真实候选、退款/转账及保存后的系统 Activity 关闭作 widget/真机验证。Flutter 格式化工具对已有大文件产生了部分非功能性格式差异，主审可在整体 diff 审阅时关注；本代理没有触碰 parser、截图捕获、候选队列或 Android 入口。
+
+### 指挥层返工与最终验收
+- 初次视觉验收判定不通过：60% 几何正确，但主体仍是旧自动确认大卡片纵向表单，不符合“现有记一笔去掉键盘区”。已返工为记一笔同构结构：顶部支出/收入/转账，紧凑一级分类网格与二级分类 chips，备注/商户、金额、账户、账本，固定取消/保存；不创建 `NumberKeyboard`，文本编辑仅在用户点击后打开。
+- 模拟器真实候选首次验收发现阻断：候选、推荐和账本读取完成后，`accountsByBookProvider(...).future` 的首次流订阅未返回，页面持续转圈。已修复根因：overlay 首次加载直接读取当前账本账户与分类快照，并在切换账本时重新加载；普通应用内确认路径保持原 provider 行为。
+- 自动截图行为保持不变：浮层不显示截图预览或单笔开关；候选已有 `screenshotPath` 时 `_keepScreenshot` 默认开启，保存后继续 `promoteScreenshot` 并写入流水附件，失败只给警告、不回滚流水。
+- 指挥层独立验证：`flutter test test/autobookkeeping_page_test.dart --no-pub` 6/6 通过；`flutter analyze lib test/autobookkeeping_page_test.dart --no-pub` 无问题；Android `testDebugUnitTest`、`lintDebug`、`assembleDebug` 成功；最终增量 `assembleDebug` 成功；相关文件 `git diff --check` 退出码 0。
+- 视觉与交互：API 37 模拟器注入真实支付宝候选后，面板按 SafeArea 可用高度 60% 底部展示，分类/金额/商户/账户/账本/操作完整，无键盘区；取消后 Activity 关闭并返回先前界面。截图保存在 `docs/qa/autobookkeeping-overlay-2026-09-27/emulator-candidate.png`。
+- 仍待真机支付验收：付款 App 实际留在透明 Activity 背景、真实支付截图内容不含提示/浮层、连续付款不串候选，以及微信/支付宝/至少一个其他 App 的跨应用表现。当前模拟器无法由 ADB 直接启动 `exported=false` 的专用 Activity，这部分不能冒充已验证。
+# 2026-09-28 自动记账悬浮窗权限误报
+
+## 已完成
+
+- 已读取并遵循 `andrej-karpathy-skill`：明确根因、保持最小改动、定义可验证验收。
+- 已检查工作区状态；存在用户已有的大量未提交改动，本轮不重置/清理。
+- 已定位 `AutoBookkeepingOverlayPermission.isGranted()` 的 Xiaomi 私有 AppOps AND 判断。
+- 已在设备 `145a0a68`（Xiaomi 23116PN5BC，Android API 36）取得证据：`SYSTEM_ALERT_WINDOW: allow`，`MIUIOP(10008): ignore`，`MIUIOP(10053): ignore`；这会触发当前实现的误报。
+
+## 当前进行
+
+- 已完成修改和验证，等待指挥层最终审查。
+
+## 修改文件
+
+- 任务文档已在 `.agent/PLAN.md`、`.agent/ACCEPTANCE.md`、`.agent/PROGRESS.md` 追加本任务段落。
+- `android/app/src/main/kotlin/com/algive/jizhang_app/autobookkeeping/AutoBookkeepingOverlayPermission.kt`：权限状态回到公开 Android API/公开 AppOps；保留 MIUI 设备识别以打开厂商设置页。
+
+## 测试结果
+
+- `flutter test --no-pub test/autobookkeeping_page_test.dart`：6/6 通过。
+- `flutter analyze --no-pub`（自动记账设置、页面、定向测试）：无问题。
+- Android `:app:testDebugUnitTest :app:assembleDebug --no-daemon`：BUILD SUCCESSFUL。
+- Android `:app:lintDebug --rerun-tasks`：通过；首次 lint 报错只涉及被忽略的本机 `android/local.properties` 盘符转义，已修正本地配置并强制刷新旧 lint 报告。
+- 小米真机 `145a0a68`：安装 Debug APK 成功；公开 AppOps `SYSTEM_ALERT_WINDOW: allow`、MIUI 私有 10008/10053 仍为 `ignore`；页面实测显示“悬浮窗权限 · 已允许”。已返回原先的抖音前台。
+- Google API 37 模拟器：安装同一 APK；公开 AppOps 为 default，页面实测显示“悬浮窗权限 · 未允许”。
+
+## 已发现问题与剩余风险
+
+- 私有 AppOps 可能影响某些 ROM 的实际后台弹窗；本轮验证了权限显示，尚未通过一笔真实付款验证跨应用浮窗。真实 `addView()` 失败仍保留日志和通知降级。
+- 当前工作树中已有的 `AutoBookkeepingOverlayPermission.kt` 改动属于任务前工作，代码审查时需区分本轮差异。
+
+## 指挥层验收
+
+- 已独立检查权限判断 diff、工作区状态、定向测试与两台设备权限页面；`git diff --check` 通过。本轮未覆盖任务前的其他未提交改动。

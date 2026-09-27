@@ -10,8 +10,8 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.PaymentNotificationListenerService
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingConfirmActivity
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
@@ -130,10 +130,12 @@ class AutoBillOverlayService : Service() {
         remove()
         runCatching {
             startActivity(
-                Intent(this, MainActivity::class.java).apply {
+                Intent(this, AutoBookkeepingConfirmActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    putExtra(MainActivity.OPEN_ROUTE_EXTRA, "/profile/autobookkeeping/confirm")
+                    putExtra(
+                        AutoBookkeepingConfirmActivity.EXTRA_BACKGROUND_MODE,
+                        AutoBookkeepingConfirmActivity.BACKGROUND_MODE_TRANSPARENT,
+                    )
                 },
             )
         }.onFailure { error ->

@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import '../../features/assistant/presentation/assistant_page.dart';
 
 import 'package:flutter/material.dart';
@@ -74,10 +76,22 @@ import '../../core/widgets/app_scaffold.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+bool isAutoBookkeepingOverlayRoute(String route) {
+  final uri = Uri.tryParse(route);
+  return uri?.path == '/profile/autobookkeeping/confirm' &&
+      uri?.queryParameters['overlay'] == '1';
+}
+
+String appInitialLocation([String? platformRoute]) {
+  final route = platformRoute ?? PlatformDispatcher.instance.defaultRouteName;
+  return route.startsWith('/') && route.isNotEmpty ? route : '/';
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/',
+    initialLocation: appInitialLocation(),
+    overridePlatformDefaultLocation: true,
     routes: [
       GoRoute(
         path: '/account/login',
@@ -370,8 +384,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'confirm',
-                    builder: (context, state) =>
-                        const AutoBookkeepingConfirmPage(),
+                    builder: (context, state) => AutoBookkeepingConfirmPage(
+                      overlayMode: state.uri.queryParameters['overlay'] == '1',
+                    ),
                   ),
                 ],
               ),

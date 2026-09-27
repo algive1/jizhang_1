@@ -396,11 +396,37 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
+    final overlayHost = isAutoBookkeepingOverlayRoute(
+      PlatformDispatcher.instance.defaultRouteName,
+    );
     final databaseBootstrap = ref.watch(databaseBootstrapProvider);
     final visualWarmup = ref.watch(startupVisualWarmupProvider);
     if (databaseBootstrap.isLoading ||
         visualWarmup.isLoading ||
-        !_startupPosterElapsed) {
+        (!overlayHost && !_startupPosterElapsed)) {
+      if (overlayHost) {
+        return MaterialApp(
+          title: '好好记账',
+          color: Colors.transparent,
+          theme: AppTheme.light(),
+          home: const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              top: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 28),
+                  child: SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
       return const MaterialApp(
         title: '好好记账',
         debugShowCheckedModeBanner: false,
@@ -408,6 +434,31 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       );
     }
     if (databaseBootstrap.hasError) {
+      if (overlayHost) {
+        return MaterialApp(
+          title: '好好记账',
+          color: Colors.transparent,
+          theme: AppTheme.light(),
+          home: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Material(
+                  color: AppTheme.light().colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('本地账本暂时无法读取，请返回后重试。'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
       return MaterialApp(
         title: '好好记账',
         debugShowCheckedModeBanner: false,
@@ -479,6 +530,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         AppBrightnessPreference.light;
     return MaterialApp.router(
       title: '好好记账',
+      color: overlayHost ? Colors.transparent : null,
       theme: AppTheme.light(appearance),
       darkTheme: AppTheme.dark(appearance),
       themeMode: brightnessPreference == AppBrightnessPreference.dark
@@ -494,6 +546,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       supportedLocales: const [Locale('zh', 'CN')],
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
+        if (overlayHost) return child ?? const SizedBox.shrink();
         final content = AppLockGate(
           child: child ?? const SizedBox.shrink(),
         );

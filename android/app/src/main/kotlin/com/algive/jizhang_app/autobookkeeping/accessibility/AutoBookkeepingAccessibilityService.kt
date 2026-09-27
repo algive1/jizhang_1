@@ -16,6 +16,7 @@ import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
 import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics as Diagnostics
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiPageCatalog
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 
@@ -41,6 +42,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var absentSince = 0L
     private var lastDebugAt = 0L
     private var lastPaymentActivityAt = 0L
+    private var lastActivityPackage: String? = null
+    private var lastActivityClassName: String? = null
     private var rootRetryCount = 0
     private var visibleWindowCount = 0
     private var overlayWaits = 0
@@ -61,6 +64,15 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 "${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource} " +
                 "packages=${basePackages.size + ruleRegistry.customPackages.size}",
         )
+        // Rebinding can happen while a payment result is already stationary;
+        // waiting for another content-change event would leave that page unread.
+        if (AutoBookkeepingSettings.enabled(this)) {
+            paymentActivity = true
+            rootRetryCount = 0
+            handler.removeCallbacks(scan)
+            scheduled = true
+            handler.postDelayed(scan, 500)
+        }
     }
 
     /**
@@ -95,16 +107,23 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val eventRule = eventPackage?.let(ruleRegistry::ruleFor)
         if (!AutoBookkeepingSettings.enabled(this) || eventRule == null) return
         if (actualEvent.eventType !in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED)) return
-        if (eventRule.sourceApp != "WECHAT") {
-            // Marketplace/payment apps frequently update WebView/Compose content
-            // without a stable Activity transition. Any relevant accessibility
-            // event may therefore trigger a scan; parsers still require explicit
-            // completed-payment evidence before accepting a candidate.
+        if (eventRule.sourceApp != "WECHAT" || eventPackage in QianjiPageCatalog.pageTypesByPackage) {
+            // Qianji covers WeChat detail, transfer and red-packet pages outside
+            // the narrow legacy payment Activity hints. Each page recognizer
+            // still decides whether its ordered parser can produce a candidate.
             paymentActivity = true
             lastPaymentActivityAt = System.currentTimeMillis()
         }
         if (actualEvent.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val activity = actualEvent.className?.toString().orEmpty()
+            // Window-state callbacks also arrive for framework/custom views
+            // (for example android.widget.LinearLayout). Keep only a class from
+            // the emitting app so an incidental child view cannot fail an
+            // Activity-level profile gate such as UnionPay's main-page exclusion.
+            if (activity.startsWith("${eventPackage.orEmpty()}.")) {
+                lastActivityPackage = eventPackage
+                lastActivityClassName = activity
+            }
             Log.i(TAG, "window event class=$activity")
             AutoBookkeepingLogStore.record(
                 this,
@@ -122,7 +141,10 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 if (isPaymentActivity) {
                     paymentActivity = true
                     lastPaymentActivityAt = System.currentTimeMillis()
-                } else if (System.currentTimeMillis() - lastPaymentActivityAt > PAYMENT_ACTIVITY_GRACE_MS) {
+                } else if (
+                    eventPackage !in QianjiPageCatalog.pageTypesByPackage &&
+                    System.currentTimeMillis() - lastPaymentActivityAt > PAYMENT_ACTIVITY_GRACE_MS
+                ) {
                     paymentActivity = false
                     lastPage = null
                 }
@@ -269,6 +291,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         paymentActivity = true
         lastPaymentActivityAt = System.currentTimeMillis()
         lastPage = null
+        lastActivityPackage = null
+        lastActivityClassName = null
         overlayWaits = 0
         handler.removeCallbacks(scan)
         scheduled = true
@@ -282,7 +306,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private fun detectCandidateFromVisibleWindows(): Pair<com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate, Int>? {
         val roots = mutableListOf<Pair<Int, AccessibilityNodeInfo>>()
         rootInActiveWindow?.let { roots.add(it.windowId to it) }
-        runCatching { windows }.getOrDefault(emptyList()).forEach { window ->
+        val interactiveWindows = runCatching { windows }.getOrDefault(emptyList())
+        interactiveWindows.forEach { window ->
             val root = runCatching { window.root }.getOrNull() ?: return@forEach
             if (ruleRegistry.ruleFor(root.packageName?.toString().orEmpty()) == null) {
                 root.recycle()
@@ -295,12 +320,25 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             }
         }
         visibleWindowCount = roots.size
+        if (roots.none { ruleRegistry.ruleFor(it.second.packageName?.toString().orEmpty()) != null }) {
+            debug(
+                "no supported root: roots=${roots.size} windows=${interactiveWindows.size} " +
+                    "packages=${roots.map { it.second.packageName }.distinct().joinToString(",")} " +
+                    "flags=${serviceInfo?.flags}",
+            )
+        }
         return try {
             roots.firstNotNullOfOrNull { (windowId, root) ->
                 if (ruleRegistry.ruleFor(root.packageName?.toString().orEmpty()) == null) return@firstNotNullOfOrNull null
                 val packageName = root.packageName?.toString().orEmpty()
                 val snapshot = reader.readSnapshot(root)
-                val result = detector.inspect(packageName, snapshot.nodes)
+                val activityClassName = lastActivityClassName
+                    ?.takeIf { lastActivityPackage == packageName }
+                val result = detector.inspect(
+                    packageName = packageName,
+                    nodes = snapshot.nodes,
+                    activityClassName = activityClassName,
+                )
                 if (result.candidate == null) {
                     debug(
                         "scan package=$packageName nodes=${snapshot.nodes.size} " +
