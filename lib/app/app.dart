@@ -50,6 +50,8 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   bool _updateDialogVisible = false;
   bool _initialUpdateCheckScheduled = false;
   bool _liquidGlassWarmupScheduled = false;
+  DateTime? _lastForegroundMaintenanceAt;
+  static const _foregroundMaintenanceDedupWindow = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -77,13 +79,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         }
       }());
       unawaited(ref.read(productAnalyticsProvider).track('app_open'));
-      _processNotifications();
-      _processRecurringAutoRecords();
-      _syncRecurringBillNotifications();
-      _syncBudgetAlerts();
-      unawaited(_flushDiagnosticsAfterSessionRestore());
-      _syncPersonalCloudForeground();
-      _registerPushIfAvailable();
+      _runForegroundMaintenance();
       unawaited(const FinanceSchedulerBridge().scheduleDaily());
       final sync = ref.read(sharedBookSyncProvider);
       unawaited(
@@ -154,18 +150,29 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     );
     if (state == AppLifecycleState.resumed) {
       unawaited(ref.read(productAnalyticsProvider).track('app_foreground'));
-      _processNotifications();
-      _processRecurringAutoRecords();
-      _syncRecurringBillNotifications();
-      _syncBudgetAlerts();
-      unawaited(_flushDiagnosticsAfterSessionRestore());
-      _syncPersonalCloudForeground();
-      _registerPushIfAvailable();
+      _runForegroundMaintenance();
       _checkForAppUpdate();
     }
     ref
         .read(sharedBookSyncProvider)
         .setForeground(state == AppLifecycleState.resumed);
+  }
+
+  void _runForegroundMaintenance() {
+    final now = DateTime.now();
+    final previous = _lastForegroundMaintenanceAt;
+    if (previous != null &&
+        now.difference(previous) < _foregroundMaintenanceDedupWindow) {
+      return;
+    }
+    _lastForegroundMaintenanceAt = now;
+    _processNotifications();
+    _processRecurringAutoRecords();
+    _syncRecurringBillNotifications();
+    _syncBudgetAlerts();
+    unawaited(_flushDiagnosticsAfterSessionRestore());
+    _syncPersonalCloudForeground();
+    _registerPushIfAvailable();
   }
 
   void _registerPushIfAvailable() {
