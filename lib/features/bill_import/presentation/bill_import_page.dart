@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
@@ -616,7 +617,10 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     // Read persisted rows directly. A StreamProvider may not have emitted yet
     // when the user re-imports immediately, which previously made duplicate
     // detection race with provider startup.
-    final transactions = await ref.read(transactionRepositoryProvider).getAll();
+    final transactions = await DriftTransactionRepository(
+      ref.read(databaseProvider),
+      bookId: ref.read(activeBookIdProvider),
+    ).getImportDedupCandidates();
     if (!mounted) return;
     final deduplicator = BillImportDeduplicator.fromTransactions(transactions);
 
