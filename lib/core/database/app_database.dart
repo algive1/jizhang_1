@@ -2100,6 +2100,34 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.get();
   }
 
+  Stream<int> watchTypeAmountSumBetween({
+    required String bookId,
+    required String type,
+    required DateTime start,
+    required DateTime endExclusive,
+  }) {
+    final raw = customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_in_cents), 0) AS total_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = ?
+        AND occurred_at >= ?
+        AND occurred_at < ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(type),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watchSingle().map((row) => row.read<int>('total_cents'));
+  }
+
   Stream<int> watchActiveCount({String? bookId}) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
     final query = customSelect(
