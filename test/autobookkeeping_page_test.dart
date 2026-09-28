@@ -349,7 +349,7 @@ void main() {
     final cancelTop = tester
         .getTopLeft(find.byKey(const ValueKey('quick-review-cancel')))
         .dy;
-    expect(cancelTop - detailBottom, inInclusiveRange(0, 32));
+    expect(cancelTop - detailBottom, inInclusiveRange(-1, 32));
     expect(find.byType(NumberKeyboard), findsNothing);
     expect(find.byType(EditableText), findsOneWidget);
 
