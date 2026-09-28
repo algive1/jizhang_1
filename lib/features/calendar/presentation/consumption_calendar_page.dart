@@ -44,6 +44,8 @@ class _ConsumptionCalendarPageState
   String? _cachedMonthBookFilter;
   int? _cachedMonthKey;
   int? _cachedClockMinute;
+  DateTime? _cachedPreviousRecorded;
+  DateTime? _cachedNextRecorded;
   _CalendarMonthData? _cachedMonthData;
 
   List<TransactionRecord>? _cachedWeekSource;
@@ -64,17 +66,31 @@ class _ConsumptionCalendarPageState
 
   @override
   Widget build(BuildContext context) {
-    final all =
-        ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
     final booksValue = ref.watch(booksProvider).value;
     final books = booksValue ?? const <LedgerBook>[];
+    final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
+    final dataKey = (
+      year: _month.year,
+      month: _month.month,
+      bookId: effectiveBookFilterId,
+    );
+    final all =
+        ref.watch(calendarMonthTransactionsProvider(dataKey)).value ??
+        const <TransactionRecord>[];
+    final neighbors =
+        ref.watch(recordedMonthNeighborsProvider(dataKey)).value ??
+        (previous: null, next: null);
     final calendarAccounts =
         ref.watch(assetDashboardAccountsProvider).value ?? const [];
     final accountNames = {
       for (final account in calendarAccounts) account.id: account.displayName,
     };
-    final effectiveBookFilterId = _effectiveBookFilterId(booksValue);
-    final monthData = _monthData(all, effectiveBookFilterId);
+    final monthData = _monthData(
+      all,
+      effectiveBookFilterId,
+      previousRecorded: neighbors.previous,
+      nextRecorded: neighbors.next,
+    );
     final selected = _selectedDay == null
         ? const <TransactionRecord>[]
         : monthData.transactionsByDay[_selectedDay] ??
@@ -221,8 +237,10 @@ class _ConsumptionCalendarPageState
 
   _CalendarMonthData _monthData(
     List<TransactionRecord> all,
-    String? effectiveBookFilterId,
-  ) {
+    String? effectiveBookFilterId, {
+    required DateTime? previousRecorded,
+    required DateTime? nextRecorded,
+  }) {
     final clock = _today;
     final monthKey = _month.year * 100 + _month.month;
     final clockMinute = clock.millisecondsSinceEpoch ~/ 60000;
@@ -230,6 +248,8 @@ class _ConsumptionCalendarPageState
         _cachedMonthBookFilter == effectiveBookFilterId &&
         _cachedMonthKey == monthKey &&
         _cachedClockMinute == clockMinute &&
+        _cachedPreviousRecorded == previousRecorded &&
+        _cachedNextRecorded == nextRecorded &&
         _cachedMonthData != null) {
       return _cachedMonthData!;
     }
@@ -244,14 +264,12 @@ class _ConsumptionCalendarPageState
     final dailyIncome = <int, double>{};
     final dailyExpenseCents = <int, int>{};
     final dailyOther = <int>{};
-    final recordedMonths = <DateTime>{};
     var totalExpenseCents = 0;
     var totalIncomeCents = 0;
 
     for (final item in filtered) {
       if (item.deletedAt != null || item.occurredAt.isAfter(clock)) continue;
       final date = item.occurredAt;
-      recordedMonths.add(DateTime(date.year, date.month));
       if (date.year != _month.year || date.month != _month.month) continue;
 
       transactionsByDay.putIfAbsent(date.day, () => []).add(item);
@@ -284,11 +302,6 @@ class _ConsumptionCalendarPageState
     for (final values in transactionsByDay.values) {
       values.sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
     }
-    final recordMonths = recordedMonths.toList()..sort();
-    final previousRecorded =
-        recordMonths.where((item) => item.isBefore(_month)).lastOrNull;
-    final nextRecorded =
-        recordMonths.where((item) => item.isAfter(_month)).firstOrNull;
     final highest = dailyExpenseCents.entries.isEmpty
         ? null
         : dailyExpenseCents.entries.reduce((a, b) {
@@ -318,6 +331,8 @@ class _ConsumptionCalendarPageState
     _cachedMonthBookFilter = effectiveBookFilterId;
     _cachedMonthKey = monthKey;
     _cachedClockMinute = clockMinute;
+    _cachedPreviousRecorded = previousRecorded;
+    _cachedNextRecorded = nextRecorded;
     _cachedMonthData = data;
     _cachedWeekSource = null;
     _cachedWeekStartKey = null;
