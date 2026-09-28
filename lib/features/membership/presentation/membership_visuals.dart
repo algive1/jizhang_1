@@ -671,6 +671,10 @@ class _TestimonialCard extends StatelessWidget {
                 width: 26,
                 height: 26,
                 fit: BoxFit.cover,
+                cacheWidth:
+                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                cacheHeight:
+                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
                 errorBuilder: (_, _, _) => const ColoredBox(
                   color: Color(0xFFDCEACB),
                   child: SizedBox(width: 26, height: 26),
