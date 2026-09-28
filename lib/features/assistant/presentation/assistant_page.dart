@@ -702,7 +702,11 @@ class AssistantRecordCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ref
-        .watch(transactionsProvider)
+        .watch(
+          transactionsByIdsProvider(
+            transactionIdsProviderKey([transactionId]),
+          ),
+        )
         .when(
           loading: () => const Padding(
             padding: EdgeInsets.all(12),
