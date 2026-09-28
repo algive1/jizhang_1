@@ -104,9 +104,10 @@ class InstallmentPlansPage extends ConsumerWidget {
   }
 
   Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
-    final transactions =
-        ref.read(transactionsProvider).value ?? const <TransactionRecord>[];
-    final accounts = ref.read(accountsProvider).value ?? const <Account>[];
+    final transactions = await ref
+        .read(transactionRepositoryProvider)
+        .getAll();
+    final accounts = await ref.read(accountRepositoryProvider).getActive();
     final expenses = transactions.where((item) => item.isExpense).toList();
     if (expenses.isEmpty || accounts.isEmpty) {
       ScaffoldMessenger.of(context)
@@ -141,9 +142,14 @@ class _PlanCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final original =
-        (ref.watch(transactionsProvider).value ?? const <TransactionRecord>[])
-            .where((item) => item.id == plan.originalTransactionId)
-            .firstOrNull;
+        ref
+            .watch(
+              transactionsByIdsProvider(
+                transactionIdsProviderKey([plan.originalTransactionId]),
+              ),
+            )
+            .value
+            ?.firstOrNull;
     return GestureDetector(
       onTap: onOpen,
       child: AppCard(
