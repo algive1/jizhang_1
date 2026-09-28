@@ -50,7 +50,7 @@ class SharedBookSyncService {
         .listen((_) {
           if (!_applying) {
             if (!_disposed) _changes.add(null);
-            requestSync();
+            unawaited(_requestSyncForLocalChanges());
           }
         });
     setForeground(true);
@@ -66,6 +66,16 @@ class SharedBookSyncService {
       });
       requestSync();
     }
+  }
+
+  Future<void> _requestSyncForLocalChanges() async {
+    if (!_foreground || session.user == null || _disposed) return;
+    final pending = await database
+        .customSelect(
+          "SELECT 1 FROM sync_outbox WHERE status='pending' LIMIT 1",
+        )
+        .getSingleOrNull();
+    if (pending != null) requestSync();
   }
 
   void requestSync() {
