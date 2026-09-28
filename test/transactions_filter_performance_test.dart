@@ -10,6 +10,88 @@ import 'package:jizhang_app/features/transactions/data/transactions_repository.d
 import 'package:jizhang_app/features/transactions/presentation/transactions_page.dart';
 
 void main() {
+  test('monthly SQL aggregates preserve cashflow semantics', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    Future<void> add(
+      String id,
+      TransactionType type,
+      double amount, {
+      double? refundAmount,
+      ReimbursementStatus reimbursementStatus = ReimbursementStatus.none,
+      double? reimbursementAmount,
+    }) {
+      final occurredAt = DateTime(2026, 8, 10, 12);
+      return repository
+          .create(
+            TransactionRecord(
+              id: id,
+              bookId: SeedIds.personalBook,
+              type: type,
+              amount: amount,
+              accountId: SeedIds.bankAccount,
+              occurredAt: occurredAt,
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+              refundStatus: refundAmount == null
+                  ? RefundStatus.none
+                  : RefundStatus.partial,
+              refundAmount: refundAmount,
+              reimbursementStatus: reimbursementStatus,
+              reimbursementAmount: reimbursementAmount,
+            ),
+          )
+          .then((_) {});
+    }
+
+    await add('sql-income', TransactionType.income, 1000);
+    await add('sql-borrow', TransactionType.borrow, 200);
+    await add(
+      'sql-refund-expense',
+      TransactionType.expense,
+      100,
+      refundAmount: 20,
+    );
+    await add(
+      'sql-reimbursed-expense',
+      TransactionType.expense,
+      100,
+      reimbursementStatus: ReimbursementStatus.pending,
+      reimbursementAmount: 60,
+    );
+    await add('sql-asset-purchase', TransactionType.assetPurchase, 500);
+
+    final summary = await database.transactionDao
+        .watchMonthSummary(
+          bookId: SeedIds.personalBook,
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+          now: DateTime(2026, 8, 20),
+        )
+        .first;
+    expect(summary.incomeCents, 120000);
+    expect(summary.personalExpenseCents, 12000);
+
+    final categories = await database.transactionDao
+        .watchMonthExpenseCategories(
+          bookId: SeedIds.personalBook,
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+          now: DateTime(2026, 8, 20),
+        )
+        .first;
+    expect(categories, hasLength(1));
+    expect(categories.single.id, 'uncategorized');
+    expect(categories.single.amountCents, 68000);
+    expect(categories.single.count, 3);
+  });
+
   test('transaction range query excludes rows outside the requested month', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
