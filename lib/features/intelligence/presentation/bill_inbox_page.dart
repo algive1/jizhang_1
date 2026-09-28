@@ -179,9 +179,9 @@ class _InboxItemCard extends ConsumerWidget {
   Future<void> _correctCategory(BuildContext context, WidgetRef ref) async {
     final transactionId = item.transactionId;
     if (transactionId == null) return;
-    final transaction = (await ref.read(transactionRepositoryProvider).getAll())
-        .where((value) => value.id == transactionId)
-        .firstOrNull;
+    final transaction = await ref
+        .read(transactionRepositoryProvider)
+        .getById(transactionId);
     if (!context.mounted) return;
     final categories = ref.read(categoriesProvider).value ?? const <Category>[];
     if (transaction == null) return;
