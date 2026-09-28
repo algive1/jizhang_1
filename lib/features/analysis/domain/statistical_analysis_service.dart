@@ -94,6 +94,7 @@ class StatisticalAnalysisService {
     String currency = 'CNY',
     DateTime? now,
     DateTime? month,
+    double? largeExpenseThreshold,
   }) {
     final clock = now ?? DateTime.now();
     allTransactions = allTransactions
@@ -157,7 +158,9 @@ class StatisticalAnalysisService {
     final previous = expenses
         .where((item) => previousRange.contains(item.occurredAt))
         .toList();
-    final distributionThreshold = largeDetector.distributionThreshold(expenses);
+    final distributionThreshold =
+        largeExpenseThreshold ??
+        largeDetector.distributionThreshold(expenses);
     final currentRegular = _regularTransactions(
       current,
       expenses,
