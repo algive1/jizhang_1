@@ -427,6 +427,10 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                 ),
                           child: Image.asset(
                             AppAssets.bookshelfEmpty,
+                            cacheWidth:
+                                (width *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .ceil(),
                             fit: BoxFit.fill,
                           ),
                         ),
