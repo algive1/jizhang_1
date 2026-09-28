@@ -653,6 +653,19 @@ void main() {
     );
     expect(firstSearchPage.length, 100);
 
+    final relatedRows = await DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    ).watchByIds(['perf-expense-0', 'perf-expense-104']).first;
+    expect(
+      relatedRows.map((item) => item.id).toSet(),
+      {'perf-expense-0', 'perf-expense-104'},
+    );
+    expect(
+      transactionIdsProviderKey(['perf-expense-104', 'perf-expense-0']),
+      transactionIdsProviderKey(['perf-expense-0', 'perf-expense-104']),
+    );
+
     final firstKeywordPage = await DriftTransactionRepository(
       database,
       bookId: SeedIds.personalBook,
