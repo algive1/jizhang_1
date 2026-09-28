@@ -9,7 +9,7 @@ import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import io.flutter.embedding.android.RenderMode
-import io.flutter.embedding.android.TransparencyMode
+import io.flutter.embedding.android.FlutterActivityLaunchConfigs.BackgroundMode
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -104,8 +104,8 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
 
     override fun getRenderMode(): RenderMode = RenderMode.texture
 
-    override fun getTransparencyMode(): TransparencyMode =
-        TransparencyMode.transparent
+    override fun getBackgroundMode(): BackgroundMode =
+        BackgroundMode.transparent
 
     override fun getInitialRoute(): String = CONFIRM_ROUTE
 
