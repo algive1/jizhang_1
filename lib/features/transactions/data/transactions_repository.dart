@@ -572,14 +572,17 @@ final calendarMonthTransactionsProvider =
       key,
     ) async* {
       await ref.watch(databaseBootstrapProvider.future);
-      final start = DateTime(key.year, key.month);
+      final first = DateTime(key.year, key.month);
+      final last = DateTime(key.year, key.month + 1, 0);
+      final start = first.subtract(Duration(days: first.weekday - 1));
+      final gridEnd = last.add(Duration(days: 7 - last.weekday));
       final repository = DriftTransactionRepository(
         ref.watch(databaseProvider),
         bookId: key.bookId,
       );
       yield* repository.watchRange(
         start: start,
-        endExclusive: DateTime(key.year, key.month + 1),
+        endExclusive: gridEnd.add(const Duration(days: 1)),
       );
     });
 
