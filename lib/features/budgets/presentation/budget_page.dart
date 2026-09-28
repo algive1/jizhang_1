@@ -176,9 +176,15 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
   }) async {
     final isCategoryBudget =
         existing?.categoryId != null || selectableCategories.isNotEmpty;
-    final monthKey = budgetMonthKey(DateTime.now());
+    final now = DateTime.now();
+    final monthKey = budgetMonthKey(now);
     final repository = ref.read(budgetRepositoryProvider);
-    final transactions = await ref.read(transactionsProvider.future);
+    final transactions = await ref
+        .read(transactionRepositoryProvider)
+        .getRange(
+          start: DateTime(now.year, now.month - 3),
+          endExclusive: DateTime(now.year, now.month),
+        );
     final preferences =
         ref.read(insightPreferencesProvider).value ??
         const InsightPreferences();
