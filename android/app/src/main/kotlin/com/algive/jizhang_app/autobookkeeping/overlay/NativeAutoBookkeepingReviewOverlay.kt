@@ -167,6 +167,18 @@ class NativeAutoBookkeepingReviewOverlay(
             showOptions(accountChip, accountOptions, selectedAccountId) {
                 selectedAccountId = it.id
                 accountChip.text = it.label
+                if (transactionType == "transfer" &&
+                    selectedDestinationAccountId == selectedAccountId
+                ) {
+                    selectedDestinationAccountId =
+                        accountOptions.firstOrNull { option ->
+                            option.id != selectedAccountId
+                        }?.id
+                    destinationChip.text = selectedDestinationAccountId?.let { id ->
+                        accountOptions.firstOrNull { option -> option.id == id }
+                            ?.let { option -> "转入 ${option.label}" }
+                    } ?: "转入账户"
+                }
             }
         }
         reimbursementChip = selectorChip("不报销") {
@@ -188,7 +200,8 @@ class NativeAutoBookkeepingReviewOverlay(
             onAdvanced()
         }
         destinationChip = selectorChip("转入账户") {
-            showOptions(destinationChip, accountOptions, selectedDestinationAccountId) {
+            val destinations = accountOptions.filter { it.id != selectedAccountId }
+            showOptions(destinationChip, destinations, selectedDestinationAccountId) {
                 selectedDestinationAccountId = it.id
                 destinationChip.text = "转入 ${it.label}"
             }
@@ -412,9 +425,25 @@ class NativeAutoBookkeepingReviewOverlay(
                     } else {
                         userSelectedType = true
                         transactionType = key
-                        selectedCategoryId = null
                         selectedSubcategoryId = null
-                        selectedCategoryName = null
+                        val firstCategory = categoryOptions.firstOrNull {
+                            it.parentId == null &&
+                                it.type == categoryTypeFor(transactionType)
+                        }
+                        selectedCategoryId =
+                            if (transactionType == "transfer") null else firstCategory?.id
+                        selectedCategoryName =
+                            if (transactionType == "transfer") null else firstCategory?.label
+                        if (transactionType == "transfer" &&
+                            selectedDestinationAccountId == selectedAccountId
+                        ) {
+                            selectedDestinationAccountId =
+                                accountOptions.firstOrNull { it.id != selectedAccountId }?.id
+                            destinationChip.text = selectedDestinationAccountId?.let { id ->
+                                accountOptions.firstOrNull { it.id == id }
+                                    ?.let { "转入 ${it.label}" }
+                            } ?: "转入账户"
+                        }
                         renderTypeTabs()
                         renderCategories()
                         updateTransferState()
@@ -424,7 +453,7 @@ class NativeAutoBookkeepingReviewOverlay(
             typeTabs[key] = tab
             tabHost.addView(tab, LinearLayout.LayoutParams(0, dp(34), 1f))
         }
-        header.addView(tabHost, LinearLayout.LayoutParams(0, dp(34), 1f))
+        header.addView(tabHost, LinearLayout.LayoutParams(0, dp(40), 1f))
         header.addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
