@@ -167,11 +167,27 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
               sliver: SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 48),
-                  child: Center(
-                    child: Text(
-                      '没有找到匹配的记录',
-                      style: TextStyle(color: context.appSecondaryText),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '没有找到匹配的记录',
+                        style: TextStyle(color: context.appSecondaryText),
+                      ),
+                      if (canLoadMore) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          key: const ValueKey(
+                            'transactions-load-more-empty',
+                          ),
+                          onPressed: () => setState(
+                            () => _visibleLimit += _pageSize,
+                          ),
+                          icon: const Icon(Icons.expand_more_rounded),
+                          label: const Text('继续加载更早流水'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
