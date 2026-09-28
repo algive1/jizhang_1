@@ -2130,6 +2130,120 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  Future<List<TransactionEntity>> getImportDedupCandidatesAtTimes({
+    String? bookId,
+    required List<DateTime> occurredAt,
+  }) {
+    if (occurredAt.isEmpty) {
+      return Future.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.source.isIn(const ['import', 'auto']) &
+                row.occurredAt.isIn(occurredAt) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
+  Future<List<TransactionEntity>> getImportDedupCandidatesByMetadata({
+    String? bookId,
+    required List<String> externalIds,
+    required List<String> importFingerprints,
+    required List<String> naturalFingerprints,
+  }) async {
+    if (externalIds.isEmpty &&
+        importFingerprints.isEmpty &&
+        naturalFingerprints.isEmpty) {
+      return const <TransactionEntity>[];
+    }
+    final bookFilter = bookId == null ? '' : 'AND t.book_id = ?';
+    final rows = await customSelect(
+      '''
+      WITH
+        wanted_external(value) AS (
+          SELECT lower(trim(CAST(value AS TEXT)))
+          FROM json_each(?)
+        ),
+        wanted_import(value) AS (
+          SELECT CAST(value AS TEXT)
+          FROM json_each(?)
+        ),
+        wanted_natural(value) AS (
+          SELECT CAST(value AS TEXT)
+          FROM json_each(?)
+        )
+      SELECT t.*
+      FROM transactions AS t
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        $bookFilter
+        AND t.source IN ('import', 'auto')
+        AND t.metadata_json IS NOT NULL
+        AND json_valid(t.metadata_json)
+        AND (
+          lower(trim(COALESCE(json_extract(t.metadata_json, '\$.externalId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.notificationOrderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.orderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.autobookkeeping.orderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR COALESCE(json_extract(t.metadata_json, '\$.importFingerprint'), '')
+            IN (SELECT value FROM wanted_import)
+          OR COALESCE(json_extract(t.metadata_json, '\$.importNaturalFingerprint'), '')
+            IN (SELECT value FROM wanted_natural)
+        )
+      ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC
+      ''',
+      variables: [
+        Variable<String>(
+          jsonEncode(
+            externalIds
+                .map((value) => value.trim().toLowerCase())
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        Variable<String>(
+          jsonEncode(
+            importFingerprints
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        Variable<String>(
+          jsonEncode(
+            naturalFingerprints
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    ).get();
+    return [
+      for (final row in rows) transactionEntries.map(row.data),
+    ];
+  }
+
   Future<List<TransactionEntity>> getActiveByTypes({
     required List<String> types,
     String? bookId,

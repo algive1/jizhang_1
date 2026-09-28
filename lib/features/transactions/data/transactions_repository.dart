@@ -223,10 +223,73 @@ class DriftTransactionRepository implements TransactionRepository {
     );
   }
 
-  Future<List<TransactionRecord>> getImportDedupCandidates() async {
-    return _mapEntities(
-      await _database.transactionDao.getImportDedupCandidates(bookId: bookId),
-    );
+  Future<List<TransactionRecord>> getImportDedupCandidates({
+    Iterable<DateTime>? occurredAt,
+    Iterable<String>? externalIds,
+    Iterable<String>? importFingerprints,
+    Iterable<String>? naturalFingerprints,
+  }) async {
+    final scoped =
+        occurredAt != null ||
+        externalIds != null ||
+        importFingerprints != null ||
+        naturalFingerprints != null;
+    if (!scoped) {
+      return _mapEntities(
+        await _database.transactionDao.getImportDedupCandidates(bookId: bookId),
+      );
+    }
+
+    final times = occurredAt?.toSet().toList(growable: false) ?? const [];
+    final external = externalIds
+            ?.map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    final fingerprints = importFingerprints
+            ?.where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    final naturals = naturalFingerprints
+            ?.where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+
+    final candidates = <String, TransactionEntity>{};
+    if (times.isNotEmpty) {
+      for (final entity
+          in await _database.transactionDao.getImportDedupCandidatesAtTimes(
+            bookId: bookId,
+            occurredAt: times,
+          )) {
+        candidates[entity.id] = entity;
+      }
+    }
+    if (external.isNotEmpty ||
+        fingerprints.isNotEmpty ||
+        naturals.isNotEmpty) {
+      for (final entity
+          in await _database.transactionDao.getImportDedupCandidatesByMetadata(
+            bookId: bookId,
+            externalIds: external,
+            importFingerprints: fingerprints,
+            naturalFingerprints: naturals,
+          )) {
+        candidates[entity.id] = entity;
+      }
+    }
+    final entities = candidates.values.toList(growable: false)
+      ..sort((a, b) {
+        final occurred = b.occurredAt.compareTo(a.occurredAt);
+        if (occurred != 0) return occurred;
+        final created = b.createdAt.compareTo(a.createdAt);
+        if (created != 0) return created;
+        return b.id.compareTo(a.id);
+      });
+    return _mapEntities(entities);
   }
 
   @override
