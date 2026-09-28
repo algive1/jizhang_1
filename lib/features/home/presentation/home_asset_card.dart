@@ -72,6 +72,10 @@ class HomeAssetCard extends StatelessWidget {
     final overview = groups.first;
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final compact = !largeText && compactHeight != null;
+    final decodeWidth =
+        (MediaQuery.sizeOf(context).width *
+                MediaQuery.devicePixelRatioOf(context))
+            .ceil();
     return Semantics(
       button: onTap != null,
       label: '查看资产总览，净资产 ${overview.currency}',
@@ -86,8 +90,11 @@ class HomeAssetCard extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: context.appSurfaceSoft,
-              image: const DecorationImage(
-                image: AssetImage(AppAssets.homeAssetScene),
+              image: DecorationImage(
+                image: ResizeImage(
+                  const AssetImage(AppAssets.homeAssetScene),
+                  width: decodeWidth,
+                ),
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
