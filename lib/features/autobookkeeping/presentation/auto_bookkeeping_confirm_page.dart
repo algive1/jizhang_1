@@ -124,6 +124,11 @@ class _AutoBookkeepingConfirmPageState
     super.dispose();
   }
 
+  String? _nonBlank(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
   Future<Object?> _handleNativeReviewCall(MethodCall call) async {
     if (call.method != 'submit') return null;
     final raw = call.arguments;
@@ -203,11 +208,11 @@ class _AutoBookkeepingConfirmPageState
       occurredAt: occurredAt,
       accounts: accounts,
       categories: categories,
-      categoryId: raw['categoryId']?.toString().takeIfNotBlank(),
-      accountId: raw['accountId']?.toString().takeIfNotBlank(),
+      categoryId: _nonBlank(raw['categoryId']),
+      accountId: _nonBlank(raw['accountId']),
       destinationAccountId:
-          raw['destinationAccountId']?.toString().takeIfNotBlank(),
-      subcategoryId: raw['subcategoryId']?.toString().takeIfNotBlank(),
+          _nonBlank(raw['destinationAccountId']),
+      subcategoryId: _nonBlank(raw['subcategoryId']),
       reimbursementStatus: reimbursementStatus,
       reimbursementNote: '',
       attachmentPaths: const <String>[],
