@@ -117,14 +117,6 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
       ref.watch(insightPreferencesProvider).value ??
       const InsightPreferences();
   final bookId = ref.watch(activeBookIdProvider);
-  final remoteRepository = ref.read(remoteInsightRepositoryProvider);
-  final remotePolicy = await remoteRepository.policy();
-  final historyDays = (remotePolicy?.historyDays ?? 90).clamp(1, 3650);
-  final now = DateTime.now();
-  final transactions = await ref.read(transactionRepositoryProvider).getRange(
-        start: now.subtract(Duration(days: historyDays)),
-        endExclusive: DateTime(now.year, now.month, now.day + 1),
-      );
   // Debounce bursts from automatic/import bookkeeping. Keep the delay
   // cancellable so disposing the provider never leaves a timer alive in tests
   // or after navigating away from Home.
@@ -137,6 +129,16 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
     if (!delay.isCompleted) delay.complete();
   });
   await delay.future;
+  if (disposed) return null;
+  final remoteRepository = ref.read(remoteInsightRepositoryProvider);
+  final remotePolicy = await remoteRepository.policy();
+  final historyDays =
+      (remotePolicy?.historyDays ?? 90).clamp(1, 3650).toInt();
+  final now = DateTime.now();
+  final transactions = await ref.read(transactionRepositoryProvider).getRange(
+        start: now.subtract(Duration(days: historyDays)),
+        endExclusive: DateTime(now.year, now.month, now.day + 1),
+      );
   if (disposed) return null;
   return remoteRepository.analyze(
         bookId: bookId,
