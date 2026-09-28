@@ -75,7 +75,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
       useImpellerBackdrop: false,
       realTimeCapture: false,
       useSync: true,
-      pixelRatio: .75,
+      pixelRatio: .625,
       batch: false,
       child: SafeArea(
         bottom: false,
@@ -350,7 +350,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
 class _ProfileGlassTuning {
   const _ProfileGlassTuning({
     this.opacity = .56,
-    this.blurSigma = 12,
+    this.blurSigma = 5,
     this.borderHighlight = .72,
     this.shadowStrength = .12,
   });
@@ -646,18 +646,18 @@ class _ImmersiveProfileBackground extends StatelessWidget {
 
   final bool dark;
 
-  Widget _image(BuildContext context, {required bool filtered}) {
+  Widget _image(BuildContext context) {
     final image = Image.asset(
       AppAssets.liquidGlassProfileBackground,
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
       cacheWidth:
           (MediaQuery.sizeOf(context).width *
                   MediaQuery.devicePixelRatioOf(context))
               .ceil(),
     );
-    final toned = dark
+    return dark
         ? ColorFiltered(
             colorFilter: const ColorFilter.mode(
               Color(0xFFB49C88),
@@ -666,14 +666,6 @@ class _ImmersiveProfileBackground extends StatelessWidget {
             child: image,
           )
         : image;
-    if (!filtered) return toned;
-    return Transform.scale(
-      scale: 1.025,
-      child: ImageFiltered(
-        imageFilter: ui.ImageFilter.blur(sigmaX: dark ? 13 : 10, sigmaY: dark ? 13 : 10),
-        child: toned,
-      ),
-    );
   }
 
   @override
@@ -681,22 +673,34 @@ class _ImmersiveProfileBackground extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _image(context, filtered: false),
-            ShaderMask(
+            _image(context),
+            // The background is captured once by LiquidGlassView. A previous
+            // version painted the same full-screen image a second time through
+            // a 10-13px ImageFiltered blur just to create the lower haze. The
+            // gradient below preserves that depth cue without a second texture
+            // decode, full-screen blur pass, or duplicate raster work.
+            DecoratedBox(
               key: const ValueKey('profile-progressive-haze'),
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (bounds) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0x00000000),
-                  Color(0x22000000),
-                  Color(0xCC000000),
-                  Color(0xFF000000),
-                ],
-                stops: [0.20, 0.38, 0.66, 1],
-              ).createShader(bounds),
-              child: _image(context, filtered: true),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: dark
+                      ? const [
+                          Color(0x00100D0C),
+                          Color(0x1F171310),
+                          Color(0x8F1D1713),
+                          Color(0xC91C1714),
+                        ]
+                      : const [
+                          Color(0x00FFFFFF),
+                          Color(0x16FFFFFF),
+                          Color(0x5CF4E5D4),
+                          Color(0x9DF2E5D8),
+                        ],
+                  stops: const [.18, .38, .68, 1],
+                ),
+              ),
             ),
             DecoratedBox(
               decoration: BoxDecoration(
