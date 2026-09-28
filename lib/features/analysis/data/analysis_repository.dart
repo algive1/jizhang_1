@@ -107,6 +107,18 @@ final analysisTransactionsProvider =
       );
     });
 
+final analysisCurrenciesProvider =
+    StreamProvider.family<List<String>, AnalysisScope>((ref, scope) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final bookId = scope == AnalysisScope.currentBook
+          ? ref.watch(activeBookIdProvider)
+          : null;
+      yield* ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchActiveCurrencies(bookId: bookId);
+    });
+
 typedef AnalysisThresholdKey = ({
   AnalysisScope scope,
   String currency,
