@@ -30,6 +30,7 @@ class SharedBookSyncService {
   DateTime? _retryAfter;
   bool _foreground = false;
   bool _applying = false;
+  bool _hasKnownSharedBooks = false;
   bool _started = false;
   bool _disposed = false;
   String? lastError;
@@ -37,28 +38,66 @@ class SharedBookSyncService {
     if (_started) return;
     _started = true;
     await session.initialize();
+    _hasKnownSharedBooks =
+        await database
+            .customSelect(
+              'SELECT 1 FROM sync_books WHERE access=1 LIMIT 1',
+            )
+            .getSingleOrNull() !=
+        null;
     _sessionChanges = session.watch().listen((_) {
-      requestSync();
+      _refreshPollingTimer();
     });
-    _databaseChanges = database.tableUpdates().listen((_) {
-      if (!_applying) {
-        if (!_disposed) _changes.add(null);
-        requestSync();
-      }
-    });
+    _databaseChanges = database
+        .tableUpdates(
+          TableUpdateQuery.allOf([
+            for (final table in SharedSyncSchema.syncKinds)
+              TableUpdateQuery.onTableName(table),
+          ]),
+        )
+        .listen((_) {
+          if (!_applying) {
+            if (!_disposed) _changes.add(null);
+            unawaited(_requestSyncForLocalChanges());
+          }
+        });
     setForeground(true);
   }
 
   void setForeground(bool foreground) {
     _foreground = foreground;
-    _timer?.cancel();
     _debounce?.cancel();
-    if (foreground) {
-      _timer = Timer.periodic(const Duration(seconds: 15), (_) {
-        requestSync();
-      });
+    _refreshPollingTimer();
+  }
+
+  Duration get _pollingInterval => _hasKnownSharedBooks
+      ? const Duration(seconds: 15)
+      : const Duration(seconds: 60);
+
+  void _refreshPollingTimer({bool requestImmediately = true}) {
+    _timer?.cancel();
+    _timer = null;
+    if (!_foreground || session.user == null || _disposed) return;
+    _timer = Timer.periodic(_pollingInterval, (_) {
       requestSync();
-    }
+    });
+    if (requestImmediately) requestSync();
+  }
+
+  void _updateKnownSharedBooks(bool value) {
+    if (_hasKnownSharedBooks == value) return;
+    _hasKnownSharedBooks = value;
+    _refreshPollingTimer(requestImmediately: false);
+  }
+
+  Future<void> _requestSyncForLocalChanges() async {
+    if (!_foreground || session.user == null || _disposed) return;
+    final pending = await database
+        .customSelect(
+          "SELECT 1 FROM sync_outbox WHERE status='pending' LIMIT 1",
+        )
+        .getSingleOrNull();
+    if (pending != null) requestSync();
   }
 
   void requestSync() {
@@ -81,6 +120,9 @@ class SharedBookSyncService {
       await _flushPromotions(userId);
       final remote = await api.request('/books');
       final books = (remote['books'] as List).cast<Json>();
+      _updateKnownSharedBooks(
+        books.any((book) => book['is_archived'] != 1),
+      );
       final known = await states();
       _applying = true;
       for (final state in known.where((s) => s['user_id'] == userId)) {
@@ -180,6 +222,14 @@ class SharedBookSyncService {
       (await database.customSelect('SELECT * FROM sync_books').get())
           .map((r) => r.data)
           .toList();
+  Future<Json?> stateForBook(String book) async =>
+      (await database
+              .customSelect(
+                'SELECT * FROM sync_books WHERE book_id=? LIMIT 1',
+                variables: [Variable(book)],
+              )
+              .getSingleOrNull())
+          ?.data;
   Future<List<Json>> pending(String book) async =>
       (await database
               .customSelect(
@@ -392,6 +442,7 @@ class SharedBookSyncService {
           'INSERT INTO sync_books(book_id,remote_id,user_id,role,access,phase,last_error) VALUES(?,?,?,?,1,?,?)',
           [local, remote, session.user!.id, 'owner', 'promoting', '首次共享快照待上传'],
         );
+        _updateKnownSharedBooks(true);
         final map = await _idMap(local, remote);
         final rows = await _bookRows(local);
         final entities = rows.map((e) {
@@ -669,8 +720,19 @@ class SharedBookSyncService {
         local,
       ],
     );
+    final changedTableNames = <String>{
+      'families',
+      ...SharedSyncSchema.syncKinds,
+      'sync_books',
+      'sync_versions',
+      'sync_id_map',
+      'sync_outbox',
+      'sync_promotions',
+    };
     database.notifyUpdates({
-      for (final table in database.allTables) TableUpdate.onTable(table),
+      for (final table in database.allTables)
+        if (changedTableNames.contains(table.actualTableName))
+          TableUpdate.onTable(table),
     });
   });
   Future<void> _recalculate(String book) async {
@@ -689,9 +751,10 @@ class SharedBookSyncService {
   }
 
   Future<void> resolve(String book, {required bool useServer}) async {
-    final state = (await states()).firstWhere(
-      (s) => s['book_id'] == book && s['user_id'] == session.user?.id,
-    );
+    final state = await stateForBook(book);
+    if (state == null || state['user_id'] != session.user?.id) {
+      throw StateError('当前账本没有可用的共享状态');
+    }
     final remote = state['remote_id'] as String;
     final snapshot = await api.request('/books/$remote/snapshot');
     final queue = await pending(book);
@@ -846,9 +909,7 @@ final activeSharedStateProvider = StreamProvider<Json?>((ref) async* {
   final service = ref.watch(sharedBookSyncProvider),
       book = ref.watch(activeBookIdProvider);
   Future<Json?> current() async {
-    final state = (await service.states())
-        .where((s) => s['book_id'] == book)
-        .firstOrNull;
+    final state = await service.stateForBook(book);
     if (state == null) return null;
     return {
       ...state,

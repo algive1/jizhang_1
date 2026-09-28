@@ -26,20 +26,24 @@ class TransactionsPage extends ConsumerStatefulWidget {
 }
 
 class _TransactionsPageState extends ConsumerState<TransactionsPage> {
+  static const _pageSize = 100;
   int _typeFilter = 0;
   String? _categoryFilter;
+  int _visibleLimit = _pageSize;
 
   @override
   Widget build(BuildContext context) {
+    final transactionState = widget.month == null
+        ? ref.watch(recentTransactionsPageProvider(_visibleLimit))
+        : ref.watch(
+            transactionsForMonthProvider((
+              year: widget.month!.year,
+              month: widget.month!.month,
+            )),
+          );
     final all =
-        (ref.watch(transactionsProvider).value ?? const <TransactionRecord>[])
-            .where(
-              (t) =>
-                  widget.month == null ||
-                  (t.occurredAt.year == widget.month!.year &&
-                      t.occurredAt.month == widget.month!.month &&
-                      !t.occurredAt.isAfter(DateTime.now())),
-            )
+        (transactionState.value ?? const <TransactionRecord>[])
+            .where((t) => !t.occurredAt.isAfter(DateTime.now()))
             .toList();
     final categories = ref.watch(categoriesProvider).value ?? const [];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
@@ -62,7 +66,20 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         .toList();
 
     final groups = _groupTransactions(transactions);
-    final summary = _monthlySummary(all);
+    final now = DateTime.now();
+    final summaryMonth = widget.month ?? now;
+    final summary =
+        ref
+            .watch(
+              transactionLedgerMonthSummaryProvider((
+                year: summaryMonth.year,
+                month: summaryMonth.month,
+              )),
+            )
+            .value ??
+        _monthlySummary(all);
+    final canLoadMore =
+        widget.month == null && all.length >= _visibleLimit;
 
     return SafeArea(
       child: CustomScrollView(
@@ -150,11 +167,27 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
               sliver: SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 48),
-                  child: Center(
-                    child: Text(
-                      '没有找到匹配的记录',
-                      style: TextStyle(color: context.appSecondaryText),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '没有找到匹配的记录',
+                        style: TextStyle(color: context.appSecondaryText),
+                      ),
+                      if (canLoadMore) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          key: const ValueKey(
+                            'transactions-load-more-empty',
+                          ),
+                          onPressed: () => setState(
+                            () => _visibleLimit += _pageSize,
+                          ),
+                          icon: const Icon(Icons.expand_more_rounded),
+                          label: const Text('继续加载更早流水'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -168,8 +201,23 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                 AppScaffold.reservedBottomInset(context),
               ),
               sliver: SliverList.builder(
-                itemCount: groups.length,
+                itemCount: groups.length + (canLoadMore ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == groups.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('transactions-load-more'),
+                          onPressed: () => setState(
+                            () => _visibleLimit += _pageSize,
+                          ),
+                          icon: const Icon(Icons.expand_more_rounded),
+                          label: const Text('加载更多流水'),
+                        ),
+                      ),
+                    );
+                  }
                   final entry = groups[index];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),

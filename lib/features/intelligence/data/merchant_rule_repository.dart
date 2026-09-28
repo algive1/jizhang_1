@@ -118,10 +118,7 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
     if (await _database.categoryDao.findById(categoryId) == null) {
       throw StateError('Category $categoryId does not exist');
     }
-    final transactions = await _transactions.getAll();
-    final transaction = transactions
-        .where((item) => item.id == transactionId)
-        .firstOrNull;
+    final transaction = await _transactions.getById(transactionId);
     if (transaction == null) {
       throw StateError('Transaction $transactionId does not exist');
     }

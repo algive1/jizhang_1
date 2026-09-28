@@ -9,6 +9,7 @@ import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_theme_definition.dart';
 import '../core/database/database_provider.dart';
 import '../core/widgets/startup_poster.dart';
 import '../features/sharing/application/shared_book_sync_service.dart';
@@ -29,16 +30,6 @@ import '../features/budgets/application/budget_alert_notification_service.dart';
 import '../features/budgets/data/budget_repository.dart';
 import '../features/settings/application/theme_controller.dart';
 
-final startupVisualWarmupProvider = FutureProvider<void>((ref) async {
-  try {
-    await LiquidGlassShaders.ensureLoaded();
-  } on Object {
-    // Liquid glass has a frosted fallback. Shader warm-up must never prevent
-    // startup, but doing it behind the Flutter poster avoids extending the
-    // Android/iOS native launch screen while still preparing the first lens.
-  }
-});
-
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
 
@@ -47,10 +38,7 @@ class JizhangApp extends ConsumerStatefulWidget {
 }
 
 class _JizhangAppState extends ConsumerState<JizhangApp>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  static const _startupPosterDuration = Duration(milliseconds: 450);
-  late final AnimationController _startupPosterController;
-  bool _startupPosterElapsed = false;
+    with WidgetsBindingObserver {
   static const _navigationChannel = MethodChannel('jizhang/navigation');
   late final void Function(FlutterErrorDetails)? _previousFlutterErrorHandler;
   late final bool Function(Object, StackTrace)? _previousPlatformErrorHandler;
@@ -58,6 +46,15 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   late final SessionRepository _sessionRepository;
   bool _updateDialogVisible = false;
   bool _initialUpdateCheckScheduled = false;
+  bool _liquidGlassWarmupScheduled = false;
+  DateTime? _lastForegroundMaintenanceAt;
+  DateTime? _lastRecurringNotificationSyncAt;
+  int _foregroundMaintenanceGeneration = 0;
+  static const _foregroundMaintenanceDedupWindow = Duration(seconds: 2);
+  static const _deferredForegroundMaintenanceDelay = Duration(
+    milliseconds: 1500,
+  );
+  static const _recurringNotificationSyncInterval = Duration(minutes: 10);
 
   @override
   void initState() {
@@ -67,14 +64,6 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     _installDiagnosticHandlers();
     WidgetsBinding.instance.addObserver(this);
     _navigationChannel.setMethodCallHandler(_handleNavigationCall);
-    _startupPosterController =
-        AnimationController(vsync: this, duration: _startupPosterDuration)
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed && mounted) {
-              setState(() => _startupPosterElapsed = true);
-            }
-          })
-          ..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(() async {
         try {
@@ -85,13 +74,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         }
       }());
       unawaited(ref.read(productAnalyticsProvider).track('app_open'));
-      _processNotifications();
-      _processRecurringAutoRecords();
-      _syncRecurringBillNotifications();
-      _syncBudgetAlerts();
-      unawaited(_flushDiagnosticsAfterSessionRestore());
-      _syncPersonalCloudForeground();
-      _registerPushIfAvailable();
+      _runForegroundMaintenance();
       unawaited(const FinanceSchedulerBridge().scheduleDaily());
       final sync = ref.read(sharedBookSyncProvider);
       unawaited(
@@ -162,18 +145,43 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     );
     if (state == AppLifecycleState.resumed) {
       unawaited(ref.read(productAnalyticsProvider).track('app_foreground'));
-      _processNotifications();
-      _processRecurringAutoRecords();
-      _syncRecurringBillNotifications();
-      _syncBudgetAlerts();
-      unawaited(_flushDiagnosticsAfterSessionRestore());
-      _syncPersonalCloudForeground();
-      _registerPushIfAvailable();
+      _runForegroundMaintenance();
       _checkForAppUpdate();
+    } else {
+      _foregroundMaintenanceGeneration++;
     }
     ref
         .read(sharedBookSyncProvider)
         .setForeground(state == AppLifecycleState.resumed);
+  }
+
+  void _runForegroundMaintenance() {
+    final now = DateTime.now();
+    final previous = _lastForegroundMaintenanceAt;
+    if (previous != null &&
+        now.difference(previous) < _foregroundMaintenanceDedupWindow) {
+      return;
+    }
+    _lastForegroundMaintenanceAt = now;
+    final generation = ++_foregroundMaintenanceGeneration;
+    _processNotifications();
+    _processRecurringAutoRecords();
+    unawaited(_runDeferredForegroundMaintenance(generation));
+  }
+
+  Future<void> _runDeferredForegroundMaintenance(int generation) async {
+    await Future<void>.delayed(_deferredForegroundMaintenanceDelay);
+    if (!mounted || generation != _foregroundMaintenanceGeneration) return;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null &&
+        lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _syncRecurringBillNotifications();
+    _syncBudgetAlerts();
+    unawaited(_flushDiagnosticsAfterSessionRestore());
+    _syncPersonalCloudForeground();
+    _registerPushIfAvailable();
   }
 
   void _registerPushIfAvailable() {
@@ -312,6 +320,13 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   }
 
   void _syncRecurringBillNotifications() {
+    final now = DateTime.now();
+    final previous = _lastRecurringNotificationSyncAt;
+    if (previous != null &&
+        now.difference(previous) < _recurringNotificationSyncInterval) {
+      return;
+    }
+    _lastRecurringNotificationSyncAt = now;
     unawaited(
       ref
           .read(databaseBootstrapProvider.future)
@@ -386,7 +401,6 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   @override
   void dispose() {
     _navigationChannel.setMethodCallHandler(null);
-    _startupPosterController.dispose();
     FlutterError.onError = _previousFlutterErrorHandler;
     PlatformDispatcher.instance.onError = _previousPlatformErrorHandler;
     WidgetsBinding.instance.removeObserver(this);
@@ -400,10 +414,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       PlatformDispatcher.instance.defaultRouteName,
     );
     final databaseBootstrap = ref.watch(databaseBootstrapProvider);
-    final visualWarmup = ref.watch(startupVisualWarmupProvider);
-    if (databaseBootstrap.isLoading ||
-        visualWarmup.isLoading ||
-        (!overlayHost && !_startupPosterElapsed)) {
+    if (databaseBootstrap.isLoading) {
       if (overlayHost) {
         return MaterialApp(
           title: '好好记账',
@@ -523,6 +534,20 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     }
 
     final appearance = ref.watch(effectiveThemeProvider);
+    if (appearance.style == AppThemeStyle.liquidGlass &&
+        !_liquidGlassWarmupScheduled) {
+      _liquidGlassWarmupScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(() async {
+          try {
+            await LiquidGlassShaders.ensureLoaded();
+          } on Object {
+            // The liquid-glass widgets already provide a frosted fallback.
+            // Warm-up is opportunistic and must not delay first interaction.
+          }
+        }());
+      });
+    }
     final disableThemeAnimations =
         MediaQueryData.fromView(View.of(context)).disableAnimations;
     final brightnessPreference =

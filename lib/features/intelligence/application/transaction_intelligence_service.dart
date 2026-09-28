@@ -70,7 +70,11 @@ class TransactionIntelligenceService {
 
   Future<DuplicateDecision> inspectExisting(String transactionId) async {
     var transaction = await _find(transactionId);
-    final existing = (await transactions.getAll())
+    final existing = (await transactions.getRange(
+      start: transaction.occurredAt.subtract(const Duration(hours: 24)),
+      endExclusive: transaction.occurredAt
+          .add(const Duration(hours: 24, microseconds: 1)),
+    ))
         .where(
           (item) =>
               item.id != transactionId && item.bookId == transaction.bookId,
@@ -124,9 +128,7 @@ class TransactionIntelligenceService {
   }
 
   Future<TransactionRecord> _find(String id) async {
-    final item = (await transactions.getAll())
-        .where((transaction) => transaction.id == id)
-        .firstOrNull;
+    final item = await transactions.getById(id);
     if (item == null) throw StateError('Transaction $id does not exist');
     return item;
   }

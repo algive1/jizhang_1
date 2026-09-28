@@ -50,7 +50,10 @@ void main() {
       transactionType: 'REFUND',
       orderId: 'ORDER_123456',
     );
-    final matcher = AutoBookkeepingRefundMatcher(transactions);
+    final matcher = AutoBookkeepingRefundMatcher.withDatabase(
+      transactions,
+      database,
+    );
     final matched = await matcher.findOriginal(
       candidate: candidate,
       bookId: SeedIds.personalBook,

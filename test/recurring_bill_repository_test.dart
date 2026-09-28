@@ -34,6 +34,8 @@ void main() {
       );
       await repository.create(bill);
       expect((await repository.getAll()).single.name, '房租');
+      expect((await repository.getById(bill.id))?.name, '房租');
+      expect(await repository.getById('missing-recurring-bill'), isNull);
       expect(bill.nextOccurrence(now), DateTime(2026, 10, 12));
       await repository.archive(bill.id);
       expect(await repository.watchActive().first, isEmpty);
@@ -135,6 +137,18 @@ void main() {
       updatedAt: DateTime(2026, 9, 1),
     );
     await repository.create(bill);
+    expect(
+      (await repository.getDueAutoRecords(DateTime(2026, 8, 31))).map(
+        (item) => item.id,
+      ),
+      isNot(contains(bill.id)),
+    );
+    expect(
+      (await repository.getDueAutoRecords(DateTime(2026, 9, 1))).map(
+        (item) => item.id,
+      ),
+      contains(bill.id),
+    );
     final service = RecurringBillExecutionService(
       database,
       QuickBookkeepingService(

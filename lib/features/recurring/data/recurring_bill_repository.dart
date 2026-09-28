@@ -14,6 +14,8 @@ import '../../books/data/book_repository.dart';
 abstract interface class RecurringBillRepository {
   Stream<List<RecurringBill>> watchActive();
   Future<List<RecurringBill>> getAll();
+  Future<List<RecurringBill>> getDueAutoRecords(DateTime cutoff);
+  Future<RecurringBill?> getById(String id);
   Future<List<RecurringBill>> getAllForNotification();
   Future<RecurringBill> create(RecurringBill bill);
   Future<RecurringBill> update(RecurringBill bill);
@@ -33,6 +35,22 @@ class DriftRecurringBillRepository implements RecurringBillRepository {
   @override
   Future<List<RecurringBill>> getAll() async =>
       _map(await _database.recurringBillDao.getAll(bookId: bookId));
+
+  @override
+  Future<List<RecurringBill>> getDueAutoRecords(DateTime cutoff) async =>
+      _map(
+        await _database.recurringBillDao.getDueAutoRecords(
+          bookId: bookId,
+          cutoff: cutoff,
+        ),
+      );
+
+  @override
+  Future<RecurringBill?> getById(String id) async {
+    final row = await _database.recurringBillDao.findById(id);
+    if (row == null || row.bookId != bookId) return null;
+    return _map([row]).single;
+  }
 
   @override
   Future<List<RecurringBill>> getAllForNotification() async =>
@@ -137,38 +155,39 @@ class DriftRecurringBillRepository implements RecurringBillRepository {
   }
 
   List<RecurringBill> _map(List<RecurringBillEntity> rows) => [
-    for (final row in rows)
-      RecurringBill(
-        interval: (jsonDecode(row.scheduleJson)['interval'] as int?) ?? 1,
-        weekday: jsonDecode(row.scheduleJson)['weekday'] as int?,
-        dayOfMonth: jsonDecode(row.scheduleJson)['day_of_month'] as int?,
-        month: jsonDecode(row.scheduleJson)['month'] as int?,
-        repeatCount: jsonDecode(row.scheduleJson)['repeat_count'] as int?,
-        completedCount:
-            (jsonDecode(row.scheduleJson)['completed_count'] as int?) ?? 0,
-        reminderDays:
-            (jsonDecode(row.scheduleJson)['reminder_days'] as int?) ?? 1,
-        subcategoryId:
-            jsonDecode(row.scheduleJson)['subcategory_id'] as String?,
-        id: row.id,
-        bookId: row.bookId,
-        name: row.name,
-        type: RecurringBillType.values.byName(row.type),
-        amount: row.amountInCents / 100,
-        cycle: RecurringBillCycle.values.byName(row.cycle),
-        startDate: row.startDate,
-        endDate: row.endDate,
-        nextDate: row.nextDate,
-        accountId: row.accountId,
-        categoryId: row.categoryId,
-        customIntervalDays: row.customIntervalDays,
-        autoRecord: row.autoRecord,
-        reminder: row.reminder,
-        status: RecurringBillStatus.values.byName(row.status),
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      ),
+    for (final row in rows) _mapOne(row),
   ];
+
+  RecurringBill _mapOne(RecurringBillEntity row) {
+    final schedule = jsonDecode(row.scheduleJson) as Map<String, dynamic>;
+    return RecurringBill(
+      interval: (schedule['interval'] as int?) ?? 1,
+      weekday: schedule['weekday'] as int?,
+      dayOfMonth: schedule['day_of_month'] as int?,
+      month: schedule['month'] as int?,
+      repeatCount: schedule['repeat_count'] as int?,
+      completedCount: (schedule['completed_count'] as int?) ?? 0,
+      reminderDays: (schedule['reminder_days'] as int?) ?? 1,
+      subcategoryId: schedule['subcategory_id'] as String?,
+      id: row.id,
+      bookId: row.bookId,
+      name: row.name,
+      type: RecurringBillType.values.byName(row.type),
+      amount: row.amountInCents / 100,
+      cycle: RecurringBillCycle.values.byName(row.cycle),
+      startDate: row.startDate,
+      endDate: row.endDate,
+      nextDate: row.nextDate,
+      accountId: row.accountId,
+      categoryId: row.categoryId,
+      customIntervalDays: row.customIntervalDays,
+      autoRecord: row.autoRecord,
+      reminder: row.reminder,
+      status: RecurringBillStatus.values.byName(row.status),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    );
+  }
 
   RecurringBillEntriesCompanion _toCompanion(RecurringBill bill) =>
       RecurringBillEntriesCompanion(
@@ -271,13 +290,11 @@ class RecurringBillExecutionService {
   /// blocking the first frame; the next resume continues the backlog.
   Future<int> processDueAutoRecords({DateTime? now}) async {
     final cutoff = now ?? DateTime.now();
-    final bills = await _recurringBills.getAll();
+    final bills = await _recurringBills.getDueAutoRecords(cutoff);
     var processed = 0;
     Object? firstError;
 
-    for (final bill in bills.where(
-      (item) => item.status == RecurringBillStatus.active && item.autoRecord,
-    )) {
+    for (final bill in bills) {
       var current = bill;
       var attempts = 0;
       while (current.status == RecurringBillStatus.active &&
@@ -286,11 +303,9 @@ class RecurringBillExecutionService {
         try {
           await recordDue(current, occurrence: current.nextDate);
           processed++;
-          final latest = (await _recurringBills.getAll()).where(
-            (item) => item.id == current.id,
-          );
-          if (latest.isEmpty) break;
-          current = latest.single;
+          final latest = await _recurringBills.getById(current.id);
+          if (latest == null) break;
+          current = latest;
           attempts++;
         } catch (error) {
           firstError ??= error;
@@ -309,9 +324,7 @@ class RecurringBillExecutionService {
     RecurringBill bill, {
     DateTime? occurrence,
   }) => _database.transaction(() async {
-    final latest = (await _recurringBills.getAll())
-        .where((item) => item.id == bill.id)
-        .firstOrNull;
+    final latest = await _recurringBills.getById(bill.id);
     if (latest == null) throw StateError('周期账单不存在');
     final requestedDue = occurrence ?? bill.nextDate;
     final existingRecord = await _transactions.getById(

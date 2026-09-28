@@ -59,8 +59,9 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
   @override
   Future<ManagedAccount?> getById(String id) async {
     await ensureAccountManagementSchema(_database);
-    final accounts = await _accounts.getAll();
-    final account = accounts.where((item) => item.id == id).firstOrNull;
+    final account = _accounts is DriftAccountRepository
+        ? await _accounts.getById(id)
+        : (await _accounts.getAll()).where((item) => item.id == id).firstOrNull;
     if (account == null) return null;
     return (await _decorate([account])).single;
   }

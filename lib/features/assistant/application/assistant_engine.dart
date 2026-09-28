@@ -98,7 +98,10 @@ class RuleBasedAssistantEngine implements AssistantEngine {
         final categoriesRepository = ref.read(categoryRepositoryProvider);
         final transactions = await ref
             .read(transactionRepositoryProvider)
-            .getAll();
+            .getRange(
+              start: DateTime(now.year, now.month),
+              endExclusive: DateTime(now.year, now.month + 1),
+            );
         if (parseIntent(text) == AssistantIntent.budget) {
           final budgets = await repository.getMonth(
             '${now.year}-${now.month.toString().padLeft(2, '0')}',

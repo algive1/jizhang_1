@@ -9,12 +9,10 @@ abstract final class AppAssets {
       'assets/images/transactions_still_life.png';
   static const goalCar = 'assets/images/goal_car.png';
   static const userAvatar = 'assets/images/user_avatar.png';
-  static const profileAvatar = 'assets/images/profile_avatar.png';
   static const liquidGlassProfileBackground =
       'assets/images/liquid_glass_profile_background.webp';
   static const proCloud = 'assets/images/pro_cloud_reference_v1.png';
   static const homeLeaves = 'assets/images/leaves_reference_v1.png';
-  static const bookshelf = 'assets/images/bookshelf_reference_v1.png';
   static const bookshelfEmpty =
       'assets/images/bookshelf_empty_background_v1.png';
   static const startupPoster = 'assets/images/startup_poster.png';

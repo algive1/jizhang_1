@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters/money_formatter.dart';
-import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/analysis_report_export_service.dart';
 import '../data/analysis_repository.dart';
@@ -24,20 +23,29 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
 
   @override
   Widget build(BuildContext context) {
-    final transactionsAsync = ref.watch(analysisTransactionsProvider);
     final currency = ref.watch(analysisCurrencyProvider);
     final scope = ref.watch(analysisScopeProvider);
-    final transactions = transactionsAsync.value ?? const <TransactionRecord>[];
     final currentYear = DateTime.now().year;
-    final earliest = transactions.isEmpty
+    final recordedYears =
+        ref.watch(analysisYearsProvider(scope)).value ?? const <int>[];
+    final earliest = recordedYears.isEmpty
         ? currentYear
-        : transactions
-              .map((item) => item.occurredAt.year)
-              .reduce((a, b) => a < b ? a : b);
+        : recordedYears.reduce((a, b) => a < b ? a : b);
     final years = [
       for (var year = currentYear; year >= earliest; year--) year,
     ];
     final selectedYear = years.contains(_year) ? _year : currentYear;
+    final reportDataKey = (scope: scope, year: selectedYear);
+    final transactionsAsync = ref.watch(
+      annualReportTransactionsProvider(reportDataKey),
+    );
+    final transactions = transactionsAsync.value ?? const [];
+    final currencies = {
+      'CNY',
+      currency,
+      ...?ref.watch(analysisCurrenciesProvider(scope)).value,
+    }.toList()
+      ..sort();
     final report = ref
         .watch(annualFinancialReportServiceProvider)
         .build(
@@ -103,7 +111,7 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
                 child: DropdownButtonFormField<String>(
                   initialValue: currency,
                   decoration: const InputDecoration(labelText: '币种'),
-                  items: _currencies(transactions, currency)
+                  items: currencies
                       .map(
                         (value) =>
                             DropdownMenuItem(value: value, child: Text(value)),
@@ -132,7 +140,11 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
                   const Text('年度数据读取失败'),
                   TextButton(
                     onPressed: () {
-                      ref.invalidate(analysisTransactionsProvider);
+                      ref.invalidate(
+                        annualReportTransactionsProvider(reportDataKey),
+                      );
+                      ref.invalidate(analysisYearsProvider(scope));
+                      ref.invalidate(analysisCurrenciesProvider(scope));
                     },
                     child: const Text('重新加载'),
                   ),
@@ -189,17 +201,6 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
     }
   }
 
-  List<String> _currencies(
-    List<TransactionRecord> transactions,
-    String current,
-  ) {
-    return {
-      'CNY',
-      current,
-      ...transactions.map((item) => item.currency.toUpperCase()),
-    }.toList()
-      ..sort();
-  }
 }
 
 class _ScopeSelector extends ConsumerWidget {

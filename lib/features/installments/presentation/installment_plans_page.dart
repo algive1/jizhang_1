@@ -104,10 +104,11 @@ class InstallmentPlansPage extends ConsumerWidget {
   }
 
   Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
-    final transactions =
-        ref.read(transactionsProvider).value ?? const <TransactionRecord>[];
-    final accounts = ref.read(accountsProvider).value ?? const <Account>[];
-    final expenses = transactions.where((item) => item.isExpense).toList();
+    final expenses = await ref
+        .read(transactionRepositoryProvider)
+        .getExpenseCandidates();
+    final accounts = await ref.read(accountRepositoryProvider).getActive();
+    if (!context.mounted) return;
     if (expenses.isEmpty || accounts.isEmpty) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('请先记录一笔消费并添加账户')));
@@ -141,9 +142,14 @@ class _PlanCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final original =
-        (ref.watch(transactionsProvider).value ?? const <TransactionRecord>[])
-            .where((item) => item.id == plan.originalTransactionId)
-            .firstOrNull;
+        ref
+            .watch(
+              transactionsByIdsProvider(
+                transactionIdsProviderKey([plan.originalTransactionId]),
+              ),
+            )
+            .value
+            ?.firstOrNull;
     return GestureDetector(
       onTap: onOpen,
       child: AppCard(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/transaction_record.dart';
@@ -613,17 +614,43 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       return;
     }
 
-    // Read persisted rows directly. A StreamProvider may not have emitted yet
-    // when the user re-imports immediately, which previously made duplicate
-    // detection race with provider startup.
-    final transactions = await ref.read(transactionRepositoryProvider).getAll();
+    // Read only rows that can still satisfy the existing dedupe rules. Rows
+    // without a provider transaction ID can match only the same occurredAt
+    // (or their persisted import fingerprints); provider IDs are checked
+    // globally because they remain the strongest identity even after edits.
+    final selectedIndices = _selected.toList()..sort();
+    final selectedRows = [
+      for (final index in selectedIndices) result.rows[index],
+    ];
+    final rowsWithoutExternalId = selectedRows
+        .where((row) => row.externalId?.trim().isEmpty ?? true)
+        .toList(growable: false);
+    final transactions = await DriftTransactionRepository(
+      ref.read(databaseProvider),
+      bookId: ref.read(activeBookIdProvider),
+    ).getImportDedupCandidates(
+      occurredAt: [
+        for (final row in rowsWithoutExternalId) row.occurredAt,
+      ],
+      externalIds: [
+        for (final row in selectedRows)
+          if (row.externalId?.trim().isNotEmpty == true)
+            row.externalId!.trim(),
+      ],
+      importFingerprints: [
+        for (final row in rowsWithoutExternalId) row.importFingerprint,
+      ],
+      naturalFingerprints: [
+        for (final row in rowsWithoutExternalId) row.naturalFingerprint,
+      ],
+    );
     if (!mounted) return;
     final deduplicator = BillImportDeduplicator.fromTransactions(transactions);
 
     final mapper = const BillImportCategoryMapper();
     final requests = <QuickBookkeepingRequest>[];
     var duplicates = 0;
-    for (final index in _selected.toList()..sort()) {
+    for (final index in selectedIndices) {
       final row = result.rows[index];
       if (deduplicator.isDuplicate(row)) {
         duplicates++;

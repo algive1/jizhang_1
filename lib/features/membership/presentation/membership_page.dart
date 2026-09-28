@@ -74,6 +74,10 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                         child: Image.asset(
                           '${memberAssets}hero-bg.webp',
                           fit: BoxFit.cover,
+                          cacheWidth:
+                              (MediaQuery.sizeOf(context).width *
+                                      MediaQuery.devicePixelRatioOf(context))
+                                  .ceil(),
                         ),
                       ),
                       Positioned(

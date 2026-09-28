@@ -18,13 +18,12 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../account/application/account_session_controller.dart';
 import '../../account/domain/account_session.dart';
 import '../../account/domain/account_session_status.dart';
+import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../budgets/data/budget_repository.dart';
-import '../../home/data/home_data.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../messages/application/system_message_service.dart';
 import '../../settings/application/theme_controller.dart';
-import '../../transactions/data/transactions_repository.dart';
 import '../application/profile_quick_actions_controller.dart';
 import '../data/profile_stats.dart';
 import 'profile_quick_actions_page.dart';
@@ -34,16 +33,28 @@ class LiquidGlassProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final transactions = ref.watch(transactionsProvider);
-    final records = transactions.value ?? const [];
     final now = DateTime.now();
-    final month = monthlySummary(records, DateTime(now.year, now.month), now);
-    final previous = monthlySummary(
-      records,
-      DateTime(now.year, now.month - 1),
-      now,
+    final bookId = ref.watch(activeBookIdProvider);
+    final activityState = ref.watch(profileActivityProvider(bookId));
+    final monthState = ref.watch(
+      profileMonthSummaryProvider((
+        bookId: bookId,
+        year: now.year,
+        month: now.month,
+      )),
     );
-    final activity = ProfileActivity(records, now);
+    final previousMonth = DateTime(now.year, now.month - 1);
+    final previousState = ref.watch(
+      profileMonthSummaryProvider((
+        bookId: bookId,
+        year: previousMonth.year,
+        month: previousMonth.month,
+      )),
+    );
+    final activity =
+        activityState.value ?? ProfileActivity.fromDates(const [], now);
+    final month = monthState.value ?? (income: 0.0, expense: 0.0);
+    final previous = previousState.value ?? (income: 0.0, expense: 0.0);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider).value;
     final accountSession = ref.watch(accountSessionProvider).value;
@@ -64,7 +75,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
       useImpellerBackdrop: false,
       realTimeCapture: false,
       useSync: true,
-      pixelRatio: .75,
+      pixelRatio: .625,
       batch: false,
       child: SafeArea(
         bottom: false,
@@ -101,7 +112,10 @@ class LiquidGlassProfilePage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               _SummaryPanel(
-                loading: transactions.isLoading,
+                loading:
+                    activityState.isLoading ||
+                    monthState.isLoading ||
+                    previousState.isLoading,
                 expense: month.expense,
                 income: month.income,
                 expenseDelta: _deltaText(month.expense, previous.expense),
@@ -336,7 +350,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
 class _ProfileGlassTuning {
   const _ProfileGlassTuning({
     this.opacity = .56,
-    this.blurSigma = 12,
+    this.blurSigma = 5,
     this.borderHighlight = .72,
     this.shadowStrength = .12,
   });
@@ -632,14 +646,18 @@ class _ImmersiveProfileBackground extends StatelessWidget {
 
   final bool dark;
 
-  Widget _image({required bool filtered}) {
+  Widget _image(BuildContext context) {
     final image = Image.asset(
       AppAssets.liquidGlassProfileBackground,
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
+      cacheWidth:
+          (MediaQuery.sizeOf(context).width *
+                  MediaQuery.devicePixelRatioOf(context))
+              .ceil(),
     );
-    final toned = dark
+    return dark
         ? ColorFiltered(
             colorFilter: const ColorFilter.mode(
               Color(0xFFB49C88),
@@ -648,14 +666,6 @@ class _ImmersiveProfileBackground extends StatelessWidget {
             child: image,
           )
         : image;
-    if (!filtered) return toned;
-    return Transform.scale(
-      scale: 1.025,
-      child: ImageFiltered(
-        imageFilter: ui.ImageFilter.blur(sigmaX: dark ? 13 : 10, sigmaY: dark ? 13 : 10),
-        child: toned,
-      ),
-    );
   }
 
   @override
@@ -663,22 +673,34 @@ class _ImmersiveProfileBackground extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _image(filtered: false),
-            ShaderMask(
+            _image(context),
+            // The background is captured once by LiquidGlassView. A previous
+            // version painted the same full-screen image a second time through
+            // a 10-13px ImageFiltered blur just to create the lower haze. The
+            // gradient below preserves that depth cue without a second texture
+            // decode, full-screen blur pass, or duplicate raster work.
+            DecoratedBox(
               key: const ValueKey('profile-progressive-haze'),
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (bounds) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0x00000000),
-                  Color(0x22000000),
-                  Color(0xCC000000),
-                  Color(0xFF000000),
-                ],
-                stops: [0.20, 0.38, 0.66, 1],
-              ).createShader(bounds),
-              child: _image(filtered: true),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: dark
+                      ? const [
+                          Color(0x00100D0C),
+                          Color(0x1F171310),
+                          Color(0x8F1D1713),
+                          Color(0xC91C1714),
+                        ]
+                      : const [
+                          Color(0x00FFFFFF),
+                          Color(0x16FFFFFF),
+                          Color(0x5CF4E5D4),
+                          Color(0x9DF2E5D8),
+                        ],
+                  stops: const [.18, .38, .68, 1],
+                ),
+              ),
             ),
             DecoratedBox(
               decoration: BoxDecoration(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../core/models/analysis.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../goals/data/goal_repository.dart';
@@ -21,14 +22,63 @@ final financialInsightEngineProvider = Provider<FinancialInsightEngine>(
   (ref) => const FinancialInsightEngine(),
 );
 
+List<TransactionRecord> _mergeInsightTransactions(
+  Iterable<TransactionRecord> recent,
+  Iterable<TransactionRecord> pending,
+) {
+  final byId = <String, TransactionRecord>{
+    for (final item in recent) item.id: item,
+  };
+  for (final item in pending) {
+    byId[item.id] = item;
+  }
+  return byId.values.toList(growable: false);
+}
+
+final insightRecentTransactionsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      yield* ref.watch(transactionRepositoryProvider).watchRange(
+        start: today.subtract(const Duration(days: 180)),
+        endExclusive: today.add(const Duration(days: 1)),
+      );
+    });
+
+final insightPendingReimbursementsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* ref
+          .watch(transactionRepositoryProvider)
+          .watchPendingReimbursements();
+    });
+
+final insightLargeExpenseThresholdProvider = StreamProvider<double>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* ref
+      .watch(databaseProvider)
+      .transactionDao
+      .watchLargeExpenseThresholdInCents(
+        bookId: ref.watch(activeBookIdProvider),
+      )
+      .map((cents) => cents / 100);
+});
+
 final localInsightFeedProvider = Provider<InsightFeed>((ref) {
-  final transactions =
-      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  final transactions = _mergeInsightTransactions(
+    ref.watch(insightRecentTransactionsProvider).value ??
+        const <TransactionRecord>[],
+    ref.watch(insightPendingReimbursementsProvider).value ??
+        const <TransactionRecord>[],
+  );
   final engine = ref.watch(financialInsightEngineProvider);
   final analysis = ref.watch(statisticalAnalysisServiceProvider).analyze(
         engine.normalizeAnalysisTransactions(transactions),
         period: AnalysisPeriod.currentMonth,
         currency: 'CNY',
+        largeExpenseThreshold:
+            ref.watch(insightLargeExpenseThresholdProvider).value,
       );
   final budgets = ref.watch(budgetOverviewProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
@@ -53,8 +103,10 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
 
 
 final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
-  final transactions =
-      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+  // Keep remote analysis reactive to transaction changes without subscribing
+  // to the entire ledger. The bounded stream reruns on transaction-table
+  // updates, while the actual query below follows the server's history policy.
+  ref.watch(insightRecentTransactionsProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
   final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
   final categories = ref.watch(allCategoriesProvider).value ?? const [];
@@ -78,7 +130,17 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
   });
   await delay.future;
   if (disposed) return null;
-  return ref.read(remoteInsightRepositoryProvider).analyze(
+  final remoteRepository = ref.read(remoteInsightRepositoryProvider);
+  final remotePolicy = await remoteRepository.policy();
+  final historyDays =
+      (remotePolicy?.historyDays ?? 90).clamp(1, 3650).toInt();
+  final now = DateTime.now();
+  final transactions = await ref.read(transactionRepositoryProvider).getRange(
+        start: now.subtract(Duration(days: historyDays)),
+        endExclusive: DateTime(now.year, now.month, now.day + 1),
+      );
+  if (disposed) return null;
+  return remoteRepository.analyze(
         bookId: bookId,
         transactions: transactions,
         accounts: accounts,

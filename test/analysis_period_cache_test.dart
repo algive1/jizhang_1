@@ -7,9 +7,24 @@ import 'package:jizhang_app/features/analysis/domain/statistical_analysis_servic
 void main() {
   test('analysis snapshot family caches each period until source data changes', () {
     final repository = _CountingAnalysisRepository();
+    const monthRepositoryKey = (
+      period: AnalysisPeriod.currentMonth,
+      month: null,
+      currency: 'CNY',
+    );
+    const yearRepositoryKey = (
+      period: AnalysisPeriod.currentYear,
+      month: null,
+      currency: 'CNY',
+    );
     final container = ProviderContainer(
       overrides: [
-        analysisRepositoryProvider.overrideWithValue(repository),
+        analysisRepositoryForKeyProvider(
+          monthRepositoryKey,
+        ).overrideWithValue(repository),
+        analysisRepositoryForKeyProvider(
+          yearRepositoryKey,
+        ).overrideWithValue(repository),
       ],
     );
     addTearDown(container.dispose);

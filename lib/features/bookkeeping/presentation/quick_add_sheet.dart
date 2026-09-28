@@ -2352,9 +2352,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             ref.read(databaseProvider),
             bookId: bookId,
           );
-          final existing = (await repository.getAll())
-              .where((bill) => bill.id == draft.id)
-              .firstOrNull;
+          final existing = await repository.getById(draft.id);
           final updated = RecurringBill(
             id: draft.id,
             bookId: bookId,

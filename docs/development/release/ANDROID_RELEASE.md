@@ -7,8 +7,9 @@
 - Application ID：`com.algive.jizhang_app`
 - Version：以 `pubspec.yaml` 为准，当前为 `1.0.0+1`
 - 推荐脚本：`bash build_apk_release.sh`
-- Release 输出：`build/app/outputs/flutter-apk/app-release.apk`
-- 脚本复制输出：`dist/jizhang_app-1.0.0+1-release.apk`
+- 默认按 ABI 拆分 Release APK：`arm64-v8a`、`armeabi-v7a`、`x86_64`
+- 输出目录：`dist/jizhang_app-<版本>-release-<abi>.apk`
+- 如确实需要一个通用 APK：`bash build_apk_release.sh --universal-apk`
 
 ## 构建与安装
 
@@ -24,7 +25,7 @@ adb install -r "dist/jizhang_app-1.0.0+1-release.apk"
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --release
+flutter build apk --release --split-per-abi
 ```
 
 ## 当前验收产物

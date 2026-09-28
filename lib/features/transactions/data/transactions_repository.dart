@@ -12,7 +12,29 @@ import '../../books/data/book_repository.dart';
 abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchAll();
   Stream<List<TransactionRecord>> watchRecent({int limit = 10});
+  Stream<List<TransactionRecord>> watchForAccount({
+    required String accountId,
+    int? limit,
+  });
+  Stream<List<TransactionRecord>> watchSince({
+    required DateTime start,
+    bool onlyOccurred = true,
+  });
+  Stream<List<TransactionRecord>> watchRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  });
+  Stream<List<TransactionRecord>> watchRanges({
+    required List<({DateTime start, DateTime endExclusive})> ranges,
+  });
+  Stream<List<TransactionRecord>> watchPendingReimbursements();
+  Stream<List<TransactionRecord>> watchReimbursementSources();
+  Future<List<TransactionRecord>> getRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  });
   Future<List<TransactionRecord>> getAll();
+  Future<List<TransactionRecord>> getExpenseCandidates();
   Future<List<TransactionRecord>> getRecent({int limit = 10});
   Future<TransactionRecord?> getById(String id);
   Future<TransactionRecord> create(TransactionRecord transaction);
@@ -51,10 +73,239 @@ class DriftTransactionRepository implements TransactionRepository {
         .asyncMap(_mapEntities);
   }
 
+  Stream<List<TransactionRecord>> watchByIds(Iterable<String> ids) {
+    final uniqueIds = ids.toSet().toList(growable: false);
+    return _database.transactionDao
+        .watchActiveByIds(ids: uniqueIds, bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  Stream<List<TransactionRecord>> watchSearchCandidates({
+    required String query,
+    DateTime? month,
+    int limit = 100,
+  }) {
+    _validateRecentLimit(limit);
+    final cleaned = query.trim();
+    if (cleaned.isEmpty) {
+      return watchRecent(limit: limit);
+    }
+    final start = month == null ? null : DateTime(month.year, month.month);
+    final endExclusive = month == null
+        ? null
+        : DateTime(month.year, month.month + 1);
+    final amountMatch = RegExp(
+      r'^(>=|>|<=|<)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|块)?(?:以上|以下)?$',
+    ).firstMatch(cleaned);
+    if (amountMatch != null) {
+      final amount = double.tryParse(amountMatch.group(2)!);
+      if (amount == null) return Stream.value(const <TransactionRecord>[]);
+      final explicitOperator = amountMatch.group(1);
+      final operator = cleaned.contains('以上')
+          ? '>='
+          : cleaned.contains('以下')
+          ? '<='
+          : explicitOperator ?? '=';
+      return _database.transactionDao
+          .watchAmountSearch(
+            amount: amount,
+            operator: operator,
+            bookId: bookId,
+            occurredFrom: start,
+            occurredBefore: endExclusive,
+            occurredThrough: month == null ? null : DateTime.now(),
+            limit: limit,
+          )
+          .asyncMap(_mapEntities);
+    }
+    return _database.transactionDao
+        .watchTextSearch(
+          query: cleaned,
+          bookId: bookId,
+          occurredFrom: start,
+          occurredBefore: endExclusive,
+          occurredThrough: month == null ? null : DateTime.now(),
+          limit: limit,
+        )
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchForAccount({
+    required String accountId,
+    int? limit,
+  }) {
+    if (limit != null) _validateRecentLimit(limit);
+    return _database.transactionDao
+        .watchActiveForAccount(accountId: accountId, limit: limit)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchSince({
+    required DateTime start,
+    bool onlyOccurred = true,
+  }) {
+    return _database.transactionDao
+        .watchActive(
+          bookId: bookId,
+          onlyOccurred: onlyOccurred,
+          occurredFrom: start,
+        )
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  }) {
+    if (!start.isBefore(endExclusive)) {
+      throw ArgumentError('Transaction range start must be before end');
+    }
+    return _database.transactionDao
+        .watchActive(
+          bookId: bookId,
+          onlyOccurred: true,
+          occurredFrom: start,
+          occurredBefore: endExclusive,
+        )
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchRanges({
+    required List<({DateTime start, DateTime endExclusive})> ranges,
+  }) {
+    for (final range in ranges) {
+      if (!range.start.isBefore(range.endExclusive)) {
+        throw ArgumentError('Transaction range start must be before end');
+      }
+    }
+    return _database.transactionDao
+        .watchActiveRanges(
+          bookId: bookId,
+          onlyOccurred: true,
+          ranges: ranges,
+        )
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchPendingReimbursements() {
+    return _database.transactionDao
+        .watchPendingReimbursements(bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchReimbursementSources() {
+    return _database.transactionDao
+        .watchReimbursementSources(bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Future<List<TransactionRecord>> getRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  }) async {
+    if (!start.isBefore(endExclusive)) {
+      throw ArgumentError('Transaction range start must be before end');
+    }
+    return _mapEntities(
+      await _database.transactionDao.getActive(
+        bookId: bookId,
+        onlyOccurred: true,
+        occurredFrom: start,
+        occurredBefore: endExclusive,
+      ),
+    );
+  }
+
+  Future<List<TransactionRecord>> getImportDedupCandidates({
+    Iterable<DateTime>? occurredAt,
+    Iterable<String>? externalIds,
+    Iterable<String>? importFingerprints,
+    Iterable<String>? naturalFingerprints,
+  }) async {
+    final scoped =
+        occurredAt != null ||
+        externalIds != null ||
+        importFingerprints != null ||
+        naturalFingerprints != null;
+    if (!scoped) {
+      return _mapEntities(
+        await _database.transactionDao.getImportDedupCandidates(bookId: bookId),
+      );
+    }
+
+    final times = occurredAt?.toSet().toList(growable: false) ?? const [];
+    final external = externalIds
+            ?.map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    final fingerprints = importFingerprints
+            ?.where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    final naturals = naturalFingerprints
+            ?.where((value) => value.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+
+    final candidates = <String, TransactionEntity>{};
+    if (times.isNotEmpty) {
+      for (final entity
+          in await _database.transactionDao.getImportDedupCandidatesAtTimes(
+            bookId: bookId,
+            occurredAt: times,
+          )) {
+        candidates[entity.id] = entity;
+      }
+    }
+    if (external.isNotEmpty ||
+        fingerprints.isNotEmpty ||
+        naturals.isNotEmpty) {
+      for (final entity
+          in await _database.transactionDao.getImportDedupCandidatesByMetadata(
+            bookId: bookId,
+            externalIds: external,
+            importFingerprints: fingerprints,
+            naturalFingerprints: naturals,
+          )) {
+        candidates[entity.id] = entity;
+      }
+    }
+    final entities = candidates.values.toList(growable: false)
+      ..sort((a, b) {
+        final occurred = b.occurredAt.compareTo(a.occurredAt);
+        if (occurred != 0) return occurred;
+        final created = b.createdAt.compareTo(a.createdAt);
+        if (created != 0) return created;
+        return b.id.compareTo(a.id);
+      });
+    return _mapEntities(entities);
+  }
+
   @override
   Future<List<TransactionRecord>> getAll() async {
     return _mapEntities(
       await _database.transactionDao.getActive(bookId: bookId),
+    );
+  }
+
+  @override
+  Future<List<TransactionRecord>> getExpenseCandidates() async {
+    return _mapEntities(
+      await _database.transactionDao.getActiveByTypes(
+        types: const ['expense', 'lend', 'assetPurchase'],
+        bookId: bookId,
+      ),
     );
   }
 
@@ -100,12 +351,7 @@ class DriftTransactionRepository implements TransactionRepository {
       throw ArgumentError('Transaction IDs must be unique within a batch');
     }
     return _database.transaction(() async {
-      for (final transaction in transactions) {
-        if (await _database.transactionDao.findById(transaction.id) != null) {
-          throw StateError('Transaction ${transaction.id} already exists');
-        }
-        await _ensureAccountsExist(transaction);
-      }
+      await _ensureBatchReferences(transactions);
       for (final transaction in transactions) {
         await _database.transactionDao.insertOne(_toCompanion(transaction));
         await _applyBalanceEffect(transaction, 1);
@@ -213,6 +459,135 @@ class DriftTransactionRepository implements TransactionRepository {
     }
   }
 
+  Future<void> _ensureBatchReferences(
+    List<TransactionRecord> transactions,
+  ) async {
+    final transactionIds = transactions.map((item) => item.id).toSet();
+    final relationIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.originalTransactionId,
+          transaction.relatedTransactionId,
+        ].whereType<String>(),
+    };
+    final accountIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.accountId,
+          transaction.destinationAccountId,
+        ].whereType<String>(),
+    };
+    final categoryIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.categoryId,
+          transaction.subcategoryId,
+        ].whereType<String>(),
+    };
+
+    final existingTransactions = await _transactionEntitiesByIds({
+      ...transactionIds,
+      ...relationIds,
+    });
+    final transactionsById = {
+      for (final entity in existingTransactions) entity.id: entity,
+    };
+    for (final transaction in transactions) {
+      if (transactionsById.containsKey(transaction.id)) {
+        throw StateError('Transaction ${transaction.id} already exists');
+      }
+    }
+
+    final categories = await _database.categoryDao.getByIds(categoryIds);
+    final categoriesById = {
+      for (final category in categories) category.id: category,
+    };
+    final accounts = await _accountEntitiesByIds(accountIds);
+    final accountsById = {for (final account in accounts) account.id: account};
+
+    for (final transaction in transactions) {
+      for (final categoryId in [
+        transaction.categoryId,
+        transaction.subcategoryId,
+      ].whereType<String>()) {
+        final category = categoriesById[categoryId];
+        if (category == null || category.bookId != transaction.bookId) {
+          throw ArgumentError('分类与流水必须属于同一账本');
+        }
+      }
+      for (final relationId in [
+        transaction.originalTransactionId,
+        transaction.relatedTransactionId,
+      ].whereType<String>()) {
+        final related = transactionsById[relationId];
+        if (related == null ||
+            related.bookId != transaction.bookId ||
+            related.deletedAt != null) {
+          throw ArgumentError('关联流水必须属于同一账本');
+        }
+      }
+
+      final resolvedAccountBookId = accountBookIdForBook?.call(
+        transaction.bookId,
+      );
+      final allowedAccountBooks = <String>{
+        transaction.bookId,
+        ?accountBookId,
+        ?resolvedAccountBookId,
+      };
+      for (final id in [
+        transaction.accountId,
+        transaction.destinationAccountId,
+      ].whereType<String>()) {
+        final account = accountsById[id];
+        if (account == null) throw StateError('账户不存在');
+        if (!allowedAccountBooks.contains(account.bookId)) {
+          throw ArgumentError('账户与流水必须属于同一账本');
+        }
+        if (account.currency.toUpperCase() !=
+            transaction.currency.toUpperCase()) {
+          throw ArgumentError('账户与流水币种必须一致；暂不支持跨币种转账');
+        }
+      }
+    }
+  }
+
+  Future<List<TransactionEntity>> _transactionEntitiesByIds(
+    Iterable<String> ids,
+  ) async {
+    final values = ids.toSet().toList(growable: false);
+    if (values.isEmpty) return const <TransactionEntity>[];
+    final result = <TransactionEntity>[];
+    for (var start = 0; start < values.length; start += 500) {
+      final end =
+          start + 500 < values.length ? start + 500 : values.length;
+      result.addAll(
+        await (_database.select(_database.transactionEntries)
+              ..where((row) => row.id.isIn(values.sublist(start, end))))
+            .get(),
+      );
+    }
+    return result;
+  }
+
+  Future<List<AccountEntity>> _accountEntitiesByIds(
+    Iterable<String> ids,
+  ) async {
+    final values = ids.toSet().toList(growable: false);
+    if (values.isEmpty) return const <AccountEntity>[];
+    final result = <AccountEntity>[];
+    for (var start = 0; start < values.length; start += 500) {
+      final end =
+          start + 500 < values.length ? start + 500 : values.length;
+      result.addAll(
+        await (_database.select(_database.accountEntries)
+              ..where((row) => row.id.isIn(values.sublist(start, end))))
+            .get(),
+      );
+    }
+    return result;
+  }
+
   Future<void> _ensureAccountsExist(TransactionRecord transaction) async {
     for (final categoryId in [
       transaction.categoryId,
@@ -272,7 +647,14 @@ class DriftTransactionRepository implements TransactionRepository {
   Future<List<TransactionRecord>> _mapEntities(
     List<TransactionEntity> entities,
   ) async {
-    final categories = await _database.categoryDao.getAll();
+    final categoryIds = <String>{
+      for (final entity in entities)
+        ...[
+          entity.categoryId,
+          entity.subcategoryId,
+        ].whereType<String>(),
+    };
+    final categories = await _database.categoryDao.getByIds(categoryIds);
     final categoriesByBookAndId = {
       for (final category in categories)
         '${category.bookId}\u0000${category.id}': category,
@@ -293,19 +675,18 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   Future<TransactionRecord> _mapEntity(TransactionEntity entity) async {
-    final categories = await _database.categoryDao.getAll();
-    CategoryEntity? category;
-    CategoryEntity? subcategory;
-    for (final item in categories) {
-      if (item.bookId != entity.bookId) continue;
-      if (item.id == entity.categoryId) category = item;
-      if (item.id == entity.subcategoryId) subcategory = item;
-      if (category != null &&
-          (entity.subcategoryId == null || subcategory != null)) {
-        break;
-      }
-    }
-    return _fromEntity(entity, category, subcategory);
+    final categories = await _database.categoryDao.getByIds([
+      entity.categoryId,
+      entity.subcategoryId,
+    ].whereType<String>());
+    final byId = {for (final category in categories) category.id: category};
+    final category = byId[entity.categoryId];
+    final subcategory = byId[entity.subcategoryId];
+    return _fromEntity(
+      entity,
+      category?.bookId == entity.bookId ? category : null,
+      subcategory?.bookId == entity.bookId ? subcategory : null,
+    );
   }
 
   TransactionRecord _fromEntity(
@@ -463,6 +844,56 @@ final transactionsByBookProvider =
       ).watchAll();
     });
 
+final transactionsByIdsProvider =
+    StreamProvider.family<List<TransactionRecord>, String>((ref, key) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final ids = key
+          .split('\u001f')
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: ref.watch(activeBookIdProvider),
+      ).watchByIds(ids);
+    });
+
+String transactionIdsProviderKey(Iterable<String> ids) {
+  final sorted = ids.toSet().toList()..sort();
+  return sorted.join('\u001f');
+}
+
+typedef TransactionSearchKey = ({
+  String query,
+  int? year,
+  int? month,
+  int limit,
+});
+
+final transactionSearchProvider =
+    StreamProvider.family<List<TransactionRecord>, TransactionSearchKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final repository = DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: ref.watch(activeBookIdProvider),
+      );
+      yield* repository.watchSearchCandidates(
+        query: key.query,
+        month: key.year == null || key.month == null
+            ? null
+            : DateTime(key.year!, key.month!),
+        limit: key.limit,
+      );
+    });
+
+final recentTransactionsPageProvider =
+    StreamProvider.family<List<TransactionRecord>, int>((ref, limit) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* ref.watch(transactionRepositoryProvider).watchRecent(limit: limit);
+    });
+
 final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   ref,
 ) async* {
@@ -475,6 +906,109 @@ final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   ).watchAll();
 });
 
+typedef TransactionMonthKey = ({int year, int month});
+
+typedef TransactionLedgerMonthSummary = ({
+  double income,
+  double expense,
+});
+
+final transactionLedgerMonthSummaryProvider =
+    StreamProvider.family<TransactionLedgerMonthSummary, TransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      final raw = ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchLedgerMonthSummary(
+            bookId: ref.watch(activeBookIdProvider),
+            start: DateTime(key.year, key.month),
+            endExclusive: DateTime(key.year, key.month + 1),
+            now: now,
+          );
+      yield* raw.map(
+        (value) => (
+          income: value.incomeCents / 100,
+          expense: value.expenseCents / 100,
+        ),
+      );
+    });
+
+typedef CalendarTransactionMonthKey = ({
+  int year,
+  int month,
+  String? bookId,
+});
+
+typedef RecordedMonthNeighbors = ({
+  DateTime? previous,
+  DateTime? next,
+});
+
+DateTime? _monthFromKey(int? key) {
+  if (key == null) return null;
+  return DateTime(key ~/ 100, key % 100);
+}
+
+final calendarMonthTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, CalendarTransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final first = DateTime(key.year, key.month);
+      final last = DateTime(key.year, key.month + 1, 0);
+      final start = first.subtract(Duration(days: first.weekday - 1));
+      final gridEnd = last.add(Duration(days: 7 - last.weekday));
+      final repository = DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: key.bookId,
+      );
+      yield* repository.watchRange(
+        start: start,
+        endExclusive: gridEnd.add(const Duration(days: 1)),
+      );
+    });
+
+final recordedMonthNeighborsProvider =
+    StreamProvider.family<RecordedMonthNeighbors, CalendarTransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final raw = ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchRecordedMonthNeighbors(
+            month: DateTime(key.year, key.month),
+            now: DateTime.now(),
+            bookId: key.bookId,
+          );
+      yield* raw.map(
+        (value) => (
+          previous: _monthFromKey(value.previousMonthKey),
+          next: _monthFromKey(value.nextMonthKey),
+        ),
+      );
+    });
+
+final transactionsForMonthProvider =
+    StreamProvider.family<List<TransactionRecord>, TransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final start = DateTime(key.year, key.month);
+      final endExclusive = DateTime(key.year, key.month + 1);
+      yield* ref.watch(transactionRepositoryProvider).watchRange(
+        start: start,
+        endExclusive: endExclusive,
+      );
+    });
+
 /// All active transactions visible to the current user, across every ledger.
 ///
 /// Most pages intentionally scope their data to [activeBookIdProvider]. The
@@ -485,6 +1019,80 @@ final allTransactionsProvider = StreamProvider<List<TransactionRecord>>((
 ) async* {
   await ref.watch(databaseBootstrapProvider.future);
   yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchAll();
+});
+
+final allAccountTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, String>((ref, accountId) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+      ).watchForAccount(accountId: accountId);
+    });
+
+typedef AccountTransactionPageKey = ({
+  String accountId,
+  int limit,
+});
+
+final accountTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, AccountTransactionPageKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(ref.watch(databaseProvider))
+          .watchForAccount(accountId: key.accountId, limit: key.limit);
+    });
+
+final accountMonthSummaryProvider =
+    StreamProvider.family<({double inflow, double outflow}), String>((
+      ref,
+      accountId,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      yield* ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchAccountMonthSummary(
+            accountId: accountId,
+            start: DateTime(now.year, now.month),
+            endExclusive: DateTime(now.year, now.month + 1),
+            now: now,
+          )
+          .map(
+            (value) => (
+              inflow: value.inflowCents / 100,
+              outflow: value.outflowCents / 100,
+            ),
+          );
+    });
+
+final reimbursementTransactionsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* ref
+          .watch(transactionRepositoryProvider)
+          .watchReimbursementSources();
+    });
+
+final assetHistoryTransactionsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day - 366);
+      yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchSince(
+        start: start,
+        onlyOccurred: false,
+      );
+    });
+
+final transactionCountProvider = StreamProvider<int>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* ref
+      .watch(databaseProvider)
+      .transactionDao
+      .watchActiveCount(bookId: ref.watch(activeBookIdProvider));
 });
 
 final transactionControllerProvider = Provider<TransactionController>((ref) {

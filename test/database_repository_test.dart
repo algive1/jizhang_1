@@ -20,6 +20,28 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('scoped transaction range index is installed', () async {
+    expect(database.schemaVersion, 25);
+    final indexes = await database
+        .customSelect("PRAGMA index_list('transactions')")
+        .get();
+    final names = indexes.map((row) => row.read<String>('name')).toSet();
+    expect(names, contains('idx_transactions_book_deleted_occurred'));
+    expect(names, contains('idx_transactions_related_type'));
+    expect(names, contains('idx_transactions_reimbursement_status'));
+    expect(names, contains('idx_transactions_type_occurred'));
+    final attachmentIndexes = await database
+        .customSelect("PRAGMA index_list('transaction_attachments')")
+        .get();
+    final attachmentNames = attachmentIndexes
+        .map((row) => row.read<String>('name'))
+        .toSet();
+    expect(
+      attachmentNames,
+      contains('idx_transaction_attachments_photo_gallery'),
+    );
+  });
+
   test(
     'create, update and soft-delete keep account balances correct',
     () async {
@@ -91,6 +113,128 @@ void main() {
       ),
     );
     expect(await _totalBalance(database), before);
+  });
+
+  test('import dedupe candidates are scoped to relevant identities', () async {
+    final matchTime = DateTime(2026, 8, 31, 12);
+    final oldTime = DateTime(2024, 1, 2, 8);
+
+    for (final item in [
+      _transaction(
+        id: 'dedupe-time',
+        type: TransactionType.expense,
+        amount: 10,
+        accountId: 'cash',
+        occurredAt: matchTime,
+        source: TransactionSource.import,
+        metadataJson:
+            '{"importFingerprint":"fp-time","importNaturalFingerprint":"natural-time"}',
+      ),
+      _transaction(
+        id: 'dedupe-external',
+        type: TransactionType.expense,
+        amount: 11,
+        accountId: 'cash',
+        occurredAt: oldTime,
+        source: TransactionSource.import,
+        metadataJson:
+            '{"importProvider":"wechat","externalId":"ORDER-42"}',
+      ),
+      _transaction(
+        id: 'dedupe-auto-external',
+        type: TransactionType.expense,
+        amount: 12,
+        accountId: 'cash',
+        occurredAt: oldTime,
+        source: TransactionSource.auto,
+        metadataJson:
+            '{"notificationOrderId":"AUTO-7","paymentPackageName":"com.tencent.mm"}',
+      ),
+      _transaction(
+        id: 'dedupe-unrelated',
+        type: TransactionType.expense,
+        amount: 13,
+        accountId: 'cash',
+        occurredAt: DateTime(2023, 1, 1),
+        source: TransactionSource.import,
+        metadataJson:
+            '{"importProvider":"wechat","externalId":"OTHER"}',
+      ),
+      _transaction(
+        id: 'dedupe-manual-same-time',
+        type: TransactionType.expense,
+        amount: 14,
+        accountId: 'cash',
+        occurredAt: matchTime,
+      ),
+    ]) {
+      await repository.create(item);
+    }
+
+    final candidates = await repository.getImportDedupCandidates(
+      occurredAt: [matchTime],
+      externalIds: const ['order-42', 'auto-7'],
+      importFingerprints: const ['fp-time'],
+      naturalFingerprints: const ['natural-time'],
+    );
+
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      {
+        'dedupe-time',
+        'dedupe-external',
+        'dedupe-auto-external',
+      },
+    );
+  });
+
+  test('expense candidates are filtered in SQLite', () async {
+    for (final item in [
+      _transaction(
+        id: 'candidate-expense',
+        type: TransactionType.expense,
+        amount: 10,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-lend',
+        type: TransactionType.lend,
+        amount: 11,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-asset-purchase',
+        type: TransactionType.assetPurchase,
+        amount: 12,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-income',
+        type: TransactionType.income,
+        amount: 13,
+        accountId: 'bank',
+      ),
+      _transaction(
+        id: 'candidate-transfer',
+        type: TransactionType.transfer,
+        amount: 14,
+        accountId: 'bank',
+        destinationAccountId: 'cash',
+      ),
+    ]) {
+      await repository.create(item);
+    }
+
+    final candidates = await repository.getExpenseCandidates();
+
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      {
+        'candidate-expense',
+        'candidate-lend',
+        'candidate-asset-purchase',
+      },
+    );
   });
 
   test('soft-delete is scoped to the current book', () async {
@@ -229,8 +373,11 @@ TransactionRecord _transaction({
   required double amount,
   required String accountId,
   String? destinationAccountId,
+  DateTime? occurredAt,
+  TransactionSource source = TransactionSource.manual,
+  String? metadataJson,
 }) {
-  final now = DateTime(2026, 8, 31, 12);
+  final now = occurredAt ?? DateTime(2026, 8, 31, 12);
   return TransactionRecord(
     id: id,
     bookId: 'book-personal',
@@ -241,6 +388,8 @@ TransactionRecord _transaction({
     occurredAt: now,
     createdAt: now,
     updatedAt: now,
+    source: source,
+    metadataJson: metadataJson,
   );
 }
 

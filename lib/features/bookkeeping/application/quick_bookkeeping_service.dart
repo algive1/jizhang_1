@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database_seeder.dart';
 import '../../../core/diagnostics/operation_log.dart';
@@ -119,6 +120,7 @@ class QuickBookkeepingService {
     this.attachments,
     this.diagnostics,
     this.analytics,
+    this.database,
   });
 
   static const lastAccountKey = 'last_used_account_id';
@@ -130,6 +132,7 @@ class QuickBookkeepingService {
   final TransactionAttachmentRepository? attachments;
   final OperationLogService? diagnostics;
   final ProductAnalytics? analytics;
+  final AppDatabase? database;
 
   Future<TransactionRecord> save(QuickBookkeepingRequest request) async {
     return (await saveAll([request])).single;
@@ -181,27 +184,23 @@ class QuickBookkeepingService {
     QuickBookkeepingRequest request,
   ) async {
     _validate(request);
-    final linkedReimbursements = await _linkedReimbursements(existing.id);
-    if (linkedReimbursements.isNotEmpty) {
+    final linkedReimbursementCents = await _linkedReimbursementCents(
+      existing.id,
+      existing.bookId,
+    );
+    if (linkedReimbursementCents > 0) {
       if (request.clearReimbursement ||
           (request.reimbursementStatus != ReimbursementStatus.none &&
               request.reimbursementStatus != existing.reimbursementStatus)) {
         throw ArgumentError('已有报销回款，请在报销回款流水中编辑或撤销');
       }
-      final paidCents = linkedReimbursements.fold<int>(
-        0,
-        (sum, item) => sum + (item.amount * 100).round(),
-      );
-      if ((request.amount * 100).round() < paidCents) {
+      if ((request.amount * 100).round() < linkedReimbursementCents) {
         throw ArgumentError('原消费金额不能低于已到账的报销金额');
       }
     }
     var updated = _toRecord(request, DateTime.now(), existing: existing);
-    if (linkedReimbursements.isNotEmpty) {
-      final paidCents = linkedReimbursements.fold<int>(
-        0,
-        (sum, item) => sum + (item.amount * 100).round(),
-      );
+    if (linkedReimbursementCents > 0) {
+      final paidCents = linkedReimbursementCents;
       updated = updated.copyWith(
         reimbursementStatus: paidCents >= (updated.amount * 100).round()
             ? ReimbursementStatus.reimbursed
@@ -237,9 +236,18 @@ class QuickBookkeepingService {
     return saved;
   }
 
-  Future<List<TransactionRecord>> _linkedReimbursements(
+  Future<int> _linkedReimbursementCents(
     String transactionId,
+    String bookId,
   ) async {
+    final db = database;
+    if (db != null) {
+      return db.transactionDao.sumRelatedTypeInCents(
+        bookId: bookId,
+        relatedTransactionId: transactionId,
+        type: TransactionType.reimbursement.name,
+      );
+    }
     return (await _transactions.getAll())
         .where(
           (item) =>
@@ -247,7 +255,7 @@ class QuickBookkeepingService {
               item.type == TransactionType.reimbursement &&
               item.relatedTransactionId == transactionId,
         )
-        .toList(growable: false);
+        .fold<int>(0, (sum, item) => sum + (item.amount * 100).round());
   }
 
   Future<List<TransactionRecord>> _saveAll(
@@ -508,5 +516,6 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
     attachments: ref.watch(transactionAttachmentRepositoryProvider),
     diagnostics: ref.watch(operationLogServiceProvider),
     analytics: ref.watch(productAnalyticsProvider),
+    database: ref.watch(databaseProvider),
   );
 });

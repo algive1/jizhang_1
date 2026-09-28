@@ -2,15 +2,22 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/database/app_database.dart';
 import '../../core/database/database_provider.dart';
 import '../../core/models/transaction_record.dart';
 import '../transactions/data/transactions_repository.dart';
 import 'auto_bookkeeping_pending.dart';
 
 class AutoBookkeepingRefundMatcher {
-  const AutoBookkeepingRefundMatcher(this._transactions);
+  const AutoBookkeepingRefundMatcher(this._transactions) : _database = null;
+
+  const AutoBookkeepingRefundMatcher.withDatabase(
+    this._transactions,
+    this._database,
+  );
 
   final TransactionRepository _transactions;
+  final AppDatabase? _database;
 
   Future<TransactionRecord?> findOriginal({
     required PendingAutoBookkeepingCandidate candidate,
@@ -21,7 +28,15 @@ class AutoBookkeepingRefundMatcher {
     if (orderId == null || orderId.isEmpty) return null;
 
     final refundCents = candidate.amountInCents;
-    final matches = (await _transactions.getAll()).where((transaction) {
+    final database = _database;
+    final candidates = database == null
+        ? await _transactions.getAll()
+        : await _loadOrderCandidates(
+            database: database,
+            bookId: bookId,
+            orderId: orderId,
+          );
+    final matches = candidates.where((transaction) {
       if (transaction.bookId != bookId ||
           transaction.type != TransactionType.expense) {
         return false;
@@ -41,6 +56,19 @@ class AutoBookkeepingRefundMatcher {
       return source != null && source == candidate.sourceApp;
     }).toList(growable: false);
     return sameSource.length == 1 ? sameSource.single : null;
+  }
+
+  Future<List<TransactionRecord>> _loadOrderCandidates({
+    required AppDatabase database,
+    required String bookId,
+    required String orderId,
+  }) async {
+    final ids = await database.transactionDao.findExpenseIdsByOrderId(
+      bookId: bookId,
+      orderId: orderId,
+    );
+    final rows = await Future.wait(ids.map(_transactions.getById));
+    return rows.whereType<TransactionRecord>().toList(growable: false);
   }
 
   String? _orderId(String? raw) {
@@ -80,7 +108,9 @@ class AutoBookkeepingRefundMatcher {
 
 final autoBookkeepingRefundMatcherProvider =
     Provider<AutoBookkeepingRefundMatcher>((ref) {
-      return AutoBookkeepingRefundMatcher(
-        DriftTransactionRepository(ref.watch(databaseProvider)),
+      final database = ref.watch(databaseProvider);
+      return AutoBookkeepingRefundMatcher.withDatabase(
+        DriftTransactionRepository(database),
+        database,
       );
     });

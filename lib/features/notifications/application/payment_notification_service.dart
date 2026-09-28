@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -750,52 +749,21 @@ final paymentNotificationAutoBookkeepingProvider =
           final targetBook =
               await settings.get(notificationTargetBookKey) ??
               SeedIds.personalBook;
-          final rows = await database
-              .customSelect(
-                'SELECT metadata_json FROM transactions WHERE book_id=? AND metadata_json IS NOT NULL',
-                variables: [Variable(targetBook)],
-              )
-              .get();
-          for (final row in rows) {
-            final raw = row.read<String>('metadata_json');
-            dynamic metadata;
-            try {
-              metadata = jsonDecode(raw);
-            } on FormatException {
-              continue;
-            }
-            if (metadata is Map &&
-                (metadata['notificationKey'] == id ||
-                    (order != null &&
-                        metadata['notificationOrderId'] == order &&
-                        metadata['paymentPackageName'] == package)))
-              return true;
-          }
-          return false;
+          return database.transactionDao.hasNotificationIdentity(
+            bookId: targetBook,
+            notificationKey: id,
+            orderId: order,
+            packageName: package,
+          );
         },
         alreadyHandledFingerprint: (fingerprint) async {
           final targetBook =
               await settings.get(notificationTargetBookKey) ??
               SeedIds.personalBook;
-          final rows = await database
-              .customSelect(
-                'SELECT metadata_json FROM transactions WHERE book_id=? AND metadata_json IS NOT NULL',
-                variables: [Variable(targetBook)],
-              )
-              .get();
-          for (final row in rows) {
-            final raw = row.read<String>('metadata_json');
-            try {
-              final metadata = jsonDecode(raw);
-              if (metadata is Map &&
-                  metadata['paymentFingerprint'] == fingerprint) {
-                return true;
-              }
-            } on FormatException {
-              continue;
-            }
-          }
-          return false;
+          return database.transactionDao.hasPaymentFingerprint(
+            bookId: targetBook,
+            fingerprint: fingerprint,
+          );
         },
         bridge: ref.watch(paymentNotificationBridgeProvider),
         pendingBridge: ref.watch(autoBookkeepingPendingBridgeProvider),

@@ -555,11 +555,23 @@ class _GoalIntro extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: goal.coverPath != null && File(goal.coverPath!).existsSync()
-              ? Image.file(File(goal.coverPath!), fit: BoxFit.cover)
+              ? Image.file(
+                  File(goal.coverPath!),
+                  fit: BoxFit.cover,
+                  cacheWidth:
+                      (92 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                  cacheHeight:
+                      (92 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                )
               : goal.goalType == GoalType.car
               ? Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Image.asset(AppAssets.goalCar, fit: BoxFit.contain),
+                  child: Image.asset(
+                    AppAssets.goalCar,
+                    fit: BoxFit.contain,
+                    cacheWidth:
+                        (68 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                  ),
                 )
               : Icon(
                   _goalIcon(goal.goalType),

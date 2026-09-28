@@ -22,7 +22,9 @@ class AccountDetailPage extends ConsumerStatefulWidget {
 }
 
 class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
+  static const _pageSize = 100;
   int _filter = 0;
+  int _visibleLimit = _pageSize;
 
   @override
   Widget build(BuildContext context) {
@@ -31,39 +33,29 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
     final account = allAccounts
         .where((item) => item.id == widget.accountId)
         .firstOrNull;
-    final all =
-        ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
     if (account == null) {
       return const SafeArea(child: Center(child: Text('账户不存在')));
     }
-    final transactions =
-        all
-            .where(
-              (item) =>
-                  item.accountId == account.id ||
-                  item.destinationAccountId == account.id,
+    final all =
+        ref
+            .watch(
+              accountTransactionsProvider((
+                accountId: account.id,
+                limit: _visibleLimit,
+              )),
             )
-            .where(_matchesFilter)
-            .toList()
-          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    final now = DateTime.now();
-    final month = all.where(
-      (item) =>
-          (item.accountId == account.id ||
-              item.destinationAccountId == account.id) &&
-          item.occurredAt.year == now.year &&
-          item.occurredAt.month == now.month &&
-          !item.occurredAt.isAfter(now) &&
-          item.deletedAt == null,
-    );
-    final inflow = month.fold<double>(
-      0,
-      (sum, item) => sum + _accountInflow(item, account.id),
-    );
-    final outflow = month.fold<double>(
-      0,
-      (sum, item) => sum + _accountOutflow(item, account.id),
-    );
+            .value ??
+        const <TransactionRecord>[];
+    final transactions = all.where(_matchesFilter).toList(growable: false);
+    final monthSummary =
+        ref.watch(accountMonthSummaryProvider(account.id)).value ??
+        (inflow: 0.0, outflow: 0.0);
+    final inflow = monthSummary.inflow;
+    final outflow = monthSummary.outflow;
+    final canLoadMore = all.length >= _visibleLimit;
+    final accountNames = {
+      for (final item in allAccounts) item.id: item.displayName,
+    };
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -146,9 +138,23 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
           const SizedBox(height: 12),
           if (transactions.isEmpty)
             AppCard(
-              child: Text(
-                '暂无该账户流水',
-                style: TextStyle(color: context.appSecondaryText),
+              child: Column(
+                children: [
+                  Text(
+                    '暂无该账户流水',
+                    style: TextStyle(color: context.appSecondaryText),
+                  ),
+                  if (canLoadMore) ...[
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                      key: const ValueKey('account-transactions-load-more-empty'),
+                      onPressed: () =>
+                          setState(() => _visibleLimit += _pageSize),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: const Text('继续加载更早流水'),
+                    ),
+                  ],
+                ],
               ),
             )
           else
@@ -156,19 +162,10 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Column(
                 children: transactions.asMap().entries.map((entry) {
-                  final source = allAccounts
-                      .where((item) => item.id == entry.value.accountId)
-                      .firstOrNull
-                      ?.displayName;
+                  final source = accountNames[entry.value.accountId];
                   final destination = entry.value.destinationAccountId == null
                       ? null
-                      : allAccounts
-                            .where(
-                              (item) =>
-                                  item.id == entry.value.destinationAccountId,
-                            )
-                            .firstOrNull
-                            ?.displayName;
+                      : accountNames[entry.value.destinationAccountId!];
                   return TransactionTile(
                     transaction: entry.value,
                     accountName: source == null
@@ -188,6 +185,17 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                 }).toList(),
               ),
             ),
+          if (transactions.isNotEmpty && canLoadMore) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: OutlinedButton.icon(
+                key: const ValueKey('account-transactions-load-more'),
+                onPressed: () => setState(() => _visibleLimit += _pageSize),
+                icon: const Icon(Icons.expand_more_rounded),
+                label: const Text('加载更多流水'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -201,20 +209,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
     _ => true,
   };
 
-  double _accountInflow(TransactionRecord item, String id) {
-    if (item.type == TransactionType.transfer ||
-        item.type == TransactionType.repayment)
-      return item.destinationAccountId == id ? item.amount : 0;
-    return item.accountId == id && item.isIncome ? item.amount : 0;
-  }
 
-  double _accountOutflow(TransactionRecord item, String id) {
-    if (item.type == TransactionType.transfer)
-      return item.accountId == id ? item.amount : 0;
-    return item.accountId == id && (item.isExpense || item.isDebtRepayment)
-        ? item.amount
-        : 0;
-  }
 }
 
 class _Metric extends StatelessWidget {

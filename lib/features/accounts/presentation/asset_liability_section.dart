@@ -208,6 +208,8 @@ class AssetLiabilitySection extends StatelessWidget {
                         width: 42,
                         height: 36,
                         fit: BoxFit.contain,
+                        cacheWidth:
+                            (42 * MediaQuery.devicePixelRatioOf(context)).ceil(),
                       ),
                       Expanded(
                         child: Text(

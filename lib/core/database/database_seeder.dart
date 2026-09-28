@@ -17,7 +17,9 @@ class DatabaseSeeder {
   DatabaseSeeder(this._database);
 
   static const currentSeedVersion = 5;
+  static const currentBookDefaultsVersion = 1;
   static const _seedVersionKey = 'seed_version';
+  static const _bookDefaultsVersionKey = 'book_defaults_version';
 
   final AppDatabase _database;
 
@@ -29,8 +31,14 @@ class DatabaseSeeder {
     final storedVersion = int.tryParse(
       await _database.appSettingsDao.getValue(_seedVersionKey) ?? '0',
     );
+    final storedBookDefaultsVersion = int.tryParse(
+      await _database.appSettingsDao.getValue(_bookDefaultsVersionKey) ?? '0',
+    );
     if ((storedVersion ?? 0) >= currentSeedVersion && !includeDemoData) {
-      await ensureExistingBookDefaults();
+      if ((storedBookDefaultsVersion ?? 0) < currentBookDefaultsVersion) {
+        await ensureExistingBookDefaults();
+        await _markBookDefaultsCurrent();
+      }
       return;
     }
 
@@ -62,6 +70,15 @@ class DatabaseSeeder {
       );
     });
     await ensureExistingBookDefaults();
+    await _markBookDefaultsCurrent();
+  }
+
+  Future<void> _markBookDefaultsCurrent() {
+    return _database.appSettingsDao.setValue(
+      _bookDefaultsVersionKey,
+      currentBookDefaultsVersion.toString(),
+      DateTime.now(),
+    );
   }
 
   Future<void> seedBookDefaults(String bookId, {required BookType type}) async {
@@ -454,119 +471,6 @@ class DatabaseSeeder {
       }
     }
     return;
-    // ignore: dead_code
-    final expenses = switch (type) {
-      BookType.personal => const [
-        ('expense-food', '餐饮', 'restaurant_outlined'),
-        ('expense-transport', '交通', 'directions_car_outlined'),
-        ('expense-shopping', '购物', 'shopping_bag_outlined'),
-        ('expense-entertainment', '娱乐', 'movie_outlined'),
-        ('expense-housing', '住房', 'home_outlined'),
-        ('expense-utilities', '生活缴费', 'receipt_long_outlined'),
-        ('expense-medical', '医疗', 'medical_services_outlined'),
-        ('expense-education', '教育培训', 'school_outlined'),
-        ('expense-travel', '旅行', 'flight_takeoff_outlined'),
-        ('expense-gift', '人情', 'redeem_outlined'),
-        ('expense-pet', '宠物', 'pets_outlined'),
-        ('expense-digital', '数码', 'devices_outlined'),
-        ('expense-car', '汽车', 'directions_car_filled_outlined'),
-        ('expense-other', '其他', 'more_horiz'),
-      ],
-      BookType.family => const [
-        ('expense-food', '家庭采购', 'shopping_cart_outlined'),
-        ('expense-transport', '家庭出行', 'directions_car_outlined'),
-        ('expense-shopping', '家庭购物', 'shopping_bag_outlined'),
-        ('expense-entertainment', '家庭娱乐', 'movie_outlined'),
-        ('expense-housing', '房屋居住', 'home_outlined'),
-        ('expense-utilities', '家庭缴费', 'receipt_long_outlined'),
-        ('expense-medical', '家庭医疗', 'medical_services_outlined'),
-        ('expense-education', '子女教育', 'school_outlined'),
-        ('expense-travel', '家庭旅行', 'flight_takeoff_outlined'),
-        ('expense-gift', '家庭人情', 'redeem_outlined'),
-        ('expense-pet', '宠物', 'pets_outlined'),
-        ('expense-digital', '家庭数码', 'devices_outlined'),
-        ('expense-car', '家庭汽车', 'directions_car_filled_outlined'),
-        ('expense-other', '其他', 'more_horiz'),
-      ],
-      BookType.enterprise => const [
-        ('expense-food', '商务餐饮', 'restaurant_outlined'),
-        ('expense-transport', '差旅交通', 'directions_car_outlined'),
-        ('expense-shopping', '办公采购', 'shopping_bag_outlined'),
-        ('expense-entertainment', '业务招待', 'movie_outlined'),
-        ('expense-housing', '场地租赁', 'home_outlined'),
-        ('expense-utilities', '办公缴费', 'receipt_long_outlined'),
-        ('expense-medical', '员工福利', 'medical_services_outlined'),
-        ('expense-education', '培训会议', 'school_outlined'),
-        ('expense-travel', '商务旅行', 'flight_takeoff_outlined'),
-        ('expense-gift', '商务礼赠', 'redeem_outlined'),
-        ('expense-pet', '其他福利', 'pets_outlined'),
-        ('expense-digital', '软件设备', 'devices_outlined'),
-        ('expense-car', '车辆运营', 'directions_car_filled_outlined'),
-        ('expense-other', '其他支出', 'more_horiz'),
-      ],
-    };
-    final incomes = switch (type) {
-      BookType.personal => const [
-        ('income-salary', '工资', 'work_outline'),
-        ('income-bonus', '奖金', 'stars_outlined'),
-        ('income-part-time', '兼职', 'schedule_outlined'),
-        ('income-investment', '投资收益', 'trending_up'),
-        ('income-refund', '退款', 'undo'),
-        ('income-other', '其他收入', 'add_circle_outline'),
-      ],
-      BookType.family => const [
-        ('income-salary', '家庭工资', 'work_outline'),
-        ('income-bonus', '家庭奖金', 'stars_outlined'),
-        ('income-part-time', '家庭兼职', 'schedule_outlined'),
-        ('income-investment', '家庭投资收益', 'trending_up'),
-        ('income-refund', '家庭退款', 'undo'),
-        ('income-other', '其他收入', 'add_circle_outline'),
-      ],
-      BookType.enterprise => const [
-        ('income-salary', '主营业务收入', 'work_outline'),
-        ('income-bonus', '经营奖励', 'stars_outlined'),
-        ('income-part-time', '其他业务收入', 'schedule_outlined'),
-        ('income-investment', '投资收益', 'trending_up'),
-        ('income-refund', '销售退款', 'undo'),
-        ('income-other', '其他收入', 'add_circle_outline'),
-      ],
-    };
-    var sortOrder = 0;
-    for (final category in expenses) {
-      final id = _categorySeedId(bookId, category.$1, type);
-      if (await _database.categoryDao.findById(id) == null) {
-        await _database.categoryDao.insertOne(
-          CategoryEntriesCompanion.insert(
-            id: id,
-            bookId: Value(bookId),
-            name: category.$2,
-            icon: category.$3,
-            type: 'expense',
-            sortOrder: Value(sortOrder),
-            isDefault: const Value(true),
-          ),
-        );
-      }
-      sortOrder++;
-    }
-    sortOrder = 0;
-    for (final category in incomes) {
-      final id = _categorySeedId(bookId, category.$1, type);
-      if (await _database.categoryDao.findById(id) == null) {
-        await _database.categoryDao.insertOne(
-          CategoryEntriesCompanion.insert(
-            id: id,
-            bookId: Value(bookId),
-            name: category.$2,
-            icon: category.$3,
-            type: 'income',
-            sortOrder: Value(sortOrder),
-            isDefault: const Value(true),
-          ),
-        );
-      }
-      sortOrder++;
-    }
   }
 
   Future<void> _seedMerchantRules({

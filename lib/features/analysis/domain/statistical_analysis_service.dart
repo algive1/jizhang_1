@@ -94,6 +94,7 @@ class StatisticalAnalysisService {
     String currency = 'CNY',
     DateTime? now,
     DateTime? month,
+    double? largeExpenseThreshold,
   }) {
     final clock = now ?? DateTime.now();
     allTransactions = allTransactions
@@ -104,46 +105,13 @@ class StatisticalAnalysisService {
               !item.occurredAt.isAfter(clock),
         )
         .toList();
-    final selectedCurrent =
-        month != null && month.year == clock.year && month.month == clock.month;
-    final range = month == null
-        ? rangeFor(period, clock)
-        : selectedCurrent
-        ? rangeFor(AnalysisPeriod.currentMonth, clock)
-        : AnalysisDateRange(
-            start: DateTime(month.year, month.month),
-            endExclusive: DateTime(month.year, month.month + 1),
-          );
-    final previousRange = month != null
-        ? (selectedCurrent
-              ? _previousComparableMonthRange(clock)
-              : AnalysisDateRange(
-                  start: DateTime(month.year, month.month - 1),
-                  endExclusive: DateTime(month.year, month.month),
-                ))
-        : switch (period) {
-            AnalysisPeriod.currentMonth => _previousComparableMonthRange(clock),
-            AnalysisPeriod.currentYear => AnalysisDateRange(
-              start: DateTime(clock.year - 1),
-              endExclusive: DateTime(
-                clock.year - 1,
-                clock.month,
-                clock.day.clamp(
-                      1,
-                      DateTime(clock.year - 1, clock.month + 1, 0).day,
-                    ) +
-                    1,
-              ),
-            ),
-            AnalysisPeriod.previousMonth => AnalysisDateRange(
-              start: DateTime(clock.year, clock.month - 2),
-              endExclusive: DateTime(clock.year, clock.month - 1),
-            ),
-            _ => AnalysisDateRange(
-              start: range.start.subtract(Duration(days: range.dayCount)),
-              endExclusive: range.start,
-            ),
-          };
+    final comparison = comparisonRangesFor(
+      period: period,
+      now: clock,
+      month: month,
+    );
+    final range = comparison.range;
+    final previousRange = comparison.previousRange;
     final expenses = allTransactions
         .where((item) => item.deletedAt == null && item.isExpense)
         .toList(growable: false);
@@ -157,7 +125,9 @@ class StatisticalAnalysisService {
     final previous = expenses
         .where((item) => previousRange.contains(item.occurredAt))
         .toList();
-    final distributionThreshold = largeDetector.distributionThreshold(expenses);
+    final distributionThreshold =
+        largeExpenseThreshold ??
+        largeDetector.distributionThreshold(expenses);
     final currentRegular = _regularTransactions(
       current,
       expenses,
@@ -214,6 +184,97 @@ class StatisticalAnalysisService {
           ),
       ],
     );
+  }
+
+  ({
+    AnalysisDateRange range,
+    AnalysisDateRange previousRange,
+  }) comparisonRangesFor({
+    required AnalysisPeriod period,
+    required DateTime now,
+    DateTime? month,
+  }) {
+    final selectedCurrent =
+        month != null && month.year == now.year && month.month == now.month;
+    final range = month == null
+        ? rangeFor(period, now)
+        : selectedCurrent
+        ? rangeFor(AnalysisPeriod.currentMonth, now)
+        : AnalysisDateRange(
+            start: DateTime(month.year, month.month),
+            endExclusive: DateTime(month.year, month.month + 1),
+          );
+    final previousRange = month != null
+        ? (selectedCurrent
+              ? _previousComparableMonthRange(now)
+              : AnalysisDateRange(
+                  start: DateTime(month.year, month.month - 1),
+                  endExclusive: DateTime(month.year, month.month),
+                ))
+        : switch (period) {
+            AnalysisPeriod.currentMonth => _previousComparableMonthRange(now),
+            AnalysisPeriod.currentYear => AnalysisDateRange(
+              start: DateTime(now.year - 1),
+              endExclusive: DateTime(
+                now.year - 1,
+                now.month,
+                now.day.clamp(
+                      1,
+                      DateTime(now.year - 1, now.month + 1, 0).day,
+                    ) +
+                    1,
+              ),
+            ),
+            AnalysisPeriod.previousMonth => AnalysisDateRange(
+              start: DateTime(now.year, now.month - 2),
+              endExclusive: DateTime(now.year, now.month - 1),
+            ),
+            _ => AnalysisDateRange(
+              start: range.start.subtract(Duration(days: range.dayCount)),
+              endExclusive: range.start,
+            ),
+          };
+    return (range: range, previousRange: previousRange);
+  }
+
+  List<AnalysisDateRange> sourceRangesFor({
+    required AnalysisPeriod period,
+    required DateTime now,
+    DateTime? month,
+  }) {
+    final comparison = comparisonRangesFor(
+      period: period,
+      now: now,
+      month: month,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    final ranges = <AnalysisDateRange>[
+      comparison.range,
+      comparison.previousRange,
+      AnalysisDateRange(
+        start: today.subtract(const Duration(days: 180)),
+        endExclusive: today,
+      ),
+    ]..sort((a, b) => a.start.compareTo(b.start));
+
+    final merged = <AnalysisDateRange>[];
+    for (final range in ranges) {
+      if (merged.isEmpty ||
+          range.start.isAfter(merged.last.endExclusive)) {
+        merged.add(range);
+        continue;
+      }
+      final current = merged.removeLast();
+      merged.add(
+        AnalysisDateRange(
+          start: current.start,
+          endExclusive: range.endExclusive.isAfter(current.endExclusive)
+              ? range.endExclusive
+              : current.endExclusive,
+        ),
+      );
+    }
+    return merged;
   }
 
   AnalysisDateRange rangeFor(AnalysisPeriod period, DateTime now) {

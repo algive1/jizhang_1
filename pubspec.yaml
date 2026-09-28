@@ -42,7 +42,6 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.0.0
   go_router: ^16.2.0
   intl: ^0.20.2
@@ -114,12 +113,8 @@ flutter:
 
   assets:
     - assets/images/
-    - 微信图片_20260919140237_156_240.png
     - assets/images/membership/
     - assets/config/
-
-  shaders:
-    - shaders/liquid_glass.frag
 
 # Android WeChat/Alipay SDKs use merchant-console values at release time.
 # iOS membership purchase is StoreKit-only and intentionally does not bundle

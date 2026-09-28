@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/installment_plan.dart';
-import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/money_text.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -29,11 +28,15 @@ class InstallmentPlanDetailPage extends ConsumerWidget {
         ),
       );
     }
-    final transactions =
-        ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
-    final original = transactions
-        .where((item) => item.id == plan.originalTransactionId)
-        .firstOrNull;
+    final original =
+        ref
+            .watch(
+              transactionsByIdsProvider(
+                transactionIdsProviderKey([plan.originalTransactionId]),
+              ),
+            )
+            .value
+            ?.firstOrNull;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),

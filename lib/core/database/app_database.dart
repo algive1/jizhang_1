@@ -742,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 25;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -965,6 +965,15 @@ class AppDatabase extends _$AppDatabase {
             investmentHoldingEntries.includeInHomeNetAssets,
           );
         }
+        if (from < 23) {
+          await _createTransactionRangeIndex();
+        }
+        if (from < 24) {
+          await _createTransactionLookupIndexes();
+        }
+        if (from < 25) {
+          await _createPhotoGalleryIndex();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -985,6 +994,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted '
       'ON transactions(book_id, deleted_at)',
     );
+    await _createTransactionRangeIndex();
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal '
       'ON goal_milestones(goal_id, sort_order)',
@@ -1002,8 +1012,56 @@ class AppDatabase extends _$AppDatabase {
     await _createBookIndexes();
     await _createAdIndexes();
     await _createAttachmentIndexes();
+    await _createPhotoGalleryIndex();
     await _createAccountIdentifierIndex();
     await _createInvestmentIndexes();
+  }
+
+  Future<void> _createTransactionRangeIndex() async {
+    if (!await _hasColumn('transactions', 'book_id') ||
+        !await _hasColumn('transactions', 'deleted_at') ||
+        !await _hasColumn('transactions', 'occurred_at')) {
+      return;
+    }
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted_occurred '
+      'ON transactions(book_id, deleted_at, occurred_at DESC)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_account_deleted_occurred '
+      'ON transactions(account_id, deleted_at, occurred_at DESC)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_destination_deleted_occurred '
+      'ON transactions(destination_account_id, deleted_at, occurred_at DESC)',
+    );
+  }
+
+  Future<void> _createTransactionLookupIndexes() async {
+    if (!await _hasColumn('transactions', 'book_id') ||
+        !await _hasColumn('transactions', 'deleted_at') ||
+        !await _hasColumn('transactions', 'type')) {
+      return;
+    }
+    if (await _hasColumn('transactions', 'related_transaction_id')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_related_type '
+        'ON transactions(book_id, related_transaction_id, type, deleted_at)',
+      );
+    }
+    if (await _hasColumn('transactions', 'reimbursement_status') &&
+        await _hasColumn('transactions', 'occurred_at')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_reimbursement_status '
+        'ON transactions(book_id, reimbursement_status, deleted_at, occurred_at DESC)',
+      );
+    }
+    if (await _hasColumn('transactions', 'occurred_at')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_type_occurred '
+        'ON transactions(book_id, type, deleted_at, occurred_at DESC)',
+      );
+    }
   }
 
   Future<void> _createInvestmentIndexes() async {
@@ -1162,6 +1220,14 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_book '
       'ON transaction_attachments(book_id, deleted_at)',
+    );
+  }
+
+  Future<void> _createPhotoGalleryIndex() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_photo_gallery '
+      'ON transaction_attachments(book_id, created_at DESC, id DESC) '
+      "WHERE deleted_at IS NULL AND mime_type LIKE 'image/%'",
     );
   }
 
@@ -1619,18 +1685,23 @@ class AccountDao extends DatabaseAccessor<AppDatabase> with _$AccountDaoMixin {
     int deltaInCents,
     DateTime updatedAt,
   ) async {
-    final account = await findById(accountId);
-    if (account == null) {
+    final affected = await customUpdate(
+      '''
+      UPDATE accounts
+      SET balance_in_cents = balance_in_cents + ?,
+          updated_at = ?
+      WHERE id = ?
+      ''',
+      variables: [
+        Variable<int>(deltaInCents),
+        Variable<DateTime>(updatedAt),
+        Variable<String>(accountId),
+      ],
+      updates: {accountEntries},
+    );
+    if (affected == 0) {
       throw StateError('Account $accountId does not exist');
     }
-    await (update(
-      accountEntries,
-    )..where((row) => row.id.equals(accountId))).write(
-      AccountEntriesCompanion(
-        balanceInCents: Value(account.balanceInCents + deltaInCents),
-        updatedAt: Value(updatedAt),
-      ),
-    );
   }
 
   Future<void> reorderActive(List<String> ids, {String? bookId}) async {
@@ -1712,10 +1783,57 @@ class CategoryDao extends DatabaseAccessor<AppDatabase>
     )..where((row) => row.id.equals(id))).getSingleOrNull();
   }
 
+  Future<List<CategoryEntity>> getByIds(Iterable<String> ids) {
+    final uniqueIds = ids.toSet().toList(growable: false);
+    if (uniqueIds.isEmpty) return Future.value(const <CategoryEntity>[]);
+    return (select(
+      categoryEntries,
+    )..where((row) => row.id.isIn(uniqueIds))).get();
+  }
+
   Future<void> upsert(CategoryEntriesCompanion category) async {
     await into(categoryEntries).insertOnConflictUpdate(category);
   }
 }
+
+typedef TransactionDateRange = ({
+  DateTime start,
+  DateTime endExclusive,
+});
+
+typedef TransactionRecordedMonthNeighbors = ({
+  int? previousMonthKey,
+  int? nextMonthKey,
+});
+
+typedef TransactionMonthSqlSummary = ({
+  int incomeCents,
+  int personalExpenseCents,
+});
+
+typedef TransactionLedgerMonthSqlSummary = ({
+  int incomeCents,
+  int expenseCents,
+});
+
+typedef TransactionAccountMonthSqlSummary = ({
+  int inflowCents,
+  int outflowCents,
+});
+
+typedef TransactionProfileActivitySqlSummary = ({
+  DateTime? firstRecordedDay,
+  int recordedDays,
+  int streak,
+});
+
+typedef TransactionCategorySqlSummary = ({
+  String id,
+  String name,
+  String? icon,
+  int amountCents,
+  int count,
+});
 
 @DriftAccessor(tables: [TransactionEntries])
 class TransactionDao extends DatabaseAccessor<AppDatabase>
@@ -1726,6 +1844,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     String? bookId,
     int? limit,
     bool onlyOccurred = false,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
   }) {
     // Evaluate the time cutoff in SQLite on every stream refresh. Capturing
     // DateTime.now() here would hide transactions saved after subscribing.
@@ -1741,7 +1861,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
                 ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
-                : const Constant(true)),
+                : const Constant(true)) &
+            (occurredFrom == null
+                ? const Constant(true)
+                : row.occurredAt.isBiggerOrEqualValue(occurredFrom)) &
+            (occurredBefore == null
+                ? const Constant(true)
+                : row.occurredAt.isSmallerThanValue(occurredBefore)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -1752,10 +1878,423 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
+  Stream<List<TransactionEntity>> watchActiveByIds({
+    required List<String> ids,
+    String? bookId,
+  }) {
+    if (ids.isEmpty) {
+      return Stream.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                row.id.isIn(ids) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .watch();
+  }
+
+  Stream<List<TransactionEntity>> watchTextSearch({
+    required String query,
+    String? bookId,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
+    DateTime? occurredThrough,
+    required int limit,
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND t.book_id = ?';
+    final rangeSql = [
+      if (occurredFrom != null) 'AND t.occurred_at >= ?',
+      if (occurredBefore != null) 'AND t.occurred_at < ?',
+      if (occurredThrough != null) 'AND t.occurred_at <= ?',
+    ].join('\n');
+    final sql = '''
+      WITH search_term(q) AS (VALUES (?))
+      SELECT t.*
+      FROM transactions AS t
+      LEFT JOIN categories AS c ON c.id = t.category_id
+      LEFT JOIN categories AS sc ON sc.id = t.subcategory_id
+      LEFT JOIN accounts AS a ON a.id = t.account_id
+      LEFT JOIN accounts AS da ON da.id = t.destination_account_id
+      CROSS JOIN search_term AS s
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        $bookFilter
+        $rangeSql
+        AND (
+          instr(COALESCE(t.merchant, ''), s.q) > 0
+          OR instr(COALESCE(t.note, ''), s.q) > 0
+          OR instr(COALESCE(a.name, ''), s.q) > 0
+          OR instr(COALESCE(da.name, ''), s.q) > 0
+          OR instr(COALESCE(t.metadata_json, ''), s.q) > 0
+          OR instr(
+            strftime(
+              '%Y-%m-%d',
+              t.occurred_at,
+              'unixepoch',
+              'localtime'
+            ),
+            s.q
+          ) > 0
+          OR instr(
+            (
+              CASE
+                WHEN t.type = 'assetSale' THEN '资产卖出'
+                WHEN t.type = 'adjustment' THEN '余额校准'
+                WHEN t.type = 'transfer' THEN '转账'
+                WHEN c.name IS NOT NULL AND trim(c.name) <> ''
+                  THEN trim(c.name)
+                ELSE '未分类'
+              END
+            ) ||
+            (
+              CASE
+                WHEN sc.name IS NOT NULL
+                  AND trim(sc.name) NOT IN ('', '/', '／')
+                  THEN ' · ' || trim(sc.name)
+                ELSE ''
+              END
+            ),
+            s.q
+          ) > 0
+          OR instr(
+            CASE t.reimbursement_status
+              WHEN 'pending' THEN '待报销'
+              WHEN 'partial' THEN '部分报销'
+              WHEN 'reimbursed' THEN '已报销'
+              ELSE '无需报销'
+            END,
+            s.q
+          ) > 0
+        )
+      ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC
+      LIMIT ?
+    ''';
+    final raw = customSelect(
+      sql,
+      variables: [
+        Variable<String>(query),
+        if (bookId != null) Variable<String>(bookId),
+        if (occurredFrom != null) Variable<DateTime>(occurredFrom),
+        if (occurredBefore != null) Variable<DateTime>(occurredBefore),
+        if (occurredThrough != null) Variable<DateTime>(occurredThrough),
+        Variable<int>(limit),
+      ],
+      readsFrom: {
+        transactionEntries,
+        attachedDatabase.categoryEntries,
+        attachedDatabase.accountEntries,
+      },
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) transactionEntries.map(row.data),
+      ],
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchAmountSearch({
+    required double amount,
+    required String operator,
+    String? bookId,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
+    DateTime? occurredThrough,
+    required int limit,
+  }) {
+    const allowedOperators = {'=', '>=', '>', '<=', '<'};
+    if (!allowedOperators.contains(operator)) {
+      throw ArgumentError.value(operator, 'operator');
+    }
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final rangeSql = [
+      if (occurredFrom != null) 'AND occurred_at >= ?',
+      if (occurredBefore != null) 'AND occurred_at < ?',
+      if (occurredThrough != null) 'AND occurred_at <= ?',
+    ].join('\n');
+    final raw = customSelect(
+      '''
+      SELECT *
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+        $rangeSql
+        AND (
+          CASE
+            WHEN type IN ('expense', 'lend', 'assetPurchase')
+              THEN MAX(
+                amount_in_cents - COALESCE(refund_amount_in_cents, 0),
+                0
+              )
+            ELSE amount_in_cents
+          END
+        ) / 100.0 $operator ?
+      ORDER BY occurred_at DESC, created_at DESC, id DESC
+      LIMIT ?
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+        if (occurredFrom != null) Variable<DateTime>(occurredFrom),
+        if (occurredBefore != null) Variable<DateTime>(occurredBefore),
+        if (occurredThrough != null) Variable<DateTime>(occurredThrough),
+        Variable<double>(amount),
+        Variable<int>(limit),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) transactionEntries.map(row.data),
+      ],
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchActiveForAccount({
+    required String accountId,
+    int? limit,
+  }) {
+    final query = select(transactionEntries)
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (row.accountId.equals(accountId) |
+                row.destinationAccountId.equals(accountId)),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    return query.watch();
+  }
+
+  Stream<List<TransactionEntity>> watchActiveRanges({
+    String? bookId,
+    required List<TransactionDateRange> ranges,
+    bool onlyOccurred = false,
+  }) {
+    if (ranges.isEmpty) {
+      return Stream.value(const <TransactionEntity>[]);
+    }
+    final query = select(transactionEntries);
+    Expression<bool> rangeFilter = const Constant(false);
+    for (final range in ranges) {
+      rangeFilter =
+          rangeFilter |
+          (transactionEntries.occurredAt.isBiggerOrEqualValue(range.start) &
+              transactionEntries.occurredAt.isSmallerThanValue(
+                range.endExclusive,
+              ));
+    }
+    query
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (bookId == null
+                ? const Constant(true)
+                : row.bookId.equals(bookId)) &
+            (onlyOccurred
+                ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
+                : const Constant(true)) &
+            rangeFilter,
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    return query.watch();
+  }
+
+  Future<List<TransactionEntity>> getImportDedupCandidates({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.source.isIn(const ['import', 'auto']) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
+  Future<List<TransactionEntity>> getImportDedupCandidatesAtTimes({
+    String? bookId,
+    required List<DateTime> occurredAt,
+  }) {
+    if (occurredAt.isEmpty) {
+      return Future.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.source.isIn(const ['import', 'auto']) &
+                row.occurredAt.isIn(occurredAt) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
+  Future<List<TransactionEntity>> getImportDedupCandidatesByMetadata({
+    String? bookId,
+    required List<String> externalIds,
+    required List<String> importFingerprints,
+    required List<String> naturalFingerprints,
+  }) async {
+    if (externalIds.isEmpty &&
+        importFingerprints.isEmpty &&
+        naturalFingerprints.isEmpty) {
+      return const <TransactionEntity>[];
+    }
+    final bookFilter = bookId == null ? '' : 'AND t.book_id = ?';
+    final rows = await customSelect(
+      '''
+      WITH
+        wanted_external(value) AS (
+          SELECT lower(trim(CAST(value AS TEXT)))
+          FROM json_each(?)
+        ),
+        wanted_import(value) AS (
+          SELECT CAST(value AS TEXT)
+          FROM json_each(?)
+        ),
+        wanted_natural(value) AS (
+          SELECT CAST(value AS TEXT)
+          FROM json_each(?)
+        )
+      SELECT t.*
+      FROM transactions AS t
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        $bookFilter
+        AND t.source IN ('import', 'auto')
+        AND t.metadata_json IS NOT NULL
+        AND json_valid(t.metadata_json)
+        AND (
+          lower(trim(COALESCE(json_extract(t.metadata_json, '\$.externalId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.notificationOrderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.orderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR lower(trim(COALESCE(json_extract(t.metadata_json, '\$.autobookkeeping.orderId'), '')))
+            IN (SELECT value FROM wanted_external)
+          OR COALESCE(json_extract(t.metadata_json, '\$.importFingerprint'), '')
+            IN (SELECT value FROM wanted_import)
+          OR COALESCE(json_extract(t.metadata_json, '\$.importNaturalFingerprint'), '')
+            IN (SELECT value FROM wanted_natural)
+        )
+      ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC
+      ''',
+      variables: [
+        Variable<String>(
+          jsonEncode(
+            externalIds
+                .map((value) => value.trim().toLowerCase())
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        Variable<String>(
+          jsonEncode(
+            importFingerprints
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        Variable<String>(
+          jsonEncode(
+            naturalFingerprints
+                .where((value) => value.isNotEmpty)
+                .toSet()
+                .toList(growable: false),
+          ),
+        ),
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    ).get();
+    return [
+      for (final row in rows) transactionEntries.map(row.data),
+    ];
+  }
+
+  Future<List<TransactionEntity>> getActiveByTypes({
+    required List<String> types,
+    String? bookId,
+  }) {
+    if (types.isEmpty) {
+      return Future.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.type.isIn(types) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
   Future<List<TransactionEntity>> getActive({
     String? bookId,
     int? limit,
     bool onlyOccurred = false,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
   }) {
     final query = select(transactionEntries)
       ..where(
@@ -1769,7 +2308,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
                 : row.bookId.equals(bookId)) &
             (onlyOccurred
                 ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
-                : const Constant(true)),
+                : const Constant(true)) &
+            (occurredFrom == null
+                ? const Constant(true)
+                : row.occurredAt.isBiggerOrEqualValue(occurredFrom)) &
+            (occurredBefore == null
+                ? const Constant(true)
+                : row.occurredAt.isSmallerThanValue(occurredBefore)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -1778,6 +2323,726 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       ]);
     if (limit != null) query.limit(limit);
     return query.get();
+  }
+
+  Stream<int> watchTypeAmountSumBetween({
+    required String bookId,
+    required String type,
+    required DateTime start,
+    required DateTime endExclusive,
+  }) {
+    final raw = customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_in_cents), 0) AS total_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = ?
+        AND occurred_at >= ?
+        AND occurred_at < ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(type),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watchSingle().map((row) => row.read<int>('total_cents'));
+  }
+
+  Stream<List<DateTime>> watchActiveOccurredDays({
+    String? bookId,
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final raw = customSelect(
+      '''
+      SELECT DISTINCT
+        strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') AS day
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+        AND occurred_at <= CAST(strftime('%s', 'now') AS INTEGER)
+      ORDER BY day ASC
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) DateTime.parse(row.read<String>('day')),
+      ],
+    );
+  }
+
+  Stream<TransactionProfileActivitySqlSummary> watchProfileActivitySummary({
+    String? bookId,
+    required DateTime now,
+  }) {
+    final localNow = now.toLocal();
+    String dateKey(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+    final todayKey = dateKey(localNow);
+    final monthStartKey = dateKey(DateTime(localNow.year, localNow.month));
+    final nextMonthKey = dateKey(DateTime(localNow.year, localNow.month + 1));
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final raw = customSelect(
+      '''
+      WITH days AS (
+        SELECT DISTINCT
+          strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') AS day
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          $bookFilter
+          AND occurred_at <= ?
+      ),
+      anchor AS (
+        SELECT CASE
+          WHEN EXISTS(SELECT 1 FROM days WHERE day = ?)
+            THEN ?
+          ELSE date(?, '-1 day')
+        END AS day
+      ),
+      ranked AS (
+        SELECT
+          day,
+          CAST(
+            julianday((SELECT day FROM anchor)) - julianday(day)
+            AS INTEGER
+          ) AS gap_days,
+          ROW_NUMBER() OVER (ORDER BY day DESC) - 1 AS row_offset
+        FROM days
+        WHERE day <= (SELECT day FROM anchor)
+      )
+      SELECT
+        (SELECT MIN(day) FROM days) AS first_day,
+        (
+          SELECT COUNT(*)
+          FROM days
+          WHERE day >= ? AND day < ?
+        ) AS recorded_days,
+        (
+          SELECT COUNT(*)
+          FROM ranked
+          WHERE gap_days = row_offset
+        ) AS streak
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+        Variable<DateTime>(now),
+        Variable<String>(todayKey),
+        Variable<String>(todayKey),
+        Variable<String>(todayKey),
+        Variable<String>(monthStartKey),
+        Variable<String>(nextMonthKey),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watchSingle().map((row) {
+      final firstDay = row.readNullable<String>('first_day');
+      return (
+        firstRecordedDay: firstDay == null ? null : DateTime.parse(firstDay),
+        recordedDays: row.read<int>('recorded_days'),
+        streak: row.read<int>('streak'),
+      );
+    });
+  }
+
+  Stream<int> watchActiveCount({String? bookId}) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final query = customSelect(
+      '''
+      SELECT COUNT(*) AS row_count
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map((row) => row.read<int>('row_count'));
+  }
+
+  Stream<List<int>> watchActiveYears({String? bookId}) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final query = customSelect(
+      '''
+      SELECT DISTINCT
+        CAST(strftime('%Y', occurred_at, 'unixepoch') AS INTEGER) AS year
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+      ORDER BY year DESC
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows) row.read<int>('year'),
+      ],
+    );
+  }
+
+  Stream<TransactionRecordedMonthNeighbors> watchRecordedMonthNeighbors({
+    required DateTime month,
+    required DateTime now,
+    String? bookId,
+  }) {
+    final start = DateTime(month.year, month.month);
+    final endExclusive = DateTime(month.year, month.month + 1);
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    const monthKeySql =
+        "CAST(strftime('%Y', occurred_at, 'unixepoch') AS INTEGER) * 100 + "
+        "CAST(strftime('%m', occurred_at, 'unixepoch') AS INTEGER)";
+    final query = customSelect(
+      '''
+      WITH eligible AS (
+        SELECT occurred_at
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          AND occurred_at <= ?
+          $bookFilter
+      )
+      SELECT
+        (
+          SELECT $monthKeySql
+          FROM eligible
+          WHERE occurred_at < ?
+          ORDER BY occurred_at DESC
+          LIMIT 1
+        ) AS previous_month_key,
+        (
+          SELECT $monthKeySql
+          FROM eligible
+          WHERE occurred_at >= ?
+          ORDER BY occurred_at ASC
+          LIMIT 1
+        ) AS next_month_key
+      ''',
+      variables: [
+        Variable<DateTime>(now),
+        if (bookId != null) Variable<String>(bookId),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        previousMonthKey: row.readNullable<int>('previous_month_key'),
+        nextMonthKey: row.readNullable<int>('next_month_key'),
+      ),
+    );
+  }
+
+  Stream<List<String>> watchActiveCurrencies({String? bookId}) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final query = customSelect(
+      '''
+      SELECT DISTINCT UPPER(currency) AS currency
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+      ORDER BY currency
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows) row.read<String>('currency'),
+      ],
+    );
+  }
+
+  Stream<int> watchLargeExpenseThresholdInCents({
+    String? bookId,
+    String currency = 'CNY',
+    DateTime? cutoff,
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final cutoffSql =
+        cutoff == null ? "CAST(strftime('%s', 'now') AS INTEGER)" : '?';
+    final variables = <Variable<Object>>[
+      Variable<String>(currency),
+      if (cutoff != null) Variable<DateTime>(cutoff),
+      if (bookId != null) Variable<String>(bookId),
+    ];
+    final query = customSelect(
+      '''
+      WITH eligible AS (
+        SELECT MAX(
+          amount_in_cents - COALESCE(refund_amount_in_cents, 0),
+          0
+        ) AS net_cents
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          AND UPPER(currency) = UPPER(?)
+          AND occurred_at <= $cutoffSql
+          AND type IN ('expense', 'lend')
+          $bookFilter
+      ),
+      ranked AS (
+        SELECT
+          net_cents,
+          ROW_NUMBER() OVER (ORDER BY net_cents) AS rn,
+          COUNT(*) OVER () AS n
+        FROM eligible
+        WHERE net_cents > 0
+      )
+      SELECT CASE
+        WHEN COALESCE(MAX(n), 0) < 5 THEN 300000
+        ELSE CAST(
+          MIN(300000, MAX(50000, AVG(net_cents) * 5))
+          AS INTEGER
+        )
+      END AS threshold_cents
+      FROM ranked
+      WHERE rn IN ((n + 1) / 2, (n + 2) / 2)
+      ''',
+      variables: variables,
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => row.read<int>('threshold_cents'),
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchPendingReimbursements({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                row.reimbursementStatus.equals('pending') &
+                row.occurredAt.isSmallerOrEqual(currentDateAndTime) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+          ]))
+        .watch();
+  }
+
+  Stream<TransactionAccountMonthSqlSummary> watchAccountMonthSummary({
+    required String accountId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+  }) {
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('transfer', 'repayment')
+              AND destination_account_id = ?
+              THEN amount_in_cents
+            WHEN account_id = ?
+              AND type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS inflow_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type = 'transfer' AND account_id = ?
+              THEN amount_in_cents
+            WHEN account_id = ?
+              AND type IN ('expense', 'lend', 'assetPurchase', 'repayment')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS outflow_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND (account_id = ? OR destination_account_id = ?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        inflowCents: row.read<int>('inflow_cents'),
+        outflowCents: row.read<int>('outflow_cents'),
+      ),
+    );
+  }
+
+  Stream<TransactionLedgerMonthSqlSummary> watchLedgerMonthSummary({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    const netExpense =
+        'MAX(amount_in_cents - COALESCE(refund_amount_in_cents, 0), 0)';
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS income_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('expense', 'lend', 'assetPurchase')
+              THEN $netExpense
+            ELSE 0
+          END
+        ), 0) AS expense_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND UPPER(currency) = UPPER(?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        incomeCents: row.read<int>('income_cents'),
+        expenseCents: row.read<int>('expense_cents'),
+      ),
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchReimbursementSources({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                (row.reimbursementStatus.equals('pending') |
+                    row.reimbursementStatus.equals('partial') |
+                    row.reimbursementStatus.equals('reimbursed')) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+          ]))
+        .watch();
+  }
+
+  Future<int> sumRelatedReimbursementsInCents({
+    required String bookId,
+    required String relatedTransactionId,
+    String? excludingTransactionId,
+  }) {
+    return sumRelatedTypeInCents(
+      bookId: bookId,
+      relatedTransactionId: relatedTransactionId,
+      type: 'reimbursement',
+      excludingTransactionId: excludingTransactionId,
+    );
+  }
+
+  Future<int> sumRelatedTypeInCents({
+    required String bookId,
+    required String relatedTransactionId,
+    required String type,
+    String? excludingTransactionId,
+  }) async {
+    final excludeSql =
+        excludingTransactionId == null ? '' : 'AND id != ?';
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_in_cents), 0) AS total_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = ?
+        AND related_transaction_id = ?
+        $excludeSql
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(type),
+        Variable<String>(relatedTransactionId),
+        if (excludingTransactionId != null)
+          Variable<String>(excludingTransactionId),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingle();
+    return row.read<int>('total_cents');
+  }
+
+  Future<List<String>> findExpenseIdsByOrderId({
+    required String bookId,
+    required String orderId,
+  }) async {
+    final rows = await customSelect(
+      '''
+      SELECT id
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = 'expense'
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND (
+          json_extract(metadata_json, '\$.orderId') = ?
+          OR json_extract(metadata_json, '\$.autobookkeeping.orderId') = ?
+        )
+      ORDER BY occurred_at DESC
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(orderId),
+        Variable<String>(orderId),
+      ],
+      readsFrom: {transactionEntries},
+    ).get();
+    return [for (final row in rows) row.read<String>('id')];
+  }
+
+  Future<bool> hasNotificationIdentity({
+    required String bookId,
+    required String notificationKey,
+    String? orderId,
+    required String packageName,
+  }) async {
+    final orderSql = orderId == null
+        ? ''
+        : "OR (json_extract(metadata_json, '\$.notificationOrderId') = ? "
+              "AND json_extract(metadata_json, '\$.paymentPackageName') = ?)";
+    final row = await customSelect(
+      '''
+      SELECT 1
+      FROM transactions
+      WHERE book_id = ?
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND (
+          json_extract(metadata_json, '\$.notificationKey') = ?
+          $orderSql
+        )
+      LIMIT 1
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(notificationKey),
+        if (orderId != null) Variable<String>(orderId),
+        if (orderId != null) Variable<String>(packageName),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingleOrNull();
+    return row != null;
+  }
+
+  Future<bool> hasPaymentFingerprint({
+    required String bookId,
+    required String fingerprint,
+  }) async {
+    final row = await customSelect(
+      '''
+      SELECT 1
+      FROM transactions
+      WHERE book_id = ?
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND json_extract(metadata_json, '\$.paymentFingerprint') = ?
+      LIMIT 1
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(fingerprint),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingleOrNull();
+    return row != null;
+  }
+
+  Stream<TransactionMonthSqlSummary> watchMonthSummary({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    const netExpense =
+        'MAX(amount_in_cents - COALESCE(refund_amount_in_cents, 0), 0)';
+    const personalExpense =
+        'MAX(($netExpense) - CASE reimbursement_status '
+        "WHEN 'pending' THEN COALESCE(reimbursement_amount_in_cents, $netExpense) "
+        "WHEN 'reimbursed' THEN COALESCE(reimbursement_amount_in_cents, $netExpense) "
+        "WHEN 'partial' THEN COALESCE(reimbursement_amount_in_cents, 0) "
+        'ELSE 0 END, 0)';
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS income_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('expense', 'lend')
+              THEN $personalExpense
+            ELSE 0
+          END
+        ), 0) AS personal_expense_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND UPPER(currency) = UPPER(?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        incomeCents: row.read<int>('income_cents'),
+        personalExpenseCents: row.read<int>('personal_expense_cents'),
+      ),
+    );
+  }
+
+  Stream<List<TransactionCategorySqlSummary>> watchMonthExpenseCategories({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    final query = customSelect(
+      '''
+      SELECT
+        CASE
+          WHEN TRIM(COALESCE(c.name, '')) <> ''
+            THEN 'name:' || TRIM(c.name)
+          WHEN t.category_id IS NOT NULL AND TRIM(t.category_id) <> ''
+            THEN 'id:' || t.book_id || ':' || TRIM(t.category_id)
+          ELSE 'uncategorized'
+        END AS category_key,
+        CASE
+          WHEN TRIM(COALESCE(c.name, '')) <> '' THEN TRIM(c.name)
+          ELSE '未分类'
+        END AS category_name,
+        c.icon AS category_icon,
+        COALESCE(
+          SUM(MAX(t.amount_in_cents - COALESCE(t.refund_amount_in_cents, 0), 0)),
+          0
+        ) AS amount_cents,
+        COUNT(*) AS transaction_count
+      FROM transactions AS t
+      LEFT JOIN categories AS c
+        ON c.id = t.category_id
+       AND c.book_id = t.book_id
+       AND c.is_archived = 0
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        AND t.book_id = ?
+        AND UPPER(t.currency) = UPPER(?)
+        AND t.type IN ('expense', 'lend', 'assetPurchase')
+        AND t.occurred_at >= ?
+        AND t.occurred_at < ?
+        AND t.occurred_at <= ?
+      GROUP BY category_key, category_name, category_icon
+      HAVING amount_cents > 0
+      ORDER BY amount_cents DESC, category_name ASC
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {
+        transactionEntries,
+        attachedDatabase.categoryEntries,
+      },
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows)
+          (
+            id: row.read<String>('category_key'),
+            name: row.read<String>('category_name'),
+            icon: row.readNullable<String>('category_icon'),
+            amountCents: row.read<int>('amount_cents'),
+            count: row.read<int>('transaction_count'),
+          ),
+      ],
+    );
   }
 
   Future<TransactionEntity?> findById(String id) {
@@ -2212,6 +3477,22 @@ class RecurringBillDao extends DatabaseAccessor<AppDatabase>
             (row) => bookId == null
                 ? const Constant(true)
                 : row.bookId.equals(bookId),
+          )
+          ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
+        .get();
+  }
+
+  Future<List<RecurringBillEntity>> getDueAutoRecords({
+    required String bookId,
+    required DateTime cutoff,
+  }) {
+    return (select(recurringBillEntries)
+          ..where(
+            (row) =>
+                row.bookId.equals(bookId) &
+                row.status.equals('active') &
+                row.autoRecord.equals(true) &
+                row.nextDate.isSmallerOrEqualValue(cutoff),
           )
           ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
         .get();

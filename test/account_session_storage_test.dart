@@ -105,7 +105,7 @@ void main() {
     expect(read, isA<LegacySession>());
   });
 
-  test('写入时同时维护规范键与旧键，允许覆盖安装与版本回滚', () async {
+  test('新会话只写规范键，不再制造旧格式双写', () async {
     final storage = InMemorySessionStorage();
     await storage.write(
       AccountSession(
@@ -116,11 +116,7 @@ void main() {
       ),
     );
     expect(storage.canonical, isA<Map<String, dynamic>>());
-    final legacy = LegacySessionPayload.tryParse(storage.legacy);
-    expect(legacy, isNotNull);
-    expect(legacy!.token, 'token-1');
-    expect(legacy.user.username, 'lu_2026');
-    expect(legacy.expiresAt, expiresAt);
+    expect(storage.legacy, isNull);
   });
 
   test('旧键字段结构保持与迁移前逐字段一致', () {

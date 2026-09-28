@@ -30,7 +30,8 @@ class _ReimbursementPageState extends ConsumerState<ReimbursementPage> {
   @override
   Widget build(BuildContext context) {
     final all =
-        ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+        ref.watch(reimbursementTransactionsProvider).value ??
+        const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
     final books = ref.watch(booksProvider).value ?? const [];
     final accountNames = {

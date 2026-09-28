@@ -64,7 +64,9 @@ class MembershipHero extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth;
-      final scale = MediaQuery.textScalerOf(context).scale(1);
+      final media = MediaQuery.of(context);
+      final scale = media.textScaler.scale(1);
+      final pixelRatio = media.devicePixelRatio;
       final height = 120.0 + (scale - 1) * 90;
       return SizedBox(
         key: const ValueKey('membership-hero'),
@@ -81,6 +83,7 @@ class MembershipHero extends StatelessWidget {
                 '${memberAssets}hero-mascot.png',
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomCenter,
+                cacheWidth: (width * .37 * pixelRatio).ceil(),
               ),
             ),
             Positioned(
@@ -92,6 +95,7 @@ class MembershipHero extends StatelessWidget {
                 child: Image.asset(
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
+                  cacheWidth: (85 * pixelRatio).ceil(),
                 ),
               ),
             ),
@@ -104,6 +108,7 @@ class MembershipHero extends StatelessWidget {
                 child: Image.asset(
                   '${memberAssets}hero-leaves.png',
                   fit: BoxFit.contain,
+                  cacheWidth: (24 * pixelRatio).ceil(),
                 ),
               ),
             ),
@@ -666,6 +671,10 @@ class _TestimonialCard extends StatelessWidget {
                 width: 26,
                 height: 26,
                 fit: BoxFit.cover,
+                cacheWidth:
+                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                cacheHeight:
+                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
                 errorBuilder: (_, _, _) => const ColoredBox(
                   color: Color(0xFFDCEACB),
                   child: SizedBox(width: 26, height: 26),

@@ -44,18 +44,12 @@ class _RestrictedAccountDetailPageState
       return const SafeArea(child: Center(child: Text('账户不存在')));
     }
 
-    final allTransactions =
-        ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
-    final transactions =
-        allTransactions
-            .where(
-              (record) =>
-                  record.accountId == item.account.id ||
-                  record.destinationAccountId == item.account.id,
-            )
-            .where((record) => _matches(record, item.account.id))
-            .toList()
-          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final accountTransactions =
+        ref.watch(allAccountTransactionsProvider(item.account.id)).value ??
+        const <TransactionRecord>[];
+    final transactions = accountTransactions
+        .where((record) => _matches(record, item.account.id))
+        .toList(growable: false);
     final showOpening = item.account.openingBalance != 0 && _filter != 2;
     var runningBalance = item.account.balance;
     final movements = <_FundMovement>[];

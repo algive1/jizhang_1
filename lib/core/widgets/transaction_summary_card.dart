@@ -55,6 +55,8 @@ class TransactionSummaryCard extends StatelessWidget {
                   AppAssets.transactionsStillLife,
                   fit: BoxFit.contain,
                   alignment: Alignment.centerRight,
+                  cacheWidth:
+                      (164 * MediaQuery.devicePixelRatioOf(context)).ceil(),
                 ),
               ),
               Positioned.fill(

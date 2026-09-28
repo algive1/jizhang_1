@@ -432,7 +432,8 @@ object AutoBookkeepingPendingStore {
     ): Boolean {
         if (first == second) return true
         if (!crossCaptureSource) return false
-        return setOf(first, second) == setOf("EXPENSE", "TRANSFER")
+        return (first == "EXPENSE" && second == "TRANSFER") ||
+            (first == "TRANSFER" && second == "EXPENSE")
     }
 
     private fun paymentMethodMatchesSource(
