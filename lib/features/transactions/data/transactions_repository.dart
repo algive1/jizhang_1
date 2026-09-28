@@ -12,6 +12,10 @@ import '../../books/data/book_repository.dart';
 abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchAll();
   Stream<List<TransactionRecord>> watchRecent({int limit = 10});
+  Stream<List<TransactionRecord>> watchSince({
+    required DateTime start,
+    bool onlyOccurred = true,
+  });
   Stream<List<TransactionRecord>> watchRange({
     required DateTime start,
     required DateTime endExclusive,
@@ -20,6 +24,7 @@ abstract interface class TransactionRepository {
     required List<({DateTime start, DateTime endExclusive})> ranges,
   });
   Stream<List<TransactionRecord>> watchPendingReimbursements();
+  Stream<List<TransactionRecord>> watchReimbursementSources();
   Future<List<TransactionRecord>> getRange({
     required DateTime start,
     required DateTime endExclusive,
@@ -64,6 +69,20 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Stream<List<TransactionRecord>> watchSince({
+    required DateTime start,
+    bool onlyOccurred = true,
+  }) {
+    return _database.transactionDao
+        .watchActive(
+          bookId: bookId,
+          onlyOccurred: onlyOccurred,
+          occurredFrom: start,
+        )
+        .asyncMap(_mapEntities);
+  }
+
+  @override
   Stream<List<TransactionRecord>> watchRange({
     required DateTime start,
     required DateTime endExclusive,
@@ -103,6 +122,13 @@ class DriftTransactionRepository implements TransactionRepository {
   Stream<List<TransactionRecord>> watchPendingReimbursements() {
     return _database.transactionDao
         .watchPendingReimbursements(bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchReimbursementSources() {
+    return _database.transactionDao
+        .watchReimbursementSources(bookId: bookId)
         .asyncMap(_mapEntities);
   }
 
