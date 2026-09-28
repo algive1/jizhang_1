@@ -26,13 +26,15 @@ class TransactionsPage extends ConsumerStatefulWidget {
 }
 
 class _TransactionsPageState extends ConsumerState<TransactionsPage> {
+  static const _pageSize = 100;
   int _typeFilter = 0;
   String? _categoryFilter;
+  int _visibleLimit = _pageSize;
 
   @override
   Widget build(BuildContext context) {
     final transactionState = widget.month == null
-        ? ref.watch(transactionsProvider)
+        ? ref.watch(recentTransactionsPageProvider(_visibleLimit))
         : ref.watch(
             transactionsForMonthProvider((
               year: widget.month!.year,
@@ -64,7 +66,20 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
         .toList();
 
     final groups = _groupTransactions(transactions);
-    final summary = _monthlySummary(all);
+    final now = DateTime.now();
+    final summaryMonth = widget.month ?? now;
+    final summary =
+        ref
+            .watch(
+              transactionLedgerMonthSummaryProvider((
+                year: summaryMonth.year,
+                month: summaryMonth.month,
+              )),
+            )
+            .value ??
+        _monthlySummary(all);
+    final canLoadMore =
+        widget.month == null && all.length >= _visibleLimit;
 
     return SafeArea(
       child: CustomScrollView(
@@ -170,8 +185,23 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                 AppScaffold.reservedBottomInset(context),
               ),
               sliver: SliverList.builder(
-                itemCount: groups.length,
+                itemCount: groups.length + (canLoadMore ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == groups.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('transactions-load-more'),
+                          onPressed: () => setState(
+                            () => _visibleLimit += _pageSize,
+                          ),
+                          icon: const Icon(Icons.expand_more_rounded),
+                          label: const Text('加载更多流水'),
+                        ),
+                      ),
+                    );
+                  }
                   final entry = groups[index];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
