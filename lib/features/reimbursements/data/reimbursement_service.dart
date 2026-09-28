@@ -107,15 +107,12 @@ class ReimbursementService {
         current.relatedTransactionId != original.id) {
       throw StateError('报销回款或原消费不存在');
     }
-    final all = await readRepository.getAll();
-    final otherPaidCents = all
-        .where(
-          (item) =>
-              item.type == TransactionType.reimbursement &&
-              item.relatedTransactionId == original.id &&
-              item.id != payment.id,
-        )
-        .fold<int>(0, (sum, item) => sum + _toCents(item.amount));
+    final otherPaidCents = await _database.transactionDao
+        .sumRelatedReimbursementsInCents(
+          bookId: bookId,
+          relatedTransactionId: original.id,
+          excludingTransactionId: payment.id,
+        );
     if (!amount.isFinite) throw ArgumentError('报销金额无效');
     final amountCents = _toCents(amount);
     final originalCents = _toCents(original.amount);
@@ -163,19 +160,16 @@ class ReimbursementService {
         current.relatedTransactionId != original.id) {
       throw StateError('报销回款或原消费不存在');
     }
-    final all = await readRepository.getAll();
     final account = await _database.accountDao.findById(payment.accountId);
     if (account == null || account.isArchived) {
       throw StateError('报销到账账户不存在或已归档');
     }
-    final remainingCents = all
-        .where(
-          (item) =>
-              item.type == TransactionType.reimbursement &&
-              item.relatedTransactionId == original.id &&
-              item.id != payment.id,
-        )
-        .fold<int>(0, (sum, item) => sum + _toCents(item.amount));
+    final remainingCents = await _database.transactionDao
+        .sumRelatedReimbursementsInCents(
+          bookId: bookId,
+          relatedTransactionId: original.id,
+          excludingTransactionId: payment.id,
+        );
     final now = DateTime.now();
     final repository = await _repository(bookId);
     await _database.transaction(() async {
