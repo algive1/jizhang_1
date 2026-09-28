@@ -12,7 +12,10 @@ class UserAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: const Color(0xFFE7DECE),
-      backgroundImage: const AssetImage(AppAssets.userAvatar),
+      backgroundImage: ResizeImage(
+        const AssetImage(AppAssets.userAvatar),
+        width: (radius * 2 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+      ),
     );
   }
 }
