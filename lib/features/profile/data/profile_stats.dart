@@ -94,6 +94,28 @@ final profileMonthSummaryProvider =
           );
     });
 
+final profilePhotoCountProvider = StreamProvider<int>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  final db = ref.watch(databaseProvider);
+  final raw = db.customSelect(
+    '''
+    SELECT COUNT(*) AS photo_count
+    FROM transaction_attachments AS a
+    INNER JOIN transactions AS t
+      ON t.id = a.transaction_id
+      AND t.book_id = a.book_id
+    WHERE a.deleted_at IS NULL
+      AND t.deleted_at IS NULL
+      AND a.mime_type LIKE 'image/%'
+    ''',
+    readsFrom: {
+      db.transactionAttachmentEntries,
+      db.transactionEntries,
+    },
+  );
+  yield* raw.watchSingle().map((row) => row.read<int>('photo_count'));
+});
+
 // Join to live transactions so soft-deleted records never inflate the photo count.
 final profilePhotosProvider = StreamProvider<List<TransactionAttachmentEntity>>(
   (ref) async* {
