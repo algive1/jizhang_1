@@ -30,6 +30,7 @@ class SharedBookSyncService {
   DateTime? _retryAfter;
   bool _foreground = false;
   bool _applying = false;
+  bool _hasKnownSharedBooks = false;
   bool _started = false;
   bool _disposed = false;
   String? lastError;
@@ -37,6 +38,13 @@ class SharedBookSyncService {
     if (_started) return;
     _started = true;
     await session.initialize();
+    _hasKnownSharedBooks =
+        await database
+            .customSelect(
+              'SELECT 1 FROM sync_books WHERE access=1 LIMIT 1',
+            )
+            .getSingleOrNull() !=
+        null;
     _sessionChanges = session.watch().listen((_) {
       _refreshPollingTimer();
     });
@@ -62,14 +70,24 @@ class SharedBookSyncService {
     _refreshPollingTimer();
   }
 
-  void _refreshPollingTimer() {
+  Duration get _pollingInterval => _hasKnownSharedBooks
+      ? const Duration(seconds: 15)
+      : const Duration(seconds: 60);
+
+  void _refreshPollingTimer({bool requestImmediately = true}) {
     _timer?.cancel();
     _timer = null;
     if (!_foreground || session.user == null || _disposed) return;
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _timer = Timer.periodic(_pollingInterval, (_) {
       requestSync();
     });
-    requestSync();
+    if (requestImmediately) requestSync();
+  }
+
+  void _updateKnownSharedBooks(bool value) {
+    if (_hasKnownSharedBooks == value) return;
+    _hasKnownSharedBooks = value;
+    _refreshPollingTimer(requestImmediately: false);
   }
 
   Future<void> _requestSyncForLocalChanges() async {
@@ -102,6 +120,9 @@ class SharedBookSyncService {
       await _flushPromotions(userId);
       final remote = await api.request('/books');
       final books = (remote['books'] as List).cast<Json>();
+      _updateKnownSharedBooks(
+        books.any((book) => book['is_archived'] != 1),
+      );
       final known = await states();
       _applying = true;
       for (final state in known.where((s) => s['user_id'] == userId)) {
@@ -413,6 +434,7 @@ class SharedBookSyncService {
           'INSERT INTO sync_books(book_id,remote_id,user_id,role,access,phase,last_error) VALUES(?,?,?,?,1,?,?)',
           [local, remote, session.user!.id, 'owner', 'promoting', '首次共享快照待上传'],
         );
+        _updateKnownSharedBooks(true);
         final map = await _idMap(local, remote);
         final rows = await _bookRows(local);
         final entities = rows.map((e) {
