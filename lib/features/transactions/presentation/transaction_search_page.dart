@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,18 +29,56 @@ class TransactionSearchPage extends ConsumerStatefulWidget {
 }
 
 class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
+  static const _pageSize = 100;
   final _controller = TextEditingController();
+  Timer? _searchDebounce;
   String _query = '';
+  String _effectiveQuery = '';
+  int _visibleLimit = _pageSize;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  void _onQueryChanged(String value) {
+    setState(() => _query = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _effectiveQuery = value;
+        _visibleLimit = _pageSize;
+      });
+    });
+  }
+
+  void _clearQuery() {
+    _searchDebounce?.cancel();
+    _controller.clear();
+    setState(() {
+      _query = '';
+      _effectiveQuery = '';
+      _visibleLimit = _pageSize;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(transactionsProvider).value ?? const [];
+    final trimmedQuery = _effectiveQuery.trim();
+    final transactionState = widget.month != null
+        ? ref.watch(
+            transactionsForMonthProvider((
+              year: widget.month!.year,
+              month: widget.month!.month,
+            )),
+          )
+        : widget.transactionIds.isEmpty && trimmedQuery.isEmpty
+        ? ref.watch(recentTransactionsPageProvider(_visibleLimit))
+        : ref.watch(transactionsProvider);
+    final all = transactionState.value ?? const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final recurringBills =
         ref.watch(recurringBillsAllProvider).value ?? const <RecurringBill>[];
@@ -80,17 +120,14 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                       child: TextField(
                         controller: _controller,
                         autofocus: widget.transactionIds.isEmpty,
-                        onChanged: (value) => setState(() => _query = value),
+                        onChanged: _onQueryChanged,
                         decoration: InputDecoration(
                           hintText: '搜索商户、分类或备注',
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: _query.isEmpty
                               ? null
                               : IconButton(
-                                  onPressed: () {
-                                    _controller.clear();
-                                    setState(() => _query = '');
-                                  },
+                                  onPressed: _clearQuery,
                                   icon: Icon(Icons.close),
                                 ),
                         ),
@@ -102,8 +139,10 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                 Text(
                   widget.transactionIds.isNotEmpty
                       ? '相关流水 · ${results.length} 笔'
-                      : _query.isEmpty
-                      ? '全部记录'
+                      : trimmedQuery.isEmpty
+                      ? widget.month == null
+                            ? '最近记录 · ${results.length} 笔'
+                            : '本月记录 · ${results.length} 笔'
                       : '找到 ${results.length} 笔记录',
                   style: TextStyle(
                     color: context.appSecondaryText,
@@ -158,7 +197,22 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                     ),
                   ),
                 if (widget.transactionIds.isEmpty &&
-                    _query.trim().isNotEmpty &&
+                    widget.month == null &&
+                    trimmedQuery.isEmpty &&
+                    all.length >= _visibleLimit) ...[
+                  const SizedBox(height: 14),
+                  Center(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('transaction-search-load-more'),
+                      onPressed: () =>
+                          setState(() => _visibleLimit += _pageSize),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: const Text('加载更多流水'),
+                    ),
+                  ),
+                ],
+                if (widget.transactionIds.isEmpty &&
+                    trimmedQuery.isNotEmpty &&
                     recurringResults.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Text(
@@ -201,7 +255,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
     TransactionRecord transaction,
     Map<String, String> accountNames,
   ) {
-    final query = _query.trim();
+    final query = _effectiveQuery.trim();
     if (query.isEmpty) return true;
     final amountMatch = RegExp(
       r'^(>=|>|<=|<)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|块)?(?:以上|以下)?$',
@@ -251,7 +305,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   }
 
   bool _matchesRecurring(RecurringBill bill, Map<String, String> accountNames) {
-    final query = _query.trim();
+    final query = _effectiveQuery.trim();
     if (query.isEmpty) return false;
     final amountMatch = RegExp(
       r'^(>=|>|<=|<)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|块)?(?:以上|以下)?$',
