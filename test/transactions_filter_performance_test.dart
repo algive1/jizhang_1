@@ -286,7 +286,7 @@ void main() {
     await DatabaseSeeder(database).seedIfNeeded();
     final repository = DriftTransactionRepository(database);
     final now = DateTime.now();
-    for (var index = 0; index < 45; index++) {
+    for (var index = 0; index < 105; index++) {
       final occurredAt = DateTime(
         now.year,
         now.month,
@@ -333,13 +333,27 @@ void main() {
     expect(builtGroups, greaterThan(0));
     expect(
       builtGroups,
-      lessThan(45),
-      reason: 'Only viewport-near date groups should be built initially.',
+      lessThan(100),
+      reason:
+          'The default ledger loads 100 records and only builds viewport-near date groups.',
     );
 
     await tester.tap(find.byKey(const ValueKey('transactions-filter-2')));
     await tester.pumpAndSettle();
     expect(find.text('没有找到匹配的记录'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transactions-load-more-empty')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('transactions-load-more-empty')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('transactions-load-more-empty')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('transactions-filter-1')));
     await tester.pumpAndSettle();
