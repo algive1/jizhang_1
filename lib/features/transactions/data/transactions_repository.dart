@@ -16,6 +16,11 @@ abstract interface class TransactionRepository {
     required DateTime start,
     required DateTime endExclusive,
   });
+  Stream<List<TransactionRecord>> watchPendingReimbursements();
+  Future<List<TransactionRecord>> getRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  });
   Future<List<TransactionRecord>> getAll();
   Future<List<TransactionRecord>> getRecent({int limit = 10});
   Future<TransactionRecord?> getById(String id);
@@ -71,6 +76,31 @@ class DriftTransactionRepository implements TransactionRepository {
           occurredBefore: endExclusive,
         )
         .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchPendingReimbursements() {
+    return _database.transactionDao
+        .watchPendingReimbursements(bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Future<List<TransactionRecord>> getRange({
+    required DateTime start,
+    required DateTime endExclusive,
+  }) async {
+    if (!start.isBefore(endExclusive)) {
+      throw ArgumentError('Transaction range start must be before end');
+    }
+    return _mapEntities(
+      await _database.transactionDao.getActive(
+        bookId: bookId,
+        onlyOccurred: true,
+        occurredFrom: start,
+        occurredBefore: endExclusive,
+      ),
+    );
   }
 
   @override
