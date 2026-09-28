@@ -48,11 +48,13 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   bool _initialUpdateCheckScheduled = false;
   bool _liquidGlassWarmupScheduled = false;
   DateTime? _lastForegroundMaintenanceAt;
+  DateTime? _lastRecurringNotificationSyncAt;
   int _foregroundMaintenanceGeneration = 0;
   static const _foregroundMaintenanceDedupWindow = Duration(seconds: 2);
   static const _deferredForegroundMaintenanceDelay = Duration(
-    milliseconds: 750,
+    milliseconds: 1500,
   );
+  static const _recurringNotificationSyncInterval = Duration(minutes: 10);
 
   @override
   void initState() {
@@ -318,6 +320,13 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   }
 
   void _syncRecurringBillNotifications() {
+    final now = DateTime.now();
+    final previous = _lastRecurringNotificationSyncAt;
+    if (previous != null &&
+        now.difference(previous) < _recurringNotificationSyncInterval) {
+      return;
+    }
+    _lastRecurringNotificationSyncAt = now;
     unawaited(
       ref
           .read(databaseBootstrapProvider.future)
