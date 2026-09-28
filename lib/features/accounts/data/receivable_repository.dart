@@ -484,7 +484,8 @@ final receivablesProvider = FutureProvider<List<Receivable>>((ref) async {
   await ref.watch(databaseBootstrapProvider.future);
   final manual = await ref.watch(receivableRepositoryProvider).getAll();
   final transactions =
-      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
+      ref.watch(reimbursementTransactionsProvider).value ??
+      const <TransactionRecord>[];
   final projected = transactions
       .where(
         (item) =>
@@ -541,6 +542,22 @@ final receivableEventsProvider =
       return ref.watch(receivableRepositoryProvider).getEvents(id);
     });
 
+final reimbursementMonthCollectedTransactionsProvider =
+    StreamProvider<double>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      yield* ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchTypeAmountSumBetween(
+            bookId: ref.watch(activeBookIdProvider),
+            type: TransactionType.reimbursement.name,
+            start: DateTime(now.year, now.month),
+            endExclusive: DateTime(now.year, now.month + 1),
+          )
+          .map((cents) => cents / 100);
+    });
+
 final receivableMonthCollectedProvider = FutureProvider<double>((ref) async {
   ref.watch(receivableDataSignalProvider);
   await ref.watch(databaseBootstrapProvider.future);
@@ -550,15 +567,7 @@ final receivableMonthCollectedProvider = FutureProvider<double>((ref) async {
   final manual = await ref
       .watch(receivableRepositoryProvider)
       .getCollectedBetween(start, end);
-  final transactions =
-      ref.watch(transactionsProvider).value ?? const <TransactionRecord>[];
-  final reimbursements = transactions
-      .where(
-        (item) =>
-            item.type == TransactionType.reimbursement &&
-            !item.occurredAt.isBefore(start) &&
-            item.occurredAt.isBefore(end),
-      )
-      .fold<double>(0, (sum, item) => sum + item.amount);
+  final reimbursements =
+      ref.watch(reimbursementMonthCollectedTransactionsProvider).value ?? 0;
   return manual + reimbursements;
 });
