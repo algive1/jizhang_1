@@ -108,6 +108,7 @@ class InstallmentPlansPage extends ConsumerWidget {
         .read(transactionRepositoryProvider)
         .getAll();
     final accounts = await ref.read(accountRepositoryProvider).getActive();
+    if (!context.mounted) return;
     final expenses = transactions.where((item) => item.isExpense).toList();
     if (expenses.isEmpty || accounts.isEmpty) {
       ScaffoldMessenger.of(context)
