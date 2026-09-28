@@ -613,6 +613,10 @@ class _CalendarHeroHeader extends StatelessWidget {
             'assets/images/微信图片_20260919140237_156_240.png',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
+            cacheWidth:
+                (MediaQuery.sizeOf(context).width *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .ceil(),
           ),
           DecoratedBox(
             decoration: BoxDecoration(
