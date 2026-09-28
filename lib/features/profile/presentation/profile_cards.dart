@@ -31,7 +31,14 @@ class ProfileHero extends StatelessWidget {
                 bottom: -29,
                 width: c.maxWidth * .73,
                 child: IgnorePointer(
-                  child: Image.asset(AppAssets.profileHeaderScene),
+                  child: Image.asset(
+                    AppAssets.profileHeaderScene,
+                    cacheWidth:
+                        (c.maxWidth *
+                                .73 *
+                                MediaQuery.devicePixelRatioOf(context))
+                            .ceil(),
+                  ),
                 ),
               ),
               Positioned(
@@ -353,6 +360,10 @@ class ProfileMonthlyCard extends StatelessWidget {
                 AppAssets.monthlyProgressScene,
                 fit: BoxFit.fitWidth,
                 alignment: Alignment.bottomRight,
+                cacheWidth:
+                    (MediaQuery.sizeOf(context).width *
+                            MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
               ),
             ),
           ),
