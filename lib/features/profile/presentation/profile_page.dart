@@ -23,7 +23,6 @@ import '../../membership/data/membership_repository.dart';
 import '../../messages/application/system_message_service.dart';
 import '../../recurring/data/recurring_bill_repository.dart';
 import '../../sharing/data/session_repository.dart';
-import '../../transactions/data/transactions_repository.dart';
 import '../data/profile_stats.dart';
 import 'profile_cards.dart';
 import 'liquid_glass_profile_page.dart';
@@ -39,7 +38,7 @@ class ProfilePage extends ConsumerWidget {
 
     final accounts = ref.watch(allAccountsProvider);
     final categories = ref.watch(categoriesProvider);
-    final transactions = ref.watch(allTransactionsProvider);
+    final activityState = ref.watch(profileActivityProvider(null));
     final books = ref.watch(booksProvider);
     final photos = ref.watch(profilePhotosProvider);
     final recurring = ref.watch(recurringBillsProvider);
@@ -47,7 +46,8 @@ class ProfilePage extends ConsumerWidget {
     final membership = ref.watch(membershipProvider);
     final systemUnread = ref.watch(systemUnreadCountProvider).value ?? 0;
     final accountSession = ref.watch(accountSessionProvider);
-    final activity = ProfileActivity(transactions.value ?? [], DateTime.now());
+    final activity =
+        activityState.value ?? ProfileActivity.fromDates(const [], DateTime.now());
     void push(String route) => context.push(route);
     void calendar() => push('/transactions/calendar');
     String count(AsyncValue<List<dynamic>> value, String unit) => value.hasError
@@ -58,7 +58,7 @@ class ProfilePage extends ConsumerWidget {
     final errors = [
       accounts,
       categories,
-      transactions,
+      activityState,
       books,
       photos,
       recurring,
@@ -124,7 +124,7 @@ class ProfilePage extends ConsumerWidget {
             const SizedBox(height: 8),
             ProfileHero(
               name: _profileName(accountSession.value),
-              days: transactions.hasValue ? '${activity.bookkeepingDays}' : '—',
+              days: activityState.hasValue ? '${activity.bookkeepingDays}' : '—',
               onTap: () => _profile(context, ref, accountSession.value),
             ),
             ProfileMembershipCard(
@@ -150,7 +150,7 @@ class ProfilePage extends ConsumerWidget {
                   child: ProfileQuickStat(
                     icon: Icons.event_available,
                     color: const Color(0xFFF39558),
-                    value: transactions.hasValue
+                    value: activityState.hasValue
                         ? '${activity.bookkeepingDays} 天'
                         : '—',
                     label: '记账天数',
@@ -183,7 +183,7 @@ class ProfilePage extends ConsumerWidget {
             ProfileMonthlyCard(
               activity: activity,
               onTap: calendar,
-              loading: !transactions.hasValue,
+              loading: !activityState.hasValue,
             ),
             const SizedBox(height: 10),
             ProfileMenuCard(
