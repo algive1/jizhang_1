@@ -48,7 +48,11 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   bool _initialUpdateCheckScheduled = false;
   bool _liquidGlassWarmupScheduled = false;
   DateTime? _lastForegroundMaintenanceAt;
+  int _foregroundMaintenanceGeneration = 0;
   static const _foregroundMaintenanceDedupWindow = Duration(seconds: 2);
+  static const _deferredForegroundMaintenanceDelay = Duration(
+    milliseconds: 750,
+  );
 
   @override
   void initState() {
@@ -141,6 +145,8 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       unawaited(ref.read(productAnalyticsProvider).track('app_foreground'));
       _runForegroundMaintenance();
       _checkForAppUpdate();
+    } else {
+      _foregroundMaintenanceGeneration++;
     }
     ref
         .read(sharedBookSyncProvider)
@@ -155,8 +161,20 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       return;
     }
     _lastForegroundMaintenanceAt = now;
+    final generation = ++_foregroundMaintenanceGeneration;
     _processNotifications();
     _processRecurringAutoRecords();
+    unawaited(_runDeferredForegroundMaintenance(generation));
+  }
+
+  Future<void> _runDeferredForegroundMaintenance(int generation) async {
+    await Future<void>.delayed(_deferredForegroundMaintenanceDelay);
+    if (!mounted || generation != _foregroundMaintenanceGeneration) return;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState != null &&
+        lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
     _syncRecurringBillNotifications();
     _syncBudgetAlerts();
     unawaited(_flushDiagnosticsAfterSessionRestore());
