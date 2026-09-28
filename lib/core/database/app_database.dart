@@ -1766,6 +1766,14 @@ class CategoryDao extends DatabaseAccessor<AppDatabase>
     )..where((row) => row.id.equals(id))).getSingleOrNull();
   }
 
+  Future<List<CategoryEntity>> getByIds(Iterable<String> ids) {
+    final uniqueIds = ids.toSet().toList(growable: false);
+    if (uniqueIds.isEmpty) return Future.value(const <CategoryEntity>[]);
+    return (select(
+      categoryEntries,
+    )..where((row) => row.id.isIn(uniqueIds))).get();
+  }
+
   Future<void> upsert(CategoryEntriesCompanion category) async {
     await into(categoryEntries).insertOnConflictUpdate(category);
   }
