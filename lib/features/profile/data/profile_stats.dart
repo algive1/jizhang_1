@@ -20,13 +20,12 @@ class ProfileActivity {
 
   ProfileActivity.fromSummary({
     required DateTime? firstRecordedDay,
-    required int recordedDays,
-    required int streak,
+    required this.recordedDays,
+    required this.streak,
     required DateTime now,
   }) {
     final today = DateTime(now.year, now.month, now.day);
     monthDays = DateTime(now.year, now.month + 1, 0).day;
-    this.recordedDays = recordedDays;
     bookkeepingDays = firstRecordedDay == null
         ? 0
         : today
@@ -39,7 +38,6 @@ class ProfileActivity {
                   )
                   .inDays +
               1;
-    this.streak = streak;
   }
 
   ProfileActivity.fromDates(Iterable<DateTime> occurredDates, DateTime now) {
@@ -69,7 +67,7 @@ class ProfileActivity {
 
   int streak = 0;
   late final int monthDays;
-  late final int recordedDays;
+  int recordedDays = 0;
   late final int bookkeepingDays;
 }
 

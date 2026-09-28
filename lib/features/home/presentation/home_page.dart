@@ -222,7 +222,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 visibility: visibility,
                 onCalculation: _showCalculation,
               ),
-            if (dataReady && book != null) ...[
+            if (dataReady) ...[
               const SizedBox(height: 12),
               _HomeAssetSection(book: book, visibility: visibility),
               const SizedBox(height: 12),
