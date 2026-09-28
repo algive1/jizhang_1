@@ -78,6 +78,9 @@ class _HomePageState extends ConsumerState<HomePage>
       ref.invalidate(currentMonthBudgetsProvider);
       ref.invalidate(budgetOverviewProvider);
       ref.invalidate(dashboardSnapshotProvider);
+      ref.invalidate(homeCurrentMonthSummaryProvider);
+      ref.invalidate(homeExpenseCategorySummaryProvider);
+      ref.invalidate(homeSelectedMonthSummaryProvider);
       ref.invalidate(homeMonthlySummaryProvider);
       ref.invalidate(homeRecentTransactionsProvider);
       ref.invalidate(analysisRepositoryProvider);
@@ -89,7 +92,12 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshDay();
+    if (state == AppLifecycleState.resumed) {
+      _refreshDay();
+      ref.invalidate(homeCurrentMonthSummaryProvider);
+      ref.invalidate(homeExpenseCategorySummaryProvider);
+      ref.invalidate(homeSelectedMonthSummaryProvider);
+    }
   }
 
   @override
@@ -124,15 +132,13 @@ class _HomePageState extends ConsumerState<HomePage>
     final goal = (goalsState.value ?? const <Goal>[])
         .where((g) => g.status == GoalStatus.active)
         .firstOrNull;
-    final transactions = ref.watch(transactionsProvider);
+    final monthSummaryState = ref.watch(homeCurrentMonthSummaryProvider);
+    final expenseCategoryState = ref.watch(homeExpenseCategorySummaryProvider);
+    final expenseCategorySummary =
+        expenseCategoryState.value ??
+        const HomeExpenseCategorySummary(categories: [], totalExpense: 0);
     final budgets = ref.watch(currentMonthBudgetsProvider);
     final snapshot = ref.watch(dashboardSnapshotProvider);
-    final analysis = ref.watch(
-      analysisSnapshotForPeriodProvider((
-        period: AnalysisPeriod.currentMonth,
-        currency: 'CNY',
-      )),
-    );
     final insightFeed = ref.watch(insightFeedProvider);
     final insight = ref.watch(homeInsightProvider);
     final recentState = ref.watch(homeRecentTransactionsProvider);
@@ -150,7 +156,7 @@ class _HomePageState extends ConsumerState<HomePage>
     // Empty transaction history is a valid final state. Keep already loaded
     // content visible while a provider refreshes so startup/import invalidation
     // never collapses the home page back to a blank shell.
-    final dataReady = book != null && transactions.hasValue;
+    final dataReady = book != null && monthSummaryState.hasValue;
     final insightPreferences =
         insightPreferencesAsync.value ?? const InsightPreferences();
     if (dataReady &&
@@ -234,26 +240,27 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ),
             if (booksState.hasError ||
-                (transactions.hasError && !transactions.hasValue))
+                (monthSummaryState.hasError && !monthSummaryState.hasValue))
               _ReadError(
                 label: '账本',
                 onRetry: () {
                   ref.invalidate(databaseBootstrapProvider);
                   ref.invalidate(booksProvider);
-                  ref.invalidate(transactionsProvider);
+                  ref.invalidate(homeCurrentMonthSummaryProvider);
+                  ref.invalidate(homeExpenseCategorySummaryProvider);
                 },
               )
             else if (!booksState.hasValue ||
                 book == null ||
-                !transactions.hasValue)
+                !monthSummaryState.hasValue)
               const HomeSurface(child: LinearProgressIndicator())
-            else if (transactions.hasError)
+            else if (monthSummaryState.hasError)
               HomeSurface(
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        '流水刷新失败，正在继续显示上次已加载的数据',
+                        '月度汇总刷新失败，正在继续显示上次已加载的数据',
                         style: TextStyle(
                           color: context.appSecondaryText,
                           fontSize: 12,
@@ -261,7 +268,8 @@ class _HomePageState extends ConsumerState<HomePage>
                       ),
                     ),
                     TextButton(
-                      onPressed: () => ref.invalidate(transactionsProvider),
+                      onPressed: () =>
+                          ref.invalidate(homeCurrentMonthSummaryProvider),
                       child: const Text('重试'),
                     ),
                   ],
@@ -330,7 +338,13 @@ class _HomePageState extends ConsumerState<HomePage>
                       onTap: _analysis,
                     ),
                     const SizedBox(height: 10),
-                    if (analysis.expenseCategories.isEmpty)
+                    if (expenseCategoryState.isLoading &&
+                        !expenseCategoryState.hasValue)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: LinearProgressIndicator(),
+                      )
+                    else if (expenseCategorySummary.categories.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
@@ -353,7 +367,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           return Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: analysis.expenseCategories
+                            children: expenseCategorySummary.categories
                                 .take(5)
                                 .map(
                                   (category) => SizedBox(
@@ -363,9 +377,8 @@ class _HomePageState extends ConsumerState<HomePage>
                                         columns,
                                     child: _CategoryExpense(
                                       category: category,
-                                      total: analysis.totalExpense,
-                                      onTap: () =>
-                                          _showCategory(category, analysis),
+                                      total: expenseCategorySummary.totalExpense,
+                                      onTap: () => _showCategory(category),
                                     ),
                                   ),
                                 )
@@ -589,10 +602,7 @@ class _HomePageState extends ConsumerState<HomePage>
         ),
       );
 
-  Future<void> _showCategory(
-    CashflowCategory category,
-    AnalysisSnapshot snapshot,
-  ) {
+  Future<void> _showCategory(CashflowCategory category) {
     var sortField = _CategoryExpenseSort.date;
     var descending = true;
     return showModalBottomSheet<void>(
@@ -604,15 +614,21 @@ class _HomePageState extends ConsumerState<HomePage>
         builder: (context, sheetRef, _) {
           return StatefulBuilder(
             builder: (context, setSheetState) {
+              final now = DateTime.now();
               final records =
-                  (sheetRef.watch(transactionsProvider).value ?? [])
+                  (sheetRef
+                              .watch(
+                                transactionsForMonthProvider((
+                                  year: now.year,
+                                  month: now.month,
+                                )),
+                              )
+                              .value ??
+                          const <TransactionRecord>[])
                       .where(
                         (item) =>
                             item.isExpense &&
                             item.currency.toUpperCase() == 'CNY' &&
-                            item.deletedAt == null &&
-                            !item.occurredAt.isAfter(DateTime.now()) &&
-                            snapshot.range.contains(item.occurredAt) &&
                             cashflowCategoryKey(item) == category.id,
                       )
                       .toList()
