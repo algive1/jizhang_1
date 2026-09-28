@@ -222,6 +222,12 @@ class DriftTransactionRepository implements TransactionRepository {
     );
   }
 
+  Future<List<TransactionRecord>> getImportDedupCandidates() async {
+    return _mapEntities(
+      await _database.transactionDao.getImportDedupCandidates(bookId: bookId),
+    );
+  }
+
   @override
   Future<List<TransactionRecord>> getAll() async {
     return _mapEntities(
