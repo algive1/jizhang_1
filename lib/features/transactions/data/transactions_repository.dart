@@ -485,7 +485,8 @@ class DriftTransactionRepository implements TransactionRepository {
     if (values.isEmpty) return const <TransactionEntity>[];
     final result = <TransactionEntity>[];
     for (var start = 0; start < values.length; start += 500) {
-      final end = (start + 500).clamp(0, values.length);
+      final end =
+          start + 500 < values.length ? start + 500 : values.length;
       result.addAll(
         await (_database.select(_database.transactionEntries)
               ..where((row) => row.id.isIn(values.sublist(start, end))))
@@ -502,7 +503,8 @@ class DriftTransactionRepository implements TransactionRepository {
     if (values.isEmpty) return const <AccountEntity>[];
     final result = <AccountEntity>[];
     for (var start = 0; start < values.length; start += 500) {
-      final end = (start + 500).clamp(0, values.length);
+      final end =
+          start + 500 < values.length ? start + 500 : values.length;
       result.addAll(
         await (_database.select(_database.accountEntries)
               ..where((row) => row.id.isIn(values.sublist(start, end))))
