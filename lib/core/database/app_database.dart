@@ -1011,6 +1011,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> _createTransactionRangeIndex() async {
+    if (!await _hasColumn('transactions', 'book_id') ||
+        !await _hasColumn('transactions', 'deleted_at') ||
+        !await _hasColumn('transactions', 'occurred_at')) {
+      return;
+    }
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted_occurred '
       'ON transactions(book_id, deleted_at, occurred_at DESC)',
