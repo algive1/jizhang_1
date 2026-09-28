@@ -55,7 +55,14 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
         applyRulesAndWhitelist()
         Diagnostics.ruleSchemaVersion = ruleRegistry.schemaVersion
-        AutoBookkeepingPendingStore.cleanupOrphanedScreenshots(this)
+        Thread(
+            {
+                AutoBookkeepingPendingStore.cleanupOrphanedScreenshots(
+                    applicationContext,
+                )
+            },
+            "AutoBookkeepingCleanup",
+        ).start()
         ensureOverlayService()
         AutoBookkeepingLogStore.record(
             this,
