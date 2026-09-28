@@ -1817,6 +1817,33 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
+  Stream<List<TransactionEntity>> watchActiveByIds({
+    required List<String> ids,
+    String? bookId,
+  }) {
+    if (ids.isEmpty) {
+      return Stream.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                row.id.isIn(ids) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .watch();
+  }
+
   Stream<List<TransactionEntity>> watchTextSearch({
     required String query,
     String? bookId,
