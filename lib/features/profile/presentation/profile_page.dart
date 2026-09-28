@@ -40,7 +40,7 @@ class ProfilePage extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final activityState = ref.watch(profileActivityProvider(null));
     final books = ref.watch(booksProvider);
-    final photos = ref.watch(profilePhotosProvider);
+    final photoCount = ref.watch(profilePhotoCountProvider);
     final recurring = ref.watch(recurringBillsProvider);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider);
@@ -60,7 +60,7 @@ class ProfilePage extends ConsumerWidget {
       categories,
       activityState,
       books,
-      photos,
+      photoCount,
       recurring,
       membership,
       accountSession,
@@ -162,7 +162,11 @@ class ProfilePage extends ConsumerWidget {
                   child: ProfileQuickStat(
                     icon: Icons.image,
                     color: const Color(0xFF74BEE4),
-                    value: count(photos, ' 张'),
+                    value: photoCount.hasError
+                        ? '读取失败'
+                        : photoCount.hasValue
+                        ? '${photoCount.value!} 张'
+                        : '—',
                     label: '记账照片',
                     onTap: () => _photos(context),
                   ),
