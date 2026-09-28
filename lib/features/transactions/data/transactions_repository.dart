@@ -277,12 +277,7 @@ class DriftTransactionRepository implements TransactionRepository {
       throw ArgumentError('Transaction IDs must be unique within a batch');
     }
     return _database.transaction(() async {
-      for (final transaction in transactions) {
-        if (await _database.transactionDao.findById(transaction.id) != null) {
-          throw StateError('Transaction ${transaction.id} already exists');
-        }
-        await _ensureAccountsExist(transaction);
-      }
+      await _ensureBatchReferences(transactions);
       for (final transaction in transactions) {
         await _database.transactionDao.insertOne(_toCompanion(transaction));
         await _applyBalanceEffect(transaction, 1);
@@ -388,6 +383,133 @@ class DriftTransactionRepository implements TransactionRepository {
         throw ArgumentError('关联金额必须大于 0 且不超过原流水金额');
       }
     }
+  }
+
+  Future<void> _ensureBatchReferences(
+    List<TransactionRecord> transactions,
+  ) async {
+    final transactionIds = transactions.map((item) => item.id).toSet();
+    final relationIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.originalTransactionId,
+          transaction.relatedTransactionId,
+        ].whereType<String>(),
+    };
+    final accountIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.accountId,
+          transaction.destinationAccountId,
+        ].whereType<String>(),
+    };
+    final categoryIds = <String>{
+      for (final transaction in transactions)
+        ...[
+          transaction.categoryId,
+          transaction.subcategoryId,
+        ].whereType<String>(),
+    };
+
+    final existingTransactions = await _transactionEntitiesByIds({
+      ...transactionIds,
+      ...relationIds,
+    });
+    final transactionsById = {
+      for (final entity in existingTransactions) entity.id: entity,
+    };
+    for (final transaction in transactions) {
+      if (transactionsById.containsKey(transaction.id)) {
+        throw StateError('Transaction ${transaction.id} already exists');
+      }
+    }
+
+    final categories = await _database.categoryDao.getByIds(categoryIds);
+    final categoriesById = {
+      for (final category in categories) category.id: category,
+    };
+    final accounts = await _accountEntitiesByIds(accountIds);
+    final accountsById = {for (final account in accounts) account.id: account};
+
+    for (final transaction in transactions) {
+      for (final categoryId in [
+        transaction.categoryId,
+        transaction.subcategoryId,
+      ].whereType<String>()) {
+        final category = categoriesById[categoryId];
+        if (category == null || category.bookId != transaction.bookId) {
+          throw ArgumentError('分类与流水必须属于同一账本');
+        }
+      }
+      for (final relationId in [
+        transaction.originalTransactionId,
+        transaction.relatedTransactionId,
+      ].whereType<String>()) {
+        final related = transactionsById[relationId];
+        if (related == null ||
+            related.bookId != transaction.bookId ||
+            related.deletedAt != null) {
+          throw ArgumentError('关联流水必须属于同一账本');
+        }
+      }
+
+      final resolvedAccountBookId = accountBookIdForBook?.call(
+        transaction.bookId,
+      );
+      final allowedAccountBooks = <String>{
+        transaction.bookId,
+        ?accountBookId,
+        ?resolvedAccountBookId,
+      };
+      for (final id in [
+        transaction.accountId,
+        transaction.destinationAccountId,
+      ].whereType<String>()) {
+        final account = accountsById[id];
+        if (account == null) throw StateError('账户不存在');
+        if (!allowedAccountBooks.contains(account.bookId)) {
+          throw ArgumentError('账户与流水必须属于同一账本');
+        }
+        if (account.currency.toUpperCase() !=
+            transaction.currency.toUpperCase()) {
+          throw ArgumentError('账户与流水币种必须一致；暂不支持跨币种转账');
+        }
+      }
+    }
+  }
+
+  Future<List<TransactionEntity>> _transactionEntitiesByIds(
+    Iterable<String> ids,
+  ) async {
+    final values = ids.toSet().toList(growable: false);
+    if (values.isEmpty) return const <TransactionEntity>[];
+    final result = <TransactionEntity>[];
+    for (var start = 0; start < values.length; start += 500) {
+      final end = (start + 500).clamp(0, values.length);
+      result.addAll(
+        await (_database.select(_database.transactionEntries)
+              ..where((row) => row.id.isIn(values.sublist(start, end))))
+            .get(),
+      );
+    }
+    return result;
+  }
+
+  Future<List<AccountEntity>> _accountEntitiesByIds(
+    Iterable<String> ids,
+  ) async {
+    final values = ids.toSet().toList(growable: false);
+    if (values.isEmpty) return const <AccountEntity>[];
+    final result = <AccountEntity>[];
+    for (var start = 0; start < values.length; start += 500) {
+      final end = (start + 500).clamp(0, values.length);
+      result.addAll(
+        await (_database.select(_database.accountEntries)
+              ..where((row) => row.id.isIn(values.sublist(start, end))))
+            .get(),
+      );
+    }
+    return result;
   }
 
   Future<void> _ensureAccountsExist(TransactionRecord transaction) async {
