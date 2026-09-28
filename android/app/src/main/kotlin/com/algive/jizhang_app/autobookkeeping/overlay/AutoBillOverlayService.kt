@@ -149,6 +149,7 @@ class AutoBillOverlayService : Service() {
 
         if (revealFlutterWhenReady) {
             revealFlutterWhenReady = false
+            AutoBookkeepingConfirmActivity.instance?.revealFlutterEditor()
             removeNativeView()
             return
         }
@@ -159,7 +160,9 @@ class AutoBillOverlayService : Service() {
     }
 
     private fun revealFlutterEditor() {
-        if (flutterReviewReady && AutoBookkeepingConfirmActivity.instance != null) {
+        val activity = AutoBookkeepingConfirmActivity.instance
+        if (flutterReviewReady && activity != null) {
+            activity.revealFlutterEditor()
             removeNativeView()
             return
         }
