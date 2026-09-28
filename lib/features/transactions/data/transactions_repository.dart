@@ -477,12 +477,13 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   Future<TransactionRecord> _mapEntity(TransactionEntity entity) async {
-    final category = entity.categoryId == null
-        ? null
-        : await _database.categoryDao.findById(entity.categoryId!);
-    final subcategory = entity.subcategoryId == null
-        ? null
-        : await _database.categoryDao.findById(entity.subcategoryId!);
+    final categories = await _database.categoryDao.getByIds([
+      entity.categoryId,
+      entity.subcategoryId,
+    ].whereType<String>());
+    final byId = {for (final category in categories) category.id: category};
+    final category = byId[entity.categoryId];
+    final subcategory = byId[entity.subcategoryId];
     return _fromEntity(
       entity,
       category?.bookId == entity.bookId ? category : null,
