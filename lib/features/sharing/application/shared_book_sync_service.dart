@@ -38,7 +38,7 @@ class SharedBookSyncService {
     _started = true;
     await session.initialize();
     _sessionChanges = session.watch().listen((_) {
-      requestSync();
+      _refreshPollingTimer();
     });
     _databaseChanges = database
         .tableUpdates(
@@ -58,14 +58,18 @@ class SharedBookSyncService {
 
   void setForeground(bool foreground) {
     _foreground = foreground;
-    _timer?.cancel();
     _debounce?.cancel();
-    if (foreground) {
-      _timer = Timer.periodic(const Duration(seconds: 15), (_) {
-        requestSync();
-      });
+    _refreshPollingTimer();
+  }
+
+  void _refreshPollingTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (!_foreground || session.user == null || _disposed) return;
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
       requestSync();
-    }
+    });
+    requestSync();
   }
 
   Future<void> _requestSyncForLocalChanges() async {
@@ -686,8 +690,19 @@ class SharedBookSyncService {
         local,
       ],
     );
+    final changedTableNames = <String>{
+      'families',
+      ...SharedSyncSchema.syncKinds,
+      'sync_books',
+      'sync_versions',
+      'sync_id_map',
+      'sync_outbox',
+      'sync_promotions',
+    };
     database.notifyUpdates({
-      for (final table in database.allTables) TableUpdate.onTable(table),
+      for (final table in database.allTables)
+        if (changedTableNames.contains(table.actualTableName))
+          TableUpdate.onTable(table),
     });
   });
   Future<void> _recalculate(String book) async {
