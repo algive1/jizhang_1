@@ -11,7 +11,6 @@ import '../../../core/widgets/app_card.dart';
 
 import 'package:go_router/go_router.dart';
 
-import '../../transactions/data/transactions_repository.dart';
 import 'cashflow_cards.dart';
 import '../application/analysis_report_export_service.dart';
 import '../data/analysis_repository.dart';
@@ -57,7 +56,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     final currencies = {
       'CNY',
       snapshot.currency,
-      ...?transactions.value?.map((t) => t.currency.toUpperCase()),
+      ...?ref.watch(analysisCurrenciesProvider(scope)).value,
     }.toList()
       ..sort();
     return SafeArea(
