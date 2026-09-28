@@ -646,7 +646,7 @@ class _ImmersiveProfileBackground extends StatelessWidget {
 
   final bool dark;
 
-  Widget _image({required bool filtered}) {
+  Widget _image(BuildContext context, {required bool filtered}) {
     final image = Image.asset(
       AppAssets.liquidGlassProfileBackground,
       fit: BoxFit.cover,
@@ -681,7 +681,7 @@ class _ImmersiveProfileBackground extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _image(filtered: false),
+            _image(context, filtered: false),
             ShaderMask(
               key: const ValueKey('profile-progressive-haze'),
               blendMode: BlendMode.dstIn,
@@ -696,7 +696,7 @@ class _ImmersiveProfileBackground extends StatelessWidget {
                 ],
                 stops: [0.20, 0.38, 0.66, 1],
               ).createShader(bounds),
-              child: _image(filtered: true),
+              child: _image(context, filtered: true),
             ),
             DecoratedBox(
               decoration: BoxDecoration(
