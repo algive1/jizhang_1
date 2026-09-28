@@ -107,6 +107,38 @@ final analysisTransactionsProvider =
       );
     });
 
+final analysisYearsProvider =
+    StreamProvider.family<List<int>, AnalysisScope>((ref, scope) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final bookId = scope == AnalysisScope.currentBook
+          ? ref.watch(activeBookIdProvider)
+          : null;
+      yield* ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchActiveYears(bookId: bookId);
+    });
+
+typedef AnnualReportDataKey = ({
+  AnalysisScope scope,
+  int year,
+});
+
+final annualReportTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, AnnualReportDataKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final repository = key.scope == AnalysisScope.allBooks
+          ? DriftTransactionRepository(ref.watch(databaseProvider))
+          : ref.watch(transactionRepositoryProvider);
+      yield* repository.watchRange(
+        start: DateTime(key.year - 1),
+        endExclusive: DateTime(key.year + 1),
+      );
+    });
+
 final analysisCurrenciesProvider =
     StreamProvider.family<List<String>, AnalysisScope>((ref, scope) async* {
       await ref.watch(databaseBootstrapProvider.future);
