@@ -178,6 +178,8 @@ class _AutoBookkeepingConfirmPageState
     final typeName = raw['type']?.toString();
     final type = switch (typeName) {
       'income' => TransactionType.income,
+      'refund' => TransactionType.refund,
+      'reimbursement' => TransactionType.reimbursement,
       'transfer' => TransactionType.transfer,
       _ => TransactionType.expense,
     };
@@ -244,8 +246,17 @@ class _AutoBookkeepingConfirmPageState
             books.any((book) => book.id == _bookId)
         ? _bookId!
         : books.first.id;
-    final type = _overlayTransactionType ??
-        _transactionTypeFor(candidate.transactionType);
+    final resolvedType =
+        _overlayTransactionType ?? _transactionTypeFor(candidate.transactionType);
+    // A parser-level TRANSFER only becomes an internal account transfer after
+    // the existing resolver finds strong evidence. Until then the established
+    // behavior is to review/save it as an expense.
+    final type =
+        candidate.transactionType == 'TRANSFER' &&
+            resolvedType == TransactionType.transfer &&
+            !_internalTransfer
+        ? TransactionType.expense
+        : resolvedType;
     final categoryType = _categoryTypeFor(type);
     final roots = categories
         .where((item) => item.parentId == null && item.type == categoryType)
@@ -278,6 +289,8 @@ class _AutoBookkeepingConfirmPageState
         'selectedSubcategoryId': _subcategoryId,
         'transactionType': switch (type) {
           TransactionType.income => 'income',
+          TransactionType.refund => 'refund',
+          TransactionType.reimbursement => 'reimbursement',
           TransactionType.transfer => 'transfer',
           _ => 'expense',
         },
