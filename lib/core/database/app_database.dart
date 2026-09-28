@@ -1855,6 +1855,30 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.get();
   }
 
+  Stream<List<int>> watchActiveYears({String? bookId}) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final query = customSelect(
+      '''
+      SELECT DISTINCT
+        CAST(strftime('%Y', occurred_at, 'unixepoch') AS INTEGER) AS year
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+      ORDER BY year DESC
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows) row.read<int>('year'),
+      ],
+    );
+  }
+
   Stream<List<String>> watchActiveCurrencies({String? bookId}) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
     final query = customSelect(
