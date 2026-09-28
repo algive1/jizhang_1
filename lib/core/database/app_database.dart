@@ -1855,6 +1855,29 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.get();
   }
 
+  Stream<List<String>> watchActiveCurrencies({String? bookId}) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final query = customSelect(
+      '''
+      SELECT DISTINCT UPPER(currency) AS currency
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+      ORDER BY currency
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows) row.read<String>('currency'),
+      ],
+    );
+  }
+
   Stream<int> watchLargeExpenseThresholdInCents({
     String? bookId,
     String currency = 'CNY',
