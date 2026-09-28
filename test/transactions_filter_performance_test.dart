@@ -198,6 +198,97 @@ void main() {
     expect(rows.map((item) => item.id), contains('old-pending-reimbursement'));
   });
 
+  test('account scoped SQL preserves monthly inflow and outflow semantics', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final occurredAt = DateTime(2026, 8, 10, 12);
+
+    Future<void> add(
+      String id,
+      TransactionType type,
+      double amount, {
+      String accountId = SeedIds.bankAccount,
+      String? destinationAccountId,
+      DateTime? at,
+    }) async {
+      final time = at ?? occurredAt;
+      await repository.create(
+        TransactionRecord(
+          id: id,
+          bookId: SeedIds.personalBook,
+          type: type,
+          amount: amount,
+          accountId: accountId,
+          destinationAccountId: destinationAccountId,
+          occurredAt: time,
+          createdAt: time,
+          updatedAt: time,
+        ),
+      );
+    }
+
+    await add('account-income', TransactionType.income, 100);
+    await add(
+      'account-transfer',
+      TransactionType.transfer,
+      30,
+      destinationAccountId: SeedIds.cashAccount,
+    );
+    await add(
+      'account-repayment',
+      TransactionType.repayment,
+      20,
+      destinationAccountId: SeedIds.cashAccount,
+    );
+    await add('account-expense', TransactionType.expense, 10);
+    await add(
+      'account-unrelated',
+      TransactionType.expense,
+      99,
+      accountId: SeedIds.wechatAccount,
+    );
+    await add(
+      'account-future',
+      TransactionType.income,
+      999,
+      at: DateTime(2026, 9, 1),
+    );
+
+    final bankRows = await repository
+        .watchForAccount(accountId: SeedIds.bankAccount)
+        .first;
+    expect(bankRows.map((item) => item.id), contains('account-income'));
+    expect(bankRows.map((item) => item.id), contains('account-future'));
+    expect(bankRows.map((item) => item.id), isNot(contains('account-unrelated')));
+
+    final summary = await database.transactionDao
+        .watchAccountMonthSummary(
+          accountId: SeedIds.bankAccount,
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+          now: DateTime(2026, 8, 20),
+        )
+        .first;
+    expect(summary.inflowCents, 10000);
+    expect(summary.outflowCents, 6000);
+
+    final cashSummary = await database.transactionDao
+        .watchAccountMonthSummary(
+          accountId: SeedIds.cashAccount,
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+          now: DateTime(2026, 8, 20),
+        )
+        .first;
+    expect(cashSummary.inflowCents, 5000);
+    expect(cashSummary.outflowCents, 0);
+  });
+
   test('reimbursement source stream and linked sum avoid full ledger scans', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
