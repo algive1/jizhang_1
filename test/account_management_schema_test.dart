@@ -9,7 +9,7 @@ import 'package:jizhang_app/features/investments/domain/investment_asset.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
-  test('database v23 creates account management extension tables', () async {
+  test('database v24 creates account management extension tables', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
 
@@ -19,7 +19,7 @@ void main() {
       "('account_management_meta','receivables','receivable_events')",
     ).get();
 
-    expect(database.schemaVersion, 23);
+    expect(database.schemaVersion, 24);
     expect(
       rows.map((row) => row.read<String>('name')).toSet(),
       {
