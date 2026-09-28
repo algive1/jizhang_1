@@ -68,16 +68,25 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   @override
   Widget build(BuildContext context) {
     final trimmedQuery = _effectiveQuery.trim();
-    final transactionState = widget.month != null
+    final transactionState = widget.transactionIds.isNotEmpty
+        ? ref.watch(transactionsProvider)
+        : trimmedQuery.isNotEmpty
+        ? ref.watch(
+            transactionSearchProvider((
+              query: trimmedQuery,
+              year: widget.month?.year,
+              month: widget.month?.month,
+              limit: _visibleLimit,
+            )),
+          )
+        : widget.month != null
         ? ref.watch(
             transactionsForMonthProvider((
               year: widget.month!.year,
               month: widget.month!.month,
             )),
           )
-        : widget.transactionIds.isEmpty && trimmedQuery.isEmpty
-        ? ref.watch(recentTransactionsPageProvider(_visibleLimit))
-        : ref.watch(transactionsProvider);
+        : ref.watch(recentTransactionsPageProvider(_visibleLimit));
     final all = transactionState.value ?? const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final recurringBills =
@@ -100,6 +109,10 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
     final recurringResults = recurringBills
         .where((bill) => _matchesRecurring(bill, accountNames))
         .toList();
+    final canLoadMore =
+        widget.transactionIds.isEmpty &&
+        all.length >= _visibleLimit &&
+        (trimmedQuery.isNotEmpty || widget.month == null);
 
     return SafeArea(
       child: CustomScrollView(
@@ -143,6 +156,8 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                       ? widget.month == null
                             ? '最近记录 · ${results.length} 笔'
                             : '本月记录 · ${results.length} 笔'
+                      : canLoadMore
+                      ? '已显示 ${results.length} 笔匹配记录'
                       : '找到 ${results.length} 笔记录',
                   style: TextStyle(
                     color: context.appSecondaryText,
@@ -196,10 +211,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                           .toList(),
                     ),
                   ),
-                if (widget.transactionIds.isEmpty &&
-                    widget.month == null &&
-                    trimmedQuery.isEmpty &&
-                    all.length >= _visibleLimit) ...[
+                if (canLoadMore) ...[
                   const SizedBox(height: 14),
                   Center(
                     child: OutlinedButton.icon(
@@ -207,7 +219,11 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                       onPressed: () =>
                           setState(() => _visibleLimit += _pageSize),
                       icon: const Icon(Icons.expand_more_rounded),
-                      label: const Text('加载更多流水'),
+                      label: Text(
+                        trimmedQuery.isEmpty
+                            ? '加载更多流水'
+                            : '加载更多匹配记录',
+                      ),
                     ),
                   ),
                 ],
