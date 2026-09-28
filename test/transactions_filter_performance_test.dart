@@ -481,6 +481,79 @@ void main() {
     expect(rows.map((item) => item.id), ['range-inside']);
   });
 
+  test('SQLite transaction search preserves text amount and status semantics', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime.now();
+
+    await repository.create(
+      TransactionRecord(
+        id: 'sql-search-target',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.expense,
+        amount: 88,
+        accountId: SeedIds.bankAccount,
+        merchant: 'SQL搜索商户',
+        note: '唯一搜索备注',
+        occurredAt: now,
+        createdAt: now,
+        updatedAt: now,
+        reimbursementStatus: ReimbursementStatus.pending,
+        reimbursementAmount: 20,
+        metadataJson: '{"search_token":"SQL_SEARCH_META"}',
+      ),
+    );
+    await repository.create(
+      TransactionRecord(
+        id: 'sql-search-noise',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.expense,
+        amount: 12,
+        accountId: SeedIds.bankAccount,
+        merchant: '无关商户',
+        note: '普通备注',
+        occurredAt: now.subtract(const Duration(minutes: 1)),
+        createdAt: now.subtract(const Duration(minutes: 1)),
+        updatedAt: now.subtract(const Duration(minutes: 1)),
+      ),
+    );
+
+    final noteRows = await repository
+        .watchSearchCandidates(query: '唯一搜索备注')
+        .first;
+    expect(noteRows.map((item) => item.id), contains('sql-search-target'));
+    expect(noteRows.map((item) => item.id), isNot(contains('sql-search-noise')));
+
+    final metadataRows = await repository
+        .watchSearchCandidates(query: 'SQL_SEARCH_META')
+        .first;
+    expect(metadataRows.map((item) => item.id), contains('sql-search-target'));
+
+    final statusRows = await repository
+        .watchSearchCandidates(query: '待报销')
+        .first;
+    expect(statusRows.map((item) => item.id), contains('sql-search-target'));
+
+    final amountRows = await repository
+        .watchSearchCandidates(query: '>=88')
+        .first;
+    expect(amountRows.map((item) => item.id), contains('sql-search-target'));
+
+    final lowerAmountRows = await repository
+        .watchSearchCandidates(query: '<20')
+        .first;
+    expect(lowerAmountRows.map((item) => item.id), contains('sql-search-noise'));
+    expect(
+      lowerAmountRows.map((item) => item.id),
+      isNot(contains('sql-search-target')),
+    );
+  });
+
   testWidgets('transactions page lazily builds date groups and switches filters', (
     tester,
   ) async {
@@ -579,6 +652,17 @@ void main() {
       recentTransactionsPageProvider(100).future,
     );
     expect(firstSearchPage.length, 100);
+
+    final firstKeywordPage = await DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    ).watchSearchCandidates(query: '性能回归-', limit: 100).first;
+    expect(firstKeywordPage.length, 100);
+    final expandedKeywordPage = await DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    ).watchSearchCandidates(query: '性能回归-', limit: 200).first;
+    expect(expandedKeywordPage.length, 105);
 
     await tester.enterText(find.byType(TextField), '性能回归-104');
     await tester.pump(const Duration(milliseconds: 100));
