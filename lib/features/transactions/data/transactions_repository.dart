@@ -766,6 +766,14 @@ final assetHistoryTransactionsProvider =
       );
     });
 
+final transactionCountProvider = StreamProvider<int>((ref) async* {
+  await ref.watch(databaseBootstrapProvider.future);
+  yield* ref
+      .watch(databaseProvider)
+      .transactionDao
+      .watchActiveCount(bookId: ref.watch(activeBookIdProvider));
+});
+
 final transactionControllerProvider = Provider<TransactionController>((ref) {
   return TransactionController(ref.watch(transactionRepositoryProvider));
 });
