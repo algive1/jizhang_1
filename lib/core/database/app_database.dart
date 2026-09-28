@@ -2110,6 +2110,59 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  Stream<List<TransactionEntity>> watchReimbursementSources({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                (row.reimbursementStatus.equals('pending') |
+                    row.reimbursementStatus.equals('partial') |
+                    row.reimbursementStatus.equals('reimbursed')) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+          ]))
+        .watch();
+  }
+
+  Future<int> sumRelatedReimbursementsInCents({
+    required String bookId,
+    required String relatedTransactionId,
+    String? excludingTransactionId,
+  }) async {
+    final excludeSql =
+        excludingTransactionId == null ? '' : 'AND id != ?';
+    final row = await customSelect(
+      '''
+      SELECT COALESCE(SUM(amount_in_cents), 0) AS total_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = 'reimbursement'
+        AND related_transaction_id = ?
+        $excludeSql
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(relatedTransactionId),
+        if (excludingTransactionId != null)
+          Variable<String>(excludingTransactionId),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingle();
+    return row.read<int>('total_cents');
+  }
+
   Stream<TransactionMonthSqlSummary> watchMonthSummary({
     required String bookId,
     required DateTime start,
