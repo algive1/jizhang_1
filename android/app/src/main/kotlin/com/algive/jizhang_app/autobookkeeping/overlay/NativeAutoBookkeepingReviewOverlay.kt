@@ -47,13 +47,14 @@ class NativeAutoBookkeepingReviewOverlay(
         val sortOrder: Int = 0,
     )
 
-    private val orange = Color.rgb(232, 139, 48)
-    private val orangeSoft = Color.rgb(255, 239, 218)
-    private val cardColor = Color.rgb(255, 249, 241)
+    private val primary = Color.rgb(115, 150, 59)
+    private val primarySoft = Color.rgb(233, 239, 216)
+    private val cardColor = Color.rgb(250, 247, 239)
     private val surfaceColor = Color.rgb(255, 252, 247)
-    private val dividerColor = Color.rgb(231, 216, 199)
-    private val primaryText = Color.rgb(48, 39, 32)
-    private val secondaryText = Color.rgb(119, 105, 92)
+    private val surfaceSoft = Color.rgb(244, 243, 232)
+    private val dividerColor = Color.rgb(234, 230, 220)
+    private val primaryText = Color.rgb(37, 41, 35)
+    private val secondaryText = Color.rgb(122, 124, 115)
 
     val root = FrameLayout(context).apply {
         isClickable = true
@@ -72,7 +73,7 @@ class NativeAutoBookkeepingReviewOverlay(
     private val card = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(12), dp(6), dp(12), dp(10))
-        background = rounded(cardColor, 28f)
+        background = rounded(cardColor, 24f)
         elevation = dp(14).toFloat()
     }
 
@@ -101,8 +102,8 @@ class NativeAutoBookkeepingReviewOverlay(
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         setText("%.2f".format(Locale.US, candidate.amountInCents / 100.0))
         setTextColor(primaryText)
-        textSize = 34f
-        typeface = Typeface.DEFAULT_BOLD
+        textSize = 30f
+        typeface = Typeface.DEFAULT
         gravity = Gravity.CENTER_VERTICAL
         setSelectAllOnFocus(true)
         setPadding(dp(12), 0, dp(8), 0)
@@ -111,8 +112,8 @@ class NativeAutoBookkeepingReviewOverlay(
 
     private val amountMirror = TextView(context).apply {
         text = "= ¥${"%.2f".format(Locale.US, candidate.amountInCents / 100.0)}"
-        setTextColor(orange)
-        textSize = 24f
+        setTextColor(primary)
+        textSize = 20f
         typeface = Typeface.DEFAULT_BOLD
         gravity = Gravity.CENTER_VERTICAL or Gravity.END
         setPadding(dp(4), 0, dp(12), 0)
@@ -120,7 +121,8 @@ class NativeAutoBookkeepingReviewOverlay(
 
     @Suppress("DEPRECATION")
     private val screenshotSwitch = Switch(context).apply {
-        isChecked = true
+        isChecked = false
+        isEnabled = false
     }
 
     private lateinit var accountChip: TextView
@@ -130,7 +132,7 @@ class NativeAutoBookkeepingReviewOverlay(
     private lateinit var dateChip: TextView
 
     private val statusText = TextView(context).apply {
-        setTextColor(orange)
+        setTextColor(primary)
         textSize = 12f
         gravity = Gravity.CENTER
         visibility = View.GONE
@@ -284,18 +286,32 @@ class NativeAutoBookkeepingReviewOverlay(
                 ?: previousType
         }
 
-        selectedCategoryId = if (userSelectedCategory && previousCategoryName != null) {
-            categoryOptions.firstOrNull {
-                it.parentId == null &&
-                    it.type == categoryTypeFor(transactionType) &&
-                    it.label == previousCategoryName
-            }?.id
-        } else {
-            payload["selectedCategoryId"]?.toString()
-                ?.takeIf { id -> categoryOptions.any { it.id == id } }
+        val validRoots = categoryOptions.filter {
+            it.parentId == null && it.type == categoryTypeFor(transactionType)
         }
-        selectedSubcategoryId = payload["selectedSubcategoryId"]?.toString()
-            ?.takeIf { id -> categoryOptions.any { it.id == id } }
+        selectedCategoryId = when {
+            transactionType == "transfer" -> null
+            userSelectedCategory && previousCategoryName != null ->
+                validRoots.firstOrNull { it.label == previousCategoryName }?.id
+                    ?: validRoots.firstOrNull()?.id
+            userSelectedType ->
+                selectedCategoryId?.takeIf { id -> validRoots.any { it.id == id } }
+                    ?: validRoots.firstOrNull()?.id
+            else ->
+                payload["selectedCategoryId"]?.toString()
+                    ?.takeIf { id -> validRoots.any { it.id == id } }
+                    ?: validRoots.firstOrNull()?.id
+        }
+        selectedSubcategoryId = if (transactionType == "transfer") {
+            null
+        } else {
+            payload["selectedSubcategoryId"]?.toString()
+                ?.takeIf { id ->
+                    categoryOptions.any {
+                        it.id == id && it.parentId == selectedCategoryId
+                    }
+                }
+        }
         selectedCategoryName = categoryOptions.firstOrNull { it.id == selectedCategoryId }?.label
             ?: previousCategoryName
 
@@ -304,8 +320,12 @@ class NativeAutoBookkeepingReviewOverlay(
             occurredAtMillis = occurredAt
             dateChip.text = dateLabel(occurredAtMillis)
         }
+        val screenshotAvailable = payload["screenshotAvailable"] == true
+        screenshotSwitch.isEnabled = screenshotAvailable
+        screenshotSwitch.alpha = if (screenshotAvailable) 1f else .45f
         if (payload["screenshotEnabled"] is Boolean) {
-            screenshotSwitch.isChecked = payload["screenshotEnabled"] == true
+            screenshotSwitch.isChecked =
+                screenshotAvailable && payload["screenshotEnabled"] == true
         }
 
         flutterReady = true
@@ -333,7 +353,7 @@ class NativeAutoBookkeepingReviewOverlay(
     fun currentDraft(): Map<String, Any?> = buildDraft()
 
     private fun build() {
-        val cardHeight = (context.resources.displayMetrics.heightPixels * .61f).toInt()
+        val cardHeight = (context.resources.displayMetrics.heightPixels * .60f).toInt()
         root.addView(
             card,
             FrameLayout.LayoutParams(
@@ -341,15 +361,15 @@ class NativeAutoBookkeepingReviewOverlay(
                 cardHeight,
                 Gravity.BOTTOM,
             ).apply {
-                leftMargin = dp(12)
-                rightMargin = dp(12)
+                leftMargin = dp(6)
+                rightMargin = dp(6)
                 bottomMargin = dp(6)
             },
         )
 
         card.addView(
             View(context).apply { background = rounded(Color.rgb(207, 196, 184), 999f) },
-            LinearLayout.LayoutParams(dp(44), dp(5)).apply {
+            LinearLayout.LayoutParams(dp(34), dp(4)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 bottomMargin = dp(4)
             },
@@ -362,7 +382,7 @@ class NativeAutoBookkeepingReviewOverlay(
         header.addView(
             TextView(context).apply {
                 text = "←"
-                textSize = 34f
+                textSize = 28f
                 setTextColor(primaryText)
                 gravity = Gravity.CENTER
                 setOnClickListener { onCancel() }
@@ -372,7 +392,7 @@ class NativeAutoBookkeepingReviewOverlay(
         val tabHost = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = rounded(surfaceColor, 23f, dividerColor, 1)
+            background = rounded(surfaceColor, 22f, dividerColor, 1)
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
         listOf(
@@ -383,7 +403,7 @@ class NativeAutoBookkeepingReviewOverlay(
         ).forEach { (key, label) ->
             val tab = TextView(context).apply {
                 text = label
-                textSize = 15f
+                textSize = 14f
                 gravity = Gravity.CENTER
                 setTextColor(primaryText)
                 setOnClickListener {
@@ -402,9 +422,9 @@ class NativeAutoBookkeepingReviewOverlay(
                 }
             }
             typeTabs[key] = tab
-            tabHost.addView(tab, LinearLayout.LayoutParams(0, dp(42), 1f))
+            tabHost.addView(tab, LinearLayout.LayoutParams(0, dp(34), 1f))
         }
-        header.addView(tabHost, LinearLayout.LayoutParams(0, dp(46), 1f))
+        header.addView(tabHost, LinearLayout.LayoutParams(0, dp(34), 1f))
         header.addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -452,54 +472,54 @@ class NativeAutoBookkeepingReviewOverlay(
         val amountRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(Color.rgb(250, 239, 225), 20f)
-            addView(amountField, LinearLayout.LayoutParams(0, dp(62), 1f))
-            addView(amountMirror, LinearLayout.LayoutParams(dp(146), dp(62)))
+            background = rounded(surfaceSoft, 20f)
+            addView(amountField, LinearLayout.LayoutParams(0, dp(52), 2f))
+            addView(amountMirror, LinearLayout.LayoutParams(0, dp(52), 3f))
         }
         detail.addView(amountRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(62),
+            dp(52),
         ).apply { topMargin = dp(2) })
 
         val primaryChips = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(accountChip, LinearLayout.LayoutParams(0, dp(40), 1f))
-            addView(reimbursementChip, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+            addView(accountChip, LinearLayout.LayoutParams(0, dp(34), 1f))
+            addView(reimbursementChip, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 leftMargin = dp(6)
             })
-            addView(bookChip, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+            addView(bookChip, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 leftMargin = dp(6)
             })
         }
         detail.addView(primaryChips, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(40),
-        ).apply { topMargin = dp(6) })
+            dp(34),
+        ).apply { topMargin = dp(4) })
 
         detail.addView(destinationChip, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(40),
-        ).apply { topMargin = dp(5) })
+            dp(34),
+        ).apply { topMargin = dp(4) })
 
         val utilityChips = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(chip("📎 附件", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(38), 1f))
-            addView(chip("▣ 图片", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+            addView(chip("📎 附件", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(34), 1f))
+            addView(chip("▣ 图片", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 leftMargin = dp(5)
             })
-            addView(dateChip, LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+            addView(dateChip, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 leftMargin = dp(5)
             })
-            addView(chip("◷ 定期付", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+            addView(chip("◷ 定期付", false) { onAdvanced() }, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 leftMargin = dp(5)
             })
         }
         detail.addView(utilityChips, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(38),
-        ).apply { topMargin = dp(5) })
+            dp(34),
+        ).apply { topMargin = dp(4) })
 
         card.addView(
             ScrollView(context).apply {
@@ -538,8 +558,8 @@ class NativeAutoBookkeepingReviewOverlay(
                 key == transactionType ||
                     (key == "income" &&
                         transactionType in setOf("refund", "reimbursement"))
-            view.background = if (selected) rounded(orange, 20f) else null
-            view.setTextColor(if (selected) Color.WHITE else primaryText)
+            view.background = if (selected) rounded(primary, 20f) else null
+            view.setTextColor(if (selected) Color.WHITE else secondaryText)
             view.typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         }
     }
@@ -560,19 +580,19 @@ class NativeAutoBookkeepingReviewOverlay(
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 setPadding(dp(2), dp(2), dp(2), dp(2))
-                background = if (selected) rounded(orangeSoft, 18f) else null
+                background = if (selected) rounded(primarySoft, 18f) else null
                 addView(TextView(context).apply {
                     text = categoryGlyph(option.label)
                     textSize = 20f
                     gravity = Gravity.CENTER
-                    setTextColor(orange)
+                    setTextColor(primary)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)))
                 addView(TextView(context).apply {
                     text = option.label
                     textSize = 11.5f
                     gravity = Gravity.CENTER
                     maxLines = 1
-                    setTextColor(if (selected) orange else primaryText)
+                    setTextColor(if (selected) primary else primaryText)
                     typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(26)))
                 setOnClickListener { anchor ->
@@ -622,8 +642,15 @@ class NativeAutoBookkeepingReviewOverlay(
     }
 
     private fun updateTransferState() {
-        destinationChip.visibility = if (transactionType == "transfer") View.VISIBLE else View.GONE
-        categoriesGrid.alpha = if (transactionType == "transfer") .45f else 1f
+        val usesAccountPair = transactionType == "transfer"
+        destinationChip.visibility = if (usesAccountPair) View.VISIBLE else View.GONE
+        categoriesGrid.visibility = if (usesAccountPair) View.GONE else View.VISIBLE
+        reimbursementChip.visibility =
+            if (transactionType == "expense") View.VISIBLE else View.GONE
+        if (transactionType != "expense") {
+            reimbursementStatus = "none"
+            reimbursementChip.text = "不报销"
+        }
     }
 
     private fun buildDraft(): Map<String, Any?> {
@@ -697,11 +724,11 @@ class NativeAutoBookkeepingReviewOverlay(
             maxLines = 1
             textSize = 12f
             gravity = Gravity.CENTER
-            setTextColor(if (selected) orange else primaryText)
+            setTextColor(if (selected) primary else primaryText)
             background = rounded(
-                if (selected) orangeSoft else surfaceColor,
+                if (selected) primarySoft else surfaceColor,
                 18f,
-                if (selected) orange else dividerColor,
+                if (selected) primary else dividerColor,
                 1,
             )
             setPadding(dp(6), 0, dp(6), 0)
@@ -714,11 +741,11 @@ class NativeAutoBookkeepingReviewOverlay(
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setTextColor(if (filled) Color.WHITE else orange)
+            setTextColor(if (filled) Color.WHITE else primary)
             background = rounded(
-                if (filled) orange else Color.TRANSPARENT,
+                if (filled) primary else Color.TRANSPARENT,
                 24f,
-                if (filled) orange else secondaryText,
+                if (filled) primary else secondaryText,
                 1,
             )
             setOnClickListener { onClick() }
