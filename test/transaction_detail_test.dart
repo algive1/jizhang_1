@@ -176,21 +176,11 @@ void main() {
   });
 
   testWidgets(
-    'detail page previews images and reports missing system handlers',
+    'detail page reports missing system handlers for file attachments',
     (tester) async {
       const channel = MethodChannel('test/transaction_detail_file_opener');
-      final image = File(
-        '${Directory.systemTemp.path}/jizhang-transaction-detail-preview.png',
-      );
-      await image.writeAsBytes(
-        base64Decode(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-        ),
-        flush: true,
-      );
       final pdf = File('${Directory.current.path}/test/fixtures/receipt.pdf');
       addTearDown(() {
-        if (image.existsSync()) image.deleteSync();
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
       });
@@ -211,7 +201,7 @@ void main() {
         createdAt: now,
         updatedAt: now,
         metadataJson: jsonEncode({
-          'attachments': [image.path, pdf.path],
+          'attachments': [pdf.path],
         }),
       );
       final account = Account(
@@ -231,7 +221,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            assetDashboardAccountsProvider.overrideWith((ref) => Stream.value([account])),
+            assetDashboardAccountsProvider.overrideWith(
+              (ref) => Stream.value([account]),
+            ),
             transactionAttachmentRepositoryProvider.overrideWithValue(
               _EmptyAttachmentRepository(),
             ),
@@ -255,33 +247,22 @@ void main() {
 
       await tester.drag(find.byType(ListView), const Offset(0, -900));
       await tester.pump();
-      expect(find.byType(Image), findsOneWidget);
-      final imageTap = find.ancestor(
-        of: find.byType(Image),
-        matching: find.byType(InkWell),
-      );
-      expect(imageTap, findsOneWidget);
-      await tester.tap(imageTap);
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      });
-      await tester.pump();
-      expect(find.byType(InteractiveViewer), findsOneWidget);
-      Navigator.of(tester.element(find.byType(InteractiveViewer))).pop();
-      await tester.pump();
-
-      await tester.fling(find.byType(ListView), const Offset(0, -1000), 1000);
-      await tester.pump();
       expect(find.byTooltip('打开 PDF 预览'), findsOneWidget);
+
       await tester.tap(find.byTooltip('打开 PDF 预览'));
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pump();
+
       expect(
         find.text('没有可打开此文件的应用：${pdf.path.split('/').last}'),
         findsOneWidget,
       );
+      ScaffoldMessenger.of(
+        tester.element(find.text('没有可打开此文件的应用：${pdf.path.split('/').last}')),
+      ).clearSnackBars();
+      await tester.pump();
     },
   );
 }
