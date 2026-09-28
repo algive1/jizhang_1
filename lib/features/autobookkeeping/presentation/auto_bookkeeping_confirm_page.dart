@@ -296,6 +296,7 @@ class _AutoBookkeepingConfirmPageState
         },
         'occurredAt': (_editedOccurredAt ?? candidate.timestamp)
             .millisecondsSinceEpoch,
+        'screenshotAvailable': candidate.screenshotPath != null,
         'screenshotEnabled':
             candidate.screenshotPath != null && _keepScreenshot,
         'books': [
