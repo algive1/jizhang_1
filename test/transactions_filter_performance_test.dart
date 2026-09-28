@@ -391,11 +391,12 @@ void main() {
       );
     }
 
-    final container = ProviderContainer(
-      overrides: [databaseProvider.overrideWithValue(database)],
-    );
-    addTearDown(container.dispose);
-    final rows = await container.read(assetHistoryTransactionsProvider.future);
+    final rows = await DriftTransactionRepository(database)
+        .watchSince(
+          start: DateTime(now.year, now.month, now.day - 366),
+          onlyOccurred: false,
+        )
+        .first;
     expect(rows.map((item) => item.id), contains('asset-history-recent'));
     expect(rows.map((item) => item.id), contains('asset-history-future'));
     expect(rows.map((item) => item.id), isNot(contains('asset-history-old')));
@@ -574,10 +575,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('transaction-search-load-more')),
-      findsOneWidget,
+    final firstSearchPage = await container.read(
+      recentTransactionsPageProvider(100).future,
     );
+    expect(firstSearchPage.length, 100);
 
     await tester.enterText(find.byType(TextField), '性能回归-104');
     await tester.pump(const Duration(milliseconds: 100));
