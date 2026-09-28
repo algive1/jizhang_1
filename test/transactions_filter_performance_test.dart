@@ -181,6 +181,47 @@ void main() {
     expect(rows.map((item) => item.id), contains('old-pending-reimbursement'));
   });
 
+  test('recorded month neighbors ignore future rows and respect gaps', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    for (final entry in <({String id, DateTime occurredAt})>[
+      (id: 'neighbor-march', occurredAt: DateTime(2026, 3, 12)),
+      (id: 'neighbor-may', occurredAt: DateTime(2026, 5, 8)),
+      (id: 'neighbor-june', occurredAt: DateTime(2026, 6, 10)),
+      (id: 'neighbor-future', occurredAt: DateTime(2026, 7, 1)),
+    ]) {
+      await repository.create(
+        TransactionRecord(
+          id: entry.id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 10,
+          accountId: SeedIds.bankAccount,
+          occurredAt: entry.occurredAt,
+          createdAt: entry.occurredAt,
+          updatedAt: entry.occurredAt,
+        ),
+      );
+    }
+
+    final neighbors = await database.transactionDao
+        .watchRecordedMonthNeighbors(
+          month: DateTime(2026, 5),
+          now: DateTime(2026, 6, 20),
+          bookId: SeedIds.personalBook,
+        )
+        .first;
+
+    expect(neighbors.previousMonthKey, 202603);
+    expect(neighbors.nextMonthKey, 202606);
+  });
+
   test('transaction range query excludes rows outside the requested month', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
