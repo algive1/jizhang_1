@@ -123,57 +123,11 @@ class NativeAutoBookkeepingReviewOverlay(
         isChecked = true
     }
 
-    private val accountChip = selectorChip(initialAccountLabel()) {
-        showOptions(accountChip, accountOptions, selectedAccountId) {
-            selectedAccountId = it.id
-            accountChip.text = it.label
-        }
-    }
-    private val reimbursementChip = selectorChip("不报销") {
-        val options = listOf(
-            Option("none", "不报销"),
-            Option("pending", "待报销"),
-            Option("reimbursed", "已报销"),
-            Option("partial", "部分报销"),
-        )
-        showOptions(reimbursementChip, options, reimbursementStatus) {
-            reimbursementStatus = it.id
-            reimbursementChip.text = it.label
-        }
-    }
-    private val bookChip = selectorChip("个人账本") {
-        showOptions(bookChip, bookOptions, selectedBookId) {
-            selectedBookId = it.id
-            bookChip.text = it.label
-        }
-    }
-    private val destinationChip = selectorChip("转入账户") {
-        showOptions(destinationChip, accountOptions, selectedDestinationAccountId) {
-            selectedDestinationAccountId = it.id
-            destinationChip.text = "转入 ${it.label}"
-        }
-    }.apply {
-        visibility = View.GONE
-    }
-
-    private val dateChip = selectorChip(dateLabel(occurredAtMillis)) {
-        val now = System.currentTimeMillis()
-        val day = 24L * 60L * 60L * 1000L
-        val options = listOf(
-            Option(now.toString(), "今天"),
-            Option((now - day).toString(), "昨天"),
-            Option((now - 2 * day).toString(), "前天"),
-            Option("advanced", "更多日期…"),
-        )
-        showOptions(dateChip, options, occurredAtMillis.toString()) { selected ->
-            if (selected.id == "advanced") {
-                onAdvanced()
-            } else {
-                occurredAtMillis = selected.id.toLongOrNull() ?: occurredAtMillis
-                dateChip.text = selected.label
-            }
-        }
-    }
+    private lateinit var accountChip: TextView
+    private lateinit var reimbursementChip: TextView
+    private lateinit var bookChip: TextView
+    private lateinit var destinationChip: TextView
+    private lateinit var dateChip: TextView
 
     private val statusText = TextView(context).apply {
         setTextColor(orange)
@@ -207,6 +161,57 @@ class NativeAutoBookkeepingReviewOverlay(
     private var flutterReady = false
 
     init {
+        accountChip = selectorChip(initialAccountLabel()) {
+            showOptions(accountChip, accountOptions, selectedAccountId) {
+                selectedAccountId = it.id
+                accountChip.text = it.label
+            }
+        }
+        reimbursementChip = selectorChip("不报销") {
+            val options = listOf(
+                Option("none", "不报销"),
+                Option("pending", "待报销"),
+                Option("reimbursed", "已报销"),
+                Option("partial", "部分报销"),
+            )
+            showOptions(reimbursementChip, options, reimbursementStatus) {
+                reimbursementStatus = it.id
+                reimbursementChip.text = it.label
+            }
+        }
+        bookChip = selectorChip("个人账本") {
+            showOptions(bookChip, bookOptions, selectedBookId) {
+                selectedBookId = it.id
+                bookChip.text = it.label
+            }
+        }
+        destinationChip = selectorChip("转入账户") {
+            showOptions(destinationChip, accountOptions, selectedDestinationAccountId) {
+                selectedDestinationAccountId = it.id
+                destinationChip.text = "转入 ${it.label}"
+            }
+        }.apply {
+            visibility = View.GONE
+        }
+        dateChip = selectorChip(dateLabel(occurredAtMillis)) {
+            val now = System.currentTimeMillis()
+            val day = 24L * 60L * 60L * 1000L
+            val options = listOf(
+                Option(now.toString(), "今天"),
+                Option((now - day).toString(), "昨天"),
+                Option((now - 2 * day).toString(), "前天"),
+                Option("advanced", "更多日期…"),
+            )
+            showOptions(dateChip, options, occurredAtMillis.toString()) { selected ->
+                if (selected.id == "advanced") {
+                    onAdvanced()
+                } else {
+                    occurredAtMillis = selected.id.toLongOrNull() ?: occurredAtMillis
+                    dateChip.text = selected.label
+                }
+            }
+        }
+
         build()
         renderTypeTabs()
         renderCategories()
