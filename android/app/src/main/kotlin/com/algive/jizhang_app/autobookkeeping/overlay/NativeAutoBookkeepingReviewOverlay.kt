@@ -180,10 +180,10 @@ class NativeAutoBookkeepingReviewOverlay(
             }
         }
         bookChip = selectorChip("个人账本") {
-            showOptions(bookChip, bookOptions, selectedBookId) {
-                selectedBookId = it.id
-                bookChip.text = it.label
-            }
+            // Switching ledgers changes both account and category repositories.
+            // Keep that less-common flow on the already-warmed Flutter editor
+            // instead of duplicating repository semantics in the overlay.
+            onAdvanced()
         }
         destinationChip = selectorChip("转入账户") {
             showOptions(destinationChip, accountOptions, selectedDestinationAccountId) {
