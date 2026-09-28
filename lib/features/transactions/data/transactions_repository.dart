@@ -809,6 +809,14 @@ final allTransactionsProvider = StreamProvider<List<TransactionRecord>>((
   yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchAll();
 });
 
+final allAccountTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, String>((ref, accountId) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+      ).watchForAccount(accountId: accountId);
+    });
+
 typedef AccountTransactionPageKey = ({
   String accountId,
   int limit,
