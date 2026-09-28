@@ -18,6 +18,30 @@ class ProfileActivity {
     );
   }
 
+  ProfileActivity.fromSummary({
+    required DateTime? firstRecordedDay,
+    required int recordedDays,
+    required int streak,
+    required DateTime now,
+  }) {
+    final today = DateTime(now.year, now.month, now.day);
+    monthDays = DateTime(now.year, now.month + 1, 0).day;
+    this.recordedDays = recordedDays;
+    bookkeepingDays = firstRecordedDay == null
+        ? 0
+        : today
+                  .difference(
+                    DateTime(
+                      firstRecordedDay.year,
+                      firstRecordedDay.month,
+                      firstRecordedDay.day,
+                    ),
+                  )
+                  .inDays +
+              1;
+    this.streak = streak;
+  }
+
   ProfileActivity.fromDates(Iterable<DateTime> occurredDates, DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
     final dates = occurredDates
@@ -57,11 +81,19 @@ typedef ProfileMonthSummary = ({
 final profileActivityProvider =
     StreamProvider.family<ProfileActivity, String?>((ref, bookId) async* {
       await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
       yield* ref
           .watch(databaseProvider)
           .transactionDao
-          .watchActiveOccurredDays(bookId: bookId)
-          .map((dates) => ProfileActivity.fromDates(dates, DateTime.now()));
+          .watchProfileActivitySummary(bookId: bookId, now: now)
+          .map(
+            (summary) => ProfileActivity.fromSummary(
+              firstRecordedDay: summary.firstRecordedDay,
+              recordedDays: summary.recordedDays,
+              streak: summary.streak,
+              now: now,
+            ),
+          );
     });
 
 typedef ProfileMonthSummaryKey = ({

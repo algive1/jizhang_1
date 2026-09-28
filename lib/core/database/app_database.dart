@@ -742,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -971,6 +971,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 24) {
           await _createTransactionLookupIndexes();
         }
+        if (from < 25) {
+          await _createPhotoGalleryIndex();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -1009,6 +1012,7 @@ class AppDatabase extends _$AppDatabase {
     await _createBookIndexes();
     await _createAdIndexes();
     await _createAttachmentIndexes();
+    await _createPhotoGalleryIndex();
     await _createAccountIdentifierIndex();
     await _createInvestmentIndexes();
   }
@@ -1216,6 +1220,14 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_book '
       'ON transaction_attachments(book_id, deleted_at)',
+    );
+  }
+
+  Future<void> _createPhotoGalleryIndex() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transaction_attachments_photo_gallery '
+      'ON transaction_attachments(book_id, created_at DESC, id DESC) '
+      "WHERE deleted_at IS NULL AND mime_type LIKE 'image/%'",
     );
   }
 
@@ -1809,6 +1821,12 @@ typedef TransactionAccountMonthSqlSummary = ({
   int outflowCents,
 });
 
+typedef TransactionProfileActivitySqlSummary = ({
+  DateTime? firstRecordedDay,
+  int recordedDays,
+  int streak,
+});
+
 typedef TransactionCategorySqlSummary = ({
   String id,
   String name,
@@ -2360,6 +2378,82 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         for (final row in rows) DateTime.parse(row.read<String>('day')),
       ],
     );
+  }
+
+  Stream<TransactionProfileActivitySqlSummary> watchProfileActivitySummary({
+    String? bookId,
+    required DateTime now,
+  }) {
+    final localNow = now.toLocal();
+    String dateKey(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+    final todayKey = dateKey(localNow);
+    final monthStartKey = dateKey(DateTime(localNow.year, localNow.month));
+    final nextMonthKey = dateKey(DateTime(localNow.year, localNow.month + 1));
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final raw = customSelect(
+      '''
+      WITH days AS (
+        SELECT DISTINCT
+          strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') AS day
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          $bookFilter
+          AND occurred_at <= ?
+      ),
+      anchor AS (
+        SELECT CASE
+          WHEN EXISTS(SELECT 1 FROM days WHERE day = ?)
+            THEN ?
+          ELSE date(?, '-1 day')
+        END AS day
+      ),
+      ranked AS (
+        SELECT
+          day,
+          CAST(
+            julianday((SELECT day FROM anchor)) - julianday(day)
+            AS INTEGER
+          ) AS gap_days,
+          ROW_NUMBER() OVER (ORDER BY day DESC) - 1 AS row_offset
+        FROM days
+        WHERE day <= (SELECT day FROM anchor)
+      )
+      SELECT
+        (SELECT MIN(day) FROM days) AS first_day,
+        (
+          SELECT COUNT(*)
+          FROM days
+          WHERE day >= ? AND day < ?
+        ) AS recorded_days,
+        (
+          SELECT COUNT(*)
+          FROM ranked
+          WHERE gap_days = row_offset
+        ) AS streak
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+        Variable<DateTime>(now),
+        Variable<String>(todayKey),
+        Variable<String>(todayKey),
+        Variable<String>(todayKey),
+        Variable<String>(monthStartKey),
+        Variable<String>(nextMonthKey),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watchSingle().map((row) {
+      final firstDay = row.readNullable<String>('first_day');
+      return (
+        firstRecordedDay: firstDay == null ? null : DateTime.parse(firstDay),
+        recordedDays: row.read<int>('recorded_days'),
+        streak: row.read<int>('streak'),
+      );
+    });
   }
 
   Stream<int> watchActiveCount({String? bookId}) {

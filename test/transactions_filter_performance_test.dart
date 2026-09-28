@@ -404,7 +404,7 @@ void main() {
     );
   });
 
-  test('profile activity uses distinct occurred days and ignores future rows', () async {
+  test('profile activity summary stays fixed-size and ignores future rows', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
     await DatabaseSeeder(database).seedIfNeeded();
@@ -438,26 +438,25 @@ void main() {
     await add('profile-day-yesterday', yesterday);
     await add('profile-day-future', tomorrow);
 
-    final days = await database.transactionDao
-        .watchActiveOccurredDays(bookId: SeedIds.personalBook)
+    final summary = await database.transactionDao
+        .watchProfileActivitySummary(
+          bookId: SeedIds.personalBook,
+          now: now,
+        )
         .first;
-    final normalizedToday = DateTime(now.year, now.month, now.day);
-    final normalizedYesterday = DateTime(
-      yesterday.year,
-      yesterday.month,
-      yesterday.day,
-    );
-    final normalizedTomorrow = DateTime(
-      tomorrow.year,
-      tomorrow.month,
-      tomorrow.day,
-    );
-    expect(days.where((day) => day == normalizedToday), hasLength(1));
-    expect(days, contains(normalizedYesterday));
-    expect(days, isNot(contains(normalizedTomorrow)));
+    expect(summary.recordedDays, greaterThanOrEqualTo(1));
+    expect(summary.firstRecordedDay, isNotNull);
+    expect(summary.firstRecordedDay!.isAfter(DateTime(now.year, now.month, now.day + 1)), isFalse);
+    expect(summary.streak, greaterThanOrEqualTo(2));
 
-    final activity = ProfileActivity.fromDates(days, now);
-    expect(activity.streak, greaterThanOrEqualTo(2));
+    final activity = ProfileActivity.fromSummary(
+      firstRecordedDay: summary.firstRecordedDay,
+      recordedDays: summary.recordedDays,
+      streak: summary.streak,
+      now: now,
+    );
+    expect(activity.streak, summary.streak);
+    expect(activity.recordedDays, summary.recordedDays);
   });
 
   test('type month SQL sum excludes other transaction types and months', () async {

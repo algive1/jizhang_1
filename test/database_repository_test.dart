@@ -21,7 +21,7 @@ void main() {
   tearDown(() => database.close());
 
   test('scoped transaction range index is installed', () async {
-    expect(database.schemaVersion, 24);
+    expect(database.schemaVersion, 25);
     final indexes = await database
         .customSelect("PRAGMA index_list('transactions')")
         .get();
@@ -30,6 +30,16 @@ void main() {
     expect(names, contains('idx_transactions_related_type'));
     expect(names, contains('idx_transactions_reimbursement_status'));
     expect(names, contains('idx_transactions_type_occurred'));
+    final attachmentIndexes = await database
+        .customSelect("PRAGMA index_list('transaction_attachments')")
+        .get();
+    final attachmentNames = attachmentIndexes
+        .map((row) => row.read<String>('name'))
+        .toSet();
+    expect(
+      attachmentNames,
+      contains('idx_transaction_attachments_photo_gallery'),
+    );
   });
 
   test(
