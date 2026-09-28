@@ -157,7 +157,12 @@ class HomeProCard extends StatelessWidget {
               child: IgnorePointer(
                 child: Opacity(
                   opacity: .7,
-                  child: Image.asset(AppAssets.proCloud, fit: BoxFit.contain),
+                  child: Image.asset(
+                    AppAssets.proCloud,
+                    fit: BoxFit.contain,
+                    cacheWidth:
+                        (90 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                  ),
                 ),
               ),
             ),
