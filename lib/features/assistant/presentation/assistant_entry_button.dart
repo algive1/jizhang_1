@@ -11,6 +11,7 @@ class AssistantAvatar extends StatelessWidget {
     'assets/images/assistant-bot-icon.png',
     width: size,
     height: size,
+    cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
     fit: BoxFit.contain,
     excludeFromSemantics: true,
   );
