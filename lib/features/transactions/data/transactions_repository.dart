@@ -693,6 +693,25 @@ final allTransactionsProvider = StreamProvider<List<TransactionRecord>>((
   yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchAll();
 });
 
+final reimbursementTransactionsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* ref
+          .watch(transactionRepositoryProvider)
+          .watchReimbursementSources();
+    });
+
+final assetHistoryTransactionsProvider =
+    StreamProvider<List<TransactionRecord>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day - 366);
+      yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchSince(
+        start: start,
+        onlyOccurred: false,
+      );
+    });
+
 final transactionControllerProvider = Provider<TransactionController>((ref) {
   return TransactionController(ref.watch(transactionRepositoryProvider));
 });
