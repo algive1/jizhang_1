@@ -222,6 +222,14 @@ class SharedBookSyncService {
       (await database.customSelect('SELECT * FROM sync_books').get())
           .map((r) => r.data)
           .toList();
+  Future<Json?> stateForBook(String book) async =>
+      (await database
+              .customSelect(
+                'SELECT * FROM sync_books WHERE book_id=? LIMIT 1',
+                variables: [Variable(book)],
+              )
+              .getSingleOrNull())
+          ?.data;
   Future<List<Json>> pending(String book) async =>
       (await database
               .customSelect(
@@ -743,9 +751,10 @@ class SharedBookSyncService {
   }
 
   Future<void> resolve(String book, {required bool useServer}) async {
-    final state = (await states()).firstWhere(
-      (s) => s['book_id'] == book && s['user_id'] == session.user?.id,
-    );
+    final state = await stateForBook(book);
+    if (state == null || state['user_id'] != session.user?.id) {
+      throw StateError('当前账本没有可用的共享状态');
+    }
     final remote = state['remote_id'] as String;
     final snapshot = await api.request('/books/$remote/snapshot');
     final queue = await pending(book);
@@ -900,9 +909,7 @@ final activeSharedStateProvider = StreamProvider<Json?>((ref) async* {
   final service = ref.watch(sharedBookSyncProvider),
       book = ref.watch(activeBookIdProvider);
   Future<Json?> current() async {
-    final state = (await service.states())
-        .where((s) => s['book_id'] == book)
-        .firstOrNull;
+    final state = await service.stateForBook(book);
     if (state == null) return null;
     return {
       ...state,
