@@ -270,6 +270,10 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                             AppAssets.homeLivingScene,
                             fit: BoxFit.contain,
                             alignment: Alignment.bottomRight,
+                            cacheWidth:
+                                (142 *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .ceil(),
                           ),
                         ),
                       ),
