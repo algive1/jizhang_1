@@ -253,7 +253,7 @@ class StatisticalAnalysisService {
       comparison.previousRange,
       AnalysisDateRange(
         start: today.subtract(const Duration(days: 180)),
-        endExclusive: today.add(const Duration(days: 1)),
+        endExclusive: today,
       ),
     ]..sort((a, b) => a.start.compareTo(b.start));
 
