@@ -1817,6 +1817,162 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
+  Stream<List<TransactionEntity>> watchTextSearch({
+    required String query,
+    String? bookId,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
+    DateTime? occurredThrough,
+    required int limit,
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND t.book_id = ?';
+    final rangeSql = [
+      if (occurredFrom != null) 'AND t.occurred_at >= ?',
+      if (occurredBefore != null) 'AND t.occurred_at < ?',
+      if (occurredThrough != null) 'AND t.occurred_at <= ?',
+    ].join('\n');
+    final sql = '''
+      WITH search_term(q) AS (VALUES (?))
+      SELECT t.*
+      FROM transactions AS t
+      LEFT JOIN categories AS c ON c.id = t.category_id
+      LEFT JOIN categories AS sc ON sc.id = t.subcategory_id
+      LEFT JOIN accounts AS a ON a.id = t.account_id
+      LEFT JOIN accounts AS da ON da.id = t.destination_account_id
+      CROSS JOIN search_term AS s
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        $bookFilter
+        $rangeSql
+        AND (
+          instr(COALESCE(t.merchant, ''), s.q) > 0
+          OR instr(COALESCE(t.note, ''), s.q) > 0
+          OR instr(COALESCE(a.name, ''), s.q) > 0
+          OR instr(COALESCE(da.name, ''), s.q) > 0
+          OR instr(COALESCE(t.metadata_json, ''), s.q) > 0
+          OR instr(
+            strftime(
+              '%Y-%m-%d',
+              t.occurred_at,
+              'unixepoch',
+              'localtime'
+            ),
+            s.q
+          ) > 0
+          OR instr(
+            (
+              CASE
+                WHEN t.type = 'assetSale' THEN '资产卖出'
+                WHEN t.type = 'adjustment' THEN '余额校准'
+                WHEN t.type = 'transfer' THEN '转账'
+                WHEN c.name IS NOT NULL AND trim(c.name) <> ''
+                  THEN trim(c.name)
+                ELSE '未分类'
+              END
+            ) ||
+            (
+              CASE
+                WHEN sc.name IS NOT NULL
+                  AND trim(sc.name) NOT IN ('', '/', '／')
+                  THEN ' · ' || trim(sc.name)
+                ELSE ''
+              END
+            ),
+            s.q
+          ) > 0
+          OR instr(
+            CASE t.reimbursement_status
+              WHEN 'pending' THEN '待报销'
+              WHEN 'partial' THEN '部分报销'
+              WHEN 'reimbursed' THEN '已报销'
+              ELSE '无需报销'
+            END,
+            s.q
+          ) > 0
+        )
+      ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC
+      LIMIT ?
+    ''';
+    final raw = customSelect(
+      sql,
+      variables: [
+        Variable<String>(query),
+        if (bookId != null) Variable<String>(bookId),
+        if (occurredFrom != null) Variable<DateTime>(occurredFrom),
+        if (occurredBefore != null) Variable<DateTime>(occurredBefore),
+        if (occurredThrough != null) Variable<DateTime>(occurredThrough),
+        Variable<int>(limit),
+      ],
+      readsFrom: {
+        transactionEntries,
+        attachedDatabase.categoryEntries,
+        attachedDatabase.accountEntries,
+      },
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) transactionEntries.map(row.data),
+      ],
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchAmountSearch({
+    required double amount,
+    required String operator,
+    String? bookId,
+    DateTime? occurredFrom,
+    DateTime? occurredBefore,
+    DateTime? occurredThrough,
+    required int limit,
+  }) {
+    const allowedOperators = {'=', '>=', '>', '<=', '<'};
+    if (!allowedOperators.contains(operator)) {
+      throw ArgumentError.value(operator, 'operator');
+    }
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final rangeSql = [
+      if (occurredFrom != null) 'AND occurred_at >= ?',
+      if (occurredBefore != null) 'AND occurred_at < ?',
+      if (occurredThrough != null) 'AND occurred_at <= ?',
+    ].join('\n');
+    final raw = customSelect(
+      '''
+      SELECT *
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+        $rangeSql
+        AND (
+          CASE
+            WHEN type IN ('expense', 'lend', 'assetPurchase')
+              THEN MAX(
+                amount_in_cents - COALESCE(refund_amount_in_cents, 0),
+                0
+              )
+            ELSE amount_in_cents
+          END
+        ) / 100.0 $operator ?
+      ORDER BY occurred_at DESC, created_at DESC, id DESC
+      LIMIT ?
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+        if (occurredFrom != null) Variable<DateTime>(occurredFrom),
+        if (occurredBefore != null) Variable<DateTime>(occurredBefore),
+        if (occurredThrough != null) Variable<DateTime>(occurredThrough),
+        Variable<double>(amount),
+        Variable<int>(limit),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) transactionEntries.map(row.data),
+      ],
+    );
+  }
+
   Stream<List<TransactionEntity>> watchActiveForAccount({
     required String accountId,
     int? limit,
