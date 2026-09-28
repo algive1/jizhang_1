@@ -69,7 +69,11 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   Widget build(BuildContext context) {
     final trimmedQuery = _effectiveQuery.trim();
     final transactionState = widget.transactionIds.isNotEmpty
-        ? ref.watch(transactionsProvider)
+        ? ref.watch(
+            transactionsByIdsProvider(
+              transactionIdsProviderKey(widget.transactionIds),
+            ),
+          )
         : trimmedQuery.isNotEmpty
         ? ref.watch(
             transactionSearchProvider((
@@ -90,7 +94,9 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
     final all = transactionState.value ?? const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final recurringBills =
-        ref.watch(recurringBillsAllProvider).value ?? const <RecurringBill>[];
+        widget.transactionIds.isEmpty && trimmedQuery.isNotEmpty
+        ? ref.watch(recurringBillsAllProvider).value ?? const <RecurringBill>[]
+        : const <RecurringBill>[];
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
