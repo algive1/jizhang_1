@@ -137,6 +137,18 @@ void main() {
       updatedAt: DateTime(2026, 9, 1),
     );
     await repository.create(bill);
+    expect(
+      (await repository.getDueAutoRecords(DateTime(2026, 8, 31))).map(
+        (item) => item.id,
+      ),
+      isNot(contains(bill.id)),
+    );
+    expect(
+      (await repository.getDueAutoRecords(DateTime(2026, 9, 1))).map(
+        (item) => item.id,
+      ),
+      contains(bill.id),
+    );
     final service = RecurringBillExecutionService(
       database,
       QuickBookkeepingService(
