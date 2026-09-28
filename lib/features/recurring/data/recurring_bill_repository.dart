@@ -14,6 +14,7 @@ import '../../books/data/book_repository.dart';
 abstract interface class RecurringBillRepository {
   Stream<List<RecurringBill>> watchActive();
   Future<List<RecurringBill>> getAll();
+  Future<RecurringBill?> getById(String id);
   Future<List<RecurringBill>> getAllForNotification();
   Future<RecurringBill> create(RecurringBill bill);
   Future<RecurringBill> update(RecurringBill bill);
@@ -33,6 +34,13 @@ class DriftRecurringBillRepository implements RecurringBillRepository {
   @override
   Future<List<RecurringBill>> getAll() async =>
       _map(await _database.recurringBillDao.getAll(bookId: bookId));
+
+  @override
+  Future<RecurringBill?> getById(String id) async {
+    final row = await _database.recurringBillDao.findById(id);
+    if (row == null || row.bookId != bookId) return null;
+    return _map([row]).single;
+  }
 
   @override
   Future<List<RecurringBill>> getAllForNotification() async =>
@@ -286,11 +294,9 @@ class RecurringBillExecutionService {
         try {
           await recordDue(current, occurrence: current.nextDate);
           processed++;
-          final latest = (await _recurringBills.getAll()).where(
-            (item) => item.id == current.id,
-          );
-          if (latest.isEmpty) break;
-          current = latest.single;
+          final latest = await _recurringBills.getById(current.id);
+          if (latest == null) break;
+          current = latest;
           attempts++;
         } catch (error) {
           firstError ??= error;
@@ -309,9 +315,7 @@ class RecurringBillExecutionService {
     RecurringBill bill, {
     DateTime? occurrence,
   }) => _database.transaction(() async {
-    final latest = (await _recurringBills.getAll())
-        .where((item) => item.id == bill.id)
-        .firstOrNull;
+    final latest = await _recurringBills.getById(bill.id);
     if (latest == null) throw StateError('周期账单不存在');
     final requestedDue = occurrence ?? bill.nextDate;
     final existingRecord = await _transactions.getById(
