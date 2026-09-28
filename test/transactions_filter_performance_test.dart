@@ -197,6 +197,118 @@ void main() {
     expect(rows.map((item) => item.id), contains('old-pending-reimbursement'));
   });
 
+  test('reimbursement source stream and linked sum avoid full ledger scans', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime(2026, 8, 20, 12);
+    final source = TransactionRecord(
+      id: 'reimbursement-source-sql',
+      bookId: SeedIds.personalBook,
+      type: TransactionType.expense,
+      amount: 300,
+      accountId: SeedIds.bankAccount,
+      occurredAt: now,
+      createdAt: now,
+      updatedAt: now,
+      reimbursementStatus: ReimbursementStatus.partial,
+      reimbursementAmount: 100,
+    );
+    await repository.create(source);
+    for (final entry in <({String id, double amount})>[
+      (id: 'reimbursement-linked-a', amount: 40),
+      (id: 'reimbursement-linked-b', amount: 60),
+    ]) {
+      await repository.create(
+        TransactionRecord(
+          id: entry.id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.reimbursement,
+          amount: entry.amount,
+          accountId: SeedIds.bankAccount,
+          relatedTransactionId: source.id,
+          occurredAt: now,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    }
+
+    final sources = await repository.watchReimbursementSources().first;
+    expect(sources.map((item) => item.id), contains(source.id));
+    expect(
+      sources.map((item) => item.id),
+      isNot(contains('reimbursement-linked-a')),
+    );
+
+    expect(
+      await database.transactionDao.sumRelatedReimbursementsInCents(
+        bookId: SeedIds.personalBook,
+        relatedTransactionId: source.id,
+      ),
+      10000,
+    );
+    expect(
+      await database.transactionDao.sumRelatedReimbursementsInCents(
+        bookId: SeedIds.personalBook,
+        relatedTransactionId: source.id,
+        excludingTransactionId: 'reimbursement-linked-b',
+      ),
+      4000,
+    );
+  });
+
+  test('asset history stream keeps one year plus future rows only', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime.now();
+    for (final entry in <({String id, DateTime occurredAt})>[
+      (
+        id: 'asset-history-old',
+        occurredAt: now.subtract(const Duration(days: 800)),
+      ),
+      (
+        id: 'asset-history-recent',
+        occurredAt: now.subtract(const Duration(days: 100)),
+      ),
+      (
+        id: 'asset-history-future',
+        occurredAt: now.add(const Duration(days: 30)),
+      ),
+    ]) {
+      await repository.create(
+        TransactionRecord(
+          id: entry.id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 10,
+          accountId: SeedIds.bankAccount,
+          occurredAt: entry.occurredAt,
+          createdAt: entry.occurredAt,
+          updatedAt: entry.occurredAt,
+        ),
+      );
+    }
+
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(database)],
+    );
+    addTearDown(container.dispose);
+    final rows = await container.read(assetHistoryTransactionsProvider.future);
+    expect(rows.map((item) => item.id), contains('asset-history-recent'));
+    expect(rows.map((item) => item.id), contains('asset-history-future'));
+    expect(rows.map((item) => item.id), isNot(contains('asset-history-old')));
+  });
+
   test('recorded month neighbors ignore future rows and respect gaps', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
