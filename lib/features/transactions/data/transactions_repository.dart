@@ -550,6 +550,61 @@ final transactionsProvider = StreamProvider<List<TransactionRecord>>((
 
 typedef TransactionMonthKey = ({int year, int month});
 
+typedef CalendarTransactionMonthKey = ({
+  int year,
+  int month,
+  String? bookId,
+});
+
+typedef RecordedMonthNeighbors = ({
+  DateTime? previous,
+  DateTime? next,
+});
+
+DateTime? _monthFromKey(int? key) {
+  if (key == null) return null;
+  return DateTime(key ~/ 100, key % 100);
+}
+
+final calendarMonthTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, CalendarTransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final start = DateTime(key.year, key.month);
+      final repository = DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: key.bookId,
+      );
+      yield* repository.watchRange(
+        start: start,
+        endExclusive: DateTime(key.year, key.month + 1),
+      );
+    });
+
+final recordedMonthNeighborsProvider =
+    StreamProvider.family<RecordedMonthNeighbors, CalendarTransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final raw = ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchRecordedMonthNeighbors(
+            month: DateTime(key.year, key.month),
+            now: DateTime.now(),
+            bookId: key.bookId,
+          );
+      yield* raw.map(
+        (value) => (
+          previous: _monthFromKey(value.previousMonthKey),
+          next: _monthFromKey(value.nextMonthKey),
+        ),
+      );
+    });
+
 final transactionsForMonthProvider =
     StreamProvider.family<List<TransactionRecord>, TransactionMonthKey>((
       ref,
