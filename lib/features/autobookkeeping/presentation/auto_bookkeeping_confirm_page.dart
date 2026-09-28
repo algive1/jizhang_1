@@ -690,34 +690,46 @@ class _AutoBookkeepingConfirmPageState
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: SafeArea(
+            top: false,
+            left: false,
+            right: false,
+            minimum: const EdgeInsets.only(bottom: 4),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final panelHeight = constraints.maxHeight * .60;
                 return Align(
                   alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    height: constraints.maxHeight,
-                    child: Stack(
-                      alignment: Alignment.bottomCenter,
-                      children: [
-                        const Positioned.fill(
-                          child: ColoredBox(
-                            color: Color.fromRGBO(0, 0, 0, .12),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: SizedBox(
-                            key: const ValueKey(
-                              'autobookkeeping-overlay-panel',
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                    child: SizedBox(
+                      key: const ValueKey('autobookkeeping-overlay-panel'),
+                      width: double.infinity,
+                      height: panelHeight,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        elevation: 12,
+                        shadowColor: Colors.black.withValues(alpha: .22),
+                        clipBehavior: Clip.antiAlias,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 14,
+                              child: Center(
+                                child: Container(
+                                  width: 34,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: .18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
                             ),
-                            width: double.infinity,
-                            height: panelHeight,
-                            child: Material(
-                              color: Theme.of(context).colorScheme.surface,
-                              elevation: 12,
-                              clipBehavior: Clip.antiAlias,
-                              borderRadius: BorderRadius.circular(24),
+                            Expanded(
                               child: _loading
                                   ? Stack(
                                       children: [
@@ -725,7 +737,7 @@ class _AutoBookkeepingConfirmPageState
                                           child: CircularProgressIndicator(),
                                         ),
                                         Positioned(
-                                          top: 8,
+                                          top: 0,
                                           right: 8,
                                           child: IconButton(
                                             key: const ValueKey(
@@ -742,9 +754,9 @@ class _AutoBookkeepingConfirmPageState
                                     )
                                   : _buildOverlayContent(context),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -822,6 +834,7 @@ class _AutoBookkeepingConfirmPageState
       reviewScreenshotAvailable: candidate.screenshotPath != null,
       reviewScreenshotEnabled:
           candidate.screenshotPath != null && _keepScreenshot,
+      reviewBottomSafeArea: false,
       onReviewCancel: _close,
       onReviewComplete: _saveOverlayDraft,
       onReviewScreenshotChanged: (enabled) {
