@@ -18,6 +18,7 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../account/application/account_session_controller.dart';
 import '../../account/domain/account_session.dart';
 import '../../account/domain/account_session_status.dart';
+import '../../books/data/book_repository.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../budgets/data/budget_repository.dart';
 import '../../membership/data/membership_repository.dart';
