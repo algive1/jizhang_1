@@ -2,7 +2,7 @@ package com.algive.jizhang_app.autobookkeeping
 
 import android.content.Context
 import android.os.Handler
-import android.os.Looper
+import android.os.HandlerThread
 
 /** Small, redacted ring buffer for diagnosing the automatic bookkeeping flow. */
 object AutoBookkeepingLogStore {
@@ -12,22 +12,21 @@ object AutoBookkeepingLogStore {
     private const val FLUSH_DELAY_MS = 1500L
     private val lock = Any()
     private val pending = ArrayDeque<String>()
-    private val handler = Handler(Looper.getMainLooper())
+    private val workerThread = HandlerThread("AutoBookkeepingLogs").apply { start() }
+    private val handler = Handler(workerThread.looper)
     private var flushScheduled = false
 
     fun record(context: Context, stage: String, detail: String) {
         val line = "${System.currentTimeMillis()}|${stage.take(40)}|${detail.replace('|', '/').take(160)}"
         synchronized(lock) {
             pending.addLast(line)
-            if (pending.size >= 8) {
-                flushLocked(context.applicationContext)
-            } else if (!flushScheduled) {
+            if (!flushScheduled) {
                 flushScheduled = true
                 handler.postDelayed({
                     synchronized(lock) {
                         flushLocked(context.applicationContext)
                     }
-                }, FLUSH_DELAY_MS)
+                }, if (pending.size >= 8) 0L else FLUSH_DELAY_MS)
             }
         }
     }
@@ -55,6 +54,7 @@ object AutoBookkeepingLogStore {
         synchronized(lock) {
             pending.clear()
             flushScheduled = false
+            handler.removeCallbacksAndMessages(null)
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
                 .remove(KEY_LINES)
