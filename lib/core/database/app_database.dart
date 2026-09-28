@@ -1732,6 +1732,11 @@ typedef TransactionMonthSqlSummary = ({
   int personalExpenseCents,
 });
 
+typedef TransactionLedgerMonthSqlSummary = ({
+  int incomeCents,
+  int expenseCents,
+});
+
 typedef TransactionCategorySqlSummary = ({
   String id,
   String name,
@@ -2035,6 +2040,58 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
             (row) => OrderingTerm.desc(row.createdAt),
           ]))
         .watch();
+  }
+
+  Stream<TransactionLedgerMonthSqlSummary> watchLedgerMonthSummary({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    const netExpense =
+        'MAX(amount_in_cents - COALESCE(refund_amount_in_cents, 0), 0)';
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS income_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('expense', 'lend', 'assetPurchase')
+              THEN $netExpense
+            ELSE 0
+          END
+        ), 0) AS expense_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND UPPER(currency) = UPPER(?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        incomeCents: row.read<int>('income_cents'),
+        expenseCents: row.read<int>('expense_cents'),
+      ),
+    );
   }
 
   Stream<TransactionMonthSqlSummary> watchMonthSummary({
