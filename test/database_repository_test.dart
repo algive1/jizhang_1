@@ -21,14 +21,15 @@ void main() {
   tearDown(() => database.close());
 
   test('scoped transaction range index is installed', () async {
-    expect(database.schemaVersion, 23);
+    expect(database.schemaVersion, 24);
     final indexes = await database
         .customSelect("PRAGMA index_list('transactions')")
         .get();
-    expect(
-      indexes.map((row) => row.read<String>('name')),
-      contains('idx_transactions_book_deleted_occurred'),
-    );
+    final names = indexes.map((row) => row.read<String>('name')).toSet();
+    expect(names, contains('idx_transactions_book_deleted_occurred'));
+    expect(names, contains('idx_transactions_related_type'));
+    expect(names, contains('idx_transactions_reimbursement_status'));
+    expect(names, contains('idx_transactions_type_occurred'));
   });
 
   test(
