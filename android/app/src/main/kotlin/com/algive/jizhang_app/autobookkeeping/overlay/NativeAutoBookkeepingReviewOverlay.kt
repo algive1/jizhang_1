@@ -272,7 +272,15 @@ class NativeAutoBookkeepingReviewOverlay(
 
         if (!userSelectedType) {
             transactionType = payload["transactionType"]?.toString()
-                ?.takeIf { it in setOf("expense", "income", "transfer") }
+                ?.takeIf {
+                    it in setOf(
+                        "expense",
+                        "income",
+                        "refund",
+                        "reimbursement",
+                        "transfer",
+                    )
+                }
                 ?: previousType
         }
 
@@ -526,7 +534,10 @@ class NativeAutoBookkeepingReviewOverlay(
 
     private fun renderTypeTabs() {
         typeTabs.forEach { (key, view) ->
-            val selected = key == transactionType
+            val selected =
+                key == transactionType ||
+                    (key == "income" &&
+                        transactionType in setOf("refund", "reimbursement"))
             view.background = if (selected) rounded(orange, 20f) else null
             view.setTextColor(if (selected) Color.WHITE else primaryText)
             view.typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
@@ -774,12 +785,16 @@ class NativeAutoBookkeepingReviewOverlay(
 
     private fun initialType(): String = when (candidate.transactionType) {
         "INCOME" -> "income"
-        "TRANSFER" -> "transfer"
+        "REFUND" -> "refund"
+        "REIMBURSEMENT" -> "reimbursement"
+        // Existing Flutter behavior treats transfer-looking payment scenes as
+        // expense until the resolver proves it is between owned accounts.
+        "TRANSFER" -> "expense"
         else -> "expense"
     }
 
     private fun categoryTypeFor(type: String): String =
-        if (type == "income") "income" else "expense"
+        if (type in setOf("income", "refund", "reimbursement")) "income" else "expense"
 
     private fun dateLabel(timestamp: Long): String {
         val now = Date()
