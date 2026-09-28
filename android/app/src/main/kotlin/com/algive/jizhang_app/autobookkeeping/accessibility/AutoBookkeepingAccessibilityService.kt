@@ -106,7 +106,12 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val eventPackage = actualEvent.packageName?.toString()
         val eventRule = eventPackage?.let(ruleRegistry::ruleFor)
         if (!AutoBookkeepingSettings.enabled(this) || eventRule == null) return
-        if (actualEvent.eventType !in setOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED)) return
+        when (actualEvent.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> Unit
+            else -> return
+        }
         if (eventRule.sourceApp != "WECHAT" || eventPackage in QianjiPageCatalog.pageTypesByPackage) {
             // Qianji covers WeChat detail, transfer and red-packet pages outside
             // the narrow legacy payment Activity hints. Each page recognizer
@@ -120,16 +125,23 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             // (for example android.widget.LinearLayout). Keep only a class from
             // the emitting app so an incidental child view cannot fail an
             // Activity-level profile gate such as UnionPay's main-page exclusion.
-            if (activity.startsWith("${eventPackage.orEmpty()}.")) {
+            val appActivity = activity.startsWith("${eventPackage.orEmpty()}.")
+            val activityChanged =
+                appActivity &&
+                    (lastActivityPackage != eventPackage ||
+                        lastActivityClassName != activity)
+            if (appActivity) {
                 lastActivityPackage = eventPackage
                 lastActivityClassName = activity
             }
-            Log.i(TAG, "window event class=$activity")
-            AutoBookkeepingLogStore.record(
-                this,
-                "window_event",
-                "${eventPackage.orEmpty()}:${activity.substringAfterLast('.')}",
-            )
+            if (activityChanged) {
+                Log.i(TAG, "window event class=$activity")
+                AutoBookkeepingLogStore.record(
+                    this,
+                    "window_event",
+                    "${eventPackage.orEmpty()}:${activity.substringAfterLast('.')}",
+                )
+            }
             if (
                 eventRule.sourceApp == "WECHAT" &&
                 activity.startsWith("${eventPackage.orEmpty()}.")
