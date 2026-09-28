@@ -30,17 +30,30 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
 
   @override
   Widget build(BuildContext context) {
+    final period = ref.watch(analysisPeriodProvider);
+    final currency = ref.watch(analysisCurrencyProvider);
+    final scope = ref.watch(analysisScopeProvider);
+    final dataKey = (
+      scope: scope,
+      period: period,
+      month: widget.month,
+    );
     final snapshot = widget.month == null
         ? ref.watch(analysisSnapshotProvider)
         : ref
-              .watch(analysisRepositoryProvider)
+              .watch(
+                analysisRepositoryForKeyProvider((
+                  period: period,
+                  month: widget.month,
+                  currency: currency,
+                )),
+              )
               .analyze(
-                period: ref.watch(analysisPeriodProvider),
+                period: period,
                 month: widget.month,
-                currency: ref.watch(analysisCurrencyProvider),
+                currency: currency,
               );
-    final transactions = ref.watch(analysisTransactionsProvider);
-    final scope = ref.watch(analysisScopeProvider);
+    final transactions = ref.watch(analysisTransactionsForKeyProvider(dataKey));
     final currencies = {
       'CNY',
       snapshot.currency,
@@ -117,11 +130,15 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                         const Text('收支读取失败，请重试'),
                         TextButton(
                           onPressed: () {
-                            if (scope == AnalysisScope.allBooks) {
-                              ref.invalidate(allTransactionsProvider);
-                            } else {
-                              ref.invalidate(transactionsProvider);
-                            }
+                            ref.invalidate(
+                              analysisTransactionsForKeyProvider(dataKey),
+                            );
+                            ref.invalidate(
+                              analysisLargeExpenseThresholdProvider((
+                                scope: scope,
+                                currency: currency,
+                              )),
+                            );
                           },
                           child: const Text('重新加载'),
                         ),
