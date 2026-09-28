@@ -38,10 +38,7 @@ class JizhangApp extends ConsumerStatefulWidget {
 }
 
 class _JizhangAppState extends ConsumerState<JizhangApp>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  static const _startupPosterDuration = Duration(milliseconds: 450);
-  late final AnimationController _startupPosterController;
-  bool _startupPosterElapsed = false;
+    with WidgetsBindingObserver {
   static const _navigationChannel = MethodChannel('jizhang/navigation');
   late final void Function(FlutterErrorDetails)? _previousFlutterErrorHandler;
   late final bool Function(Object, StackTrace)? _previousPlatformErrorHandler;
@@ -61,14 +58,6 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     _installDiagnosticHandlers();
     WidgetsBinding.instance.addObserver(this);
     _navigationChannel.setMethodCallHandler(_handleNavigationCall);
-    _startupPosterController =
-        AnimationController(vsync: this, duration: _startupPosterDuration)
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed && mounted) {
-              setState(() => _startupPosterElapsed = true);
-            }
-          })
-          ..forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(() async {
         try {
@@ -385,7 +374,6 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   @override
   void dispose() {
     _navigationChannel.setMethodCallHandler(null);
-    _startupPosterController.dispose();
     FlutterError.onError = _previousFlutterErrorHandler;
     PlatformDispatcher.instance.onError = _previousPlatformErrorHandler;
     WidgetsBinding.instance.removeObserver(this);
@@ -399,8 +387,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       PlatformDispatcher.instance.defaultRouteName,
     );
     final databaseBootstrap = ref.watch(databaseBootstrapProvider);
-    if (databaseBootstrap.isLoading ||
-        (!overlayHost && !_startupPosterElapsed)) {
+    if (databaseBootstrap.isLoading) {
       if (overlayHost) {
         return MaterialApp(
           title: '好好记账',
