@@ -20,6 +20,17 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('scoped transaction range index is installed', () async {
+    expect(database.schemaVersion, 23);
+    final indexes = await database
+        .customSelect("PRAGMA index_list('transactions')")
+        .get();
+    expect(
+      indexes.map((row) => row.read<String>('name')),
+      contains('idx_transactions_book_deleted_occurred'),
+    );
+  });
+
   test(
     'create, update and soft-delete keep account balances correct',
     () async {
