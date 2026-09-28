@@ -82,8 +82,8 @@ class NativeAutoBookkeepingReviewOverlay(
         rowCount = 3
         alignmentMode = GridLayout.ALIGN_BOUNDS
         useDefaultMargins = false
-        setPadding(dp(2), dp(2), dp(2), dp(2))
-        background = rounded(surfaceColor, 22f, dividerColor, 1)
+        setPadding(dp(6), dp(6), dp(6), dp(6))
+        background = rounded(surfaceColor, 24f, dividerColor, 1)
     }
 
     private val noteField = EditText(context).apply {
@@ -472,7 +472,7 @@ class NativeAutoBookkeepingReviewOverlay(
 
         card.addView(categoriesGrid, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(184),
+            dp(182),
         ).apply {
             topMargin = dp(4)
         })
@@ -612,10 +612,10 @@ class NativeAutoBookkeepingReviewOverlay(
                 background = if (selected) rounded(primarySoft, 18f) else null
                 addView(TextView(context).apply {
                     text = categoryGlyph(option.label)
-                    textSize = 20f
+                    textSize = 28f
                     gravity = Gravity.CENTER
                     setTextColor(primary)
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)))
                 addView(TextView(context).apply {
                     text = option.label
                     textSize = 11.5f
@@ -637,7 +637,7 @@ class NativeAutoBookkeepingReviewOverlay(
                 tile,
                 GridLayout.LayoutParams().apply {
                     width = 0
-                    height = dp(58)
+                    height = dp(56)
                     columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
                 },
             )
@@ -647,7 +647,7 @@ class NativeAutoBookkeepingReviewOverlay(
                 View(context),
                 GridLayout.LayoutParams().apply {
                     width = 0
-                    height = dp(58)
+                    height = dp(56)
                     columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
                 },
             )
