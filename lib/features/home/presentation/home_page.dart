@@ -15,6 +15,7 @@ import '../../books/data/book_repository.dart';
 import '../../sharing/application/shared_book_sync_service.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/analysis.dart';
+import '../../../core/models/book.dart';
 import '../../../core/models/dashboard_snapshot.dart';
 import '../../../core/models/goal.dart';
 import '../../../core/models/transaction_record.dart';
@@ -127,32 +128,7 @@ class _HomePageState extends ConsumerState<HomePage>
     final visibility = book == null
         ? const HomeCardVisibility()
         : cardVisibility[book.id] ?? const HomeCardVisibility();
-    final sharedState = ref.watch(activeSharedStateProvider).value;
-    final goalsState = ref.watch(goalsProvider);
-    final goal = (goalsState.value ?? const <Goal>[])
-        .where((g) => g.status == GoalStatus.active)
-        .firstOrNull;
     final monthSummaryState = ref.watch(homeCurrentMonthSummaryProvider);
-    final expenseCategoryState = ref.watch(homeExpenseCategorySummaryProvider);
-    final expenseCategorySummary =
-        expenseCategoryState.value ??
-        const HomeExpenseCategorySummary(categories: [], totalExpense: 0);
-    final budgets = ref.watch(currentMonthBudgetsProvider);
-    final snapshot = ref.watch(dashboardSnapshotProvider);
-    final insightFeed = ref.watch(insightFeedProvider);
-    final insight = ref.watch(homeInsightProvider);
-    final recentState = ref.watch(homeRecentTransactionsProvider);
-    final recent = recentState.value ?? const <TransactionRecord>[];
-    final accountsState = ref.watch(allAccountsProvider);
-    final accounts = accountsState.value ?? const [];
-    final excludedAssetAccountIds =
-        ref.watch(excludedAssetAccountIdsProvider).value ?? const <String>{};
-    final accountsForAssetTotal = accounts
-        .where((account) => !excludedAssetAccountIds.contains(account.id))
-        .toList(growable: false);
-    final accountNames = {
-      for (final account in accounts) account.id: account.displayName,
-    };
     // Empty transaction history is a valid final state. Keep already loaded
     // content visible while a provider refreshes so startup/import invalidation
     // never collapses the home page back to a blank shell.
@@ -196,49 +172,12 @@ class _HomePageState extends ConsumerState<HomePage>
               onNotifications: () => context.push('/assistant'),
               onCalendar: () => context.push('/transactions/calendar'),
             ),
-            HomeInsightDrawer(
-              key: ValueKey('insight-${book?.id}-${_day.toIso8601String()}'),
+            _HomeInsightSection(
               bookId: book?.id ?? '',
               day: _day,
-              insight: insight,
               available: dataReady,
-              cooldownDays: insightFeed.cooldownDays,
-              onTap: () {
-                final item = insight;
-                if (item == null) return;
-                context.push(
-                  '/insights/${Uri.encodeComponent(item.id)}',
-                  extra: item,
-                );
-              },
             ),
-            if (book?.isShared == true)
-              InkWell(
-                onTap: () => context.push('/profile/family'),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.people_outline,
-                        size: 16,
-                        color: context.appPrimary,
-                      ),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '${(sharedState?['pending'] as List? ?? []).length} 项待同步 · ${sharedState?['error'] != null ? '需要处理' : '共享成员'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.appPrimary,
-                          ),
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right, size: 18),
-                    ],
-                  ),
-                ),
-              ),
+            if (book != null) _HomeSharedStatus(book: book),
             if (booksState.hasError ||
                 (monthSummaryState.hasError && !monthSummaryState.hasValue))
               _ReadError(
@@ -276,167 +215,26 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ),
             const SizedBox(height: 12),
-            if (budgets.hasError || goalsState.hasError)
-              _ReadError(
-                label: '预算与目标',
-                onRetry: () {
-                  ref.invalidate(currentMonthBudgetsProvider);
-                  ref.invalidate(goalsProvider);
-                },
-              )
-            else if ((budgets.isLoading && !budgets.hasValue) ||
-                (goalsState.isLoading && !goalsState.hasValue))
-              const HomeSurface(child: LinearProgressIndicator())
-            else if (dataReady)
-              HomeSpendingGoalCard(
-                bookType: book.type,
-                snapshot: snapshot,
-                goal: goal,
-                onBudget: () => context.push('/profile/budgets'),
-                onCalculation: () => _showCalculation(snapshot),
-                onGoal: () =>
-                    context.push(goal == null ? '/goals' : '/goals/${goal.id}'),
-                todayAmountHidden: visibility.today,
-                goalAmountHidden: visibility.goal,
-                onTodayAmountHiddenChanged: (hidden) => ref
-                    .read(homeCardVisibilityProvider.notifier)
-                    .setHidden(book.id, HomeAmountSection.today, hidden),
-                onGoalAmountHiddenChanged: (hidden) => ref
-                    .read(homeCardVisibilityProvider.notifier)
-                    .setHidden(book.id, HomeAmountSection.goal, hidden),
+            if (book != null)
+              _HomeBudgetGoalSection(
+                book: book,
+                dataReady: dataReady,
+                visibility: visibility,
+                onCalculation: _showCalculation,
               ),
-            if (dataReady) ...[
+            if (dataReady && book != null) ...[
               const SizedBox(height: 12),
-              if (accountsState.hasError)
-                HomeAssetCard.error(
-                  onRetry: () => ref.invalidate(allAccountsProvider),
-                )
-              else if (accountsState.isLoading && !accountsState.hasValue)
-                const HomeAssetCard.loading()
-              else
-                HomeAssetCard(
-                  accounts: accountsForAssetTotal,
-                  investmentByCurrency: ref.watch(
-                    includedInvestmentValueByCurrencyProvider,
-                  ),
-                  amountHidden: visibility.assets,
-                  onAmountHiddenChanged: (hidden) => ref
-                      .read(homeCardVisibilityProvider.notifier)
-                      .setHidden(book.id, HomeAmountSection.assets, hidden),
-                  onTap: () => context.push('/profile/assets'),
-                ),
+              _HomeAssetSection(book: book, visibility: visibility),
               const SizedBox(height: 12),
               const HomeExpenseTrend(),
               const SizedBox(height: 12),
-              HomeSurface(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SectionHeading(
-                      title: '分类支出',
-                      action: '查看全部',
-                      onTap: _analysis,
-                    ),
-                    const SizedBox(height: 10),
-                    if (expenseCategoryState.isLoading &&
-                        !expenseCategoryState.hasValue)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator(),
-                      )
-                    else if (expenseCategorySummary.categories.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          '记下一笔支出，在这里了解钱花在哪里',
-                          style: TextStyle(
-                            color: context.appSecondaryText,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    else
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns =
-                              constraints.maxWidth < 290 ||
-                                  MediaQuery.textScalerOf(context).scale(14) >
-                                      19
-                              ? 2
-                              : 5;
-                          return Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: expenseCategorySummary.categories
-                                .take(5)
-                                .map(
-                                  (category) => SizedBox(
-                                    width:
-                                        (constraints.maxWidth -
-                                            8 * (columns - 1)) /
-                                        columns,
-                                    child: _CategoryExpense(
-                                      category: category,
-                                      total: expenseCategorySummary.totalExpense,
-                                      onTap: () => _showCategory(category),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          );
-                        },
-                      ),
-                  ],
-                ),
+              _HomeCategoryExpenseSection(
+                onAnalysis: _analysis,
+                onCategory: _showCategory,
               ),
+              const SizedBox(height: 12),
+              const _HomeRecentTransactionsSection(),
             ],
-            SizedBox(height: 12),
-            if (dataReady)
-              HomeSurface(
-                child: Column(
-                  children: [
-                    _SectionHeading(
-                      title: '最近交易',
-                      action: '查看更多',
-                      onTap: () => context.go('/transactions'),
-                    ),
-                    const SizedBox(height: 6),
-                    if (recentState.hasError)
-                      _ReadError(
-                        label: '最近交易',
-                        onRetry: () =>
-                            ref.invalidate(homeRecentTransactionsProvider),
-                      )
-                    else if (recentState.isLoading && !recentState.hasValue)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 18),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (recent.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Column(
-                          children: [
-                            Text(
-                              '每一笔小记录，都让生活更清晰',
-                              style: TextStyle(
-                                color: context.appSecondaryText,
-                                fontSize: 13,
-                              ),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => showQuickAddSheet(context),
-                              icon: const Icon(Icons.add),
-                              label: const Text('记一笔'),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      ..._buildRecentGroups(recent, accountNames),
-                  ],
-                ),
-              ),
           ],
         ),
     );
@@ -458,73 +256,6 @@ class _HomePageState extends ConsumerState<HomePage>
     if (openMembership == true && mounted) {
       context.push('/profile/membership');
     }
-  }
-
-  List<Widget> _buildRecentGroups(
-    List<TransactionRecord> transactions,
-    Map<String, String> accountNames,
-  ) {
-    final groups = <DateTime, List<TransactionRecord>>{};
-    for (final transaction in transactions) {
-      final date = DateUtils.dateOnly(transaction.occurredAt.toLocal());
-      groups.putIfAbsent(date, () => []).add(transaction);
-    }
-    final entries = groups.entries.toList(growable: false);
-    return [
-      for (var groupIndex = 0; groupIndex < entries.length; groupIndex++)
-        Padding(
-          padding: EdgeInsets.only(
-            top: groupIndex == 0 ? 0 : 10,
-            bottom: groupIndex == entries.length - 1 ? 0 : 4,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 2, bottom: 2),
-                child: Text(
-                  TransactionDateFormatter.groupLabel(entries[groupIndex].key),
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              for (
-                var itemIndex = 0;
-                itemIndex < entries[groupIndex].value.length;
-                itemIndex++
-              )
-                Builder(
-                  builder: (context) {
-                    final record = entries[groupIndex].value[itemIndex];
-                    final source = accountNames[record.accountId];
-                    final destination = record.destinationAccountId == null
-                        ? null
-                        : accountNames[record.destinationAccountId!];
-                    return TransactionTile(
-                      transaction: record,
-                      homeStyle: true,
-                      accountName: source == null
-                          ? null
-                          : destination == null
-                          ? source
-                          : '$source → $destination',
-                      showDivider:
-                          !(groupIndex == entries.length - 1 &&
-                              itemIndex ==
-                                  entries[groupIndex].value.length - 1),
-                      onTap: () => openTransactionDetail(context, record),
-                      onLongPress: () =>
-                          showTransactionActions(context, ref, record),
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-    ];
   }
 
   Future<void> _showCalculation(DashboardSnapshot snapshot) =>
@@ -764,6 +495,381 @@ class _HomePageState extends ConsumerState<HomePage>
         },
       ),
     );
+  }
+}
+
+
+class _HomeInsightSection extends ConsumerWidget {
+  const _HomeInsightSection({
+    required this.bookId,
+    required this.day,
+    required this.available,
+  });
+
+  final String bookId;
+  final DateTime day;
+  final bool available;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final feed = ref.watch(insightFeedProvider);
+    final insight = ref.watch(homeInsightProvider);
+    return HomeInsightDrawer(
+      key: ValueKey('insight-$bookId-${day.toIso8601String()}'),
+      bookId: bookId,
+      day: day,
+      insight: insight,
+      available: available,
+      cooldownDays: feed.cooldownDays,
+      onTap: () {
+        final item = insight;
+        if (item == null) return;
+        context.push(
+          '/insights/${Uri.encodeComponent(item.id)}',
+          extra: item,
+        );
+      },
+    );
+  }
+}
+
+class _HomeSharedStatus extends ConsumerWidget {
+  const _HomeSharedStatus({required this.book});
+
+  final LedgerBook book;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!book.isShared) return const SizedBox.shrink();
+    final sharedState = ref.watch(activeSharedStateProvider).value;
+    return InkWell(
+      onTap: () => context.push('/profile/family'),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 16,
+              color: context.appPrimary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '${(sharedState?['pending'] as List? ?? []).length} 项待同步 · '
+                '${sharedState?['error'] != null ? '需要处理' : '共享成员'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.appPrimary,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeBudgetGoalSection extends ConsumerWidget {
+  const _HomeBudgetGoalSection({
+    required this.book,
+    required this.dataReady,
+    required this.visibility,
+    required this.onCalculation,
+  });
+
+  final LedgerBook book;
+  final bool dataReady;
+  final HomeCardVisibility visibility;
+  final ValueChanged<DashboardSnapshot> onCalculation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgets = ref.watch(currentMonthBudgetsProvider);
+    final goalsState = ref.watch(goalsProvider);
+    final goal = (goalsState.value ?? const <Goal>[])
+        .where((item) => item.status == GoalStatus.active)
+        .firstOrNull;
+    final snapshot = ref.watch(dashboardSnapshotProvider);
+
+    if (budgets.hasError || goalsState.hasError) {
+      return _ReadError(
+        label: '预算与目标',
+        onRetry: () {
+          ref.invalidate(currentMonthBudgetsProvider);
+          ref.invalidate(goalsProvider);
+        },
+      );
+    }
+    if ((budgets.isLoading && !budgets.hasValue) ||
+        (goalsState.isLoading && !goalsState.hasValue)) {
+      return const HomeSurface(child: LinearProgressIndicator());
+    }
+    if (!dataReady) return const SizedBox.shrink();
+
+    return HomeSpendingGoalCard(
+      bookType: book.type,
+      snapshot: snapshot,
+      goal: goal,
+      onBudget: () => context.push('/profile/budgets'),
+      onCalculation: () => onCalculation(snapshot),
+      onGoal: () =>
+          context.push(goal == null ? '/goals' : '/goals/${goal.id}'),
+      todayAmountHidden: visibility.today,
+      goalAmountHidden: visibility.goal,
+      onTodayAmountHiddenChanged: (hidden) => ref
+          .read(homeCardVisibilityProvider.notifier)
+          .setHidden(book.id, HomeAmountSection.today, hidden),
+      onGoalAmountHiddenChanged: (hidden) => ref
+          .read(homeCardVisibilityProvider.notifier)
+          .setHidden(book.id, HomeAmountSection.goal, hidden),
+    );
+  }
+}
+
+class _HomeAssetSection extends ConsumerWidget {
+  const _HomeAssetSection({
+    required this.book,
+    required this.visibility,
+  });
+
+  final LedgerBook book;
+  final HomeCardVisibility visibility;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountsState = ref.watch(allAccountsProvider);
+    final excluded =
+        ref.watch(excludedAssetAccountIdsProvider).value ?? const <String>{};
+    final investmentByCurrency = ref.watch(
+      includedInvestmentValueByCurrencyProvider,
+    );
+
+    if (accountsState.hasError) {
+      return HomeAssetCard.error(
+        onRetry: () => ref.invalidate(allAccountsProvider),
+      );
+    }
+    if (accountsState.isLoading && !accountsState.hasValue) {
+      return const HomeAssetCard.loading();
+    }
+    final accounts = (accountsState.value ?? const [])
+        .where((account) => !excluded.contains(account.id))
+        .toList(growable: false);
+    return HomeAssetCard(
+      accounts: accounts,
+      investmentByCurrency: investmentByCurrency,
+      amountHidden: visibility.assets,
+      onAmountHiddenChanged: (hidden) => ref
+          .read(homeCardVisibilityProvider.notifier)
+          .setHidden(book.id, HomeAmountSection.assets, hidden),
+      onTap: () => context.push('/profile/assets'),
+    );
+  }
+}
+
+class _HomeCategoryExpenseSection extends ConsumerWidget {
+  const _HomeCategoryExpenseSection({
+    required this.onAnalysis,
+    required this.onCategory,
+  });
+
+  final VoidCallback onAnalysis;
+  final ValueChanged<CashflowCategory> onCategory;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(homeExpenseCategorySummaryProvider);
+    final summary =
+        state.value ??
+        const HomeExpenseCategorySummary(categories: [], totalExpense: 0);
+    return HomeSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeading(
+            title: '分类支出',
+            action: '查看全部',
+            onTap: onAnalysis,
+          ),
+          const SizedBox(height: 10),
+          if (state.isLoading && !state.hasValue)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: LinearProgressIndicator(),
+            )
+          else if (summary.categories.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                '记下一笔支出，在这里了解钱花在哪里',
+                style: TextStyle(
+                  color: context.appSecondaryText,
+                  fontSize: 12,
+                ),
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns =
+                    constraints.maxWidth < 290 ||
+                        MediaQuery.textScalerOf(context).scale(14) > 19
+                    ? 2
+                    : 5;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: summary.categories
+                      .take(5)
+                      .map(
+                        (category) => SizedBox(
+                          width:
+                              (constraints.maxWidth - 8 * (columns - 1)) /
+                              columns,
+                          child: _CategoryExpense(
+                            category: category,
+                            total: summary.totalExpense,
+                            onTap: () => onCategory(category),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeRecentTransactionsSection extends ConsumerWidget {
+  const _HomeRecentTransactionsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recentState = ref.watch(homeRecentTransactionsProvider);
+    final recent = recentState.value ?? const <TransactionRecord>[];
+    final accounts = ref.watch(allAccountsProvider).value ?? const [];
+    final accountNames = {
+      for (final account in accounts) account.id: account.displayName,
+    };
+    return HomeSurface(
+      child: Column(
+        children: [
+          _SectionHeading(
+            title: '最近交易',
+            action: '查看更多',
+            onTap: () => context.go('/transactions'),
+          ),
+          const SizedBox(height: 6),
+          if (recentState.hasError)
+            _ReadError(
+              label: '最近交易',
+              onRetry: () => ref.invalidate(homeRecentTransactionsProvider),
+            )
+          else if (recentState.isLoading && !recentState.hasValue)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (recent.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                children: [
+                  Text(
+                    '每一笔小记录，都让生活更清晰',
+                    style: TextStyle(
+                      color: context.appSecondaryText,
+                      fontSize: 13,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => showQuickAddSheet(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('记一笔'),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._buildGroups(context, ref, recent, accountNames),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildGroups(
+    BuildContext context,
+    WidgetRef ref,
+    List<TransactionRecord> transactions,
+    Map<String, String> accountNames,
+  ) {
+    final groups = <DateTime, List<TransactionRecord>>{};
+    for (final transaction in transactions) {
+      final date = DateUtils.dateOnly(transaction.occurredAt.toLocal());
+      groups.putIfAbsent(date, () => []).add(transaction);
+    }
+    final entries = groups.entries.toList(growable: false);
+    return [
+      for (var groupIndex = 0; groupIndex < entries.length; groupIndex++)
+        Padding(
+          padding: EdgeInsets.only(
+            top: groupIndex == 0 ? 0 : 10,
+            bottom: groupIndex == entries.length - 1 ? 0 : 4,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 2),
+                child: Text(
+                  TransactionDateFormatter.groupLabel(entries[groupIndex].key),
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              for (
+                var itemIndex = 0;
+                itemIndex < entries[groupIndex].value.length;
+                itemIndex++
+              )
+                Builder(
+                  builder: (context) {
+                    final record = entries[groupIndex].value[itemIndex];
+                    final source = accountNames[record.accountId];
+                    final destination = record.destinationAccountId == null
+                        ? null
+                        : accountNames[record.destinationAccountId!];
+                    return TransactionTile(
+                      transaction: record,
+                      homeStyle: true,
+                      accountName: source == null
+                          ? null
+                          : destination == null
+                          ? source
+                          : '$source → $destination',
+                      showDivider:
+                          !(groupIndex == entries.length - 1 &&
+                              itemIndex ==
+                                  entries[groupIndex].value.length - 1),
+                      onTap: () => openTransactionDetail(context, record),
+                      onLongPress: () =>
+                          showTransactionActions(context, ref, record),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+    ];
   }
 }
 
