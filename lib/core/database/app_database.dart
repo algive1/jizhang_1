@@ -1673,18 +1673,23 @@ class AccountDao extends DatabaseAccessor<AppDatabase> with _$AccountDaoMixin {
     int deltaInCents,
     DateTime updatedAt,
   ) async {
-    final account = await findById(accountId);
-    if (account == null) {
+    final affected = await customUpdate(
+      '''
+      UPDATE accounts
+      SET balance_in_cents = balance_in_cents + ?,
+          updated_at = ?
+      WHERE id = ?
+      ''',
+      variables: [
+        Variable<int>(deltaInCents),
+        Variable<DateTime>(updatedAt),
+        Variable<String>(accountId),
+      ],
+      updates: {accountEntries},
+    );
+    if (affected == 0) {
       throw StateError('Account $accountId does not exist');
     }
-    await (update(
-      accountEntries,
-    )..where((row) => row.id.equals(accountId))).write(
-      AccountEntriesCompanion(
-        balanceInCents: Value(account.balanceInCents + deltaInCents),
-        updatedAt: Value(updatedAt),
-      ),
-    );
   }
 
   Future<void> reorderActive(List<String> ids, {String? bookId}) async {
