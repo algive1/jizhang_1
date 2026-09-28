@@ -354,6 +354,71 @@ void main() {
     );
   });
 
+  test('type month SQL sum excludes other transaction types and months', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    Future<void> add(
+      String id,
+      TransactionType type,
+      double amount,
+      DateTime occurredAt,
+    ) async {
+      await repository.create(
+        TransactionRecord(
+          id: id,
+          bookId: SeedIds.personalBook,
+          type: type,
+          amount: amount,
+          accountId: SeedIds.bankAccount,
+          occurredAt: occurredAt,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        ),
+      );
+    }
+
+    await add(
+      'month-reimbursement-a',
+      TransactionType.reimbursement,
+      40,
+      DateTime(2026, 9, 5),
+    );
+    await add(
+      'month-reimbursement-b',
+      TransactionType.reimbursement,
+      60,
+      DateTime(2026, 9, 20),
+    );
+    await add(
+      'month-income-noise',
+      TransactionType.income,
+      999,
+      DateTime(2026, 9, 10),
+    );
+    await add(
+      'month-reimbursement-outside',
+      TransactionType.reimbursement,
+      70,
+      DateTime(2026, 8, 31),
+    );
+
+    final total = await database.transactionDao
+        .watchTypeAmountSumBetween(
+          bookId: SeedIds.personalBook,
+          type: TransactionType.reimbursement.name,
+          start: DateTime(2026, 9),
+          endExclusive: DateTime(2026, 10),
+        )
+        .first;
+    expect(total, 10000);
+  });
+
   test('asset history stream keeps one year plus future rows only', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
