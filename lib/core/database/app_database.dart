@@ -967,7 +967,6 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 23) {
           await _createTransactionRangeIndex();
-    await _createTransactionLookupIndexes();
         }
         if (from < 24) {
           await _createTransactionLookupIndexes();
