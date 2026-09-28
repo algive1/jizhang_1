@@ -254,13 +254,13 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
 
   @override
   Widget build(BuildContext context) {
-    final transactions = ref.watch(transactionsProvider);
+    final transactionCount = ref.watch(transactionCountProvider);
     final accounts = ref.watch(allAccountsProvider);
     final databaseState = ref.watch(databaseBootstrapProvider);
     final ready =
-        transactions.hasValue &&
+        transactionCount.hasValue &&
         accounts.hasValue &&
-        !transactions.hasError &&
+        !transactionCount.hasError &&
         !accounts.hasError;
     final databaseReady = databaseState.hasValue && !databaseState.hasError;
     return SafeArea(
@@ -292,20 +292,20 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 const SizedBox(height: 12),
                 const Text('导出全部未删除流水，含币种、账户、分类、备注及转账和校准记录。归档账户的名称也会保留。'),
                 const SizedBox(height: 12),
-                if (transactions.isLoading || accounts.isLoading)
+                if (transactionCount.isLoading || accounts.isLoading)
                   const LinearProgressIndicator()
                 else if (!ready) ...[
                   Text('本地数据读取失败，暂时无法导出'),
                   TextButton(
                     onPressed: () {
-                      ref.invalidate(transactionsProvider);
+                      ref.invalidate(transactionCountProvider);
                       ref.invalidate(allAccountsProvider);
                     },
                     child: Text('重新加载'),
                   ),
                 ] else
                   Text(
-                    '可导出 ${transactions.value!.length} 笔记录',
+                    '可导出 ${transactionCount.value!} 笔记录',
                     style: TextStyle(color: context.appSecondaryText),
                   ),
                 const SizedBox(height: 16),
@@ -318,8 +318,11 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                             _status = null;
                           });
                           try {
+                            final transactions = await ref
+                                .read(transactionRepositoryProvider)
+                                .getAll();
                             final csv = TransactionCsv.encode(
-                              transactions.value!,
+                              transactions,
                               accounts.value!,
                             );
                             final date = DateTime.now()
