@@ -42,7 +42,7 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
   @override
   Widget build(BuildContext context) {
     final accountState = ref.watch(assetDashboardAccountsProvider);
-    final transactionState = ref.watch(allTransactionsProvider);
+    final transactionState = ref.watch(assetHistoryTransactionsProvider);
     final activeBook = ref.watch(activeBookProvider);
     final allAccounts = accountState.value ?? const <Account>[];
     final excludedAssetAccountIds =
