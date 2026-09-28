@@ -99,11 +99,10 @@ class LegacySessionPayload {
 
 /// 生产实现：规范会话写在 `account_session_v1`。
 ///
-/// 兼容策略（第一阶段不强制任何已有用户重新登录）：
-/// - 启动时先读规范键，读到旧键内容时就地迁移；
-/// - 迁移后仍然同步维护旧键 `shared_ledger_session_v1`，因此覆盖安装、
-///   甚至回滚到旧版本都能继续识别同一个 Token；
-/// - 只有某一个键损坏时只清那个键，绝不因为解析失败而级联清掉另一个键。
+/// 兼容策略：
+/// - 启动时先读规范键，只有规范键缺失时才尝试旧键并就地迁移；
+/// - 新登录、刷新和迁移后的后续写入只维护规范键，不再制造旧格式双写；
+/// - 登出仍同时清理两个键，避免历史开发安装留下可复活的旧 Token。
 class SecureSessionStorage implements SessionEnvelopeStorage {
   const SecureSessionStorage();
 
@@ -133,15 +132,10 @@ class SecureSessionStorage implements SessionEnvelopeStorage {
   }
 
   @override
-  Future<void> write(AccountSession session) async {
-    // 先写规范键再写旧键：中途中断最坏退化成一次重新迁移。
-    await _storage.write(
+  Future<void> write(AccountSession session) {
+    return _storage.write(
       key: canonicalKey,
       value: jsonEncode(session.toJson()),
-    );
-    await _storage.write(
-      key: legacyKey,
-      value: jsonEncode(legacyJson(session)),
     );
   }
 
@@ -210,7 +204,6 @@ class InMemorySessionStorage implements SessionEnvelopeStorage {
   @override
   Future<void> write(AccountSession session) async {
     canonical = session.toJson();
-    legacy = SecureSessionStorage.legacyJson(session);
   }
 
   @override
