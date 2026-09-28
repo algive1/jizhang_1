@@ -72,6 +72,13 @@ class DriftTransactionRepository implements TransactionRepository {
         .asyncMap(_mapEntities);
   }
 
+  Stream<List<TransactionRecord>> watchByIds(Iterable<String> ids) {
+    final uniqueIds = ids.toSet().toList(growable: false);
+    return _database.transactionDao
+        .watchActiveByIds(ids: uniqueIds, bookId: bookId)
+        .asyncMap(_mapEntities);
+  }
+
   Stream<List<TransactionRecord>> watchSearchCandidates({
     required String query,
     DateTime? month,
@@ -624,6 +631,24 @@ final transactionsByBookProvider =
             ?.assetBookId,
       ).watchAll();
     });
+
+final transactionsByIdsProvider =
+    StreamProvider.family<List<TransactionRecord>, String>((ref, key) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final ids = key
+          .split('\u001f')
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: ref.watch(activeBookIdProvider),
+      ).watchByIds(ids);
+    });
+
+String transactionIdsProviderKey(Iterable<String> ids) {
+  final sorted = ids.toSet().toList()..sort();
+  return sorted.join('\u001f');
+}
 
 typedef TransactionSearchKey = ({
   String query,
