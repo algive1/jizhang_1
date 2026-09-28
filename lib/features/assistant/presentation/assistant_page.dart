@@ -193,6 +193,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     'assets/images/assistant-chat-leaf-decoration.png',
                     width: 100,
                     height: 130,
+                    cacheWidth:
+                        (100 * MediaQuery.devicePixelRatioOf(context)).ceil(),
                     fit: BoxFit.contain,
                   ),
                 ),
