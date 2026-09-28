@@ -248,12 +248,25 @@ class AutoBillOverlayService : Service() {
         } else {
             reviewUi?.setFlutterReady(false)
             reviewUi?.setSaving(false)
+            // The native card can outlive the transparent Flutter host (process
+            // pressure, configuration changes, plugin/activity recreation). Keep
+            // the card usable by warming a replacement host instead of leaving
+            // the next Complete tap queued forever.
+            mainHandler.postDelayed({
+                if (root != null &&
+                    AutoBookkeepingConfirmActivity.instance == null &&
+                    AutoBookkeepingPendingStore.readCandidate(this) != null
+                ) {
+                    openConfirmation(pending)
+                }
+            }, FLUTTER_HOST_RESTART_DELAY_MS)
         }
     }
 
     companion object {
         var instance: AutoBillOverlayService? = null
         private const val TAG = "AutoBookkeeping"
+        private const val FLUTTER_HOST_RESTART_DELAY_MS = 300L
     }
 
     override fun onCreate() {
