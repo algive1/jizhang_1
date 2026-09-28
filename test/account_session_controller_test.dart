@@ -49,7 +49,7 @@ void main() {
     expect(controller.token, 'legacy-token');
     expect(controller.currentUserId, 'user-1');
     expect(controller.hasUsableSession, isTrue);
-    // 迁移结果同时写回规范键和旧键。
+    // 迁移写入规范键；已有旧键保留到显式清理，避免迁移中断丢会话。
     expect(storage.canonical, isA<Map<String, dynamic>>());
     expect(
       LegacySessionPayload.tryParse(storage.legacy)?.token,
@@ -155,9 +155,9 @@ void main() {
       AccountSessionStatus.authenticated,
     ]);
     expect(
-      LegacySessionPayload.tryParse(storage.legacy)?.token,
-      'token-1',
-      reason: '旧版本仍能读取同一个 Token',
+      storage.legacy,
+      isNull,
+      reason: '新登录只持久化规范会话，不再生成旧格式 Token',
     );
   });
 
