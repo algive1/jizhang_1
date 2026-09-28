@@ -52,6 +52,12 @@ class DriftAccountRepository implements AccountRepository {
   Future<List<Account>> getAll() async =>
       _map(await _database.accountDao.getAll(bookId: bookId));
 
+  Future<Account?> getById(String id) async {
+    final row = await _database.accountDao.findById(id);
+    if (row == null || row.bookId != bookId) return null;
+    return _map([row]).single;
+  }
+
   @override
   Future<Account> create(Account account) async {
     if (!account.balance.isFinite) throw ArgumentError('请输入有效余额');
