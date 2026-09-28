@@ -38,7 +38,8 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
     );
     final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
     final transactions =
-        ref.watch(allTransactionsProvider).value ?? const <TransactionRecord>[];
+        ref.watch(assetHistoryTransactionsProvider).value ??
+        const <TransactionRecord>[];
     final investmentSnapshots =
         ref.watch(investmentSnapshotsProvider(365)).value ??
         const <InvestmentSnapshot>[];
@@ -125,7 +126,12 @@ class _HomeExpenseTrendState extends ConsumerState<HomeExpenseTrend> {
             child: IgnorePointer(
               child: Opacity(
                 opacity: .34,
-                child: Image.asset(AppAssets.homeLeaves, fit: BoxFit.contain),
+                child: Image.asset(
+                  AppAssets.homeLeaves,
+                  fit: BoxFit.contain,
+                  cacheWidth:
+                      (48 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                ),
               ),
             ),
           ),
