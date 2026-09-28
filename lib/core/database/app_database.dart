@@ -1020,6 +1020,14 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted_occurred '
       'ON transactions(book_id, deleted_at, occurred_at DESC)',
     );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_account_deleted_occurred '
+      'ON transactions(account_id, deleted_at, occurred_at DESC)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_destination_deleted_occurred '
+      'ON transactions(destination_account_id, deleted_at, occurred_at DESC)',
+    );
   }
 
   Future<void> _createInvestmentIndexes() async {
@@ -1753,6 +1761,11 @@ typedef TransactionLedgerMonthSqlSummary = ({
   int expenseCents,
 });
 
+typedef TransactionAccountMonthSqlSummary = ({
+  int inflowCents,
+  int outflowCents,
+});
+
 typedef TransactionCategorySqlSummary = ({
   String id,
   String name,
@@ -1794,6 +1807,29 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
             (occurredBefore == null
                 ? const Constant(true)
                 : row.occurredAt.isSmallerThanValue(occurredBefore)),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    if (limit != null) query.limit(limit);
+    return query.watch();
+  }
+
+  Stream<List<TransactionEntity>> watchActiveForAccount({
+    required String accountId,
+    int? limit,
+  }) {
+    final query = select(transactionEntries)
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (row.accountId.equals(accountId) |
+                row.destinationAccountId.equals(accountId)),
       )
       ..orderBy([
         (row) => OrderingTerm.desc(row.occurredAt),
@@ -2056,6 +2092,65 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
             (row) => OrderingTerm.desc(row.createdAt),
           ]))
         .watch();
+  }
+
+  Stream<TransactionAccountMonthSqlSummary> watchAccountMonthSummary({
+    required String accountId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+  }) {
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('transfer', 'repayment')
+              AND destination_account_id = ?
+              THEN amount_in_cents
+            WHEN account_id = ?
+              AND type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS inflow_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type = 'transfer' AND account_id = ?
+              THEN amount_in_cents
+            WHEN account_id = ?
+              AND type IN ('expense', 'lend', 'assetPurchase', 'repayment')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS outflow_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND (account_id = ? OR destination_account_id = ?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<String>(accountId),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        inflowCents: row.read<int>('inflow_cents'),
+        outflowCents: row.read<int>('outflow_cents'),
+      ),
+    );
   }
 
   Stream<TransactionLedgerMonthSqlSummary> watchLedgerMonthSummary({
