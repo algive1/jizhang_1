@@ -179,9 +179,18 @@ void main() {
     'detail page previews images and reports missing system handlers',
     (tester) async {
       const channel = MethodChannel('test/transaction_detail_file_opener');
-      final image = File('${Directory.current.path}/assets/images/icon.png');
+      final image = File(
+        '${Directory.systemTemp.path}/jizhang-transaction-detail-preview.png',
+      );
+      await image.writeAsBytes(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        ),
+        flush: true,
+      );
       final pdf = File('${Directory.current.path}/test/fixtures/receipt.pdf');
       addTearDown(() {
+        if (image.existsSync()) image.deleteSync();
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
       });
