@@ -2128,6 +2128,33 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return raw.watchSingle().map((row) => row.read<int>('total_cents'));
   }
 
+  Stream<List<DateTime>> watchActiveOccurredDays({
+    String? bookId,
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final raw = customSelect(
+      '''
+      SELECT DISTINCT
+        strftime('%Y-%m-%d', occurred_at, 'unixepoch', 'localtime') AS day
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        $bookFilter
+        AND occurred_at <= CAST(strftime('%s', 'now') AS INTEGER)
+      ORDER BY day ASC
+      ''',
+      variables: [
+        if (bookId != null) Variable<String>(bookId),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return raw.watch().map(
+      (rows) => [
+        for (final row in rows) DateTime.parse(row.read<String>('day')),
+      ],
+    );
+  }
+
   Stream<int> watchActiveCount({String? bookId}) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
     final query = customSelect(
