@@ -79,6 +79,10 @@ class _AutoBookkeepingConfirmPageState
   bool _saving = false;
   bool _closing = false;
 
+  static const _nativeReviewChannel = MethodChannel(
+    'jizhang/autobookkeeping_native_review',
+  );
+
   Future<void> _record(String stage, Map<String, Object?> detail) =>
       const AutoBookkeepingLogsBridge().recordDetailed(
         stage,
@@ -106,7 +110,201 @@ class _AutoBookkeepingConfirmPageState
   @override
   void initState() {
     super.initState();
+    if (widget.overlayMode) {
+      _nativeReviewChannel.setMethodCallHandler(_handleNativeReviewCall);
+    }
     unawaited(_loadCandidateWithTimeout());
+  }
+
+  @override
+  void dispose() {
+    if (widget.overlayMode) {
+      _nativeReviewChannel.setMethodCallHandler(null);
+    }
+    super.dispose();
+  }
+
+  Future<Object?> _handleNativeReviewCall(MethodCall call) async {
+    if (call.method != 'submit') return null;
+    final raw = call.arguments;
+    if (raw is! Map) {
+      return const <String, Object?>{
+        'success': false,
+        'message': '原生确认参数无效',
+      };
+    }
+    final success = await _saveNativeReview(Map<Object?, Object?>.from(raw));
+    return <String, Object?>{
+      'success': success,
+      'message': _message,
+    };
+  }
+
+  Future<bool> _saveNativeReview(Map<Object?, Object?> raw) async {
+    final candidate = _candidate;
+    final books = _overlayBooks;
+    if (candidate == null || books == null || books.isEmpty || _saving) {
+      return false;
+    }
+
+    final requestedBookId = raw['bookId']?.toString();
+    final bookId = requestedBookId != null &&
+            books.any((book) => book.id == requestedBookId)
+        ? requestedBookId
+        : (_bookId ?? books.first.id);
+    final selectedBook = books.where((book) => book.id == bookId).firstOrNull;
+    if (selectedBook == null) return false;
+
+    final accounts =
+        bookId == _bookId && _overlayAccounts != null
+            ? _overlayAccounts!
+            : await DriftAccountRepository(
+                ref.read(databaseProvider),
+                bookId: selectedBook.assetBookId,
+              ).getActive();
+    final categories =
+        bookId == _bookId && _overlayCategories != null
+            ? _overlayCategories!
+            : await DriftCategoryRepository(
+                ref.read(databaseProvider),
+                bookId: bookId,
+              ).getActive();
+
+    final typeName = raw['type']?.toString();
+    final type = switch (typeName) {
+      'income' => TransactionType.income,
+      'transfer' => TransactionType.transfer,
+      _ => TransactionType.expense,
+    };
+    final amount = raw['amountInCents'];
+    final amountInCents = amount is num ? amount.toInt() : 0;
+    if (amountInCents <= 0) {
+      setState(() => _message = '请输入有效金额');
+      return false;
+    }
+
+    final reimbursementName =
+        raw['reimbursementStatus']?.toString() ?? 'none';
+    final reimbursementStatus = ReimbursementStatus.values.firstWhere(
+      (value) => value.name == reimbursementName,
+      orElse: () => ReimbursementStatus.none,
+    );
+    final occurredAtRaw = raw['occurredAt'];
+    final occurredAt = occurredAtRaw is num
+        ? DateTime.fromMillisecondsSinceEpoch(occurredAtRaw.toInt())
+        : candidate.timestamp;
+    _keepScreenshot = raw['screenshotEnabled'] != false;
+
+    final draft = QuickAddReviewDraft(
+      bookId: bookId,
+      type: type,
+      amountInCents: amountInCents,
+      note: raw['note']?.toString() ?? candidate.merchant,
+      occurredAt: occurredAt,
+      accounts: accounts,
+      categories: categories,
+      categoryId: raw['categoryId']?.toString().takeIfNotBlank(),
+      accountId: raw['accountId']?.toString().takeIfNotBlank(),
+      destinationAccountId:
+          raw['destinationAccountId']?.toString().takeIfNotBlank(),
+      subcategoryId: raw['subcategoryId']?.toString().takeIfNotBlank(),
+      reimbursementStatus: reimbursementStatus,
+      reimbursementNote: '',
+      attachmentPaths: const <String>[],
+      tags: const <String>[],
+      payerUserId: null,
+      recurringDraft: null,
+      isPlanned: false,
+      isOneTime: true,
+      isRecurring: false,
+    );
+    return _saveOverlayDraft(draft);
+  }
+
+  Future<void> _syncNativeReview() async {
+    if (!widget.overlayMode || !mounted) return;
+    final candidate = _candidate;
+    final books = _overlayBooks;
+    final accounts = _overlayAccounts;
+    final categories = _overlayCategories;
+    if (candidate == null ||
+        books == null ||
+        accounts == null ||
+        categories == null ||
+        books.isEmpty) {
+      return;
+    }
+
+    final selectedBookId = _bookId != null &&
+            books.any((book) => book.id == _bookId)
+        ? _bookId!
+        : books.first.id;
+    final type = _overlayTransactionType ??
+        _transactionTypeFor(candidate.transactionType);
+    final categoryType = _categoryTypeFor(type);
+    final roots = categories
+        .where((item) => item.parentId == null && item.type == categoryType)
+        .toList()
+      ..sort((a, b) {
+        bool isOther(Category item) =>
+            item.id == 'expense-other' || item.name.trim().startsWith('其他');
+        final aOther = isOther(a);
+        final bOther = isOther(b);
+        if (aOther != bOther) return aOther ? -1 : 1;
+        return b.sortOrder.compareTo(a.sortOrder);
+      });
+    final children = categories
+        .where((item) => item.parentId != null)
+        .toList()
+      ..sort((a, b) => b.sortOrder.compareTo(a.sortOrder));
+    final selectedCategoryId = _validCategoryId(roots);
+    final selectedAccountId = _validAccountId(accounts);
+    final selectedDestinationAccountId = _validDestinationAccountId(
+      accounts,
+      sourceAccountId: selectedAccountId,
+    );
+
+    try {
+      await _nativeReviewChannel.invokeMethod<void>('sync', {
+        'selectedBookId': selectedBookId,
+        'selectedAccountId': selectedAccountId,
+        'selectedDestinationAccountId': selectedDestinationAccountId,
+        'selectedCategoryId': selectedCategoryId,
+        'selectedSubcategoryId': _subcategoryId,
+        'transactionType': switch (type) {
+          TransactionType.income => 'income',
+          TransactionType.transfer => 'transfer',
+          _ => 'expense',
+        },
+        'occurredAt': (_editedOccurredAt ?? candidate.timestamp)
+            .millisecondsSinceEpoch,
+        'screenshotEnabled':
+            candidate.screenshotPath != null && _keepScreenshot,
+        'books': [
+          for (final book in books) {'id': book.id, 'label': book.name},
+        ],
+        'accounts': [
+          for (final account in accounts)
+            {
+              'id': account.id,
+              'label': account.displayName,
+              'type': account.type.name,
+            },
+        ],
+        'categories': [
+          for (final category in <Category>[...roots, ...children])
+            {
+              'id': category.id,
+              'label': category.name,
+              'type': category.type.name,
+              'parentId': category.parentId,
+              'sortOrder': category.sortOrder,
+            },
+        ],
+      });
+    } on MissingPluginException {
+      // Widget tests and non-Android hosts intentionally have no native overlay.
+    }
   }
 
   Future<void> _loadCandidateWithTimeout() async {
@@ -227,6 +425,9 @@ class _AutoBookkeepingConfirmPageState
         _destinationAccountId = transferRecommendation?.destinationAccountId;
         _loading = false;
       });
+      if (widget.overlayMode && candidate != null) {
+        unawaited(_syncNativeReview());
+      }
       if (candidate != null && candidate.screenshotPath == null) {
         unawaited(_refreshScreenshot(candidate.fingerprint));
       }
@@ -259,6 +460,7 @@ class _AutoBookkeepingConfirmPageState
       }
       if (refreshed.screenshotPath != null) {
         setState(() => _candidate = refreshed);
+        if (widget.overlayMode) unawaited(_syncNativeReview());
         return;
       }
     }
