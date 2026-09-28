@@ -119,15 +119,13 @@ class RefundService {
         current.relatedTransactionId != original.id) {
       throw StateError('退款或原消费不存在');
     }
-    final all = await readRepository.getAll();
-    final otherRefundCents = all
-        .where(
-          (item) =>
-              item.type == TransactionType.refund &&
-              item.relatedTransactionId == original.id &&
-              item.id != refund.id,
-        )
-        .fold<int>(0, (sum, item) => sum + _toCents(item.amount));
+    final otherRefundCents = await _database.transactionDao
+        .sumRelatedTypeInCents(
+          bookId: bookId,
+          relatedTransactionId: original.id,
+          type: TransactionType.refund.name,
+          excludingTransactionId: refund.id,
+        );
     if (!amount.isFinite) throw ArgumentError('退款金额无效');
     final amountCents = _toCents(amount);
     final originalCents = _toCents(original.amount);
@@ -175,20 +173,18 @@ class RefundService {
         current.relatedTransactionId != original.id) {
       throw StateError('退款或原消费不存在');
     }
-    final all = await readRepository.getAll();
     final account = await _database.accountDao.findById(refund.accountId);
     if (account == null || account.isArchived) {
       throw StateError('退款账户不存在或已归档');
     }
     final repository = _repository(account.bookId);
-    final remainingCents = all
-        .where(
-          (item) =>
-              item.type == TransactionType.refund &&
-              item.relatedTransactionId == original.id &&
-              item.id != refund.id,
-        )
-        .fold<int>(0, (sum, item) => sum + _toCents(item.amount));
+    final remainingCents = await _database.transactionDao
+        .sumRelatedTypeInCents(
+          bookId: bookId,
+          relatedTransactionId: original.id,
+          type: TransactionType.refund.name,
+          excludingTransactionId: refund.id,
+        );
     final now = DateTime.now();
     await _database.transaction(() async {
       await repository.softDelete(current.id);
