@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import com.algive.jizhang_app.MainActivity
+import io.flutter.embedding.android.RenderMode
+import io.flutter.embedding.android.TransparencyMode
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 
 /** Transparent Flutter host for confirming a detected payment over the source app. */
@@ -29,6 +31,11 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
             dimAmount = BACKGROUND_DIM_AMOUNT
         }
     }
+
+    override fun getRenderMode(): RenderMode = RenderMode.texture
+
+    override fun getTransparencyMode(): TransparencyMode =
+        TransparencyMode.transparent
 
     override fun getInitialRoute(): String = CONFIRM_ROUTE
 
