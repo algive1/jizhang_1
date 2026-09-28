@@ -40,12 +40,19 @@ class SharedBookSyncService {
     _sessionChanges = session.watch().listen((_) {
       requestSync();
     });
-    _databaseChanges = database.tableUpdates().listen((_) {
-      if (!_applying) {
-        if (!_disposed) _changes.add(null);
-        requestSync();
-      }
-    });
+    _databaseChanges = database
+        .tableUpdates(
+          TableUpdateQuery.allOf([
+            for (final table in SharedSyncSchema.syncKinds)
+              TableUpdateQuery.onTableName(table),
+          ]),
+        )
+        .listen((_) {
+          if (!_applying) {
+            if (!_disposed) _changes.add(null);
+            requestSync();
+          }
+        });
     setForeground(true);
   }
 
