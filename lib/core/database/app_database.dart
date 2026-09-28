@@ -2251,6 +2251,20 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     required String bookId,
     required String relatedTransactionId,
     String? excludingTransactionId,
+  }) {
+    return sumRelatedTypeInCents(
+      bookId: bookId,
+      relatedTransactionId: relatedTransactionId,
+      type: 'reimbursement',
+      excludingTransactionId: excludingTransactionId,
+    );
+  }
+
+  Future<int> sumRelatedTypeInCents({
+    required String bookId,
+    required String relatedTransactionId,
+    required String type,
+    String? excludingTransactionId,
   }) async {
     final excludeSql =
         excludingTransactionId == null ? '' : 'AND id != ?';
@@ -2261,12 +2275,13 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       WHERE deleted_at IS NULL
         AND ${SharedSyncSchema.visibleBooksSql('book_id')}
         AND book_id = ?
-        AND type = 'reimbursement'
+        AND type = ?
         AND related_transaction_id = ?
         $excludeSql
       ''',
       variables: [
         Variable<String>(bookId),
+        Variable<String>(type),
         Variable<String>(relatedTransactionId),
         if (excludingTransactionId != null)
           Variable<String>(excludingTransactionId),
@@ -2274,6 +2289,93 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       readsFrom: {transactionEntries},
     ).getSingle();
     return row.read<int>('total_cents');
+  }
+
+  Future<List<String>> findExpenseIdsByOrderId({
+    required String bookId,
+    required String orderId,
+  }) async {
+    final rows = await customSelect(
+      '''
+      SELECT id
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND type = 'expense'
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND (
+          json_extract(metadata_json, '$.orderId') = ?
+          OR json_extract(metadata_json, '$.autobookkeeping.orderId') = ?
+        )
+      ORDER BY occurred_at DESC
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(orderId),
+        Variable<String>(orderId),
+      ],
+      readsFrom: {transactionEntries},
+    ).get();
+    return [for (final row in rows) row.read<String>('id')];
+  }
+
+  Future<bool> hasNotificationIdentity({
+    required String bookId,
+    required String notificationKey,
+    String? orderId,
+    required String packageName,
+  }) async {
+    final orderSql = orderId == null
+        ? ''
+        : "OR (json_extract(metadata_json, '$.notificationOrderId') = ? "
+              "AND json_extract(metadata_json, '$.paymentPackageName') = ?)";
+    final row = await customSelect(
+      '''
+      SELECT 1
+      FROM transactions
+      WHERE book_id = ?
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND (
+          json_extract(metadata_json, '$.notificationKey') = ?
+          $orderSql
+        )
+      LIMIT 1
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(notificationKey),
+        if (orderId != null) Variable<String>(orderId),
+        if (orderId != null) Variable<String>(packageName),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingleOrNull();
+    return row != null;
+  }
+
+  Future<bool> hasPaymentFingerprint({
+    required String bookId,
+    required String fingerprint,
+  }) async {
+    final row = await customSelect(
+      '''
+      SELECT 1
+      FROM transactions
+      WHERE book_id = ?
+        AND metadata_json IS NOT NULL
+        AND json_valid(metadata_json)
+        AND json_extract(metadata_json, '$.paymentFingerprint') = ?
+      LIMIT 1
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(fingerprint),
+      ],
+      readsFrom: {transactionEntries},
+    ).getSingleOrNull();
+    return row != null;
   }
 
   Stream<TransactionMonthSqlSummary> watchMonthSummary({
