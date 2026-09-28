@@ -742,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -967,6 +967,10 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 23) {
           await _createTransactionRangeIndex();
+    await _createTransactionLookupIndexes();
+        }
+        if (from < 24) {
+          await _createTransactionLookupIndexes();
         }
       });
     },
@@ -1028,6 +1032,33 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_transactions_destination_deleted_occurred '
       'ON transactions(destination_account_id, deleted_at, occurred_at DESC)',
     );
+  }
+
+  Future<void> _createTransactionLookupIndexes() async {
+    if (!await _hasColumn('transactions', 'book_id') ||
+        !await _hasColumn('transactions', 'deleted_at') ||
+        !await _hasColumn('transactions', 'type')) {
+      return;
+    }
+    if (await _hasColumn('transactions', 'related_transaction_id')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_related_type '
+        'ON transactions(book_id, related_transaction_id, type, deleted_at)',
+      );
+    }
+    if (await _hasColumn('transactions', 'reimbursement_status') &&
+        await _hasColumn('transactions', 'occurred_at')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_reimbursement_status '
+        'ON transactions(book_id, reimbursement_status, deleted_at, occurred_at DESC)',
+      );
+    }
+    if (await _hasColumn('transactions', 'occurred_at')) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transactions_type_occurred '
+        'ON transactions(book_id, type, deleted_at, occurred_at DESC)',
+      );
+    }
   }
 
   Future<void> _createInvestmentIndexes() async {
