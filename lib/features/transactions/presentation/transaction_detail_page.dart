@@ -164,19 +164,31 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
           child: Stack(
             children: [
               Center(
-                child: InteractiveViewer(
-                  minScale: .5,
-                  maxScale: 5,
-                  child: Image.file(
-                    File(attachment.path),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, error, stackTrace) => const Center(
-                      child: Text(
-                        '图片无法读取',
-                        style: TextStyle(color: Colors.white),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final devicePixelRatio =
+                        MediaQuery.devicePixelRatioOf(context);
+                    final physicalWidth =
+                        constraints.maxWidth * devicePixelRatio * 2;
+                    final decodeWidth =
+                        physicalWidth.clamp(1.0, 2048.0).ceil();
+                    return InteractiveViewer(
+                      minScale: .5,
+                      maxScale: 5,
+                      child: Image.file(
+                        File(attachment.path),
+                        fit: BoxFit.contain,
+                        cacheWidth: decodeWidth,
+                        filterQuality: FilterQuality.medium,
+                        errorBuilder: (_, error, stackTrace) => const Center(
+                          child: Text(
+                            '图片无法读取',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
               Positioned(
