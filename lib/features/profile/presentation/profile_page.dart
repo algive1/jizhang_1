@@ -481,9 +481,7 @@ class ProfilePage extends ConsumerWidget {
         heightFactor: .7,
         child: Consumer(
           builder: (context, ref, _) {
-            final photos = ref.watch(profilePhotosProvider);
             return _ProfilePhotosSheet(
-              photos: photos,
               books: ref.watch(booksProvider).value ?? const [],
               onTap: (item) {
                 Navigator.pop(sheetContext);
@@ -497,23 +495,25 @@ class ProfilePage extends ConsumerWidget {
   }
 }
 
-class _ProfilePhotosSheet extends StatefulWidget {
+class _ProfilePhotosSheet extends ConsumerStatefulWidget {
   const _ProfilePhotosSheet({
-    required this.photos,
     required this.books,
     required this.onTap,
   });
 
-  final AsyncValue<List<TransactionAttachmentEntity>> photos;
   final List<LedgerBook> books;
   final void Function(TransactionAttachmentEntity item) onTap;
 
   @override
-  State<_ProfilePhotosSheet> createState() => _ProfilePhotosSheetState();
+  ConsumerState<_ProfilePhotosSheet> createState() =>
+      _ProfilePhotosSheetState();
 }
 
-class _ProfilePhotosSheetState extends State<_ProfilePhotosSheet> {
+class _ProfilePhotosSheetState extends ConsumerState<_ProfilePhotosSheet> {
+  static const _pageSize = 60;
+
   String? _selectedBookId;
+  int _limit = _pageSize;
 
   @override
   Widget build(BuildContext context) {
@@ -521,11 +521,12 @@ class _ProfilePhotosSheetState extends State<_ProfilePhotosSheet> {
     final selectedBook = books
         .where((book) => book.id == _selectedBookId)
         .firstOrNull;
-    final items = _selectedBookId == null
-        ? widget.photos.value ?? const <TransactionAttachmentEntity>[]
-        : (widget.photos.value ?? const <TransactionAttachmentEntity>[])
-              .where((item) => item.bookId == _selectedBookId)
-              .toList(growable: false);
+    final photos = ref.watch(
+      profilePhotosProvider((
+        bookId: _selectedBookId,
+        limit: _limit,
+      )),
+    );
     return SafeArea(
       child: Column(
         children: [
@@ -552,42 +553,75 @@ class _ProfilePhotosSheetState extends State<_ProfilePhotosSheet> {
               ],
             ),
           ),
-          Expanded(child: _photosContent(items)),
+          Expanded(child: _photosContent(photos)),
         ],
       ),
     );
   }
 
-  Widget _photosContent(List<TransactionAttachmentEntity> items) {
-    return widget.photos.when(
+  Widget _photosContent(AsyncValue<ProfilePhotoPage> photos) {
+    return photos.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => const Center(child: Text('照片读取失败，请稍后重试')),
-      data: (_) => items.isEmpty
+      data: (page) => page.items.isEmpty
           ? Center(
               child: Text(
                 _selectedBookId == null ? '暂无记账照片，可在记账时添加附件' : '该账本暂无记账照片',
               ),
             )
-          : GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return InkWell(
-                  onTap: () => widget.onTap(item),
-                  child: Image.file(
-                    File(item.path),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, error, stack) =>
-                        const Center(child: Icon(Icons.broken_image_outlined)),
+          : Column(
+              children: [
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final logicalWidth =
+                          ((constraints.maxWidth - 48) / 3).clamp(
+                            1.0,
+                            constraints.maxWidth,
+                          );
+                      final cacheWidth =
+                          (logicalWidth *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .ceil();
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                            ),
+                        itemCount: page.items.length,
+                        itemBuilder: (context, index) {
+                          final item = page.items[index];
+                          return InkWell(
+                            onTap: () => widget.onTap(item),
+                            child: Image.file(
+                              File(item.path),
+                              fit: BoxFit.cover,
+                              cacheWidth: cacheWidth,
+                              errorBuilder: (_, error, stack) => const Center(
+                                child: Icon(Icons.broken_image_outlined),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+                if (page.hasMore)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: TextButton.icon(
+                      key: const ValueKey('profile-photos-load-more'),
+                      onPressed: () =>
+                          setState(() => _limit += _pageSize),
+                      icon: const Icon(Icons.expand_more_rounded),
+                      label: const Text('加载更多照片'),
+                    ),
+                  ),
+              ],
             ),
     );
   }
@@ -597,7 +631,10 @@ class _ProfilePhotosSheetState extends State<_ProfilePhotosSheet> {
       key: ValueKey('profile-photo-filter-${bookId ?? 'all'}'),
       label: Text(label),
       selected: _selectedBookId == bookId,
-      onSelected: (_) => setState(() => _selectedBookId = bookId),
+      onSelected: (_) => setState(() {
+        _selectedBookId = bookId;
+        _limit = _pageSize;
+      }),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );

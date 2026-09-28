@@ -116,26 +116,57 @@ final profilePhotoCountProvider = StreamProvider<int>((ref) async* {
   yield* raw.watchSingle().map((row) => row.read<int>('photo_count'));
 });
 
-// Join to live transactions so soft-deleted records never inflate the photo count.
-final profilePhotosProvider = StreamProvider<List<TransactionAttachmentEntity>>(
-  (ref) async* {
-    await ref.watch(databaseBootstrapProvider.future);
-    final db = ref.watch(databaseProvider);
-    final a = db.transactionAttachmentEntries;
-    final t = db.transactionEntries;
-    final query =
-        db.select(a).join([
-          innerJoin(
-            t,
-            t.id.equalsExp(a.transactionId) & t.bookId.equalsExp(a.bookId),
+typedef ProfilePhotosKey = ({
+  String? bookId,
+  int limit,
+});
+
+typedef ProfilePhotoPage = ({
+  List<TransactionAttachmentEntity> items,
+  bool hasMore,
+});
+
+// Join to live transactions so soft-deleted records never inflate the photo
+// gallery. The sheet requests bounded pages and pushes the optional book filter
+// into SQLite instead of loading every attachment and filtering in Dart.
+final profilePhotosProvider =
+    StreamProvider.family<ProfilePhotoPage, ProfilePhotosKey>((ref, key) async* {
+      if (key.limit < 1) {
+        throw ArgumentError.value(key.limit, 'limit', 'must be > 0');
+      }
+      await ref.watch(databaseBootstrapProvider.future);
+      final db = ref.watch(databaseProvider);
+      final a = db.transactionAttachmentEntries;
+      final t = db.transactionEntries;
+      final bookFilter = key.bookId == null
+          ? const Constant(true)
+          : a.bookId.equals(key.bookId!);
+      final query =
+          db.select(a).join([
+              innerJoin(
+                t,
+                t.id.equalsExp(a.transactionId) & t.bookId.equalsExp(a.bookId),
+              ),
+            ])
+            ..where(
+              a.deletedAt.isNull() &
+                  t.deletedAt.isNull() &
+                  a.mimeType.like('image/%') &
+                  bookFilter,
+            )
+            ..orderBy([
+              OrderingTerm.desc(a.createdAt),
+              OrderingTerm.desc(a.id),
+            ])
+            ..limit(key.limit + 1);
+      yield* query.watch().map((rows) {
+        final hasMore = rows.length > key.limit;
+        final visibleRows = hasMore ? rows.take(key.limit) : rows;
+        return (
+          items: List<TransactionAttachmentEntity>.unmodifiable(
+            visibleRows.map((row) => row.readTable(a)),
           ),
-        ])..where(
-          a.deletedAt.isNull() &
-              t.deletedAt.isNull() &
-              a.mimeType.like('image/%'),
+          hasMore: hasMore,
         );
-    yield* query.watch().map(
-      (rows) => rows.map((row) => row.readTable(a)).toList(),
-    );
-  },
-);
+      });
+    });
