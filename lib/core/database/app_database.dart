@@ -1722,6 +1722,11 @@ typedef TransactionDateRange = ({
   DateTime endExclusive,
 });
 
+typedef TransactionRecordedMonthNeighbors = ({
+  int? previousMonthKey,
+  int? nextMonthKey,
+});
+
 typedef TransactionMonthSqlSummary = ({
   int incomeCents,
   int personalExpenseCents,
@@ -1876,6 +1881,59 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       (rows) => [
         for (final row in rows) row.read<int>('year'),
       ],
+    );
+  }
+
+  Stream<TransactionRecordedMonthNeighbors> watchRecordedMonthNeighbors({
+    required DateTime month,
+    required DateTime now,
+    String? bookId,
+  }) {
+    final start = DateTime(month.year, month.month);
+    final endExclusive = DateTime(month.year, month.month + 1);
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    const monthKeySql =
+        "CAST(strftime('%Y', occurred_at, 'unixepoch') AS INTEGER) * 100 + "
+        "CAST(strftime('%m', occurred_at, 'unixepoch') AS INTEGER)";
+    final query = customSelect(
+      '''
+      WITH eligible AS (
+        SELECT occurred_at
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          AND occurred_at <= ?
+          $bookFilter
+      )
+      SELECT
+        (
+          SELECT $monthKeySql
+          FROM eligible
+          WHERE occurred_at < ?
+          ORDER BY occurred_at DESC
+          LIMIT 1
+        ) AS previous_month_key,
+        (
+          SELECT $monthKeySql
+          FROM eligible
+          WHERE occurred_at >= ?
+          ORDER BY occurred_at ASC
+          LIMIT 1
+        ) AS next_month_key
+      ''',
+      variables: [
+        Variable<DateTime>(now),
+        if (bookId != null) Variable<String>(bookId),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        previousMonthKey: row.readNullable<int>('previous_month_key'),
+        nextMonthKey: row.readNullable<int>('next_month_key'),
+      ),
     );
   }
 
