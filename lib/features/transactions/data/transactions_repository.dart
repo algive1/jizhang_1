@@ -536,6 +536,12 @@ final transactionsByBookProvider =
       ).watchAll();
     });
 
+final recentTransactionsPageProvider =
+    StreamProvider.family<List<TransactionRecord>, int>((ref, limit) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* ref.watch(transactionRepositoryProvider).watchRecent(limit: limit);
+    });
+
 final transactionsProvider = StreamProvider<List<TransactionRecord>>((
   ref,
 ) async* {
@@ -549,6 +555,35 @@ final transactionsProvider = StreamProvider<List<TransactionRecord>>((
 });
 
 typedef TransactionMonthKey = ({int year, int month});
+
+typedef TransactionLedgerMonthSummary = ({
+  double income,
+  double expense,
+});
+
+final transactionLedgerMonthSummaryProvider =
+    StreamProvider.family<TransactionLedgerMonthSummary, TransactionMonthKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      final raw = ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchLedgerMonthSummary(
+            bookId: ref.watch(activeBookIdProvider),
+            start: DateTime(key.year, key.month),
+            endExclusive: DateTime(key.year, key.month + 1),
+            now: now,
+          );
+      yield* raw.map(
+        (value) => (
+          income: value.incomeCents / 100,
+          expense: value.expenseCents / 100,
+        ),
+      );
+    });
 
 typedef CalendarTransactionMonthKey = ({
   int year,
