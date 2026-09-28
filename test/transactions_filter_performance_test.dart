@@ -8,6 +8,7 @@ import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/core/widgets/transaction_date_group.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 import 'package:jizhang_app/features/transactions/presentation/transactions_page.dart';
+import 'package:jizhang_app/features/transactions/presentation/transaction_search_page.dart';
 
 void main() {
   test('monthly SQL aggregates preserve cashflow semantics', () async {
@@ -470,6 +471,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('transactions-filter-1')));
     await tester.pumpAndSettle();
     expect(find.byType(TransactionDateGroup), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: TransactionSearchPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('transaction-search-load-more')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byType(TextField), '性能回归-104');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('性能回归-104'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.text('性能回归-104'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
