@@ -355,6 +355,55 @@ void main() {
     );
   });
 
+  test('import dedupe candidates exclude unrelated transaction sources', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime.now();
+
+    Future<void> add(
+      String id,
+      TransactionSource source,
+    ) async {
+      await repository.create(
+        TransactionRecord(
+          id: id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 10,
+          accountId: SeedIds.bankAccount,
+          occurredAt: now,
+          createdAt: now,
+          updatedAt: now,
+          source: source,
+        ),
+      );
+    }
+
+    await add('dedupe-import', TransactionSource.import);
+    await add('dedupe-auto', TransactionSource.auto);
+    await add('dedupe-manual', TransactionSource.manual);
+    await add('dedupe-ocr', TransactionSource.ocr);
+
+    final candidates = await repository.getImportDedupCandidates();
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      containsAll({'dedupe-import', 'dedupe-auto'}),
+    );
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      isNot(contains('dedupe-manual')),
+    );
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      isNot(contains('dedupe-ocr')),
+    );
+  });
+
   test('profile activity uses distinct occurred days and ignores future rows', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
