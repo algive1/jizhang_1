@@ -8,6 +8,7 @@ import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/core/widgets/transaction_date_group.dart';
 import 'package:jizhang_app/features/transactions/data/transactions_repository.dart';
 import 'package:jizhang_app/features/transactions/presentation/transactions_page.dart';
+import 'package:jizhang_app/features/profile/data/profile_stats.dart';
 import 'package:jizhang_app/features/transactions/presentation/transaction_search_page.dart';
 
 void main() {
@@ -352,6 +353,62 @@ void main() {
       ),
       4000,
     );
+  });
+
+  test('profile activity uses distinct occurred days and ignores future rows', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final now = DateTime.now();
+    final firstToday = now.subtract(const Duration(minutes: 2));
+    final secondToday = now.subtract(const Duration(minutes: 1));
+    final yesterday = now.subtract(const Duration(days: 1));
+    final tomorrow = now.add(const Duration(days: 1));
+
+    Future<void> add(String id, DateTime occurredAt) async {
+      await repository.create(
+        TransactionRecord(
+          id: id,
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: 1,
+          accountId: SeedIds.bankAccount,
+          occurredAt: occurredAt,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        ),
+      );
+    }
+
+    await add('profile-day-a', firstToday);
+    await add('profile-day-b', secondToday);
+    await add('profile-day-yesterday', yesterday);
+    await add('profile-day-future', tomorrow);
+
+    final days = await database.transactionDao
+        .watchActiveOccurredDays(bookId: SeedIds.personalBook)
+        .first;
+    final normalizedToday = DateTime(now.year, now.month, now.day);
+    final normalizedYesterday = DateTime(
+      yesterday.year,
+      yesterday.month,
+      yesterday.day,
+    );
+    final normalizedTomorrow = DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+    );
+    expect(days.where((day) => day == normalizedToday), hasLength(1));
+    expect(days, contains(normalizedYesterday));
+    expect(days, isNot(contains(normalizedTomorrow)));
+
+    final activity = ProfileActivity.fromDates(days, now);
+    expect(activity.streak, greaterThanOrEqualTo(2));
   });
 
   test('type month SQL sum excludes other transaction types and months', () async {
