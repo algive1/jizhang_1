@@ -2943,6 +2943,22 @@ class RecurringBillDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  Future<List<RecurringBillEntity>> getDueAutoRecords({
+    required String bookId,
+    required DateTime cutoff,
+  }) {
+    return (select(recurringBillEntries)
+          ..where(
+            (row) =>
+                row.bookId.equals(bookId) &
+                row.status.equals('active') &
+                row.autoRecord.equals(true) &
+                row.nextDate.isSmallerOrEqualValue(cutoff),
+          )
+          ..orderBy([(row) => OrderingTerm.asc(row.nextDate)]))
+        .get();
+  }
+
   Future<void> insertOne(RecurringBillEntriesCompanion bill) async {
     await into(recurringBillEntries).insert(bill);
   }
