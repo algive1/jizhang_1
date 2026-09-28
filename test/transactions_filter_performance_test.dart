@@ -78,6 +78,22 @@ void main() {
     expect(summary.incomeCents, 120000);
     expect(summary.personalExpenseCents, 12000);
 
+    final ledgerSummary = await database.transactionDao
+        .watchLedgerMonthSummary(
+          bookId: SeedIds.personalBook,
+          start: DateTime(2026, 8),
+          endExclusive: DateTime(2026, 9),
+          now: DateTime(2026, 8, 20),
+        )
+        .first;
+    expect(ledgerSummary.incomeCents, 120000);
+    expect(
+      ledgerSummary.expenseCents,
+      68000,
+      reason:
+          'Ledger summary keeps asset purchases and ignores reimbursement offsets, matching the transaction page.',
+    );
+
     final categories = await database.transactionDao
         .watchMonthExpenseCategories(
           bookId: SeedIds.personalBook,
