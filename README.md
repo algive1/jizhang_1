@@ -21,7 +21,7 @@ flutter pub get
 flutter analyze
 flutter test
 flutter build apk --debug
-flutter build apk --release
+flutter build apk --release --split-per-abi
 ```
 
 Android 模拟器一键构建、安装并启动：
@@ -34,7 +34,7 @@ Android 模拟器一键构建、安装并启动：
 
 开发文档统一从 [`docs/development/README.md`](docs/development/README.md) 进入；当前状态见 [`docs/development/CURRENT_STATUS.md`](docs/development/CURRENT_STATUS.md)，架构全景见 [`docs/development/ARCHITECTURE.md`](docs/development/ARCHITECTURE.md)。原型资源位于 `docs/design_refs/`。
 
-最终 Android Release APK 位于 `build/app/outputs/flutter-apk/app-release.apk`。未提供正式 keystore 时会使用 debug key 生成仅供本地验收的 Release APK；上架前必须配置 `android/key.properties`。构建说明见 [`docs/development/release/ANDROID_RELEASE.md`](docs/development/release/ANDROID_RELEASE.md)。
+Android Release 默认按 ABI 拆分，使用 `bash build_apk_release.sh` 后产物位于 `dist/jizhang_app-<版本>-release-<abi>.apk`；如确实需要通用包可传 `--universal-apk`。未提供正式 keystore 时会使用 debug key 生成仅供本地验收的 Release APK；上架前必须配置 `android/key.properties`。构建说明见 [`docs/development/release/ANDROID_RELEASE.md`](docs/development/release/ANDROID_RELEASE.md)。
 
 ## 源码打包
 
