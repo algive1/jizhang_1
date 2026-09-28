@@ -7,6 +7,7 @@ import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
+import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.android.TransparencyMode
 import io.flutter.embedding.engine.FlutterEngine
@@ -59,6 +60,13 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
         }
     }
 
+    fun revealFlutterEditor() {
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.attributes = window.attributes.apply {
+            dimAmount = VISIBLE_EDITOR_DIM_AMOUNT
+        }
+    }
+
     fun submitNativeReview(
         draft: Map<String, Any?>,
         callback: (Boolean, String?) -> Unit,
@@ -103,6 +111,13 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The user may cancel the native overlay while this transparent host is
+        // still cold-starting. Do not leave an empty Activity above the payment
+        // app when the pending candidate has already been completed.
+        if (AutoBookkeepingPendingStore.readCandidate(this) == null) {
+            finish()
+            return
+        }
         AutoBillOverlayService.instance?.confirmationOpened()
     }
 
@@ -123,5 +138,6 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
         const val EXTRA_BACKGROUND_MODE = "background_mode"
         const val BACKGROUND_MODE_TRANSPARENT = "transparent"
         const val NATIVE_REVIEW_CHANNEL = "jizhang/autobookkeeping_native_review"
+        private const val VISIBLE_EDITOR_DIM_AMOUNT = 0.32f
     }
 }
