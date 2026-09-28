@@ -92,6 +92,95 @@ void main() {
     expect(categories.single.count, 3);
   });
 
+  test('large expense threshold is derived from full scoped history in SQL', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+
+    for (var index = 1; index <= 5; index++) {
+      final occurredAt = DateTime(2026, 7, index, 12);
+      await repository.create(
+        TransactionRecord(
+          id: 'threshold-$index',
+          bookId: SeedIds.personalBook,
+          type: TransactionType.expense,
+          amount: index * 100,
+          accountId: SeedIds.bankAccount,
+          occurredAt: occurredAt,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        ),
+      );
+    }
+    final assetAt = DateTime(2026, 7, 10, 12);
+    await repository.create(
+      TransactionRecord(
+        id: 'threshold-asset',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.assetPurchase,
+        amount: 10000,
+        accountId: SeedIds.bankAccount,
+        occurredAt: assetAt,
+        createdAt: assetAt,
+        updatedAt: assetAt,
+      ),
+    );
+    final futureAt = DateTime(2026, 9, 1);
+    await repository.create(
+      TransactionRecord(
+        id: 'threshold-future',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.expense,
+        amount: 10000,
+        accountId: SeedIds.bankAccount,
+        occurredAt: futureAt,
+        createdAt: futureAt,
+        updatedAt: futureAt,
+      ),
+    );
+
+    final threshold = await database.transactionDao
+        .watchLargeExpenseThresholdInCents(
+          bookId: SeedIds.personalBook,
+          cutoff: DateTime(2026, 8, 20),
+        )
+        .first;
+
+    expect(threshold, 150000);
+  });
+
+  test('pending reimbursement query keeps old unresolved expenses', () async {
+    final database = createMemoryDatabase();
+    addTearDown(database.close);
+    await DatabaseSeeder(database).seedIfNeeded();
+    final repository = DriftTransactionRepository(
+      database,
+      bookId: SeedIds.personalBook,
+    );
+    final occurredAt = DateTime(2025, 1, 10, 12);
+    await repository.create(
+      TransactionRecord(
+        id: 'old-pending-reimbursement',
+        bookId: SeedIds.personalBook,
+        type: TransactionType.expense,
+        amount: 200,
+        accountId: SeedIds.bankAccount,
+        occurredAt: occurredAt,
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+        reimbursementStatus: ReimbursementStatus.pending,
+        reimbursementAmount: 120,
+      ),
+    );
+
+    final rows = await repository.watchPendingReimbursements().first;
+    expect(rows.map((item) => item.id), contains('old-pending-reimbursement'));
+  });
+
   test('transaction range query excludes rows outside the requested month', () async {
     final database = createMemoryDatabase();
     addTearDown(database.close);
