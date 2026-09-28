@@ -1717,6 +1717,11 @@ class CategoryDao extends DatabaseAccessor<AppDatabase>
   }
 }
 
+typedef TransactionDateRange = ({
+  DateTime start,
+  DateTime endExclusive,
+});
+
 typedef TransactionMonthSqlSummary = ({
   int incomeCents,
   int personalExpenseCents,
@@ -1770,6 +1775,47 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         (row) => OrderingTerm.desc(row.id),
       ]);
     if (limit != null) query.limit(limit);
+    return query.watch();
+  }
+
+  Stream<List<TransactionEntity>> watchActiveRanges({
+    String? bookId,
+    required List<TransactionDateRange> ranges,
+    bool onlyOccurred = false,
+  }) {
+    if (ranges.isEmpty) {
+      return Stream.value(const <TransactionEntity>[]);
+    }
+    final query = select(transactionEntries);
+    Expression<bool> rangeFilter = const Constant(false);
+    for (final range in ranges) {
+      rangeFilter =
+          rangeFilter |
+          (transactionEntries.occurredAt.isBiggerOrEqualValue(range.start) &
+              transactionEntries.occurredAt.isSmallerThanValue(
+                range.endExclusive,
+              ));
+    }
+    query
+      ..where(
+        (row) =>
+            row.deletedAt.isNull() &
+            CustomExpression<bool>(
+              SharedSyncSchema.visibleBooksSql('book_id'),
+            ) &
+            (bookId == null
+                ? const Constant(true)
+                : row.bookId.equals(bookId)) &
+            (onlyOccurred
+                ? row.occurredAt.isSmallerOrEqual(currentDateAndTime)
+                : const Constant(true)) &
+            rangeFilter,
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAt),
+        (row) => OrderingTerm.desc(row.createdAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
     return query.watch();
   }
 
