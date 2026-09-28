@@ -2064,6 +2064,29 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
+  Future<List<TransactionEntity>> getImportDedupCandidates({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.source.isIn(const ['import', 'auto']) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
   Future<List<TransactionEntity>> getActive({
     String? bookId,
     int? limit,
