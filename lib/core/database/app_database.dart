@@ -742,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -965,6 +965,9 @@ class AppDatabase extends _$AppDatabase {
             investmentHoldingEntries.includeInHomeNetAssets,
           );
         }
+        if (from < 23) {
+          await _createTransactionRangeIndex();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -985,6 +988,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted '
       'ON transactions(book_id, deleted_at)',
     );
+    await _createTransactionRangeIndex();
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal '
       'ON goal_milestones(goal_id, sort_order)',
@@ -1004,6 +1008,13 @@ class AppDatabase extends _$AppDatabase {
     await _createAttachmentIndexes();
     await _createAccountIdentifierIndex();
     await _createInvestmentIndexes();
+  }
+
+  Future<void> _createTransactionRangeIndex() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_book_deleted_occurred '
+      'ON transactions(book_id, deleted_at, occurred_at DESC)',
+    );
   }
 
   Future<void> _createInvestmentIndexes() async {
