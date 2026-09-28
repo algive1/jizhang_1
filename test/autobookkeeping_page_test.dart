@@ -23,6 +23,7 @@ import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/categories/data/category_repository.dart';
 import 'package:jizhang_app/features/intelligence/domain/merchant_classification_service.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/components/category_grid.dart';
+import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
 
 void main() {
   test('独立浮层 Activity 路由从平台初始地址打开', () {
@@ -250,6 +251,14 @@ void main() {
     expect(
       find.byKey(const ValueKey('autobookkeeping-quick-add-review')),
       findsOneWidget,
+    );
+    final reviewSheet = tester.widget<QuickAddSheet>(
+      find.byKey(const ValueKey('autobookkeeping-quick-add-review')),
+    );
+    expect(
+      reviewSheet.reviewBottomSafeArea,
+      isFalse,
+      reason: '原生浮层已经处理系统底部安全区，确认按钮不能重复抬高',
     );
     expect(
       find.byKey(const ValueKey('quick-category-section')),
