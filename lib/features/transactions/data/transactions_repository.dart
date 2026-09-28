@@ -12,6 +12,10 @@ import '../../books/data/book_repository.dart';
 abstract interface class TransactionRepository {
   Stream<List<TransactionRecord>> watchAll();
   Stream<List<TransactionRecord>> watchRecent({int limit = 10});
+  Stream<List<TransactionRecord>> watchForAccount({
+    required String accountId,
+    int? limit,
+  });
   Stream<List<TransactionRecord>> watchSince({
     required DateTime start,
     bool onlyOccurred = true,
@@ -65,6 +69,17 @@ class DriftTransactionRepository implements TransactionRepository {
     _validateRecentLimit(limit);
     return _database.transactionDao
         .watchActive(bookId: bookId, limit: limit, onlyOccurred: true)
+        .asyncMap(_mapEntities);
+  }
+
+  @override
+  Stream<List<TransactionRecord>> watchForAccount({
+    required String accountId,
+    int? limit,
+  }) {
+    if (limit != null) _validateRecentLimit(limit);
+    return _database.transactionDao
+        .watchActiveForAccount(accountId: accountId, limit: limit)
         .asyncMap(_mapEntities);
   }
 
@@ -692,6 +707,45 @@ final allTransactionsProvider = StreamProvider<List<TransactionRecord>>((
   await ref.watch(databaseBootstrapProvider.future);
   yield* DriftTransactionRepository(ref.watch(databaseProvider)).watchAll();
 });
+
+typedef AccountTransactionPageKey = ({
+  String accountId,
+  int limit,
+});
+
+final accountTransactionsProvider =
+    StreamProvider.family<List<TransactionRecord>, AccountTransactionPageKey>((
+      ref,
+      key,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(ref.watch(databaseProvider))
+          .watchForAccount(accountId: key.accountId, limit: key.limit);
+    });
+
+final accountMonthSummaryProvider =
+    StreamProvider.family<({double inflow, double outflow}), String>((
+      ref,
+      accountId,
+    ) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final now = DateTime.now();
+      yield* ref
+          .watch(databaseProvider)
+          .transactionDao
+          .watchAccountMonthSummary(
+            accountId: accountId,
+            start: DateTime(now.year, now.month),
+            endExclusive: DateTime(now.year, now.month + 1),
+            now: now,
+          )
+          .map(
+            (value) => (
+              inflow: value.inflowCents / 100,
+              outflow: value.outflowCents / 100,
+            ),
+          );
+    });
 
 final reimbursementTransactionsProvider =
     StreamProvider<List<TransactionRecord>>((ref) async* {
