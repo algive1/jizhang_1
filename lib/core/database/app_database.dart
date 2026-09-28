@@ -1717,6 +1717,19 @@ class CategoryDao extends DatabaseAccessor<AppDatabase>
   }
 }
 
+typedef TransactionMonthSqlSummary = ({
+  int incomeCents,
+  int personalExpenseCents,
+});
+
+typedef TransactionCategorySqlSummary = ({
+  String id,
+  String name,
+  String? icon,
+  int amountCents,
+  int count,
+});
+
 @DriftAccessor(tables: [TransactionEntries])
 class TransactionDao extends DatabaseAccessor<AppDatabase>
     with _$TransactionDaoMixin {
@@ -1794,6 +1807,134 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       ]);
     if (limit != null) query.limit(limit);
     return query.get();
+  }
+
+  Stream<TransactionMonthSqlSummary> watchMonthSummary({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    const netExpense =
+        'MAX(amount_in_cents - COALESCE(refund_amount_in_cents, 0), 0)';
+    const personalExpense =
+        'MAX(($netExpense) - CASE reimbursement_status '
+        "WHEN 'pending' THEN COALESCE(reimbursement_amount_in_cents, $netExpense) "
+        "WHEN 'reimbursed' THEN COALESCE(reimbursement_amount_in_cents, $netExpense) "
+        "WHEN 'partial' THEN COALESCE(reimbursement_amount_in_cents, 0) "
+        'ELSE 0 END, 0)';
+    final query = customSelect(
+      '''
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('income', 'refund', 'reimbursement', 'borrow')
+              THEN amount_in_cents
+            ELSE 0
+          END
+        ), 0) AS income_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN type IN ('expense', 'lend')
+              THEN $personalExpense
+            ELSE 0
+          END
+        ), 0) AS personal_expense_cents
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+        AND book_id = ?
+        AND UPPER(currency) = UPPER(?)
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND occurred_at <= ?
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => (
+        incomeCents: row.read<int>('income_cents'),
+        personalExpenseCents: row.read<int>('personal_expense_cents'),
+      ),
+    );
+  }
+
+  Stream<List<TransactionCategorySqlSummary>> watchMonthExpenseCategories({
+    required String bookId,
+    required DateTime start,
+    required DateTime endExclusive,
+    required DateTime now,
+    String currency = 'CNY',
+  }) {
+    final query = customSelect(
+      '''
+      SELECT
+        CASE
+          WHEN TRIM(COALESCE(c.name, '')) <> ''
+            THEN 'name:' || TRIM(c.name)
+          WHEN t.category_id IS NOT NULL AND TRIM(t.category_id) <> ''
+            THEN 'id:' || t.book_id || ':' || TRIM(t.category_id)
+          ELSE 'uncategorized'
+        END AS category_key,
+        CASE
+          WHEN TRIM(COALESCE(c.name, '')) <> '' THEN TRIM(c.name)
+          ELSE '未分类'
+        END AS category_name,
+        c.icon AS category_icon,
+        COALESCE(
+          SUM(MAX(t.amount_in_cents - COALESCE(t.refund_amount_in_cents, 0), 0)),
+          0
+        ) AS amount_cents,
+        COUNT(*) AS transaction_count
+      FROM transactions AS t
+      LEFT JOIN categories AS c
+        ON c.id = t.category_id
+       AND c.book_id = t.book_id
+       AND c.is_archived = 0
+      WHERE t.deleted_at IS NULL
+        AND ${SharedSyncSchema.visibleBooksSql('t.book_id')}
+        AND t.book_id = ?
+        AND UPPER(t.currency) = UPPER(?)
+        AND t.type IN ('expense', 'lend', 'assetPurchase')
+        AND t.occurred_at >= ?
+        AND t.occurred_at < ?
+        AND t.occurred_at <= ?
+      GROUP BY category_key, category_name, category_icon
+      HAVING amount_cents > 0
+      ORDER BY amount_cents DESC, category_name ASC
+      ''',
+      variables: [
+        Variable<String>(bookId),
+        Variable<String>(currency),
+        Variable<DateTime>(start),
+        Variable<DateTime>(endExclusive),
+        Variable<DateTime>(now),
+      ],
+      readsFrom: {
+        transactionEntries,
+        attachedDatabase.categoryEntries,
+      },
+    );
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows)
+          (
+            id: row.read<String>('category_key'),
+            name: row.read<String>('category_name'),
+            icon: row.readNullable<String>('category_icon'),
+            amountCents: row.read<int>('amount_cents'),
+            count: row.read<int>('transaction_count'),
+          ),
+      ],
+    );
   }
 
   Future<TransactionEntity?> findById(String id) {
