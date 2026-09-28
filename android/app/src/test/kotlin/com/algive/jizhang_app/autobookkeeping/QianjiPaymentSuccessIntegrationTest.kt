@@ -10,6 +10,36 @@ class QianjiPaymentSuccessIntegrationTest {
     private val detector = PaymentSceneDetector()
 
     @Test
+    fun installedMeituanTakeoutPackageIsRecognized() {
+        val result = detector.inspect(
+            "com.sankuai.meituan.takeoutnew",
+            labels("支付成功", "商家名称", "测试餐厅", "实付金额", "18.80", "支付方式", "微信支付"),
+        )
+        assertNotNull(result.rejectionReason, result.candidate)
+        assertEquals(1880L, result.candidate?.amountInCents)
+        assertEquals("MEITUAN", result.candidate?.sourceApp)
+    }
+
+    @Test
+    fun staleWechatLauncherActivityDoesNotHideCompleteBillDetail() {
+        val result = detector.inspect(
+            packageName = "com.tencent.mm",
+            nodes = labels(
+                "扫二维码付款-给陆勤老师-专注职工社保", "-1.00",
+                "当前状态", "支付成功", "收款方备注", "二维码收款",
+                "支付方式", "零钱", "转账时间", "2026年9月28日 22:28:59",
+                "转账单号", "10001073012026092801990426730526", "全部账单",
+            ),
+            activityClassName = "com.tencent.mm.ui.LauncherUI",
+        )
+
+        assertNotNull(result.rejectionReason, result.candidate)
+        assertEquals(100L, result.candidate?.amountInCents)
+        assertEquals("10001073012026092801990426730526", result.candidate?.orderId)
+        assertEquals("QIANJI_WeChatBillDetail", result.candidate?.scene?.scene)
+    }
+
+    @Test
     fun sevenSupportedAppsReachCandidateFromPaymentOrBillSuccessPage() {
         val cases = listOf(
             Case(

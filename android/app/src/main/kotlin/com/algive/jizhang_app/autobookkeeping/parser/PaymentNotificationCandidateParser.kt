@@ -70,7 +70,9 @@ class PaymentNotificationCandidateParser(
         }
 
         val amount = amountInCents(content) ?: return null
-        val merchant = merchant(content) ?: counterparty(content) ?: return null
+        val parsedMerchant = merchant(content) ?: counterparty(content)
+        val merchant = parsedMerchant ?: fallbackMerchant(packageName, title, transactionType, content)
+            ?: return null
         val paymentMethod =
             explicitPaymentMethod(content)
                 ?: PAYMENT_METHODS[packageName]
@@ -100,7 +102,7 @@ class PaymentNotificationCandidateParser(
                 confidence = .90,
             ),
             amountConfidence = .95,
-            merchantConfidence = .90,
+            merchantConfidence = if (parsedMerchant == null) .55 else .90,
             sourceApp = source,
             transactionType = transactionType,
             orderId = ORDER_ID_PATTERN.find(content)?.groupValues?.getOrNull(1),
@@ -221,6 +223,18 @@ class PaymentNotificationCandidateParser(
         return value
     }
 
+    private fun fallbackMerchant(
+        packageName: String,
+        title: String,
+        transactionType: String,
+        content: String,
+    ): String? {
+        if (transactionType != "EXPENSE" || !SUCCESS_PATTERN.containsMatchIn(content)) return null
+        val cleanedTitle = title.replace(GROUPED_TITLE_PREFIX, "").trim()
+        return cleanedTitle.takeIf { it.isNotBlank() }
+            ?: PAYMENT_METHODS[packageName]
+    }
+
     private companion object {
         const val WECHAT_PACKAGE = "com.tencent.mm"
 
@@ -237,6 +251,7 @@ class PaymentNotificationCandidateParser(
             "com.unionpay" to "云闪付",
             "com.sankuai.meituan" to "美团支付",
             "com.sankuai.meituan.takeout" to "美团支付",
+            "com.sankuai.meituan.takeoutnew" to "美团支付",
             "com.jingdong.app.mall" to "京东支付",
             "com.xunmeng.pinduoduo" to "拼多多支付",
             "com.ss.android.ugc.aweme" to "抖音支付",
@@ -321,5 +336,6 @@ class PaymentNotificationCandidateParser(
         val INVALID_MERCHANT_PATTERN = Regex(
             "[¥￥]|支付成功|付款成功|交易成功|实付金额|支付金额",
         )
+        val GROUPED_TITLE_PREFIX = Regex("^\\[?\\d+条]?\\s*")
     }
 }

@@ -490,6 +490,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final sourceAccount = _selectedAccount(accounts, _accountId);
     final destinationAccount = _destinationAccount(accounts, sourceAccount);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final compactCategoryRowHeight =
+        MediaQuery.textScalerOf(context).scale(14) > 19 ? 72.0 : 56.0;
     final input = _amount;
 
     return Scaffold(
@@ -571,7 +573,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) => SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                        padding: widget.reviewMode
+                            ? const EdgeInsets.fromLTRB(16, 0, 16, 6)
+                            : const EdgeInsets.fromLTRB(16, 2, 16, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -591,15 +595,28 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             ],
                             if (!_usesAccountPair)
                               SizedBox(
-                                height: (constraints.maxHeight - 242).clamp(
-                                  150.0,
-                                  360.0,
-                                ),
+                                key: const ValueKey('quick-category-card'),
+                                // Three rows stay visible; extra rows scroll
+                                // inside the shared category card.
+                                height: widget.reviewMode
+                                    ? compactCategoryRowHeight * 3 + 14
+                                    : (constraints.maxHeight - 242).clamp(
+                                        150.0,
+                                        360.0,
+                                      ),
                                 child: CategoryGrid(
                                   categories: activeCategories,
                                   selected: selectedCategory,
                                   subcategories: subcategories,
                                   selectedSubcategoryId: effectiveSubcategoryId,
+                                  tileHeight: widget.reviewMode
+                                      ? compactCategoryRowHeight
+                                      : null,
+                                  iconSize: widget.reviewMode
+                                      ? (compactCategoryRowHeight > 56
+                                            ? 34
+                                            : 30)
+                                      : 42,
                                   onSelected: (category, anchorRect) =>
                                       _chooseCategory(
                                         categories,
@@ -624,7 +641,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                   isDestination: true,
                                 ),
                               ),
-                            const SizedBox(height: 10),
+                            SizedBox(height: widget.reviewMode ? 6 : 10),
                             _buildDetailCard(
                               context,
                               input: input,
@@ -931,7 +948,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }) {
     return Container(
       key: ValueKey('quick-detail-card'),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: widget.reviewMode
+          ? const EdgeInsets.fromLTRB(8, 6, 8, 8)
+          : const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(20),
@@ -945,10 +964,11 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             onAi: _openAi,
             onVoice: _openVoice,
           ),
-          SizedBox(height: 10),
+          SizedBox(height: widget.reviewMode ? 4 : 10),
           AmountInputView(
             input: input,
             currency: _currencySymbol(sourceAccount),
+            height: widget.reviewMode ? 52 : 58,
             onTap: widget.reviewMode ? _editReviewAmount : null,
           ),
           if (_amountError)
@@ -967,7 +987,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 ),
               ),
             ),
-          const SizedBox(height: 10),
+          SizedBox(height: widget.reviewMode ? 4 : 10),
           _ChipRow(
             children: [
               if (!_usesAccountPair)
@@ -979,6 +999,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   // 因此默认就呈选中态，而不是等用户改过才高亮。
                   selected: sourceAccount != null,
                   showChevron: true,
+                  height: widget.reviewMode ? 34 : 40,
                   onTap: () => _chooseAccount(accounts, isDestination: false),
                 ),
               if (_supportsReimbursement)
@@ -989,6 +1010,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   // 「不报销」本身也是一个已确定的选择。
                   selected: true,
                   showChevron: true,
+                  height: widget.reviewMode ? 34 : 40,
                   onTap: _pickReimbursement,
                 ),
               if (selectedBook?.type == BookType.family &&
@@ -1000,6 +1022,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   icon: Icons.person_outline_rounded,
                   selected: true,
                   showChevron: true,
+                  height: widget.reviewMode ? 34 : 40,
                   onTap: () => _chooseFamilyPayer(selectedBook!),
                 ),
               if (!_isEditing)
@@ -1015,6 +1038,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
                   showChevron: true,
+                  height: widget.reviewMode ? 34 : 40,
                   onTap: () => _chooseBook(books),
                 )
               else
@@ -1029,11 +1053,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         )
                       : BookColorDot(book: selectedBook, size: 12),
                   selected: selectedBook != null,
+                  height: widget.reviewMode ? 34 : 40,
                   onTap: null,
                 ),
             ],
           ),
-          SizedBox(height: 8),
+          SizedBox(height: widget.reviewMode ? 4 : 8),
           _ChipRow(
             children: [
               _QuickChip(
@@ -1043,12 +1068,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     : '附件 ${_attachments.length}/4',
                 icon: Icons.attach_file,
                 selected: _attachments.isNotEmpty,
+                height: widget.reviewMode ? 34 : 40,
                 onTap: _onAttachmentChip,
               ),
               _QuickChip(
                 key: const ValueKey('quick-image-chip'),
                 label: '图片',
                 icon: Icons.image_outlined,
+                height: widget.reviewMode ? 34 : 40,
                 onTap: _pickImageAttachment,
               ),
               _QuickChip(
@@ -1056,6 +1083,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 label: _dateChipLabel,
                 icon: Icons.calendar_today_outlined,
                 selected: true,
+                height: widget.reviewMode ? 34 : 40,
                 onTap: _pickDateTime,
               ),
               _QuickChip(
@@ -1063,6 +1091,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 label: '定期付',
                 icon: Icons.schedule_outlined,
                 selected: _isRecurring,
+                height: widget.reviewMode ? 34 : 40,
                 onTap: _configureRecurring,
               ),
             ],
@@ -1724,9 +1753,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               category.type == desiredType && category.parentId == null,
         )
         .toList();
-    // The auto-bookkeeping review uses the order already presented by its
-    // category repository; the manual quick-add screen keeps its own ordering.
-    if (widget.reviewMode) return result;
+    // Keep the established bookkeeping order in the floating review too:
+    // “其他” first, then the remaining roots by descending sort order.
     bool isOtherCategory(Category category) =>
         category.id == 'expense-other' ||
         category.id == 'income-other' ||

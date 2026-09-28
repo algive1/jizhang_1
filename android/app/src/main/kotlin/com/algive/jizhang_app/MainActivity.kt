@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationManagerCompat
@@ -71,6 +72,7 @@ open class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        AutoBookkeepingLogStore.clearDetailed(this)
         navigationChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "jizhang/navigation",
@@ -168,6 +170,11 @@ open class MainActivity : FlutterFragmentActivity() {
                     "setEnabled" -> {
                         val enabled = call.arguments as? Boolean ?: false
                         if (enabled && !isNotificationAccessGranted()) {
+                            AutoBookkeepingLogStore.recordDetailed(
+                                this,
+                                "payment_notification_setting_rejected",
+                                "enabled=true reason=notification_access_missing",
+                            )
                             result.error(
                                 "NOTIFICATION_ACCESS_REQUIRED",
                                 "请先允许「好好记账」读取通知",
@@ -178,6 +185,12 @@ open class MainActivity : FlutterFragmentActivity() {
                         notificationPreferences().edit()
                             .putBoolean(KEY_ENABLED, enabled)
                             .apply()
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "payment_notification_setting_changed",
+                            "enabled=$enabled access=${isNotificationAccessGranted()} " +
+                                "listenerConnected=${PaymentNotificationListenerService.connected}",
+                        )
                         if (enabled) {
                             runCatching {
                                 android.service.notification.NotificationListenerService
@@ -187,6 +200,12 @@ open class MainActivity : FlutterFragmentActivity() {
                                             PaymentNotificationListenerService::class.java,
                                         ),
                                     )
+                            }.onFailure { error ->
+                                AutoBookkeepingLogStore.recordDetailed(
+                                    this,
+                                    "payment_notification_rebind_failed",
+                                    Log.getStackTraceString(error),
+                                )
                             }
                         }
                         result.success(null)
@@ -277,6 +296,11 @@ open class MainActivity : FlutterFragmentActivity() {
                             return@setMethodCallHandler
                         }
                         val added = AutoBookkeepingCustomApps.add(this, pkg)
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "custom_app_add_result",
+                            "package=$pkg added=$added packages=${AutoBookkeepingCustomApps.all(this)}",
+                        )
                         if (added) {
                             AutoBookkeepingLogStore.record(
                                 this,
@@ -296,7 +320,13 @@ open class MainActivity : FlutterFragmentActivity() {
                     }
                     "removeCustomApp" -> {
                         val pkg = (call.arguments as? String).orEmpty().trim()
+                        val removed = AutoBookkeepingCustomApps.contains(this, pkg)
                         AutoBookkeepingCustomApps.remove(this, pkg)
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "custom_app_remove_result",
+                            "package=$pkg removed=$removed packages=${AutoBookkeepingCustomApps.all(this)}",
+                        )
                         AutoBookkeepingLogStore.record(
                             this,
                             "custom_app_removed",
@@ -332,6 +362,13 @@ open class MainActivity : FlutterFragmentActivity() {
                             AutoBookkeepingDiagnostics.error = "通知不可用，识别结果将在打开应用时提示"
                         }
                         AutoBookkeepingLogStore.record(this, "setting_changed", "enabled=$enabled")
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "setting_changed_detail",
+                            "enabled=$enabled accessibility=${isAccessibilityGranted()} " +
+                                "overlay=$overlayGranted notifications=$notificationsAvailable " +
+                                "notificationListener=${isNotificationAccessGranted()}",
+                        )
                         if (!enabled) {
                             AutoBookkeepingPendingStore.complete(this, remember = false)
                         }
@@ -415,6 +452,17 @@ open class MainActivity : FlutterFragmentActivity() {
                     "clear" -> {
                         AutoBookkeepingLogStore.clear(this)
                         result.success(null)
+                    }
+                    "recordDetailed" -> {
+                        val arguments = call.arguments as? Map<*, *>
+                        val stage = arguments?.get("stage") as? String
+                        val detail = arguments?.get("detail") as? String
+                        if (stage.isNullOrBlank() || detail == null) {
+                            result.error("INVALID_LOG", "日志内容无效", null)
+                        } else {
+                            AutoBookkeepingLogStore.recordDetailed(this, stage, detail)
+                            result.success(null)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -663,6 +711,15 @@ open class MainActivity : FlutterFragmentActivity() {
 
     private fun reconcileAutoBookkeepingRuntime() {
         val enabled = AutoBookkeepingSettings.enabled(this)
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "runtime_reconcile",
+            "enabled=$enabled accessibility=${isAccessibilityGranted()} " +
+                "overlay=${AutoBookkeepingOverlayPermission.isGranted(this)} " +
+                "notifications=${AutoBookkeepingNotificationController.statusNotificationsAvailable(this)} " +
+                "notificationListener=${isNotificationAccessGranted()} " +
+                "foreground=${AutoBookkeepingDiagnostics.foregroundRunning}",
+        )
         val ready =
             enabled &&
                 isAccessibilityGranted() &&

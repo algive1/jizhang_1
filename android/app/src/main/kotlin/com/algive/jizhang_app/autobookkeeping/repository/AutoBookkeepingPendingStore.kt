@@ -1,6 +1,7 @@
 package com.algive.jizhang_app.autobookkeeping.repository
 
 import android.content.Context
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
 import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
@@ -35,7 +36,9 @@ object AutoBookkeepingPendingStore {
 
     private const val PENDING_TTL_MILLIS = 30 * 60 * 1000L
     private const val HANDLED_TTL_MILLIS = 10 * 60 * 1000L
-    private const val CROSS_SOURCE_MATCH_MILLIS = 2 * 60 * 1000L
+    // A page result and its notification normally arrive together. A broad
+    // window incorrectly merges two same-amount payments made seconds apart.
+    private const val CROSS_SOURCE_MATCH_MILLIS = 10_000L
 
     private const val PRIORITY_NOTIFICATION = 1
     private const val PRIORITY_ACCESSIBILITY = 2
@@ -51,10 +54,16 @@ object AutoBookkeepingPendingStore {
         val now = System.currentTimeMillis()
         val incoming = payload(candidate, now)
         val pending = parse(preferences.getString(KEY_PENDING, null))
+        AutoBookkeepingLogStore.recordDetailed(
+            context,
+            "pending_enqueue_requested",
+            "candidate=${candidate.toMap()} current=$pending",
+        )
 
         if (pending != null) {
             val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
             if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
+                AutoBookkeepingLogStore.recordDetailed(context, "pending_expired", "candidate=$pending")
                 deleteScreenshot(context, pending.optString("screenshotPath"))
                 preferences.edit().remove(KEY_PENDING).apply()
             } else {
@@ -71,8 +80,10 @@ object AutoBookkeepingPendingStore {
                         preferences.edit()
                             .putString(KEY_PENDING, incoming.toString())
                             .apply()
+                        logEnqueueDecision(context, PendingEnqueueDecision.ACCEPTED, candidate, "same transaction upgraded")
                         return PendingEnqueueDecision.ACCEPTED
                     }
+                    logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "same transaction")
                     return PendingEnqueueDecision.DUPLICATE
                 }
 
@@ -83,8 +94,10 @@ object AutoBookkeepingPendingStore {
                     preferences.edit()
                         .putString(KEY_PENDING, incoming.toString())
                         .apply()
+                    logEnqueueDecision(context, PendingEnqueueDecision.ACCEPTED, candidate, "higher priority replaced pending")
                     return PendingEnqueueDecision.ACCEPTED
                 }
+                logEnqueueDecision(context, PendingEnqueueDecision.BUSY, candidate, "pending slot occupied")
                 return PendingEnqueueDecision.BUSY
             }
         }
@@ -96,6 +109,7 @@ object AutoBookkeepingPendingStore {
             handledFingerprint == fingerprint &&
             now - handledAt <= HANDLED_TTL_MILLIS
         ) {
+            logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "handled fingerprint")
             return PendingEnqueueDecision.DUPLICATE
         }
 
@@ -105,10 +119,12 @@ object AutoBookkeepingPendingStore {
             now - handledAt <= HANDLED_TTL_MILLIS &&
             isLikelySameTransaction(handledPayload, incoming)
         ) {
+            logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "handled transaction match")
             return PendingEnqueueDecision.DUPLICATE
         }
 
         preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
+        logEnqueueDecision(context, PendingEnqueueDecision.ACCEPTED, candidate, "new pending candidate")
         return PendingEnqueueDecision.ACCEPTED
     }
 
@@ -247,6 +263,11 @@ object AutoBookkeepingPendingStore {
         val value = parse(preferences.getString(KEY_PENDING, null))
         val fingerprint = value?.optString(KEY_FINGERPRINT).orEmpty()
         val screenshotPath = value?.optString("screenshotPath").orEmpty()
+        AutoBookkeepingLogStore.recordDetailed(
+            context,
+            "pending_completed",
+            "remember=$remember keepScreenshot=$keepScreenshot fingerprint=$fingerprint candidate=$value",
+        )
         val editor = preferences.edit().remove(KEY_PENDING)
 
         if (!keepScreenshot) {
@@ -276,10 +297,14 @@ object AutoBookkeepingPendingStore {
         path: String,
     ): Boolean {
         if (!isManagedScreenshot(context, path)) {
+            AutoBookkeepingLogStore.recordDetailed(context, "pending_screenshot_rejected", "reason=unmanaged path=$path")
             return false
         }
         val file = File(path)
-        if (!file.isFile) return false
+        if (!file.isFile) {
+            AutoBookkeepingLogStore.recordDetailed(context, "pending_screenshot_rejected", "reason=missing_file path=$path")
+            return false
+        }
 
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val pending = parse(preferences.getString(KEY_PENDING, null))
@@ -287,6 +312,11 @@ object AutoBookkeepingPendingStore {
             pending == null ||
             pending.optString(KEY_FINGERPRINT) != fingerprint
         ) {
+            AutoBookkeepingLogStore.recordDetailed(
+                context,
+                "pending_screenshot_rejected",
+                "reason=candidate_changed fingerprint=$fingerprint path=$path current=${pending?.optString(KEY_FINGERPRINT)}",
+            )
             deleteScreenshot(context, path)
             return false
         }
@@ -297,8 +327,20 @@ object AutoBookkeepingPendingStore {
         }
         pending.put("screenshotPath", path)
         preferences.edit().putString(KEY_PENDING, pending.toString()).apply()
+        AutoBookkeepingLogStore.recordDetailed(context, "pending_screenshot_attached", "fingerprint=$fingerprint path=$path")
         return true
     }
+
+    private fun logEnqueueDecision(
+        context: Context,
+        decision: PendingEnqueueDecision,
+        candidate: PaymentCandidate,
+        reason: String,
+    ) = AutoBookkeepingLogStore.recordDetailed(
+        context,
+        "pending_enqueue_decision",
+        "decision=$decision reason=$reason candidate=${candidate.toMap()}",
+    )
 
     private fun readValidPayload(context: Context): JSONObject? {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -422,7 +464,10 @@ object AutoBookkeepingPendingStore {
             return sameSource || sameMerchant || samePaymentRail
         }
 
-        return sameSource && sameMerchant
+        // Same-source page events are deduplicated by the visible page session;
+        // notifications with the same post time share an exact fingerprint.
+        // Merchant + amount + a nearby time is not enough to merge real buys.
+        return false
     }
 
     internal fun transactionTypesCompatible(

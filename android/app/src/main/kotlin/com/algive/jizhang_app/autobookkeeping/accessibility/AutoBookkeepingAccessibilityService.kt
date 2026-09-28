@@ -9,7 +9,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.detector.PaymentSceneDetector
@@ -18,6 +17,7 @@ import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnos
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.parser.QianjiPageCatalog
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
+import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
 import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 
 class AutoBookkeepingAccessibilityService : AccessibilityService() {
@@ -41,6 +41,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var lastWindow = -1
     private var absentSince = 0L
     private var lastDebugAt = 0L
+    private var lastEventLogAt = 0L
+    private var lastRejectedSnapshotAt = 0L
     private var lastPaymentActivityAt = 0L
     private var lastActivityPackage: String? = null
     private var lastActivityClassName: String? = null
@@ -71,6 +73,12 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 "${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource} " +
                 "packages=${basePackages.size + ruleRegistry.customPackages.size}",
         )
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "accessibility_service_connected",
+            "rules=${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource} " +
+                "packages=${basePackages + ruleRegistry.customPackages}",
+        )
         // Rebinding can happen while a payment result is already stationary;
         // waiting for another content-change event would leave that page unread.
         if (AutoBookkeepingSettings.enabled(this)) {
@@ -78,7 +86,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             rootRetryCount = 0
             handler.removeCallbacks(scan)
             scheduled = true
-            handler.postDelayed(scan, 500)
+            handler.postDelayed(scan, 150)
         }
     }
 
@@ -107,12 +115,39 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         Diagnostics.ruleSource =
             (if (ruleRegistry.loadedFromAsset) "asset" else "built_in") +
                 if (ruleRegistry.customPackages.isEmpty()) "" else "+custom"
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "accessibility_rules_applied",
+            "packages=${merged.sorted()} rules=${Diagnostics.ruleVersions} source=${Diagnostics.ruleSource}",
+        )
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val actualEvent = event ?: return
         val eventPackage = actualEvent.packageName?.toString()
         val eventRule = eventPackage?.let(ruleRegistry::ruleFor)
-        if (!AutoBookkeepingSettings.enabled(this) || eventRule == null) return
+        val enabled = AutoBookkeepingSettings.enabled(this)
+        val now = System.currentTimeMillis()
+        if (eventRule != null && now - lastEventLogAt >= EVENT_LOG_INTERVAL_MS) {
+            lastEventLogAt = now
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "accessibility_event",
+                "package=$eventPackage type=${AccessibilityEvent.eventTypeToString(actualEvent.eventType)} " +
+                    "class=${actualEvent.className} eventTime=${actualEvent.eventTime} " +
+                    "window=${actualEvent.windowId} changeTypes=${actualEvent.contentChangeTypes} " +
+                    "enabled=$enabled rule=${eventRule.sourceApp} text=${actualEvent.text.joinToString(" ")}",
+            )
+        }
+        if (!enabled) return
+        // Overlay removal can reveal a stationary payment page without a new app event.
+        if (eventRule == null) {
+            if (actualEvent.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED && paymentActivity && !scheduled) {
+                rootRetryCount = 0
+                scheduled = true
+                handler.postDelayed(scan, 150)
+            }
+            return
+        }
         when (actualEvent.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
@@ -171,7 +206,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
         Diagnostics.lastEventAt = System.currentTimeMillis()
         // Read the latest root after 500 ms; continuous refreshes cannot starve parsing.
-        if (!scheduled) { scheduled = true; handler.postDelayed(scan, 500) }
+        if (!scheduled) { scheduled = true; handler.postDelayed(scan, 150) }
     }
     private val scan = Runnable { scheduled = false; scanPage() }
     @Suppress("DEPRECATION")
@@ -184,9 +219,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         // single missing permission silently disabled auto bookkeeping.
         if (AutoBillOverlayService.instance == null) {
             ensureOverlayService()
-            val overlayCanStillStart =
-                AutoBookkeepingOverlayPermission.isGranted(this) &&
-                    AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+            val overlayCanStillStart = AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
             if (AutoBillOverlayService.instance == null && overlayCanStillStart) {
                 // The foreground service is starting asynchronously; give it a
                 // bounded number of frames before falling back.
@@ -208,8 +241,13 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val detected = detectCandidateFromVisibleWindows()
         if (detected == null) {
             debug("scan windows=$visibleWindowCount candidate=false")
-            if (absentSince == 0L) absentSince = System.currentTimeMillis()
-            if (System.currentTimeMillis() - absentSince > 1500) lastPage = null
+            // Our confirmation Activity temporarily covers the payment page.
+            // Do not treat that as leaving the page, otherwise returning after
+            // Save creates a fresh timestamp and reopens the same transaction.
+            if (AutoBillOverlayService.instance?.isShowing != true) {
+                if (absentSince == 0L) absentSince = System.currentTimeMillis()
+                if (System.currentTimeMillis() - absentSince > 1500) lastPage = null
+            }
             retryScanIfNeeded()
             return
         }
@@ -218,34 +256,62 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val candidate = detected.first
         val windowId = detected.second
         debug("scan windows=$visibleWindowCount candidate=true")
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "candidate_detected_detail",
+            candidate.toMap().toString(),
+        )
         val identity = BillFingerprint.hash(BillFingerprint.identity(candidate))
         AutoBookkeepingLogStore.record(this, "candidate_detected", "payment success candidate")
         if (identity == lastPage && windowId == lastWindow) {
             AutoBookkeepingLogStore.record(this, "deduplicated", "same page and fingerprint")
             return
         }
-        if (!AutoBookkeepingPendingStore.enqueueIfAbsent(this, candidate)) {
-            AutoBookkeepingLogStore.record(this, "deduplicated", "pending store rejected duplicate")
+        val enqueueDecision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "candidate_enqueue_decision",
+            "decision=$enqueueDecision candidate=${candidate.toMap()}",
+        )
+        if (enqueueDecision != PendingEnqueueDecision.ACCEPTED) {
+            AutoBookkeepingLogStore.record(this, "deduplicated", "pending store: $enqueueDecision")
+            if (enqueueDecision == PendingEnqueueDecision.DUPLICATE && AutoBillOverlayService.instance?.isShowing != true) {
+                AutoBookkeepingPendingStore.readCandidate(this)?.let { pending ->
+                    offerCandidate(pending, identity, windowId)
+                }
+            }
             return
         }
 
         if (AutoBookkeepingSettings.screenshotEnabled(this)) {
             val fingerprint = BillFingerprint.of(candidate)
+            // The Flutter confirmation surface does not display the evidence image.
+            // Start it first; save the screenshot asynchronously afterward.
+            offerCandidate(candidate, identity, windowId)
             AutoBookkeepingScreenshotCapture.capture(
                 service = this,
                 candidate = candidate,
                 // On API 34+ capture only the paying app's window so the status
                 // bar, our own overlay and the IME stay out of the evidence PNG.
                 preferredWindowId = windowId,
-                onCaptured = {
-                    offerCandidate(candidate, identity, windowId)
-                },
+                onCaptured = {},
                 onComplete = { path ->
                     if (path != null) {
-                        AutoBookkeepingPendingStore.attachScreenshotIfCurrent(
+                        val attached = AutoBookkeepingPendingStore.attachScreenshotIfCurrent(
                             this,
                             fingerprint,
                             path,
+                        )
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "screenshot_attached",
+                            "path=$path attached=$attached",
+                        )
+                    } else {
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "screenshot_missing",
+                            "candidate=${candidate.toMap()}",
                         )
                     }
                 },
@@ -268,6 +334,11 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 this,
                 "overlay_skipped",
                 "pending candidate changed before overlay",
+            )
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "overlay_skipped_detail",
+                "offered=${candidate.toMap()} current=${current?.toMap()}",
             )
             return
         }
@@ -292,6 +363,11 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                 "merchantConfidence=${current.merchantConfidence}"
         Log.i(TAG, "payment candidate offered")
         AutoBookkeepingLogStore.record(this, "overlay_offered", "payment candidate offered")
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "overlay_offer_result",
+            "shown=${AutoBillOverlayService.instance?.isShowing == true} candidate=${current.toMap()}",
+        )
     }
 
     /**
@@ -305,6 +381,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     fun triggerManualCapture() {
         if (!AutoBookkeepingSettings.enabled(this)) {
             Diagnostics.error = "自动记账未开启"
+            AutoBookkeepingLogStore.recordDetailed(this, "manual_capture_ignored", "reason=disabled")
             return
         }
         paymentActivity = true
@@ -316,6 +393,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(scan)
         scheduled = true
         AutoBookkeepingLogStore.record(this, "manual_capture", "quick settings tile requested a scan")
+        AutoBookkeepingLogStore.recordDetailed(this, "manual_capture", "source=quick_settings_tile")
         handler.post(scan)
     }
 
@@ -359,6 +437,16 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                     activityClassName = activityClassName,
                 )
                 if (result.candidate == null) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastRejectedSnapshotAt >= REJECTED_SNAPSHOT_INTERVAL_MS) {
+                        lastRejectedSnapshotAt = now
+                        AutoBookkeepingLogStore.recordDetailed(
+                            this,
+                            "page_rejected_snapshot",
+                            "package=$packageName reason=${result.rejectionReason} " +
+                                "labels=${snapshot.nodes.map { it.label }.filter { it.isNotBlank() }.joinToString(" | ")}",
+                        )
+                    }
                     debug(
                         "scan package=$packageName nodes=${snapshot.nodes.size} " +
                             "visited=${snapshot.visited} depth=${snapshot.maxDepth} " +
@@ -385,18 +473,16 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
 
     private fun ensureOverlayService() {
         val enabled = AutoBookkeepingSettings.enabled(this)
-        val overlayGranted = AutoBookkeepingOverlayPermission.isGranted(this)
         val notificationAvailable =
             AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
         if (
             !enabled ||
-            !overlayGranted ||
             !notificationAvailable ||
             AutoBillOverlayService.instance != null
         ) {
             Log.i(
                 TAG,
-                "overlay start skipped: enabled=$enabled overlayGranted=$overlayGranted " +
+                "overlay start skipped: enabled=$enabled " +
                     "notificationAvailable=$notificationAvailable " +
                     "running=${AutoBillOverlayService.instance != null}",
             )
@@ -412,6 +498,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastDebugAt < 1000) return
         lastDebugAt = now
+        AutoBookkeepingLogStore.recordDetailed(this, "scan_trace", message)
         Log.i(TAG, message)
         AutoBookkeepingLogStore.record(this, "scan", message)
     }
@@ -427,12 +514,20 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             "accessibility service interrupted",
         )
     }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); Diagnostics.accessibilityConnected = false; instance = null; super.onDestroy() }
+    override fun onDestroy() {
+        AutoBookkeepingLogStore.recordDetailed(this, "accessibility_service_destroyed", "service destroyed")
+        handler.removeCallbacksAndMessages(null)
+        Diagnostics.accessibilityConnected = false
+        instance = null
+        super.onDestroy()
+    }
 
     companion object {
         private const val TAG = "AutoBookkeeping"
         private const val PAYMENT_ACTIVITY_GRACE_MS = 5000L
-        private const val ROOT_RETRY_DELAY_MS = 200L
+        private const val ROOT_RETRY_DELAY_MS = 120L
+        private const val EVENT_LOG_INTERVAL_MS = 500L
+        private const val REJECTED_SNAPSHOT_INTERVAL_MS = 1_000L
         private const val MAX_ROOT_RETRIES = 10
 
         /** How many 200 ms frames to wait for the overlay before falling back. */

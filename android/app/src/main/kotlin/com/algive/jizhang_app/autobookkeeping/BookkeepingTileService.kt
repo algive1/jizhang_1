@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.util.Log
 import android.widget.Toast
 import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
@@ -28,6 +29,7 @@ class BookkeepingTileService : TileService() {
 
     override fun onTileAdded() {
         super.onTileAdded()
+        AutoBookkeepingLogStore.recordDetailed(this, "tile_added", "quick settings tile added")
         refreshTile()
     }
 
@@ -39,6 +41,11 @@ class BookkeepingTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val service = AutoBookkeepingAccessibilityService.instance
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "tile_clicked",
+            "enabled=${AutoBookkeepingSettings.enabled(this)} serviceRunning=${service != null}",
+        )
         if (service == null || !AutoBookkeepingSettings.enabled(this)) {
             AutoBookkeepingDiagnostics.error = "自动记账未运行，请先开启无障碍服务"
             // Nothing to scan with: take the user to the setup page instead of
@@ -87,6 +94,11 @@ class BookkeepingTileService : TileService() {
                 this,
                 "tile_open_failed",
                 error.javaClass.simpleName,
+            )
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "tile_open_failed_detail",
+                Log.getStackTraceString(error),
             )
         }
     }

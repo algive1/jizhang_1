@@ -18,6 +18,8 @@ class CategoryGrid extends StatelessWidget {
     required this.subcategories,
     required this.selectedSubcategoryId,
     required this.onSelected,
+    this.tileHeight,
+    this.iconSize = 42,
   });
 
   final List<Category> categories;
@@ -25,6 +27,8 @@ class CategoryGrid extends StatelessWidget {
   final List<Category> subcategories;
   final String? selectedSubcategoryId;
   final CategoryGridSelection onSelected;
+  final double? tileHeight;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -63,8 +67,10 @@ class CategoryGrid extends StatelessWidget {
                         _CategoryTile(
                           key: ValueKey('quick-category-${category.id}'),
                           width: constraints.maxWidth / columns,
+                          height: tileHeight,
                           name: category.name,
                           iconKey: category.icon,
+                          iconSize: iconSize,
                           selected: selected?.id == category.id,
                           subtitle: selected?.id == category.id
                               ? selectedSubcategory?.name
@@ -93,16 +99,20 @@ class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
     super.key,
     required this.width,
+    this.height,
     required this.name,
     required this.iconKey,
+    required this.iconSize,
     required this.selected,
     required this.onTap,
     this.subtitle,
   });
 
   final double width;
+  final double? height;
   final String name;
   final String iconKey;
+  final double iconSize;
   final bool selected;
   final String? subtitle;
   final ValueChanged<Rect> onTap;
@@ -115,6 +125,7 @@ class _CategoryTile extends StatelessWidget {
 
     return SizedBox(
       width: width,
+      height: height,
       child: Semantics(
         selected: selected,
         button: true,
@@ -137,7 +148,7 @@ class _CategoryTile extends StatelessWidget {
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(vertical: height == null ? 4 : 1),
             child: Column(
               children: [
                 AnimatedScale(
@@ -147,11 +158,11 @@ class _CategoryTile extends StatelessWidget {
                   child: CategoryIcon(
                     category: name,
                     iconKey: iconKey,
-                    size: 42,
+                    size: iconSize,
                     monochrome: true,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: height == null ? 4 : 2),
                 Text(
                   name,
                   maxLines: 1,

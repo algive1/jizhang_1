@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/app/theme/app_theme_definition.dart';
@@ -7,6 +10,7 @@ import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/book.dart';
+import 'package:jizhang_app/core/models/category.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/autobookkeeping/auto_bookkeeping_learning.dart';
@@ -96,7 +100,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('跨应用确认模式显示接近全屏的取消完成面板且不出现键盘', (tester) async {
+  testWidgets('跨应用确认模式显示约55%高度的取消完成面板且不出现键盘', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(400, 800);
     addTearDown(tester.view.resetPhysicalSize);
@@ -121,12 +125,48 @@ void main() {
     final panel = tester.getSize(
       find.byKey(const ValueKey('autobookkeeping-overlay-panel')),
     );
-    expect(panel.height, greaterThan(700));
-    expect(panel.height, lessThan(800));
+    expect(panel.height, inInclusiveRange(400, 480));
     expect(find.text('没有待确认的交易记录'), findsOneWidget);
     expect(find.byType(EditableText), findsNothing);
     expect(find.text('确认并完成'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('跨应用确认加载时可关闭且保留待确认账单', (tester) async {
+    const channel = MethodChannel('jizhang/autobookkeeping_overlay');
+    MethodCall? closeCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          closeCall = call;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          autoBookkeepingPendingBridgeProvider.overrideWithValue(
+            _HangingPendingBridge(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: AutoBookkeepingConfirmPage(overlayMode: true),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final close = find.byKey(const ValueKey('autobookkeeping-loading-close'));
+    expect(close, findsOneWidget);
+    await tester.tap(close);
+    await tester.pump();
+
+    expect(closeCall?.method, 'close');
+    expect(closeCall?.arguments, {'preservePending': true});
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('付款候选使用记一笔结构、分类和固定操作且不创建键盘区', (tester) async {
@@ -140,6 +180,22 @@ void main() {
     await DatabaseSeeder(database).seedIfNeeded();
     final repositoryCategories = await DriftCategoryRepository(database)
         .getActive();
+    final expectedExpenseRoots =
+        repositoryCategories
+            .where(
+              (category) =>
+                  category.type.name == 'expense' && category.parentId == null,
+            )
+            .toList()
+          ..sort((a, b) {
+            bool isOther(Category category) =>
+                category.id == 'expense-other' ||
+                category.name.trim().startsWith('其他');
+            final aIsOther = isOther(a);
+            final bIsOther = isOther(b);
+            if (aIsOther != bIsOther) return aIsOther ? -1 : 1;
+            return b.sortOrder.compareTo(a.sortOrder);
+          });
     final books = [
       LedgerBook(
         id: 'book-personal',
@@ -199,17 +255,24 @@ void main() {
       find.byKey(const ValueKey('quick-category-section')),
       findsOneWidget,
     );
+    final categoryCard = find.byKey(const ValueKey('quick-category-card'));
+    final categoryViewport = find.byKey(
+      const ValueKey('quick-category-section'),
+    );
+    expect(tester.getSize(categoryCard).height, 182);
+    expect(tester.getSize(categoryViewport).height, 168);
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('quick-category-expense-food')))
+          .dy,
+      greaterThanOrEqualTo(tester.getBottomRight(categoryViewport).dy - 1),
+      reason: '第四行分类从分类卡片内部开始滚动',
+    );
     final grid = tester.widget<CategoryGrid>(find.byType(CategoryGrid));
     expect(
       grid.categories.map((category) => category.id).toList(),
-      repositoryCategories
-          .where(
-            (category) =>
-                category.type.name == 'expense' && category.parentId == null,
-          )
-          .map((category) => category.id)
-          .toList(),
-      reason: '自动确认分类顺序应复用浮层现有顺序',
+      expectedExpenseRoots.map((category) => category.id).toList(),
+      reason: '自动确认分类顺序应将“其他”置首，其余按 sortOrder 倒序',
     );
     expect(find.byKey(const ValueKey('quick-detail-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-amount-input')), findsOneWidget);
@@ -250,6 +313,13 @@ void main() {
     expect(find.byKey(const ValueKey('quick-review-complete')), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('完成'), findsOneWidget);
+    final detailBottom = tester
+        .getBottomRight(find.byKey(const ValueKey('quick-detail-card')))
+        .dy;
+    final cancelTop = tester
+        .getTopLeft(find.byKey(const ValueKey('quick-review-cancel')))
+        .dy;
+    expect(cancelTop - detailBottom, inInclusiveRange(0, 32));
     expect(find.byType(NumberKeyboard), findsNothing);
     expect(find.byType(EditableText), findsOneWidget);
 
@@ -358,4 +428,13 @@ class _FakePendingBridge implements AutoBookkeepingPendingBridge {
 
   @override
   Future<PendingAutoBookkeepingCandidate?> getPending() async => candidate;
+}
+
+class _HangingPendingBridge extends _FakePendingBridge {
+  _HangingPendingBridge();
+
+  final _pending = Completer<PendingAutoBookkeepingCandidate?>();
+
+  @override
+  Future<PendingAutoBookkeepingCandidate?> getPending() => _pending.future;
 }

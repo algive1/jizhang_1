@@ -4,9 +4,12 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -14,23 +17,39 @@ import com.algive.jizhang_app.PaymentNotificationListenerService
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingConfirmActivity
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 
 class AutoBillOverlayService : Service() {
-    private var root: LinearLayout? = null
+    private var root: View? = null
     private var wm: WindowManager? = null
+    private var flutterConfirmationOpen = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    val isShowing: Boolean get() = root != null || flutterConfirmationOpen
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     fun offer(candidate: PaymentCandidate): Boolean {
-        if (!AutoBookkeepingOverlayPermission.isGranted(this)) {
-            AutoBookkeepingLogStore.record(this, "overlay_permission_denied", "overlay permission check returned false")
-            return false
-        }
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "overlay_offer_requested",
+            "candidate=${candidate.toMap()} showing=$isShowing",
+        )
+        if (flutterConfirmationOpen) return true
+        remove()
+        if (!offerNativePrompt(candidate)) return openConfirmation(candidate)
+        // A visible overlay grants the foreground transition on Android/MIUI.
+        // Keep it in place until the confirmation Activity is actually resumed.
+        // Launch before screenshot capture can occupy the accessibility main
+        // thread for several seconds on some Xiaomi builds.
+        openConfirmation(candidate)
+        return true
+    }
+
+    /** Visible prompt also provides a manual fallback if Android blocks the automatic transition. */
+    private fun offerNativePrompt(candidate: PaymentCandidate): Boolean {
         if (root != null) {
             // enqueueIfAbsent only allows this path when the pending candidate
             // was replaced (for example, accessibility superseded a lower
@@ -62,7 +81,7 @@ class AutoBillOverlayService : Service() {
                 textSize = 16f
             })
             addView(TextView(context).apply {
-                text = "当前悬浮层只展示识别结果，不会在未确认记账方式和账户时自动保存。"
+                text = "正在打开确认页；若未自动弹出，请点“去确认”。"
                 setTextColor(Color.LTGRAY)
                 textSize = 13f
                 setPadding(0, 12, 0, 12)
@@ -79,6 +98,11 @@ class AutoBillOverlayService : Service() {
                 gravity = Gravity.END
                 addView(action("忽略") {
                     AutoBookkeepingLogStore.record(context, "overlay_ignored", "user ignored candidate")
+                    AutoBookkeepingLogStore.recordDetailed(
+                        context,
+                        "overlay_ignored",
+                        "candidate=${candidate.toMap()}",
+                    )
                     AutoBookkeepingPendingStore.complete(context)
                     remove()
                     PaymentNotificationListenerService.instance
@@ -111,7 +135,9 @@ class AutoBillOverlayService : Service() {
     }
 
     private fun remove() {
-        root?.let { runCatching { wm?.removeView(it) } }
+        root?.let {
+            runCatching { wm?.removeView(it) }
+        }
         root = null
     }
 
@@ -125,10 +151,14 @@ class AutoBillOverlayService : Service() {
             setOnClickListener { onClick() }
         }
 
-    private fun openConfirmation(candidate: PaymentCandidate) {
-        AutoBookkeepingLogStore.record(this, "confirm_open_requested", "user opened confirmation page")
-        remove()
-        runCatching {
+    private fun openConfirmation(candidate: PaymentCandidate): Boolean {
+        AutoBookkeepingLogStore.record(this, "confirm_open_requested", "opening confirmation page")
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "confirm_open_requested",
+            "candidate=${candidate.toMap()} confirmationOpen=$flutterConfirmationOpen",
+        )
+        return runCatching {
             startActivity(
                 Intent(this, AutoBookkeepingConfirmActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -138,10 +168,20 @@ class AutoBillOverlayService : Service() {
                     )
                 },
             )
+            true
         }.onFailure { error ->
             AutoBookkeepingLogStore.record(this, "confirm_open_failed", error.javaClass.simpleName)
-            offer(candidate)
-        }
+            AutoBookkeepingLogStore.recordDetailed(this, "confirm_open_failed", Log.getStackTraceString(error))
+        }.getOrDefault(false)
+    }
+
+    fun confirmationOpened() {
+        flutterConfirmationOpen = true
+        remove()
+    }
+
+    fun confirmationClosed() {
+        flutterConfirmationOpen = false
     }
 
     companion object {
@@ -184,9 +224,11 @@ class AutoBillOverlayService : Service() {
 
     override fun onDestroy() {
         remove()
+        mainHandler.removeCallbacksAndMessages(null)
         instance = null
         AutoBookkeepingDiagnostics.foregroundRunning = false
         AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service destroyed")
+        AutoBookkeepingLogStore.recordDetailed(this, "overlay_service_destroyed", "foreground service destroyed")
         AutoBookkeepingNotificationController.cancelStatus(this)
         super.onDestroy()
     }
@@ -207,6 +249,18 @@ class AutoBillOverlayService : Service() {
             )
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (!isShowing) {
+            mainHandler.post {
+                AutoBookkeepingPendingStore.readCandidate(this)?.let { pending ->
+                    AutoBookkeepingLogStore.record(
+                        this,
+                        "pending_recovered",
+                        "showing stored confirmation candidate",
+                    )
+                    offer(pending)
+                }
+            }
         }
         return START_STICKY
     }

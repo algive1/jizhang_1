@@ -95,7 +95,7 @@ class _AutoBookkeepingLogsPageState
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 18),
             child: Text(
-              '仅保留最近 120 条脱敏运行记录，用于判断支付事件、页面识别、去重和悬浮窗状态。',
+              '本机保留最近 500 条自动记账事件；Debug 包会记录未脱敏的通知和无障碍事件详情。',
               style: TextStyle(color: Colors.grey),
             ),
           ),

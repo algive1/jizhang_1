@@ -40,6 +40,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     fun refreshRules() {
         ruleRegistry = AutoBookkeepingRuleRegistry.load(this)
         realtimeParser = PaymentNotificationCandidateParser(ruleRegistry)
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_rules_applied",
+            "rules=${ruleRegistry.versionsSummary()} packages=${ruleRegistry.customPackages}",
+        )
     }
 
     override fun onListenerConnected() {
@@ -62,6 +67,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             this,
             "notification_listener_disconnected",
             "notification listener disconnected",
+        )
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_listener_disconnected",
+            "enabled=${getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_ENABLED, false)}",
         )
         val enabled = getSharedPreferences(
             PaymentNotificationStore.PREFS_NAME,
@@ -97,12 +107,25 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val enabled = getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_ENABLED, false)
-        if (!enabled) return
-
         val extras = statusBarNotification.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = notificationText(extras)
-        if (title.isBlank() && text.isBlank()) return
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_posted",
+            "package=$packageName key=${statusBarNotification.key} id=${statusBarNotification.id} " +
+                "postTime=${statusBarNotification.postTime} enabled=$enabled " +
+                "title=$title text=$text extras=${extras.keySet().sorted()}",
+        )
+        if (!enabled) return
+        if (title.isBlank() && text.isBlank()) {
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "notification_ignored",
+                "reason=empty_content package=$packageName key=${statusBarNotification.key}",
+            )
+            return
+        }
 
         val candidate = realtimeParser.parse(
             packageName = packageName,
@@ -115,8 +138,18 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 "notification_rejected",
                 "$packageName no high-confidence completed payment",
             )
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "notification_parse_rejected",
+                "package=$packageName title=$title text=$text",
+            )
             return
         }
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_candidate_parsed",
+            candidate.toMap().toString(),
+        )
 
         val id = "$packageName:${statusBarNotification.key}:${statusBarNotification.postTime}"
         PaymentNotificationStore.append(
@@ -130,7 +163,13 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 .put("postedAtMillis", statusBarNotification.postTime),
         )
 
-        when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
+        val decision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_enqueue_decision",
+            "decision=$decision candidate=${candidate.toMap()}",
+        )
+        when (decision) {
             PendingEnqueueDecision.ACCEPTED -> {
                 PaymentNotificationStore.acknowledge(this, listOf(id))
                 AutoBookkeepingLogStore.record(
@@ -162,17 +201,28 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     fun retryStoredNotifications() {
-        if (!connected) return
+        if (!connected) {
+            AutoBookkeepingLogStore.recordDetailed(this, "notification_recovery_skipped", "reason=listener_disconnected")
+            return
+        }
         val enabled = getSharedPreferences(
             PaymentNotificationStore.PREFS_NAME,
             MODE_PRIVATE,
         ).getBoolean(KEY_ENABLED, false)
-        if (!enabled) return
+        if (!enabled) {
+            AutoBookkeepingLogStore.recordDetailed(this, "notification_recovery_skipped", "reason=disabled")
+            return
+        }
 
         for (raw in PaymentNotificationStore.read(this)) {
             val packageName = raw["packageName"].orEmpty()
             val title = raw["title"].orEmpty()
             val text = raw["text"].orEmpty()
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "notification_recovery_attempt",
+                "id=${raw["id"]} package=$packageName title=$title text=$text",
+            )
             val timestamp = raw["postedAtMillis"]
                 ?.toLongOrNull()
                 ?.takeIf { it > 0L }
@@ -191,10 +241,21 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         listOf(rejectedId),
                     )
                 }
+                AutoBookkeepingLogStore.recordDetailed(
+                    this,
+                    "notification_recovery_rejected",
+                    "id=$rejectedId package=$packageName title=$title text=$text",
+                )
                 continue
             }
             val id = raw["id"].orEmpty()
-            when (AutoBookkeepingPendingStore.enqueueDecision(this, candidate)) {
+            val decision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "notification_recovery_decision",
+                "id=$id decision=$decision candidate=${candidate.toMap()}",
+            )
+            when (decision) {
                 PendingEnqueueDecision.ACCEPTED -> {
                     if (id.isNotEmpty()) {
                         PaymentNotificationStore.acknowledge(this, listOf(id))
@@ -215,6 +276,23 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                 PendingEnqueueDecision.BUSY -> return
             }
         }
+    }
+
+    override fun onNotificationRemoved(
+        statusBarNotification: StatusBarNotification,
+        rankingMap: RankingMap?,
+        reason: Int,
+    ) {
+        val packageName = statusBarNotification.packageName
+        if (ruleRegistry.ruleFor(packageName) != null) {
+            AutoBookkeepingLogStore.recordDetailed(
+                this,
+                "notification_removed",
+                "package=$packageName key=${statusBarNotification.key} " +
+                    "id=${statusBarNotification.id} reason=$reason",
+            )
+        }
+        super.onNotificationRemoved(statusBarNotification, rankingMap, reason)
     }
 
     private fun notificationText(extras: android.os.Bundle): String {
@@ -243,6 +321,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     private fun showRealtimeCandidate(candidate: PaymentCandidate) {
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "notification_candidate_presentation_requested",
+            "candidate=${candidate.toMap()} overlayRunning=${AutoBillOverlayService.instance != null}",
+        )
         val runningOverlay = AutoBillOverlayService.instance
         if (runningOverlay != null) {
             val shown = runningOverlay.offer(candidate)
@@ -298,6 +381,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        AutoBookkeepingLogStore.recordDetailed(this, "notification_listener_destroyed", "service destroyed")
         connected = false
         if (instance === this) instance = null
         mainHandler.removeCallbacksAndMessages(null)

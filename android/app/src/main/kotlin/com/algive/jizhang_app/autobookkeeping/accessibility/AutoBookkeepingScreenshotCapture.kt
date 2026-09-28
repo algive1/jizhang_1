@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.annotation.RequiresApi
@@ -90,6 +91,11 @@ internal object AutoBookkeepingScreenshotCapture {
                                 "screenshot_failed",
                                 error.javaClass.simpleName,
                             )
+                            AutoBookkeepingLogStore.recordDetailed(
+                                service,
+                                "screenshot_failed_detail",
+                                "candidate=${candidate.toMap()} error=${Log.getStackTraceString(error)}",
+                            )
                         }
                         .getOrNull()
                     bitmap.recycle()
@@ -102,6 +108,12 @@ internal object AutoBookkeepingScreenshotCapture {
                     service,
                     "screenshot_failed",
                     "errorCode=$errorCode",
+                )
+                AutoBookkeepingLogStore.recordDetailed(
+                    service,
+                    "screenshot_failed_detail",
+                    "candidate=${candidate.toMap()} errorCode=$errorCode " +
+                        "attempt=$attempt preferredWindowId=$preferredWindowId",
                 )
                 // The system rate-limits captures; one delayed retry recovers
                 // the common "two payments in quick succession" case.
@@ -145,6 +157,11 @@ internal object AutoBookkeepingScreenshotCapture {
                 service,
                 "screenshot_failed",
                 error.javaClass.simpleName,
+            )
+            AutoBookkeepingLogStore.recordDetailed(
+                service,
+                "screenshot_failed_detail",
+                "candidate=${candidate.toMap()} windowId=$windowId error=${Log.getStackTraceString(error)}",
             )
             mainHandler.post {
                 onCaptured()
@@ -218,6 +235,11 @@ internal object AutoBookkeepingScreenshotCapture {
             service,
             "screenshot_captured",
             "local payment screenshot stored",
+        )
+        AutoBookkeepingLogStore.recordDetailed(
+            service,
+            "screenshot_captured_detail",
+            "candidate=${candidate.toMap()} path=${file.absolutePath} bytes=${file.length()}",
         )
         return file.absolutePath
     }

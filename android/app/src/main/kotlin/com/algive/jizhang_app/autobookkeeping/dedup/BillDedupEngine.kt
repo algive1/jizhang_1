@@ -11,7 +11,10 @@ object BillFingerprint {
         if (order.isNotEmpty()) {
             return hash(listOf(c.sourceApp, "order", order, c.transactionType).joinToString("|"))
         }
-        return hash("${identity(c)}|${c.timestamp / 60000}")
+        // Page-level duplicate events are filtered by AccessibilityService.
+        // Keep the full local observation time here so two real payments with
+        // identical merchant/amount inside one minute remain distinct.
+        return hash("${identity(c)}|${c.timestamp}")
     }
 
     fun identity(c: PaymentCandidate): String = listOf(

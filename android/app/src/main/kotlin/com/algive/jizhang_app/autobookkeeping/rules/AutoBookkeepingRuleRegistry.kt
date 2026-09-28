@@ -125,6 +125,7 @@ class AutoBookkeepingRuleRegistry private constructor(
             "com.eg.android.AlipayGphone",
             "com.unionpay",
             "com.sankuai.meituan",
+            "com.sankuai.meituan.takeoutnew",
             "com.sankuai.meituan.takeout",
             "com.jingdong.app.mall",
             "com.xunmeng.pinduoduo",
@@ -407,6 +408,7 @@ class AutoBookkeepingRuleRegistry private constructor(
                 AppPaymentRule(
                     packageNames = setOf(
                         "com.sankuai.meituan",
+                        "com.sankuai.meituan.takeoutnew",
                         "com.sankuai.meituan.takeout",
                     ),
                     sourceApp = "MEITUAN",

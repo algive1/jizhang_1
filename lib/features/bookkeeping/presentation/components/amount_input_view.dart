@@ -9,10 +9,12 @@ class AmountInputView extends StatelessWidget {
     required this.input,
     required this.currency,
     this.onTap,
+    this.height = 58,
   });
   final AmountInput input;
   final String currency;
   final VoidCallback? onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -23,7 +25,7 @@ class AmountInputView extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: Container(
         key: const ValueKey('quick-amount-input'),
-        height: 58,
+        height: height,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: context.appSurfaceSoft,

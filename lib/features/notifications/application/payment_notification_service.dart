@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -11,9 +12,16 @@ import '../../settings/data/app_settings_repository.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/platform/bookkeeping_feedback.dart';
 import '../../autobookkeeping/auto_bookkeeping_pending.dart';
+import '../../autobookkeeping/auto_bookkeeping_logs.dart';
 import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../domain/payment_notification.dart';
+
+void _recordAutoBookkeepingDebug(String stage, Map<String, Object?> detail) {
+  unawaited(
+    const AutoBookkeepingLogsBridge().recordDetailed(stage, jsonEncode(detail)),
+  );
+}
 
 class MethodChannelPaymentNotificationBridge
     implements PaymentNotificationBridge {
@@ -246,7 +254,8 @@ class PaymentNotificationParser {
 
   String? _channelFor(String packageName) {
     if (packageName == 'com.sankuai.meituan' ||
-        packageName == 'com.sankuai.meituan.takeout') {
+        packageName == 'com.sankuai.meituan.takeout' ||
+        packageName == 'com.sankuai.meituan.takeoutnew') {
       return 'meituan';
     }
     return switch (packageName) {
@@ -459,6 +468,9 @@ class PaymentNotificationAutoBookkeepingService {
       _processing ??= _processPending().whenComplete(() => _processing = null);
   Future<NotificationAutoBookkeepingSummary> _processPending() async {
     if (!await bridge.isEnabled()) {
+      _recordAutoBookkeepingDebug('notification_processing_skipped', {
+        'reason': 'disabled',
+      });
       return const NotificationAutoBookkeepingSummary(
         created: 0,
         duplicates: 0,
@@ -466,6 +478,10 @@ class PaymentNotificationAutoBookkeepingService {
       );
     }
     final pending = await bridge.getPending();
+    _recordAutoBookkeepingDebug('notification_processing_started', {
+      'count': pending.length,
+      'hasPendingBridge': pendingBridge != null,
+    });
     var created = 0;
     var duplicates = 0;
     var unrecognized = 0;
@@ -473,12 +489,42 @@ class PaymentNotificationAutoBookkeepingService {
     var queued = 0;
     final acknowledged = <String>[];
     for (final notification in pending) {
+      _recordAutoBookkeepingDebug('notification_processing_event', {
+        'id': notification.id,
+        'packageName': notification.packageName,
+        'title': notification.title,
+        'text': notification.text,
+        'postedAt': notification.postedAt.toIso8601String(),
+      });
       final parsed = parser.parse(notification);
       if (parsed == null) {
         unrecognized++;
         acknowledged.add(notification.id);
+        _recordAutoBookkeepingDebug('notification_processing_rejected', {
+          'id': notification.id,
+          'packageName': notification.packageName,
+          'content': notification.content,
+          'reason': 'parser_returned_null',
+        });
         continue;
       }
+      _recordAutoBookkeepingDebug('notification_processing_parsed', {
+        'id': notification.id,
+        'packageName': notification.packageName,
+        'amount': parsed.amount,
+        'merchant': parsed.merchant,
+        'channel': parsed.channel,
+        'occurredAt': parsed.occurredAt.toIso8601String(),
+        'orderId': parsed.orderId,
+        'transactionType': parsed.transactionType,
+        'paymentMethod': parsed.paymentMethod,
+        'identifierSuffix': parsed.identifierSuffix,
+        'targetIdentifierSuffix': parsed.targetIdentifierSuffix,
+        'targetAccountHint': parsed.targetAccountHint,
+        'note': parsed.note,
+        'originalAmount': parsed.originalAmount,
+        'discountAmount': parsed.discountAmount,
+      });
       final notificationKey = notification.id;
       final fingerprint = _notificationFingerprint(notification, parsed);
       if (await _isAlreadyHandled(
@@ -489,6 +535,11 @@ class PaymentNotificationAutoBookkeepingService {
       )) {
         duplicates++;
         acknowledged.add(notification.id);
+        _recordAutoBookkeepingDebug('notification_processing_duplicate', {
+          'id': notification.id,
+          'fingerprint': fingerprint,
+          'orderId': parsed.orderId,
+        });
         continue;
       }
       if (pendingBridge != null) {
@@ -500,6 +551,11 @@ class PaymentNotificationAutoBookkeepingService {
         if (merchant == null || merchant.isEmpty) {
           unrecognized++;
           acknowledged.add(notification.id);
+          _recordAutoBookkeepingDebug('notification_processing_rejected', {
+            'id': notification.id,
+            'content': notification.content,
+            'reason': 'merchant_empty',
+          });
           continue;
         }
         final enqueueResult = await pendingBridge!.enqueue(
@@ -534,13 +590,28 @@ class PaymentNotificationAutoBookkeepingService {
           case AutoBookkeepingEnqueueResult.accepted:
             queued++;
             acknowledged.add(notification.id);
+            _recordAutoBookkeepingDebug('notification_candidate_queued', {
+              'id': notification.id,
+              'fingerprint': fingerprint,
+              'merchant': merchant,
+              'amount': parsed.amount,
+            });
             break;
           case AutoBookkeepingEnqueueResult.duplicate:
             duplicates++;
             acknowledged.add(notification.id);
+            _recordAutoBookkeepingDebug('notification_candidate_duplicate', {
+              'id': notification.id,
+              'fingerprint': fingerprint,
+            });
             break;
           case AutoBookkeepingEnqueueResult.busy:
             waiting++;
+            _recordAutoBookkeepingDebug('notification_candidate_waiting', {
+              'id': notification.id,
+              'fingerprint': fingerprint,
+              'reason': 'pending_slot_busy',
+            });
             break;
         }
         continue;
@@ -553,6 +624,12 @@ class PaymentNotificationAutoBookkeepingService {
           : await resolveTarget!(parsed.channel, parsed.identifierSuffix);
       if (target == null) {
         waiting++;
+        _recordAutoBookkeepingDebug('notification_candidate_waiting', {
+          'id': notification.id,
+          'channel': parsed.channel,
+          'identifierSuffix': parsed.identifierSuffix,
+          'reason': 'target_account_unavailable',
+        });
         continue;
       }
       final id = 'auto-notification-${stableNotificationKey(fingerprint)}';
@@ -586,20 +663,64 @@ class PaymentNotificationAutoBookkeepingService {
         await bookkeeping.save(request);
         created++;
         acknowledged.add(notification.id);
-      } on StateError {
+        _recordAutoBookkeepingDebug('notification_bookkeeping_saved', {
+          'id': notification.id,
+          'transactionId': id,
+          'fingerprint': fingerprint,
+          'amount': parsed.amount,
+          'merchant': parsed.merchant,
+          'bookId': target.bookId,
+          'accountId': target.accountId,
+        });
+      } on StateError catch (error) {
         if (!await _isAlreadyHandled(
           notificationKey,
           parsed.orderId,
           notification.packageName,
           fingerprint,
         )) {
+          _recordAutoBookkeepingDebug('notification_bookkeeping_failed', {
+            'id': notification.id,
+            'transactionId': id,
+            'error': error.toString(),
+          });
           rethrow;
         }
         duplicates++;
         acknowledged.add(notification.id);
+        _recordAutoBookkeepingDebug('notification_bookkeeping_duplicate', {
+          'id': notification.id,
+          'transactionId': id,
+        });
+      } on Object catch (error) {
+        _recordAutoBookkeepingDebug('notification_bookkeeping_failed', {
+          'id': notification.id,
+          'transactionId': id,
+          'error': error.toString(),
+        });
+        rethrow;
       }
     }
-    await bridge.acknowledge(acknowledged);
+    try {
+      await bridge.acknowledge(acknowledged);
+      _recordAutoBookkeepingDebug('notification_acknowledged', {
+        'ids': acknowledged,
+      });
+    } on Object catch (error) {
+      _recordAutoBookkeepingDebug('notification_acknowledgement_failed', {
+        'ids': acknowledged,
+        'error': error.toString(),
+      });
+      rethrow;
+    }
+    _recordAutoBookkeepingDebug('notification_processing_finished', {
+      'created': created,
+      'duplicates': duplicates,
+      'unrecognized': unrecognized,
+      'waiting': waiting,
+      'queued': queued,
+      'acknowledged': acknowledged,
+    });
     await BookkeepingFeedback.notifySuccess(count: created);
     return NotificationAutoBookkeepingSummary(
       created: created,

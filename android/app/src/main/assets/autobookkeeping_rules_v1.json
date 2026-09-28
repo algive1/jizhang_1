@@ -74,6 +74,7 @@
     {
       "packages": [
         "com.sankuai.meituan",
+        "com.sankuai.meituan.takeoutnew",
         "com.sankuai.meituan.takeout"
       ],
       "sourceApp": "MEITUAN",

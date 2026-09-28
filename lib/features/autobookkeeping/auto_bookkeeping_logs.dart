@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class AutoBookkeepingLogEntry {
   const AutoBookkeepingLogEntry({
@@ -42,6 +43,20 @@ class AutoBookkeepingLogsBridge {
           .toList(growable: false);
     } on MissingPluginException {
       return const <AutoBookkeepingLogEntry>[];
+    }
+  }
+
+  Future<void> recordDetailed(String stage, String detail) async {
+    if (!kDebugMode) return;
+    try {
+      await _channel.invokeMethod<void>('recordDetailed', {
+        'stage': stage,
+        'detail': detail,
+      });
+    } on MissingPluginException {
+      // Logs are Android-only; no-op on other platforms.
+    } on PlatformException {
+      // Diagnostics must never interrupt bookkeeping.
     }
   }
 

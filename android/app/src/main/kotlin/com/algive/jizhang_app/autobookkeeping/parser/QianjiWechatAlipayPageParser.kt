@@ -338,12 +338,22 @@ private val alipayBillStatuses = setOf(
 private val alipayBillTimeLabels = setOf("支付时间", "创建时间", "收款时间", "到账时间", "时间")
 
 private fun matchesAlipayBillDetail(nodes: List<ScreenNode>): Boolean =
-    (
+    matchesAlipayArrivalExpense(nodes) || (
         hasAnyExact(nodes, alipayBillStatuses) ||
             nodes.any { node -> isTextNode(node) && refundLabelPattern.matches(node.label) }
         ) &&
         hasAnyExact(nodes, alipayBillTimeLabels) &&
         hasCommonAmount(nodes)
+
+private fun matchesAlipayArrivalExpense(nodes: List<ScreenNode>): Boolean =
+    hasExact(nodes, "到账成功", "交易方式", "到账时间", "完成") &&
+        hasCommonAmount(nodes) &&
+        alipayArrivalCounterparty(nodes) != null
+
+private fun alipayArrivalCounterparty(nodes: List<ScreenNode>): String? =
+    visibleLabels(nodes).firstOrNull { label ->
+        label.contains(Regex("(?:银行|储蓄|信用卡|借记卡).*[（(](?:尾号)?\\d{4}[）)]"))
+    }
 
 private fun matchesAlipayPaySuccess(nodes: List<ScreenNode>): Boolean =
     hasExact(nodes, "支付成功") &&
@@ -580,9 +590,9 @@ private fun parseWechatBillDetail(
         "提现金额",
         "充值金额",
         "金额",
-    )
+    ) ?: uniqueVisiblePageAmount(nodes.filter { isTextNode(it) && commonAmountPattern.matches(it.label) })
     val merchant = merchantValue(nodes) ?: suffixAfter(nodes, "转账-转给")
-        ?: suffixAfter(nodes, "转账-来自")
+        ?: suffixAfter(nodes, "转账-来自", "扫二维码付款-给")
     if (amount == null) return reject(pageType, "MISSING_OR_AMBIGUOUS_AMOUNT")
     if (merchant.isNullOrBlank()) return reject(pageType, "NO_COUNTERPARTY")
     return emitCandidate(
@@ -596,6 +606,7 @@ private fun parseWechatBillDetail(
         note = noteValue(nodes),
         timeLabels = arrayOf("支付时间", "转账时间", "收款时间", "到账时间", "时间"),
         account = valueAfter(nodes, "支付方式", "收款方式"),
+        orderId = orderId(nodes),
     )
 }
 
@@ -739,7 +750,9 @@ private fun parseAlipayBillDetail(
 ): QianjiPageParseResult {
     val pageType = "AlipayBillDetail"
     val amountSource = visibleLabels(nodes).firstOrNull { commonAmountPattern.matches(it) }.orEmpty()
+    val arrivalExpense = matchesAlipayArrivalExpense(nodes)
     val transactionType = when {
+        arrivalExpense -> "EXPENSE"
         amountSource.contains("收入") || amountSource.startsWith("+") ||
             amountSource.startsWith("+¥") || amountSource.startsWith("+￥") -> "INCOME"
         hasExact(nodes, "收款成功") || hasExact(nodes, "已存入") || hasExact(nodes, "已收钱") -> "INCOME"
@@ -763,7 +776,8 @@ private fun parseAlipayBillDetail(
         "订单金额",
         "金额",
     ) ?: uniqueVisiblePageAmount(nodes, exclude = setOf("时间", "优惠", "服务费"))
-    val merchant = merchantValue(nodes)
+    val merchant = merchantValue(nodes) ?:
+        if (arrivalExpense) alipayArrivalCounterparty(nodes) else null
     if (amount == null) return reject(pageType, "MISSING_OR_AMBIGUOUS_AMOUNT")
     if (merchant.isNullOrBlank()) return reject(pageType, "NO_COUNTERPARTY")
     return emitCandidate(
@@ -776,7 +790,11 @@ private fun parseAlipayBillDetail(
         transactionType = transactionType,
         note = noteValue(nodes),
         timeLabels = arrayOf("支付时间", "创建时间", "收款时间", "到账时间", "时间"),
-        account = valueAfter(nodes, "付款方式", "收款方式"),
+        account = if (arrivalExpense) {
+            valueAfter(nodes, "交易方式")
+        } else {
+            valueAfter(nodes, "付款方式", "收款方式")
+        },
         targetAccount = valueAfter(nodes, "提现到", "还款到"),
         orderId = orderId(nodes),
         originalAmount = amountAfter(nodes, "原价", "订单金额"),
@@ -1307,9 +1325,11 @@ private fun noteValue(nodes: List<ScreenNode>): String? =
     )
 
 private fun orderId(nodes: List<ScreenNode>): String? =
-    QianjiPageSupport.firstRegexValue(
+    valueAfter(nodes, "订单号", "交易号", "转账单号", "商户单号")
+        ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,}")) }
+        ?: QianjiPageSupport.firstRegexValue(
         nodes,
-        Regex("(?:订单号|交易号)\\s*[：:]?\\s*([A-Za-z0-9_-]{6,})"),
+        Regex("(?:订单号|交易号|转账单号|商户单号)\\s*[：:]?\\s*([A-Za-z0-9_-]{6,})"),
     )
 
 private fun emitCandidate(

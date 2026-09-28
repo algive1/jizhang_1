@@ -79,12 +79,26 @@ class PaymentSceneDetector(
             }
         }
 
-        val qianjiResult = qianjiPageParsers.inspect(
+        var qianjiResult = qianjiPageParsers.inspect(
             packageName = packageName,
             nodes = nodes,
             observedAt = timestamp,
             activityClassName = activityClassName,
         )
+        // WeChat can publish the new WebView tree one event before its
+        // MMWebViewUI window-state event. Retry the strict page parser against
+        // the complete node tree so a stale LauncherUI value cannot hide a
+        // valid bill detail page.
+        if (
+            packageName == "com.tencent.mm" &&
+            qianjiResult?.rejectionReason == "PROFILE_ACTIVITY_REJECTED"
+        ) {
+            qianjiResult = qianjiPageParsers.inspect(
+                packageName = packageName,
+                nodes = nodes,
+                observedAt = timestamp,
+            )
+        }
         if (qianjiResult?.blocksLegacyFallback == true) {
             return PaymentDetectionResult(
                 qianjiResult.candidate,

@@ -36,11 +36,17 @@ import '../../recurring/data/recurring_bill_repository.dart';
 import '../../recurring/application/recurring_bill_notification_service.dart';
 import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../auto_bookkeeping_logs.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
-  const AutoBookkeepingConfirmPage({super.key, this.overlayMode = false});
+  const AutoBookkeepingConfirmPage({
+    super.key,
+    this.overlayMode = false,
+    this.onReady,
+  });
 
   final bool overlayMode;
+  final VoidCallback? onReady;
 
   @override
   ConsumerState<AutoBookkeepingConfirmPage> createState() =>
@@ -73,10 +79,51 @@ class _AutoBookkeepingConfirmPageState
   bool _saving = false;
   bool _closing = false;
 
+  Future<void> _record(String stage, Map<String, Object?> detail) =>
+      const AutoBookkeepingLogsBridge().recordDetailed(
+        stage,
+        jsonEncode(detail),
+      );
+
+  Map<String, Object?> _candidateLog(
+    PendingAutoBookkeepingCandidate candidate,
+  ) => {
+    'fingerprint': candidate.fingerprint,
+    'amountInCents': candidate.amountInCents,
+    'merchant': candidate.merchant,
+    'paymentMethod': candidate.paymentMethod,
+    'timestamp': candidate.timestamp.toIso8601String(),
+    'sourceApp': candidate.sourceApp,
+    'scene': candidate.scene,
+    'transactionType': candidate.transactionType,
+    'orderId': candidate.orderId,
+    'note': candidate.note,
+    'identifierSuffix': candidate.identifierSuffix,
+    'targetIdentifierSuffix': candidate.targetIdentifierSuffix,
+    'targetAccountHint': candidate.targetAccountHint,
+  };
+
   @override
   void initState() {
     super.initState();
-    unawaited(_loadCandidate());
+    unawaited(_loadCandidateWithTimeout());
+  }
+
+  Future<void> _loadCandidateWithTimeout() async {
+    try {
+      await _loadCandidate().timeout(const Duration(seconds: 7));
+    } on TimeoutException {
+      unawaited(
+        _record('confirmation_candidate_load_timeout', {
+          'overlayMode': widget.overlayMode,
+        }),
+      );
+      if (!mounted || !_loading) return;
+      setState(() {
+        _loading = false;
+        _message = '账本加载超时，请稍后从通知重新打开';
+      });
+    }
   }
 
   Future<void> _loadCandidate() async {
@@ -84,6 +131,12 @@ class _AutoBookkeepingConfirmPageState
       final candidate = await ref
           .read(autoBookkeepingPendingBridgeProvider)
           .getPending();
+      unawaited(
+        _record('confirmation_candidate_loaded', {
+          'overlayMode': widget.overlayMode,
+          'candidate': candidate == null ? null : _candidateLog(candidate),
+        }),
+      );
       AutoBookkeepingRecommendation? recommendation;
       TransactionRecord? matchedRefundOriginal;
       AutoBookkeepingTransferRecommendation? transferRecommendation;
@@ -177,7 +230,13 @@ class _AutoBookkeepingConfirmPageState
       if (candidate != null && candidate.screenshotPath == null) {
         unawaited(_refreshScreenshot(candidate.fingerprint));
       }
+      widget.onReady?.call();
     } on Object catch (error) {
+      unawaited(
+        _record('confirmation_candidate_load_failed', {
+          'error': error.toString(),
+        }),
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -205,12 +264,31 @@ class _AutoBookkeepingConfirmPageState
     }
   }
 
-  Future<void> _completePending({bool keepScreenshot = false}) async {
+  Future<void> _completePending({
+    bool keepScreenshot = false,
+    String reason = 'user_dismissed',
+    String? transactionId,
+  }) async {
     if (_closing) return;
     _closing = true;
-    await ref
-        .read(autoBookkeepingPendingBridgeProvider)
-        .complete(keepScreenshot: keepScreenshot);
+    try {
+      await ref
+          .read(autoBookkeepingPendingBridgeProvider)
+          .complete(keepScreenshot: keepScreenshot);
+      await _record('confirmation_completed', {
+        'reason': reason,
+        'transactionId': transactionId,
+        'keepScreenshot': keepScreenshot,
+        'candidate': _candidate == null ? null : _candidateLog(_candidate!),
+      });
+    } on Object catch (error) {
+      await _record('confirmation_complete_failed', {
+        'reason': reason,
+        'transactionId': transactionId,
+        'error': error.toString(),
+      });
+      rethrow;
+    }
     // A second notification may have remained in the raw recovery queue while
     // this confirmation slot was occupied. Drain it immediately instead of
     // waiting for the next app resume.
@@ -224,10 +302,10 @@ class _AutoBookkeepingConfirmPageState
   }
 
   Future<void> _close() async {
-    await _completePending();
+    await _completePending(reason: 'user_dismissed');
     if (!mounted) return;
     if (widget.overlayMode) {
-      await SystemNavigator.pop();
+      await _closeOverlayHost();
     } else {
       context.pop();
     }
@@ -252,6 +330,19 @@ class _AutoBookkeepingConfirmPageState
   }) async {
     final candidate = _candidate;
     if (candidate == null || _saving) return false;
+    await _record('confirmation_save_started', {
+      'candidate': _candidateLog(candidate),
+      'bookId': bookId,
+      'accountId': account.id,
+      'categoryId': category?.id,
+      'destinationAccountId': destinationAccount?.id,
+      'amountInCents':
+          reviewDraft?.amountInCents ??
+          _editedAmountInCents ??
+          candidate.amountInCents,
+      'note': reviewDraft?.note ?? _editedNote ?? candidate.note,
+      'overlayMode': widget.overlayMode,
+    });
     setState(() {
       _saving = true;
       _message = null;
@@ -521,11 +612,22 @@ class _AutoBookkeepingConfirmPageState
         // must never be rolled back or shown as failed because memory could
         // not be updated.
       }
-      await _completePending();
+      await _record('confirmation_save_succeeded', {
+        'transactionId': saved.id,
+        'bookId': saved.bookId,
+        'accountId': saved.accountId,
+        'amount': saved.amount,
+        'merchant': saved.merchant,
+        'type': saved.type.name,
+        'committedWarning': committedWarning,
+        'screenshotWarning': screenshotWarning,
+        'attachmentWarning': attachmentWarning,
+      });
+      await _completePending(reason: 'saved', transactionId: saved.id);
       await BookkeepingFeedback.notifySuccess(count: 1);
       if (!mounted) return true;
       if (widget.overlayMode) {
-        await SystemNavigator.pop();
+        await _closeOverlayHost();
         return true;
       }
       final messenger = ScaffoldMessenger.of(context);
@@ -546,6 +648,10 @@ class _AutoBookkeepingConfirmPageState
       );
       return true;
     } on Object catch (error) {
+      await _record('confirmation_save_failed', {
+        'candidate': _candidate == null ? null : _candidateLog(_candidate!),
+        'error': error.toString(),
+      });
       if (!mounted) return false;
       setState(() {
         _saving = false;
@@ -553,6 +659,24 @@ class _AutoBookkeepingConfirmPageState
       });
       return false;
     }
+  }
+
+  Future<void> _closeOverlayHost({bool preservePending = false}) async {
+    try {
+      await const MethodChannel('jizhang/autobookkeeping_overlay')
+          .invokeMethod<void>('close', {'preservePending': preservePending});
+    } on MissingPluginException {
+      await SystemNavigator.pop();
+    }
+  }
+
+  Future<void> _dismissLoadingOverlay() async {
+    unawaited(
+      _record('confirmation_loading_dismissed', {
+        'overlayMode': widget.overlayMode,
+      }),
+    );
+    await _closeOverlayHost(preservePending: true);
   }
 
   @override
@@ -568,7 +692,7 @@ class _AutoBookkeepingConfirmPageState
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final panelHeight = constraints.maxHeight * .96;
+                final panelHeight = constraints.maxHeight * .60;
                 return Align(
                   alignment: Alignment.bottomCenter,
                   child: SizedBox(
@@ -595,8 +719,26 @@ class _AutoBookkeepingConfirmPageState
                               clipBehavior: Clip.antiAlias,
                               borderRadius: BorderRadius.circular(24),
                               child: _loading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(),
+                                  ? Stack(
+                                      children: [
+                                        const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: IconButton(
+                                            key: const ValueKey(
+                                              'autobookkeeping-loading-close',
+                                            ),
+                                            tooltip: '关闭',
+                                            onPressed: () => unawaited(
+                                              _dismissLoadingOverlay(),
+                                            ),
+                                            icon: const Icon(Icons.close),
+                                          ),
+                                        ),
+                                      ],
                                     )
                                   : _buildOverlayContent(context),
                             ),

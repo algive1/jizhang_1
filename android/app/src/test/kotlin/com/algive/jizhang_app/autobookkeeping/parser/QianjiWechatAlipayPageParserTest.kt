@@ -25,6 +25,24 @@ class QianjiWechatAlipayPageParserTest {
     private val wechat = QianjiWechatPageParser()
     private val alipay = QianjiAlipayPageParser()
 
+    @Test
+    fun qrBillDetailReadsUnlabelledAmountAndRecipient() {
+        val nodes = text(
+            "扫二维码付款-给测试商户", "-1.00", "当前状态", "支付成功",
+            "收款方备注", "二维码收款", "支付方式", "零钱",
+            "转账时间", "2026年9月28日 19:27:59", "转账单号",
+            "10001073012026092801730776732517", "全部账单",
+        )
+        val result = wechat.parse(nodes, 1_800_000_000_000L)
+        assertEquals("WeChatBillDetail", result.pageType)
+        assertEquals(100L, result.candidate?.amountInCents)
+        assertEquals("测试商户", result.candidate?.merchantRaw)
+        assertEquals("EXPENSE", result.candidate?.transactionType)
+        assertEquals("10001073012026092801730776732517", result.candidate?.orderId)
+        assertNull(wechat.parse(nodes + text("-2.00"), 1_800_000_000_000L).candidate)
+        assertNull(wechat.parse(nodes.filterNot { it.label == "-1.00" }, 1_800_000_000_000L).candidate)
+    }
+
     private val wechatFixtures = listOf(
         Fixture(
             "WechatPersonalRedPacketSend",

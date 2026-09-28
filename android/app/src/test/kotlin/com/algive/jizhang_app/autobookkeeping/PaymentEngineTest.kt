@@ -38,6 +38,7 @@ class PaymentEngineTest {
                 "com.unionpay",
                 "com.sankuai.meituan",
                 "com.sankuai.meituan.takeout",
+                "com.sankuai.meituan.takeoutnew",
                 "com.jingdong.app.mall",
                 "com.xunmeng.pinduoduo",
                 "com.ss.android.ugc.aweme",
@@ -248,6 +249,18 @@ class PaymentEngineTest {
                 100000,
             ),
         )
+    }
+
+    @Test fun nativeNotificationParserAcceptsGroupedWechatPaymentWithoutMerchant() {
+        val candidate = PaymentNotificationCandidateParser().parse(
+            "com.tencent.mm",
+            "[2条]微信支付",
+            "已支付¥1.00",
+            1790613783321,
+        )
+        assertEquals(100L, candidate?.amountInCents)
+        assertEquals("微信支付", candidate?.merchantRaw)
+        assertEquals(1790613783321, candidate?.timestamp)
     }
 
     @Test fun pageParserExtractsOrderDiscountNoteAndSuffix() {
@@ -563,6 +576,7 @@ class PaymentEngineTest {
             engine.check(c.copy(timestamp = 160000, transactionType = "REFUND")),
         )
         assertNotEquals(BillFingerprint.of(c), BillFingerprint.of(c.copy(paymentMethod = "银行卡")))
+        assertNotEquals(BillFingerprint.of(c), BillFingerprint.of(c.copy(timestamp = c.timestamp + 1)))
         val ordered = c.copy(orderId = "ORDER_123456")
         assertEquals(
             BillFingerprint.of(ordered),
