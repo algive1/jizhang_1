@@ -105,6 +105,55 @@ void main() {
     expect(await _totalBalance(database), before);
   });
 
+  test('expense candidates are filtered in SQLite', () async {
+    for (final item in [
+      _transaction(
+        id: 'candidate-expense',
+        type: TransactionType.expense,
+        amount: 10,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-lend',
+        type: TransactionType.lend,
+        amount: 11,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-asset-purchase',
+        type: TransactionType.assetPurchase,
+        amount: 12,
+        accountId: 'cash',
+      ),
+      _transaction(
+        id: 'candidate-income',
+        type: TransactionType.income,
+        amount: 13,
+        accountId: 'bank',
+      ),
+      _transaction(
+        id: 'candidate-transfer',
+        type: TransactionType.transfer,
+        amount: 14,
+        accountId: 'bank',
+        destinationAccountId: 'cash',
+      ),
+    ]) {
+      await repository.create(item);
+    }
+
+    final candidates = await repository.getExpenseCandidates();
+
+    expect(
+      candidates.map((item) => item.id).toSet(),
+      {
+        'candidate-expense',
+        'candidate-lend',
+        'candidate-asset-purchase',
+      },
+    );
+  });
+
   test('soft-delete is scoped to the current book', () async {
     await repository.create(
       _transaction(

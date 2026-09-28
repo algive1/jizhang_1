@@ -34,6 +34,7 @@ abstract interface class TransactionRepository {
     required DateTime endExclusive,
   });
   Future<List<TransactionRecord>> getAll();
+  Future<List<TransactionRecord>> getExpenseCandidates();
   Future<List<TransactionRecord>> getRecent({int limit = 10});
   Future<TransactionRecord?> getById(String id);
   Future<TransactionRecord> create(TransactionRecord transaction);
@@ -232,6 +233,16 @@ class DriftTransactionRepository implements TransactionRepository {
   Future<List<TransactionRecord>> getAll() async {
     return _mapEntities(
       await _database.transactionDao.getActive(bookId: bookId),
+    );
+  }
+
+  @override
+  Future<List<TransactionRecord>> getExpenseCandidates() async {
+    return _mapEntities(
+      await _database.transactionDao.getActiveByTypes(
+        types: const ['expense', 'lend', 'assetPurchase'],
+        bookId: bookId,
+      ),
     );
   }
 

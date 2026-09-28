@@ -104,12 +104,11 @@ class InstallmentPlansPage extends ConsumerWidget {
   }
 
   Future<void> _openCreate(BuildContext context, WidgetRef ref) async {
-    final transactions = await ref
+    final expenses = await ref
         .read(transactionRepositoryProvider)
-        .getAll();
+        .getExpenseCandidates();
     final accounts = await ref.read(accountRepositoryProvider).getActive();
     if (!context.mounted) return;
-    final expenses = transactions.where((item) => item.isExpense).toList();
     if (expenses.isEmpty || accounts.isEmpty) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('请先记录一笔消费并添加账户')));

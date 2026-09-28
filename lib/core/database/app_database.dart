@@ -2130,6 +2130,33 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  Future<List<TransactionEntity>> getActiveByTypes({
+    required List<String> types,
+    String? bookId,
+  }) {
+    if (types.isEmpty) {
+      return Future.value(const <TransactionEntity>[]);
+    }
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                row.type.isIn(types) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+            (row) => OrderingTerm.desc(row.id),
+          ]))
+        .get();
+  }
+
   Future<List<TransactionEntity>> getActive({
     String? bookId,
     int? limit,
