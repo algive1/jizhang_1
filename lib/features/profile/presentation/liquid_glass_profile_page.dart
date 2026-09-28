@@ -20,11 +20,9 @@ import '../../account/domain/account_session.dart';
 import '../../account/domain/account_session_status.dart';
 import '../../books/presentation/book_selector.dart';
 import '../../budgets/data/budget_repository.dart';
-import '../../home/data/home_data.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../messages/application/system_message_service.dart';
 import '../../settings/application/theme_controller.dart';
-import '../../transactions/data/transactions_repository.dart';
 import '../application/profile_quick_actions_controller.dart';
 import '../data/profile_stats.dart';
 import 'profile_quick_actions_page.dart';
@@ -34,16 +32,28 @@ class LiquidGlassProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final transactions = ref.watch(transactionsProvider);
-    final records = transactions.value ?? const [];
     final now = DateTime.now();
-    final month = monthlySummary(records, DateTime(now.year, now.month), now);
-    final previous = monthlySummary(
-      records,
-      DateTime(now.year, now.month - 1),
-      now,
+    final bookId = ref.watch(activeBookIdProvider);
+    final activityState = ref.watch(profileActivityProvider(bookId));
+    final monthState = ref.watch(
+      profileMonthSummaryProvider((
+        bookId: bookId,
+        year: now.year,
+        month: now.month,
+      )),
     );
-    final activity = ProfileActivity(records, now);
+    final previousMonth = DateTime(now.year, now.month - 1);
+    final previousState = ref.watch(
+      profileMonthSummaryProvider((
+        bookId: bookId,
+        year: previousMonth.year,
+        month: previousMonth.month,
+      )),
+    );
+    final activity =
+        activityState.value ?? ProfileActivity.fromDates(const [], now);
+    final month = monthState.value ?? (income: 0.0, expense: 0.0);
+    final previous = previousState.value ?? (income: 0.0, expense: 0.0);
     final budget = ref.watch(budgetOverviewProvider).total;
     final membership = ref.watch(membershipProvider).value;
     final accountSession = ref.watch(accountSessionProvider).value;
@@ -101,7 +111,10 @@ class LiquidGlassProfilePage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               _SummaryPanel(
-                loading: transactions.isLoading,
+                loading:
+                    activityState.isLoading ||
+                    monthState.isLoading ||
+                    previousState.isLoading,
                 expense: month.expense,
                 income: month.income,
                 expenseDelta: _deltaText(month.expense, previous.expense),
