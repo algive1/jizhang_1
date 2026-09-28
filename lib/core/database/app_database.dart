@@ -1810,14 +1810,16 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   }
 
   Stream<int> watchLargeExpenseThresholdInCents({
-    required DateTime now,
     String? bookId,
     String currency = 'CNY',
+    DateTime? cutoff,
   }) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final cutoffSql =
+        cutoff == null ? "CAST(strftime('%s', 'now') AS INTEGER)" : '?';
     final variables = <Variable<Object>>[
       Variable<String>(currency),
-      Variable<DateTime>(now),
+      if (cutoff != null) Variable<DateTime>(cutoff),
       if (bookId != null) Variable<String>(bookId),
     ];
     final query = customSelect(
@@ -1831,7 +1833,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         WHERE deleted_at IS NULL
           AND ${SharedSyncSchema.visibleBooksSql('book_id')}
           AND UPPER(currency) = UPPER(?)
-          AND occurred_at <= ?
+          AND occurred_at <= $cutoffSql
           AND type IN ('expense', 'lend')
           $bookFilter
       ),
