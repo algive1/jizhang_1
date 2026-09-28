@@ -1809,6 +1809,81 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.get();
   }
 
+  Stream<int> watchLargeExpenseThresholdInCents({
+    required DateTime now,
+    String? bookId,
+    String currency = 'CNY',
+  }) {
+    final bookFilter = bookId == null ? '' : 'AND book_id = ?';
+    final variables = <Variable<Object>>[
+      Variable<String>(currency),
+      Variable<DateTime>(now),
+      if (bookId != null) Variable<String>(bookId),
+    ];
+    final query = customSelect(
+      '''
+      WITH eligible AS (
+        SELECT MAX(
+          amount_in_cents - COALESCE(refund_amount_in_cents, 0),
+          0
+        ) AS net_cents
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND ${SharedSyncSchema.visibleBooksSql('book_id')}
+          AND UPPER(currency) = UPPER(?)
+          AND occurred_at <= ?
+          AND type IN ('expense', 'lend')
+          $bookFilter
+      ),
+      ranked AS (
+        SELECT
+          net_cents,
+          ROW_NUMBER() OVER (ORDER BY net_cents) AS rn,
+          COUNT(*) OVER () AS n
+        FROM eligible
+        WHERE net_cents > 0
+      )
+      SELECT CASE
+        WHEN COALESCE(MAX(n), 0) < 5 THEN 300000
+        ELSE CAST(
+          MIN(300000, MAX(50000, AVG(net_cents) * 5))
+          AS INTEGER
+        )
+      END AS threshold_cents
+      FROM ranked
+      WHERE rn IN ((n + 1) / 2, (n + 2) / 2)
+      ''',
+      variables: variables,
+      readsFrom: {transactionEntries},
+    );
+    return query.watchSingle().map(
+      (row) => row.read<int>('threshold_cents'),
+    );
+  }
+
+  Stream<List<TransactionEntity>> watchPendingReimbursements({
+    String? bookId,
+  }) {
+    return (select(transactionEntries)
+          ..where(
+            (row) =>
+                row.deletedAt.isNull() &
+                row.reimbursementStatus.equals('pending') &
+                row.occurredAt.isSmallerOrEqual(currentDateAndTime) &
+                CustomExpression<bool>(
+                  SharedSyncSchema.visibleBooksSql('book_id'),
+                ) &
+                (bookId == null
+                    ? const Constant(true)
+                    : row.bookId.equals(bookId)),
+          )
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.occurredAt),
+            (row) => OrderingTerm.desc(row.createdAt),
+          ]))
+        .watch();
+  }
+
   Stream<TransactionMonthSqlSummary> watchMonthSummary({
     required String bookId,
     required DateTime start,
