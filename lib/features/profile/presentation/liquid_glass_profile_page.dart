@@ -652,6 +652,10 @@ class _ImmersiveProfileBackground extends StatelessWidget {
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
       filterQuality: FilterQuality.high,
+      cacheWidth:
+          (MediaQuery.sizeOf(context).width *
+                  MediaQuery.devicePixelRatioOf(context))
+              .ceil(),
     );
     final toned = dark
         ? ColorFiltered(
