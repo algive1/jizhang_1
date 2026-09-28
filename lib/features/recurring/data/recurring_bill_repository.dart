@@ -155,38 +155,39 @@ class DriftRecurringBillRepository implements RecurringBillRepository {
   }
 
   List<RecurringBill> _map(List<RecurringBillEntity> rows) => [
-    for (final row in rows)
-      RecurringBill(
-        interval: (jsonDecode(row.scheduleJson)['interval'] as int?) ?? 1,
-        weekday: jsonDecode(row.scheduleJson)['weekday'] as int?,
-        dayOfMonth: jsonDecode(row.scheduleJson)['day_of_month'] as int?,
-        month: jsonDecode(row.scheduleJson)['month'] as int?,
-        repeatCount: jsonDecode(row.scheduleJson)['repeat_count'] as int?,
-        completedCount:
-            (jsonDecode(row.scheduleJson)['completed_count'] as int?) ?? 0,
-        reminderDays:
-            (jsonDecode(row.scheduleJson)['reminder_days'] as int?) ?? 1,
-        subcategoryId:
-            jsonDecode(row.scheduleJson)['subcategory_id'] as String?,
-        id: row.id,
-        bookId: row.bookId,
-        name: row.name,
-        type: RecurringBillType.values.byName(row.type),
-        amount: row.amountInCents / 100,
-        cycle: RecurringBillCycle.values.byName(row.cycle),
-        startDate: row.startDate,
-        endDate: row.endDate,
-        nextDate: row.nextDate,
-        accountId: row.accountId,
-        categoryId: row.categoryId,
-        customIntervalDays: row.customIntervalDays,
-        autoRecord: row.autoRecord,
-        reminder: row.reminder,
-        status: RecurringBillStatus.values.byName(row.status),
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      ),
+    for (final row in rows) _mapOne(row),
   ];
+
+  RecurringBill _mapOne(RecurringBillEntity row) {
+    final schedule = jsonDecode(row.scheduleJson) as Map<String, dynamic>;
+    return RecurringBill(
+      interval: (schedule['interval'] as int?) ?? 1,
+      weekday: schedule['weekday'] as int?,
+      dayOfMonth: schedule['day_of_month'] as int?,
+      month: schedule['month'] as int?,
+      repeatCount: schedule['repeat_count'] as int?,
+      completedCount: (schedule['completed_count'] as int?) ?? 0,
+      reminderDays: (schedule['reminder_days'] as int?) ?? 1,
+      subcategoryId: schedule['subcategory_id'] as String?,
+      id: row.id,
+      bookId: row.bookId,
+      name: row.name,
+      type: RecurringBillType.values.byName(row.type),
+      amount: row.amountInCents / 100,
+      cycle: RecurringBillCycle.values.byName(row.cycle),
+      startDate: row.startDate,
+      endDate: row.endDate,
+      nextDate: row.nextDate,
+      accountId: row.accountId,
+      categoryId: row.categoryId,
+      customIntervalDays: row.customIntervalDays,
+      autoRecord: row.autoRecord,
+      reminder: row.reminder,
+      status: RecurringBillStatus.values.byName(row.status),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    );
+  }
 
   RecurringBillEntriesCompanion _toCompanion(RecurringBill bill) =>
       RecurringBillEntriesCompanion(
