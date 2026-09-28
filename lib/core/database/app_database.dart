@@ -2306,8 +2306,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         AND metadata_json IS NOT NULL
         AND json_valid(metadata_json)
         AND (
-          json_extract(metadata_json, '$.orderId') = ?
-          OR json_extract(metadata_json, '$.autobookkeeping.orderId') = ?
+          json_extract(metadata_json, '\$.orderId') = ?
+          OR json_extract(metadata_json, '\$.autobookkeeping.orderId') = ?
         )
       ORDER BY occurred_at DESC
       ''',
@@ -2329,8 +2329,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   }) async {
     final orderSql = orderId == null
         ? ''
-        : "OR (json_extract(metadata_json, '$.notificationOrderId') = ? "
-              "AND json_extract(metadata_json, '$.paymentPackageName') = ?)";
+        : "OR (json_extract(metadata_json, '\$.notificationOrderId') = ? "
+              "AND json_extract(metadata_json, '\$.paymentPackageName') = ?)";
     final row = await customSelect(
       '''
       SELECT 1
@@ -2339,7 +2339,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         AND metadata_json IS NOT NULL
         AND json_valid(metadata_json)
         AND (
-          json_extract(metadata_json, '$.notificationKey') = ?
+          json_extract(metadata_json, '\$.notificationKey') = ?
           $orderSql
         )
       LIMIT 1
@@ -2366,7 +2366,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       WHERE book_id = ?
         AND metadata_json IS NOT NULL
         AND json_valid(metadata_json)
-        AND json_extract(metadata_json, '$.paymentFingerprint') = ?
+        AND json_extract(metadata_json, '\$.paymentFingerprint') = ?
       LIMIT 1
       ''',
       variables: [
