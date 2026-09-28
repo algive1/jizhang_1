@@ -9,10 +9,12 @@ import '../transactions/data/transactions_repository.dart';
 import 'auto_bookkeeping_pending.dart';
 
 class AutoBookkeepingRefundMatcher {
-  const AutoBookkeepingRefundMatcher(
-    this._transactions, {
-    AppDatabase? database,
-  }) : _database = database;
+  const AutoBookkeepingRefundMatcher(this._transactions) : _database = null;
+
+  const AutoBookkeepingRefundMatcher.withDatabase(
+    this._transactions,
+    this._database,
+  );
 
   final TransactionRepository _transactions;
   final AppDatabase? _database;
@@ -107,8 +109,8 @@ class AutoBookkeepingRefundMatcher {
 final autoBookkeepingRefundMatcherProvider =
     Provider<AutoBookkeepingRefundMatcher>((ref) {
       final database = ref.watch(databaseProvider);
-      return AutoBookkeepingRefundMatcher(
+      return AutoBookkeepingRefundMatcher.withDatabase(
         DriftTransactionRepository(database),
-        database: database,
+        database,
       );
     });
