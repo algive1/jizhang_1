@@ -236,8 +236,18 @@ final currentMonthBudgetsProvider = StreamProvider<List<Budget>>((ref) async* {
 });
 
 final budgetOverviewProvider = Provider<BudgetOverview>((ref) {
+  final now = DateTime.now();
   final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
-  final transactions = ref.watch(transactionsProvider).value ?? const [];
+  final transactions =
+      ref
+          .watch(
+            transactionsForMonthProvider((
+              year: now.year,
+              month: now.month,
+            )),
+          )
+          .value ??
+      const <TransactionRecord>[];
   final categories = ref.watch(allCategoriesProvider).value ?? const [];
   return ref
       .watch(budgetRepositoryProvider)
@@ -245,7 +255,7 @@ final budgetOverviewProvider = Provider<BudgetOverview>((ref) {
         budgets: budgets,
         transactions: transactions,
         categories: categories,
-        now: DateTime.now(),
+        now: now,
         goalReservation:
             (ref.watch(goalsProvider).value ?? const <Goal>[])
                 .where((goal) => goal.status == GoalStatus.active)
