@@ -61,6 +61,20 @@ void main() {
     );
   });
 
+  test('source ranges keep old selected months disjoint from recent baselines', () {
+    final ranges = service.sourceRangesFor(
+      period: AnalysisPeriod.currentMonth,
+      now: now,
+      month: DateTime(2024, 1),
+    );
+
+    expect(ranges, hasLength(2));
+    expect(ranges.first.start, DateTime(2023, 12));
+    expect(ranges.first.endExclusive, DateTime(2024, 2));
+    expect(ranges.last.endExclusive, DateTime(2026, 8, 31));
+    expect(ranges.last.dayCount, 180);
+  });
+
   test('normal spending is compared with the same length prior period', () {
     final snapshot = service.analyze([
       _expense('current', 100, DateTime(2026, 8, 10, 12)),
