@@ -582,11 +582,11 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '性能回归-104');
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('性能回归-104'), findsNothing);
+    expect(find.text('最近记录 · 100 笔'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
-    expect(find.text('性能回归-104'), findsOneWidget);
+    expect(find.text('找到 1 笔记录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
