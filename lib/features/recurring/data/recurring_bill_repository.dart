@@ -14,6 +14,7 @@ import '../../books/data/book_repository.dart';
 abstract interface class RecurringBillRepository {
   Stream<List<RecurringBill>> watchActive();
   Future<List<RecurringBill>> getAll();
+  Future<List<RecurringBill>> getDueAutoRecords(DateTime cutoff);
   Future<RecurringBill?> getById(String id);
   Future<List<RecurringBill>> getAllForNotification();
   Future<RecurringBill> create(RecurringBill bill);
@@ -34,6 +35,15 @@ class DriftRecurringBillRepository implements RecurringBillRepository {
   @override
   Future<List<RecurringBill>> getAll() async =>
       _map(await _database.recurringBillDao.getAll(bookId: bookId));
+
+  @override
+  Future<List<RecurringBill>> getDueAutoRecords(DateTime cutoff) async =>
+      _map(
+        await _database.recurringBillDao.getDueAutoRecords(
+          bookId: bookId,
+          cutoff: cutoff,
+        ),
+      );
 
   @override
   Future<RecurringBill?> getById(String id) async {
@@ -279,13 +289,11 @@ class RecurringBillExecutionService {
   /// blocking the first frame; the next resume continues the backlog.
   Future<int> processDueAutoRecords({DateTime? now}) async {
     final cutoff = now ?? DateTime.now();
-    final bills = await _recurringBills.getAll();
+    final bills = await _recurringBills.getDueAutoRecords(cutoff);
     var processed = 0;
     Object? firstError;
 
-    for (final bill in bills.where(
-      (item) => item.status == RecurringBillStatus.active && item.autoRecord,
-    )) {
+    for (final bill in bills) {
       var current = bill;
       var attempts = 0;
       while (current.status == RecurringBillStatus.active &&
