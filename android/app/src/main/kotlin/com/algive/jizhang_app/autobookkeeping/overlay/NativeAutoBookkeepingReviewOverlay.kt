@@ -59,7 +59,10 @@ class NativeAutoBookkeepingReviewOverlay(
     val root = FrameLayout(context).apply {
         isClickable = true
         isFocusableInTouchMode = true
-        setBackgroundColor(Color.argb(82, 0, 0, 0))
+        // Keep the paying app fully visible behind the review card. The root
+        // still consumes touches outside the card, but it must not paint the
+        // old full-screen grey scrim.
+        setBackgroundColor(Color.TRANSPARENT)
         setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
                 onCancel()
