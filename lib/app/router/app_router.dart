@@ -106,8 +106,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AccountRecoveryPage(),
       ),
       ShellRoute(
-        builder: (context, state, child) =>
-            AppScaffold(location: state.uri.path, child: child),
+        builder: (context, state, child) {
+          if (isAutoBookkeepingOverlayRoute(state.uri.toString())) {
+            return child;
+          }
+          return AppScaffold(location: state.uri.path, child: child);
+        },
         routes: [
           GoRoute(
             path: '/assistant',

@@ -21,6 +21,7 @@ import com.google.mlkit.vision.common.InputImage
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingConfirmActivity
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingCustomApps
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
@@ -72,7 +73,11 @@ open class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        AutoBookkeepingLogStore.clearDetailed(this)
+        // Opening the transparent confirmation host must not erase the timing
+        // trail produced by the native overlay just before Flutter warm-up.
+        if (this !is AutoBookkeepingConfirmActivity) {
+            AutoBookkeepingLogStore.clearDetailed(this)
+        }
         navigationChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "jizhang/navigation",

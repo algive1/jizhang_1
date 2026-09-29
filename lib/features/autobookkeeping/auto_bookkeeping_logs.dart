@@ -57,6 +57,10 @@ class AutoBookkeepingLogsBridge {
       // Logs are Android-only; no-op on other platforms.
     } on PlatformException {
       // Diagnostics must never interrupt bookkeeping.
+    } on Object {
+      // Pure-Dart unit tests and background entry points may not have a
+      // ServicesBinding/binary messenger yet. Debug logging is best-effort and
+      // must never make the underlying bookkeeping operation fail.
     }
   }
 

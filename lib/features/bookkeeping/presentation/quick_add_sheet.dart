@@ -131,6 +131,7 @@ class QuickAddSheet extends ConsumerStatefulWidget {
     this.reviewMessage,
     this.reviewScreenshotAvailable = false,
     this.reviewScreenshotEnabled = false,
+    this.reviewBottomSafeArea = true,
     this.onReviewCancel,
     this.onReviewComplete,
     this.onReviewScreenshotChanged,
@@ -157,6 +158,11 @@ class QuickAddSheet extends ConsumerStatefulWidget {
   final String? reviewMessage;
   final bool reviewScreenshotAvailable;
   final bool reviewScreenshotEnabled;
+
+  /// Whether review actions need to consume the system bottom safe area.
+  /// Native overlay hosts already apply it once around the floating card.
+  final bool reviewBottomSafeArea;
+
   final Future<void> Function()? onReviewCancel;
   final Future<bool> Function(QuickAddReviewDraft draft)? onReviewComplete;
   final ValueChanged<bool>? onReviewScreenshotChanged;
@@ -671,6 +677,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   if (widget.reviewMode)
                     SafeArea(
                       top: false,
+                      bottom: widget.reviewBottomSafeArea,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
                         child: Row(

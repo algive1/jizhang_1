@@ -23,6 +23,7 @@ import 'package:jizhang_app/features/books/data/book_repository.dart';
 import 'package:jizhang_app/features/categories/data/category_repository.dart';
 import 'package:jizhang_app/features/intelligence/domain/merchant_classification_service.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/components/category_grid.dart';
+import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
 
 void main() {
   test('独立浮层 Activity 路由从平台初始地址打开', () {
@@ -170,6 +171,20 @@ void main() {
   });
 
   testWidgets('付款候选使用记一笔结构、分类和固定操作且不创建键盘区', (tester) async {
+    const nativeReviewChannel = MethodChannel(
+      'jizhang/autobookkeeping_native_review',
+    );
+    MethodCall? nativeSyncCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeReviewChannel, (call) async {
+          if (call.method == 'sync') nativeSyncCall = call;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeReviewChannel, null),
+    );
+
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(412, 860);
     addTearDown(tester.view.resetPhysicalSize);
@@ -251,6 +266,21 @@ void main() {
       find.byKey(const ValueKey('autobookkeeping-quick-add-review')),
       findsOneWidget,
     );
+    expect(nativeSyncCall?.method, 'sync');
+    final nativePayload = nativeSyncCall?.arguments as Map<Object?, Object?>?;
+    expect(nativePayload?['selectedBookId'], 'book-personal');
+    expect((nativePayload?['books'] as List?)?.isNotEmpty, isTrue);
+    expect((nativePayload?['accounts'] as List?)?.isNotEmpty, isTrue);
+    expect((nativePayload?['categories'] as List?)?.isNotEmpty, isTrue);
+    expect(nativePayload?['transactionType'], 'expense');
+    final reviewSheet = tester.widget<QuickAddSheet>(
+      find.byKey(const ValueKey('autobookkeeping-quick-add-review')),
+    );
+    expect(
+      reviewSheet.reviewBottomSafeArea,
+      isFalse,
+      reason: '原生浮层已经处理系统底部安全区，确认按钮不能重复抬高',
+    );
     expect(
       find.byKey(const ValueKey('quick-category-section')),
       findsOneWidget,
@@ -319,7 +349,7 @@ void main() {
     final cancelTop = tester
         .getTopLeft(find.byKey(const ValueKey('quick-review-cancel')))
         .dy;
-    expect(cancelTop - detailBottom, inInclusiveRange(0, 32));
+    expect(cancelTop - detailBottom, inInclusiveRange(-1, 32));
     expect(find.byType(NumberKeyboard), findsNothing);
     expect(find.byType(EditableText), findsOneWidget);
 

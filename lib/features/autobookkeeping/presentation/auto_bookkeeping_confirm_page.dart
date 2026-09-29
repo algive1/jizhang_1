@@ -79,6 +79,10 @@ class _AutoBookkeepingConfirmPageState
   bool _saving = false;
   bool _closing = false;
 
+  static const _nativeReviewChannel = MethodChannel(
+    'jizhang/autobookkeeping_native_review',
+  );
+
   Future<void> _record(String stage, Map<String, Object?> detail) =>
       const AutoBookkeepingLogsBridge().recordDetailed(
         stage,
@@ -106,7 +110,220 @@ class _AutoBookkeepingConfirmPageState
   @override
   void initState() {
     super.initState();
+    if (widget.overlayMode) {
+      _nativeReviewChannel.setMethodCallHandler(_handleNativeReviewCall);
+    }
     unawaited(_loadCandidateWithTimeout());
+  }
+
+  @override
+  void dispose() {
+    if (widget.overlayMode) {
+      _nativeReviewChannel.setMethodCallHandler(null);
+    }
+    super.dispose();
+  }
+
+  String? _nonBlank(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  Future<Object?> _handleNativeReviewCall(MethodCall call) async {
+    if (call.method != 'submit') return null;
+    final raw = call.arguments;
+    if (raw is! Map) {
+      return const <String, Object?>{
+        'success': false,
+        'message': '原生确认参数无效',
+      };
+    }
+    final success = await _saveNativeReview(Map<Object?, Object?>.from(raw));
+    return <String, Object?>{
+      'success': success,
+      'message': _message,
+    };
+  }
+
+  Future<bool> _saveNativeReview(Map<Object?, Object?> raw) async {
+    final candidate = _candidate;
+    final books = _overlayBooks;
+    if (candidate == null || books == null || books.isEmpty || _saving) {
+      return false;
+    }
+
+    final requestedBookId = raw['bookId']?.toString();
+    final bookId = requestedBookId != null &&
+            books.any((book) => book.id == requestedBookId)
+        ? requestedBookId
+        : (_bookId ?? books.first.id);
+    final selectedBook = books.where((book) => book.id == bookId).firstOrNull;
+    if (selectedBook == null) return false;
+
+    final accounts =
+        bookId == _bookId && _overlayAccounts != null
+            ? _overlayAccounts!
+            : await DriftAccountRepository(
+                ref.read(databaseProvider),
+                bookId: selectedBook.assetBookId,
+              ).getActive();
+    final categories =
+        bookId == _bookId && _overlayCategories != null
+            ? _overlayCategories!
+            : await DriftCategoryRepository(
+                ref.read(databaseProvider),
+                bookId: bookId,
+              ).getActive();
+
+    final typeName = raw['type']?.toString();
+    final type = switch (typeName) {
+      'income' => TransactionType.income,
+      'refund' => TransactionType.refund,
+      'reimbursement' => TransactionType.reimbursement,
+      'transfer' => TransactionType.transfer,
+      _ => TransactionType.expense,
+    };
+    final amount = raw['amountInCents'];
+    final amountInCents = amount is num ? amount.toInt() : 0;
+    if (amountInCents <= 0) {
+      setState(() => _message = '请输入有效金额');
+      return false;
+    }
+
+    final reimbursementName =
+        raw['reimbursementStatus']?.toString() ?? 'none';
+    final reimbursementStatus = ReimbursementStatus.values.firstWhere(
+      (value) => value.name == reimbursementName,
+      orElse: () => ReimbursementStatus.none,
+    );
+    final occurredAtRaw = raw['occurredAt'];
+    final occurredAt = occurredAtRaw is num
+        ? DateTime.fromMillisecondsSinceEpoch(occurredAtRaw.toInt())
+        : candidate.timestamp;
+    _keepScreenshot = raw['screenshotEnabled'] != false;
+
+    final draft = QuickAddReviewDraft(
+      bookId: bookId,
+      type: type,
+      amountInCents: amountInCents,
+      note: raw['note']?.toString() ?? candidate.merchant,
+      occurredAt: occurredAt,
+      accounts: accounts,
+      categories: categories,
+      categoryId: _nonBlank(raw['categoryId']),
+      accountId: _nonBlank(raw['accountId']),
+      destinationAccountId:
+          _nonBlank(raw['destinationAccountId']),
+      subcategoryId: _nonBlank(raw['subcategoryId']),
+      reimbursementStatus: reimbursementStatus,
+      reimbursementNote: '',
+      attachmentPaths: const <String>[],
+      tags: const <String>[],
+      payerUserId: null,
+      recurringDraft: null,
+      isPlanned: false,
+      isOneTime: true,
+      isRecurring: false,
+    );
+    return _saveOverlayDraft(draft);
+  }
+
+  Future<void> _syncNativeReview() async {
+    if (!widget.overlayMode || !mounted) return;
+    final candidate = _candidate;
+    final books = _overlayBooks;
+    final accounts = _overlayAccounts;
+    final categories = _overlayCategories;
+    if (candidate == null ||
+        books == null ||
+        accounts == null ||
+        categories == null ||
+        books.isEmpty) {
+      return;
+    }
+
+    final selectedBookId = _bookId != null &&
+            books.any((book) => book.id == _bookId)
+        ? _bookId!
+        : books.first.id;
+    final resolvedType =
+        _overlayTransactionType ?? _transactionTypeFor(candidate.transactionType);
+    // A parser-level TRANSFER only becomes an internal account transfer after
+    // the existing resolver finds strong evidence. Until then the established
+    // behavior is to review/save it as an expense.
+    final type =
+        candidate.transactionType == 'TRANSFER' &&
+            resolvedType == TransactionType.transfer &&
+            !_internalTransfer
+        ? TransactionType.expense
+        : resolvedType;
+    final categoryType = _categoryTypeFor(type);
+    final roots = categories
+        .where((item) => item.parentId == null && item.type == categoryType)
+        .toList()
+      ..sort((a, b) {
+        bool isOther(Category item) =>
+            item.id == 'expense-other' || item.name.trim().startsWith('其他');
+        final aOther = isOther(a);
+        final bOther = isOther(b);
+        if (aOther != bOther) return aOther ? -1 : 1;
+        return b.sortOrder.compareTo(a.sortOrder);
+      });
+    final children = categories
+        .where((item) => item.parentId != null)
+        .toList()
+      ..sort((a, b) => b.sortOrder.compareTo(a.sortOrder));
+    final selectedCategoryId = _validCategoryId(roots);
+    final selectedAccountId = _validAccountId(accounts);
+    final selectedDestinationAccountId = _validDestinationAccountId(
+      accounts,
+      sourceAccountId: selectedAccountId,
+    );
+
+    try {
+      await _nativeReviewChannel.invokeMethod<void>('sync', {
+        'selectedBookId': selectedBookId,
+        'selectedAccountId': selectedAccountId,
+        'selectedDestinationAccountId': selectedDestinationAccountId,
+        'selectedCategoryId': selectedCategoryId,
+        'selectedSubcategoryId': _subcategoryId,
+        'transactionType': switch (type) {
+          TransactionType.income => 'income',
+          TransactionType.refund => 'refund',
+          TransactionType.reimbursement => 'reimbursement',
+          TransactionType.transfer => 'transfer',
+          _ => 'expense',
+        },
+        'occurredAt': (_editedOccurredAt ?? candidate.timestamp)
+            .millisecondsSinceEpoch,
+        'screenshotAvailable': candidate.screenshotPath != null,
+        'screenshotEnabled':
+            candidate.screenshotPath != null && _keepScreenshot,
+        'books': [
+          for (final book in books) {'id': book.id, 'label': book.name},
+        ],
+        'accounts': [
+          for (final account in accounts)
+            {
+              'id': account.id,
+              'label': account.displayName,
+              'type': account.type.name,
+            },
+        ],
+        'categories': [
+          for (final category in <Category>[...roots, ...children])
+            {
+              'id': category.id,
+              'label': category.name,
+              'type': category.type.name,
+              'parentId': category.parentId,
+              'sortOrder': category.sortOrder,
+            },
+        ],
+      });
+    } on MissingPluginException {
+      // Widget tests and non-Android hosts intentionally have no native overlay.
+    }
   }
 
   Future<void> _loadCandidateWithTimeout() async {
@@ -227,6 +444,9 @@ class _AutoBookkeepingConfirmPageState
         _destinationAccountId = transferRecommendation?.destinationAccountId;
         _loading = false;
       });
+      if (widget.overlayMode && candidate != null) {
+        unawaited(_syncNativeReview());
+      }
       if (candidate != null && candidate.screenshotPath == null) {
         unawaited(_refreshScreenshot(candidate.fingerprint));
       }
@@ -259,6 +479,7 @@ class _AutoBookkeepingConfirmPageState
       }
       if (refreshed.screenshotPath != null) {
         setState(() => _candidate = refreshed);
+        if (widget.overlayMode) unawaited(_syncNativeReview());
         return;
       }
     }
@@ -690,34 +911,46 @@ class _AutoBookkeepingConfirmPageState
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: SafeArea(
+            top: false,
+            left: false,
+            right: false,
+            minimum: const EdgeInsets.only(bottom: 4),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final panelHeight = constraints.maxHeight * .60;
                 return Align(
                   alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    height: constraints.maxHeight,
-                    child: Stack(
-                      alignment: Alignment.bottomCenter,
-                      children: [
-                        const Positioned.fill(
-                          child: ColoredBox(
-                            color: Color.fromRGBO(0, 0, 0, .12),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: SizedBox(
-                            key: const ValueKey(
-                              'autobookkeeping-overlay-panel',
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                    child: SizedBox(
+                      key: const ValueKey('autobookkeeping-overlay-panel'),
+                      width: double.infinity,
+                      height: panelHeight,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        elevation: 12,
+                        shadowColor: Colors.black.withValues(alpha: .22),
+                        clipBehavior: Clip.antiAlias,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 14,
+                              child: Center(
+                                child: Container(
+                                  width: 34,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: .18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
                             ),
-                            width: double.infinity,
-                            height: panelHeight,
-                            child: Material(
-                              color: Theme.of(context).colorScheme.surface,
-                              elevation: 12,
-                              clipBehavior: Clip.antiAlias,
-                              borderRadius: BorderRadius.circular(24),
+                            Expanded(
                               child: _loading
                                   ? Stack(
                                       children: [
@@ -725,7 +958,7 @@ class _AutoBookkeepingConfirmPageState
                                           child: CircularProgressIndicator(),
                                         ),
                                         Positioned(
-                                          top: 8,
+                                          top: 0,
                                           right: 8,
                                           child: IconButton(
                                             key: const ValueKey(
@@ -742,9 +975,9 @@ class _AutoBookkeepingConfirmPageState
                                     )
                                   : _buildOverlayContent(context),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -822,6 +1055,7 @@ class _AutoBookkeepingConfirmPageState
       reviewScreenshotAvailable: candidate.screenshotPath != null,
       reviewScreenshotEnabled:
           candidate.screenshotPath != null && _keepScreenshot,
+      reviewBottomSafeArea: false,
       onReviewCancel: _close,
       onReviewComplete: _saveOverlayDraft,
       onReviewScreenshotChanged: (enabled) {
