@@ -46,6 +46,7 @@ object AutoBookkeepingPendingStore {
     fun enqueueIfAbsent(context: Context, candidate: PaymentCandidate): Boolean =
         enqueueDecision(context, candidate) == PendingEnqueueDecision.ACCEPTED
 
+    @Synchronized
     fun enqueueDecision(
         context: Context,
         candidate: PaymentCandidate,
@@ -254,6 +255,7 @@ object AutoBookkeepingPendingStore {
         )
     }
 
+    @Synchronized
     fun complete(
         context: Context,
         remember: Boolean = true,
@@ -291,6 +293,19 @@ object AutoBookkeepingPendingStore {
         editor.apply()
     }
 
+    @Synchronized
+    fun enrichNoteIfCurrent(context: Context, fingerprint: String, note: String): Boolean {
+        if (note.isBlank()) return false
+        val pending = readValidPayload(context) ?: return false
+        if (pending.optString(KEY_FINGERPRINT) != fingerprint ||
+            pending.optString("note").isNotBlank()) return false
+        pending.put("note", note)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_PENDING, pending.toString()).apply()
+        return true
+    }
+
+    @Synchronized
     fun attachScreenshotIfCurrent(
         context: Context,
         fingerprint: String,
@@ -422,13 +437,7 @@ object AutoBookkeepingPendingStore {
 
         val firstOrderId = first.optString("orderId").trim()
         val secondOrderId = second.optString("orderId").trim()
-        if (
-            firstOrderId.isNotBlank() &&
-            secondOrderId.isNotBlank() &&
-            firstOrderId == secondOrderId
-        ) {
-            return true
-        }
+        BillFingerprint.matchingOrder(firstOrderId, secondOrderId)?.let { return it }
 
         val firstAt = first.optLong("timestamp", 0L)
         val secondAt = second.optLong("timestamp", 0L)

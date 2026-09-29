@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
+import androidx.core.widget.doAfterTextChanged
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -89,15 +90,24 @@ class NativeAutoBookkeepingReviewOverlay(
         background = rounded(surfaceColor, 24f, dividerColor, 1)
     }
 
+    private val reviewNote = ReviewNote(candidate.note?.takeIf { it.isNotBlank() } ?: candidate.merchantNormalized)
+    private var applyingNote = false
     private val noteField = EditText(context).apply {
         setSingleLine(true)
-        setText(candidate.merchantNormalized)
+        setText(reviewNote.value)
+        doAfterTextChanged { if (!applyingNote) reviewNote.edit(it?.toString().orEmpty()) }
         setTextColor(primaryText)
         setHintTextColor(secondaryText)
         hint = "添加备注..."
         textSize = 15f
         setPadding(dp(8), 0, dp(4), 0)
         background = null
+    }
+
+    fun enrichNote(note: String) {
+        if (!reviewNote.enrich(note)) return
+        applyingNote = true
+        try { noteField.setText(reviewNote.value) } finally { applyingNote = false }
     }
 
     private val amountField = EditText(context).apply {

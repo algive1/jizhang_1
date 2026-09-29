@@ -357,7 +357,6 @@ private fun alipayArrivalCounterparty(nodes: List<ScreenNode>): String? =
 
 private fun matchesAlipayPaySuccess(nodes: List<ScreenNode>): Boolean =
     hasExact(nodes, "支付成功") &&
-        hasCommonAmount(nodes) &&
         (
             nodes.any { node -> isTextNode(node) && Regex("^支付成功￥\\d+\\.\\d+$").matches(node.label) } ||
                 hasClassLabel(nodes, "android.widget.TextView", "完成")

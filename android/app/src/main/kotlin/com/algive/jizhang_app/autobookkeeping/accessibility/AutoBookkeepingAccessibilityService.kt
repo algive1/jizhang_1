@@ -37,9 +37,19 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
      * this set plus the user's own apps.
      */
     private var basePackages: Set<String> = emptySet()
-    private var scheduled = false
+    private val scanThrottle = ScanThrottle()
+    private val scheduled get() = scanThrottle.pending
     private var lastPage: String? = null
     private var lastWindow = -1
+    private var offeredFingerprint: String? = null
+    private var enrichUntil = 0L
+    private val enrichScan = Runnable {
+        if (AutoBookkeepingSettings.enabled(this)) {
+            detectCandidateFromVisibleWindows()?.let { (candidate, windowId, _) ->
+                if (pageIdentity(candidate) == lastPage && windowId == lastWindow) enrichNote(candidate)
+            }
+        }
+    }
     private var absentSince = 0L
     private var lastDebugAt = 0L
     private var lastEventLogAt = 0L
@@ -51,7 +61,6 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var lastActivityClassName: String? = null
     private var rootRetryCount = 0
     private var visibleWindowCount = 0
-    private var overlayWaits = 0
     override fun onServiceConnected() {
         Diagnostics.accessibilityConnected = true
         instance = this
@@ -88,8 +97,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             paymentActivity = true
             rootRetryCount = 0
             handler.removeCallbacks(scan)
-            scheduled = true
-            handler.postDelayed(scan, 150)
+            scanThrottle.consumed()
+            scheduleScan(150)
         }
     }
 
@@ -146,8 +155,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         if (eventRule == null) {
             if (actualEvent.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED && paymentActivity && !scheduled) {
                 rootRetryCount = 0
-                scheduled = true
-                handler.postDelayed(scan, 150)
+                scheduleScan(150)
             }
             return
         }
@@ -170,7 +178,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             // (for example android.widget.LinearLayout). Keep only a class from
             // the emitting app so an incidental child view cannot fail an
             // Activity-level profile gate such as UnionPay's main-page exclusion.
-            val appActivity = activity.startsWith("${eventPackage.orEmpty()}.")
+            val appActivity = activity.startsWith("${eventPackage.orEmpty()}.") ||
+                (eventRule.sourceApp == "ALIPAY" && activity.startsWith("com.alipay."))
             val activityChanged =
                 appActivity &&
                     (lastActivityPackage != eventPackage ||
@@ -208,10 +217,13 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             }
         }
         Diagnostics.lastEventAt = System.currentTimeMillis()
-        // Read the latest root after 500 ms; continuous refreshes cannot starve parsing.
-        if (!scheduled) { scheduled = true; handler.postDelayed(scan, 150) }
+        // Leading-edge coalescing: refreshes cannot postpone this 150 ms read.
+        scheduleScan(150)
     }
-    private val scan = Runnable { scheduled = false; scanPage() }
+    private fun scheduleScan(delay: Long) {
+        if (scanThrottle.request()) handler.postDelayed(scan, delay)
+    }
+    private val scan = Runnable { scanThrottle.consumed(); scanPage() }
     @Suppress("DEPRECATION")
     private fun scanPage() {
         if (!AutoBookkeepingSettings.enabled(this)) { lastPage = null; return }
@@ -222,20 +234,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         // single missing permission silently disabled auto bookkeeping.
         if (AutoBillOverlayService.instance == null) {
             ensureOverlayService()
-            val overlayCanStillStart = AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
-            if (AutoBillOverlayService.instance == null && overlayCanStillStart) {
-                // The foreground service is starting asynchronously; give it a
-                // bounded number of frames before falling back.
-                if (overlayWaits < MAX_OVERLAY_WAITS) {
-                    overlayWaits += 1
-                    debug("waiting for overlay instance ($overlayWaits)")
-                    handler.postDelayed(scan, 200)
-                    return
-                }
-            }
             debug("overlay unavailable, using notification fallback")
-        } else {
-            overlayWaits = 0
         }
         if (!paymentActivity) {
             debug("scan blocked paymentActivity=false")
@@ -265,14 +264,11 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             "candidate_detected_detail",
             candidate.toMap().toString(),
         )
-        val identity = BillFingerprint.hash(BillFingerprint.identity(candidate))
+        val identity = pageIdentity(candidate)
         AutoBookkeepingLogStore.record(this, "candidate_detected", "payment success candidate")
         if (identity == lastPage && windowId == lastWindow) {
             AutoBookkeepingLogStore.record(this, "deduplicated", "same page and fingerprint")
-            notifyDetectionFeedback(
-                key = "same:$identity",
-                message = "本页面已经记录过了",
-            )
+            enrichNote(candidate)
             return
         }
         val enqueueDecision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
@@ -293,11 +289,6 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                     message = "已命中页面 · 已有一笔待确认记录",
                 )
                 PendingEnqueueDecision.ACCEPTED -> Unit
-            }
-            if (enqueueDecision == PendingEnqueueDecision.DUPLICATE && AutoBillOverlayService.instance?.isShowing != true) {
-                AutoBookkeepingPendingStore.readCandidate(this)?.let { pending ->
-                    offerCandidate(pending, identity, windowId)
-                }
             }
             return
         }
@@ -348,6 +339,19 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             offerCandidate(candidate, identity, windowId)
         }
     }
+    private fun pageIdentity(candidate: com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate): String =
+        if (!candidate.orderId.isNullOrBlank()) BillFingerprint.of(candidate)
+        else BillFingerprint.hash(BillFingerprint.identity(candidate))
+
+    private fun enrichNote(candidate: com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate) {
+        if (android.os.SystemClock.elapsedRealtime() > enrichUntil) return
+        val fingerprint = offeredFingerprint ?: return
+        val note = candidate.note?.takeIf { it.isNotBlank() } ?: return
+        if (AutoBookkeepingPendingStore.enrichNoteIfCurrent(this, fingerprint, note)) {
+            AutoBillOverlayService.instance?.enrichNote(fingerprint, note)
+        }
+    }
+
     private fun offerCandidate(
         candidate: com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate,
         identity: String,
@@ -385,6 +389,11 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         }
         lastPage = identity
         lastWindow = windowId
+        offeredFingerprint = BillFingerprint.of(current)
+        enrichUntil = android.os.SystemClock.elapsedRealtime() + 1200
+        handler.removeCallbacks(enrichScan)
+        handler.postDelayed(enrichScan, 350)
+        handler.postDelayed(enrichScan, 1000)
         Diagnostics.lastScene = current.scene.scene
         Diagnostics.lastResult =
             "source=${current.sourceApp} amountConfidence=${current.amountConfidence} " +
@@ -417,12 +426,13 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         lastPage = null
         lastActivityPackage = null
         lastActivityClassName = null
-        overlayWaits = 0
+        rootRetryCount = 0
         handler.removeCallbacks(scan)
-        scheduled = true
+        handler.removeCallbacks(enrichScan)
+        scanThrottle.consumed()
         AutoBookkeepingLogStore.record(this, "manual_capture", "quick settings tile requested a scan")
         AutoBookkeepingLogStore.recordDetailed(this, "manual_capture", "source=quick_settings_tile")
-        handler.post(scan)
+        scheduleScan(0)
     }
 
     private var paymentActivity = false
@@ -431,9 +441,22 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private fun detectCandidateFromVisibleWindows(): Triple<com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate, Int, String?>? {
         val roots = mutableListOf<Pair<Int, AccessibilityNodeInfo>>()
         rootInActiveWindow?.let { roots.add(it.windowId to it) }
+        val foregroundPackage = roots.firstOrNull()?.second?.packageName?.toString()
+        // Our overlay may cover the payer; unrelated foreground apps must not
+        // cause a stale/background payment window to produce a new bill.
+        if (foregroundPackage != null && foregroundPackage != packageName &&
+            ruleRegistry.ruleFor(foregroundPackage) == null) {
+            roots.forEach { it.second.recycle() }
+            return null
+        }
         val interactiveWindows = runCatching { windows }.getOrDefault(emptyList())
         interactiveWindows.forEach { window ->
             val root = runCatching { window.root }.getOrNull() ?: return@forEach
+            if (ruleRegistry.ruleFor(foregroundPackage.orEmpty()) != null &&
+                root.packageName?.toString() != foregroundPackage) {
+                root.recycle()
+                return@forEach
+            }
             if (ruleRegistry.ruleFor(root.packageName?.toString().orEmpty()) == null) {
                 root.recycle()
                 return@forEach
@@ -522,7 +545,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             return
         }
         rootRetryCount += 1
-        handler.postDelayed(scan, ROOT_RETRY_DELAY_MS)
+        scheduleScan(ROOT_RETRY_DELAY_MS)
     }
 
     private fun ensureOverlayService() {
@@ -559,7 +582,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         handler.removeCallbacks(scan)
-        scheduled = false
+        handler.removeCallbacks(enrichScan)
+        scanThrottle.consumed()
         Diagnostics.accessibilityConnected = false
         Diagnostics.error = "无障碍服务已中断"
         AutoBookkeepingLogStore.record(
@@ -584,9 +608,6 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         private const val REJECTED_SNAPSHOT_INTERVAL_MS = 1_000L
         private const val DETECTION_FEEDBACK_DEDUP_MS = 1_500L
         private const val MAX_ROOT_RETRIES = 10
-
-        /** How many 200 ms frames to wait for the overlay before falling back. */
-        private const val MAX_OVERLAY_WAITS = 10
 
         /** The live service, or `null` while the user has it switched off. */
         @Volatile

@@ -13,6 +13,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PaymentEngineTest {
+    @Test fun differentOrdersCannotFallBackToSameAmountMatching() {
+        assertEquals(false, BillFingerprint.matchingOrder("order-1", "order-2"))
+        assertEquals(true, BillFingerprint.matchingOrder(" order-1 ", "order-1"))
+        assertNull(BillFingerprint.matchingOrder("", "order-1"))
+    }
+
+    @Test fun orderFingerprintSurvivesLateMetadataButSeparatesNextPayment() {
+        val first = parse("支付成功", "收款方", "商店", "￥20")!!.copy(orderId = "order-1")
+        assertEquals(BillFingerprint.of(first), BillFingerprint.of(first.copy(note = "午餐", paymentMethod = "零钱")))
+        assertNotEquals(BillFingerprint.of(first), BillFingerprint.of(first.copy(orderId = "order-2")))
+    }
+
     private fun nodes(vararg text: String) = text.map { ScreenNode(text = it) }
     private fun parse(vararg text: String) = WeChatPaymentParser().parse(nodes(*text), 100000)
     @Test fun fixtures() {

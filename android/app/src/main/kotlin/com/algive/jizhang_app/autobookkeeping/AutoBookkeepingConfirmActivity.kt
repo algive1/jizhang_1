@@ -42,6 +42,9 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
         window.attributes = window.attributes.apply {
             dimAmount = 0f
         }
+        // Draw the native card above Flutter immediately, without waiting for
+        // Dart/database startup or relying on a third-party overlay window.
+        AutoBillOverlayService.instance?.attachReviewToActivity(this)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -125,6 +128,7 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
     }
 
     override fun onDestroy() {
+        AutoBillOverlayService.instance?.detachActivityReview()
         nativeReviewChannel?.setMethodCallHandler(null)
         nativeReviewChannel = null
         if (instance === this) instance = null

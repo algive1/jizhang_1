@@ -12,6 +12,8 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.view.doOnPreDraw
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
@@ -38,6 +40,7 @@ class AutoBillOverlayService : Service() {
     private var revealFlutterWhenReady = false
     private var currentCandidate: PaymentCandidate? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var offeredAt = 0L
     val isShowing: Boolean get() = root != null || flutterConfirmationOpen
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -94,8 +97,15 @@ class AutoBillOverlayService : Service() {
         }
     }
 
+    fun enrichNote(fingerprint: String, note: String) {
+        val current = currentCandidate ?: return
+        if (com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint.of(current) != fingerprint) return
+        reviewUi?.enrichNote(note)
+    }
+
     fun offer(candidate: PaymentCandidate): Boolean {
         val requestedAt = SystemClock.elapsedRealtime()
+        offeredAt = requestedAt
         AutoBookkeepingLogStore.recordDetailed(
             this,
             "overlay_offer_requested",
@@ -112,7 +122,7 @@ class AutoBillOverlayService : Service() {
         val nativeShown = showNativeReview(candidate)
         AutoBookkeepingLogStore.recordDetailed(
             this,
-            "native_review_visible",
+            "native_review_attached",
             "shown=$nativeShown elapsedMs=${SystemClock.elapsedRealtime() - requestedAt} candidate=${candidate.toMap()}",
         )
         if (!nativeShown) return openConfirmation(candidate)
@@ -245,10 +255,34 @@ class AutoBillOverlayService : Service() {
 
     private fun removeNativeView() {
         root?.let {
-            runCatching { wm?.removeView(it) }
+            runCatching {
+                if (wm != null) wm?.removeViewImmediate(it)
+                else (it.parent as? ViewGroup)?.removeView(it)
+            }
         }
         root = null
         reviewUi = null
+        wm = null
+    }
+
+    /** A normal Activity window remains usable when the payer hides overlays. */
+    fun attachReviewToActivity(activity: AutoBookkeepingConfirmActivity) {
+        val view = root ?: return
+        wm?.removeViewImmediate(view)
+        wm = null
+        (view.parent as? ViewGroup)?.removeView(view)
+        activity.addContentView(view, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
+        ViewCompat.requestApplyInsets(view)
+        view.doOnPreDraw {
+            AutoBookkeepingLogStore.recordDetailed(this, "native_review_first_predraw",
+                "host=activity elapsedMs=${SystemClock.elapsedRealtime() - offeredAt}")
+        }
+    }
+
+    fun detachActivityReview() {
+        if (wm == null) removeNativeView()
     }
 
     private fun removeFeedbackView() {

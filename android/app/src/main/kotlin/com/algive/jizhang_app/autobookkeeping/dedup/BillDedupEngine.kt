@@ -6,6 +6,13 @@ import kotlin.math.abs
 
 enum class DedupResult { NOT_DUPLICATE, POSSIBLE_DUPLICATE, DUPLICATE }
 object BillFingerprint {
+    /** null means insufficient order evidence; false must not fall back to amount. */
+    fun matchingOrder(first: String?, second: String?): Boolean? {
+        val a = first?.trim().orEmpty()
+        val b = second?.trim().orEmpty()
+        return if (a.isEmpty() || b.isEmpty()) null else a == b
+    }
+
     fun of(c: PaymentCandidate): String {
         val order = c.orderId?.trim().orEmpty()
         if (order.isNotEmpty()) {

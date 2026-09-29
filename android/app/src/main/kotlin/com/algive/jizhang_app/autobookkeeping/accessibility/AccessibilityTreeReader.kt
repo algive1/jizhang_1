@@ -1,6 +1,7 @@
 package com.algive.jizhang_app.autobookkeeping.accessibility
 
 import android.graphics.Rect
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import com.algive.jizhang_app.autobookkeeping.model.ScreenNode
 
@@ -21,9 +22,10 @@ class AccessibilityTreeReader {
         var visited = 0
         var maxDepth = 0
         var truncated = false
+        val deadline = SystemClock.elapsedRealtime() + 250
 
         fun visit(node: AccessibilityNodeInfo, depth: Int) {
-            if (visited >= MAX_NODES || depth > MAX_DEPTH) {
+            if (visited >= MAX_NODES || depth > MAX_DEPTH || SystemClock.elapsedRealtime() >= deadline) {
                 truncated = true
                 return
             }
@@ -48,7 +50,7 @@ class AccessibilityTreeReader {
             val childLimit = node.childCount.coerceAtMost(MAX_CHILDREN_PER_NODE)
             if (node.childCount > childLimit) truncated = true
             for (i in 0 until childLimit) {
-                if (visited >= MAX_NODES) {
+                if (visited >= MAX_NODES || SystemClock.elapsedRealtime() >= deadline) {
                     truncated = true
                     break
                 }

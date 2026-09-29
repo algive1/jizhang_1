@@ -67,6 +67,10 @@ class PaymentSceneDetector(
         if (registry.ruleFor(packageName) == null) {
             return PaymentDetectionResult(null, "UNSUPPORTED_PACKAGE")
         }
+        if (packageName in setOf("com.tencent.mm", "com.eg.android.AlipayGphone") &&
+            nodes.any { it.label in INCOMPLETE_PAYMENT_LABELS }) {
+            return PaymentDetectionResult(null, "PAYMENT_NOT_COMPLETED")
+        }
 
         // A legacy WeChat confirmation layout carries a transfer recipient but
         // also the generic 支付成功 label. Preserve its specific transfer result
@@ -143,5 +147,11 @@ class PaymentSceneDetector(
                 "NO_MATCHING_PAYMENT_SCENE"
         }
         return PaymentDetectionResult(null, reason)
+    }
+    private companion object {
+        val INCOMPLETE_PAYMENT_LABELS = setOf(
+            "待付款", "等待付款", "支付中", "付款中", "支付失败", "付款失败",
+            "交易关闭", "已取消", "请输入支付密码",
+        )
     }
 }

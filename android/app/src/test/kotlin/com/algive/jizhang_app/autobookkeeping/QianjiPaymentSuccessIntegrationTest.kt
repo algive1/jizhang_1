@@ -10,6 +10,17 @@ class QianjiPaymentSuccessIntegrationTest {
     private val detector = PaymentSceneDetector()
 
     @Test
+    fun incompletePaymentCannotBeOverriddenByStaleSuccessLabel() {
+        for (pkg in listOf("com.tencent.mm", "com.eg.android.AlipayGphone")) {
+            for (status in listOf("待付款", "支付中", "支付失败", "交易关闭", "请输入支付密码")) {
+                val result = detector.inspect(pkg, labels("支付成功", "支付成功￥9.90", "￥9.90", "完成", status))
+                assertEquals("$pkg $status", null, result.candidate)
+                assertEquals("PAYMENT_NOT_COMPLETED", result.rejectionReason)
+            }
+        }
+    }
+
+    @Test
     fun installedMeituanTakeoutPackageIsRecognized() {
         val result = detector.inspect(
             "com.sankuai.meituan.takeoutnew",
