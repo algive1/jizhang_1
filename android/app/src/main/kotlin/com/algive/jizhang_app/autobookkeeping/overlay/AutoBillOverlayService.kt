@@ -2,7 +2,9 @@ package com.algive.jizhang_app.autobookkeeping.overlay
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -11,6 +13,8 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.algive.jizhang_app.PaymentNotificationListenerService
@@ -26,6 +30,8 @@ class AutoBillOverlayService : Service() {
     private var root: View? = null
     private var wm: WindowManager? = null
     private var reviewUi: NativeAutoBookkeepingReviewOverlay? = null
+    private var feedbackView: View? = null
+    private var feedbackWm: WindowManager? = null
     private var flutterConfirmationOpen = false
     private var flutterReviewReady = false
     private var pendingNativeSubmit = false
@@ -35,6 +41,58 @@ class AutoBillOverlayService : Service() {
     val isShowing: Boolean get() = root != null || flutterConfirmationOpen
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+
+    fun showDetectionFeedback(message: String) {
+        mainHandler.post {
+            feedbackView?.let { view ->
+                runCatching { feedbackWm?.removeView(view) }
+            }
+            feedbackView = null
+
+            val view = TextView(this).apply {
+                text = message
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    setColor(Color.argb(220, 42, 46, 39))
+                    cornerRadius = dp(18).toFloat()
+                }
+                elevation = dp(8).toFloat()
+            }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = dp(92)
+            }
+            val manager = getSystemService(WINDOW_SERVICE) as WindowManager
+            val shown = runCatching {
+                manager.addView(view, params)
+                feedbackView = view
+                feedbackWm = manager
+            }.isSuccess
+            if (!shown) {
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                return@post
+            }
+            mainHandler.postDelayed({
+                if (feedbackView === view) {
+                    runCatching { manager.removeView(view) }
+                    feedbackView = null
+                }
+            }, DETECTION_FEEDBACK_DURATION_MS)
+        }
+    }
 
     fun offer(candidate: PaymentCandidate): Boolean {
         val requestedAt = SystemClock.elapsedRealtime()
@@ -193,6 +251,14 @@ class AutoBillOverlayService : Service() {
         reviewUi = null
     }
 
+    private fun removeFeedbackView() {
+        feedbackView?.let {
+            runCatching { feedbackWm?.removeView(it) }
+        }
+        feedbackView = null
+        feedbackWm = null
+    }
+
     private fun openConfirmation(candidate: PaymentCandidate): Boolean {
         if (flutterConfirmationOpen && AutoBookkeepingConfirmActivity.instance != null) return true
         AutoBookkeepingLogStore.record(this, "confirm_open_requested", "warming Flutter confirmation engine")
@@ -267,6 +333,7 @@ class AutoBillOverlayService : Service() {
         var instance: AutoBillOverlayService? = null
         private const val TAG = "AutoBookkeeping"
         private const val FLUTTER_HOST_RESTART_DELAY_MS = 300L
+        private const val DETECTION_FEEDBACK_DURATION_MS = 1800L
     }
 
     override fun onCreate() {
@@ -304,6 +371,7 @@ class AutoBillOverlayService : Service() {
 
     override fun onDestroy() {
         removeNativeView()
+        removeFeedbackView()
         mainHandler.removeCallbacksAndMessages(null)
         instance = null
         AutoBookkeepingDiagnostics.foregroundRunning = false
@@ -312,6 +380,9 @@ class AutoBillOverlayService : Service() {
         AutoBookkeepingNotificationController.cancelStatus(this)
         super.onDestroy()
     }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     override fun onStartCommand(
         intent: Intent?,
