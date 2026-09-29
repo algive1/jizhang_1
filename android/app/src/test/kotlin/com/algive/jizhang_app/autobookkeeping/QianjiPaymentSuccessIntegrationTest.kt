@@ -40,6 +40,19 @@ class QianjiPaymentSuccessIntegrationTest {
     }
 
     @Test
+    fun matchedPaymentPageIsReportedEvenWhenNoCandidateCanBeBuilt() {
+        val result = detector.inspect(
+            packageName = "com.eg.android.AlipayGphone",
+            nodes = labels("支付成功", "完成"),
+            timestamp = 1_800_000_000_000L,
+        )
+
+        assertEquals(true, result.matchedPage)
+        assertEquals("AlipayPaySuccess", result.pageType)
+        assertEquals(null, result.candidate)
+    }
+
+    @Test
     fun sevenSupportedAppsReachCandidateFromPaymentOrBillSuccessPage() {
         val cases = listOf(
             Case(
@@ -105,6 +118,8 @@ class QianjiPaymentSuccessIntegrationTest {
                 activityClassName = case.activityClassName,
             )
             assertNotNull("${case.pageType}: ${result.rejectionReason}", result.candidate)
+            assertEquals(true, result.matchedPage)
+            assertEquals(case.pageType, result.pageType)
             assertEquals("QIANJI_${case.pageType}", result.candidate?.scene?.scene)
         }
     }
