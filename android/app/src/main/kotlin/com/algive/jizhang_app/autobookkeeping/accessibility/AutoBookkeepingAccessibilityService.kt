@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
@@ -43,6 +44,8 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var lastDebugAt = 0L
     private var lastEventLogAt = 0L
     private var lastRejectedSnapshotAt = 0L
+    private var lastFeedbackAt = 0L
+    private var lastFeedbackKey: String? = null
     private var lastPaymentActivityAt = 0L
     private var lastActivityPackage: String? = null
     private var lastActivityClassName: String? = null
@@ -255,6 +258,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         absentSince = 0
         val candidate = detected.first
         val windowId = detected.second
+        val matchedPageType = detected.third
         debug("scan windows=$visibleWindowCount candidate=true")
         AutoBookkeepingLogStore.recordDetailed(
             this,
@@ -265,6 +269,10 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         AutoBookkeepingLogStore.record(this, "candidate_detected", "payment success candidate")
         if (identity == lastPage && windowId == lastWindow) {
             AutoBookkeepingLogStore.record(this, "deduplicated", "same page and fingerprint")
+            notifyDetectionFeedback(
+                key = "same:$identity",
+                message = "本页面已经记录过了",
+            )
             return
         }
         val enqueueDecision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
@@ -275,6 +283,17 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         )
         if (enqueueDecision != PendingEnqueueDecision.ACCEPTED) {
             AutoBookkeepingLogStore.record(this, "deduplicated", "pending store: $enqueueDecision")
+            when (enqueueDecision) {
+                PendingEnqueueDecision.DUPLICATE -> notifyDetectionFeedback(
+                    key = "duplicate:$identity",
+                    message = "本页面已经记录过了",
+                )
+                PendingEnqueueDecision.BUSY -> notifyDetectionFeedback(
+                    key = "busy:" + matchedPageType.orEmpty(),
+                    message = "已命中页面 · 已有一笔待确认记录",
+                )
+                PendingEnqueueDecision.ACCEPTED -> Unit
+            }
             if (enqueueDecision == PendingEnqueueDecision.DUPLICATE && AutoBillOverlayService.instance?.isShowing != true) {
                 AutoBookkeepingPendingStore.readCandidate(this)?.let { pending ->
                     offerCandidate(pending, identity, windowId)
@@ -282,6 +301,15 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
             }
             return
         }
+
+        notifyDetectionFeedback(
+            key = "accepted:$identity",
+            message = if (matchedPageType.isNullOrBlank()) {
+                "已识别到交易 · 等待确认"
+            } else {
+                "已命中页面 · 已识别到交易"
+            },
+        )
 
         if (AutoBookkeepingSettings.screenshotEnabled(this)) {
             val fingerprint = BillFingerprint.of(candidate)
@@ -400,7 +428,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
     private var paymentActivity = false
 
     @Suppress("DEPRECATION")
-    private fun detectCandidateFromVisibleWindows(): Pair<com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate, Int>? {
+    private fun detectCandidateFromVisibleWindows(): Triple<com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate, Int, String?>? {
         val roots = mutableListOf<Pair<Int, AccessibilityNodeInfo>>()
         rootInActiveWindow?.let { roots.add(it.windowId to it) }
         val interactiveWindows = runCatching { windows }.getOrDefault(emptyList())
@@ -437,6 +465,12 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                     activityClassName = activityClassName,
                 )
                 if (result.candidate == null) {
+                    if (result.matchedPage) {
+                        notifyDetectionFeedback(
+                            key = "matched:" + result.pageType + ":" + result.rejectionReason,
+                            message = "已命中页面 · 未识别到可记账交易",
+                        )
+                    }
                     val now = System.currentTimeMillis()
                     if (now - lastRejectedSnapshotAt >= REJECTED_SNAPSHOT_INTERVAL_MS) {
                         lastRejectedSnapshotAt = now
@@ -454,12 +488,32 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
                     )
                     null
                 } else {
-                    result.candidate to windowId
+                    Triple(result.candidate, windowId, result.pageType)
                 }
             }
         } finally {
             roots.forEach { (_, root) -> root.recycle() }
         }
+    }
+
+    private fun notifyDetectionFeedback(key: String, message: String) {
+        val now = System.currentTimeMillis()
+        if (key == lastFeedbackKey && now - lastFeedbackAt < DETECTION_FEEDBACK_DEDUP_MS) {
+            return
+        }
+        lastFeedbackKey = key
+        lastFeedbackAt = now
+        val overlay = AutoBillOverlayService.instance
+        if (overlay != null) {
+            overlay.showDetectionFeedback(message)
+        } else {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+        AutoBookkeepingLogStore.recordDetailed(
+            this,
+            "page_match_feedback",
+            "key=$key message=$message",
+        )
     }
 
     private fun retryScanIfNeeded() {
@@ -528,6 +582,7 @@ class AutoBookkeepingAccessibilityService : AccessibilityService() {
         private const val ROOT_RETRY_DELAY_MS = 120L
         private const val EVENT_LOG_INTERVAL_MS = 500L
         private const val REJECTED_SNAPSHOT_INTERVAL_MS = 1_000L
+        private const val DETECTION_FEEDBACK_DEDUP_MS = 1_500L
         private const val MAX_ROOT_RETRIES = 10
 
         /** How many 200 ms frames to wait for the overlay before falling back. */
