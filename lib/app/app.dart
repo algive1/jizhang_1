@@ -419,7 +419,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         return MaterialApp(
           title: '好好记账',
           color: Colors.transparent,
-          theme: AppTheme.light(),
+          theme: AppTheme.light().copyWith(
+            scaffoldBackgroundColor: Colors.transparent,
+            canvasColor: Colors.transparent,
+          ),
           home: const Scaffold(
             backgroundColor: Colors.transparent,
             body: SafeArea(
@@ -449,7 +452,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         return MaterialApp(
           title: '好好记账',
           color: Colors.transparent,
-          theme: AppTheme.light(),
+          theme: AppTheme.light().copyWith(
+            scaffoldBackgroundColor: Colors.transparent,
+            canvasColor: Colors.transparent,
+          ),
           home: Scaffold(
             backgroundColor: Colors.transparent,
             body: SafeArea(
@@ -556,8 +562,18 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     return MaterialApp.router(
       title: '好好记账',
       color: overlayHost ? Colors.transparent : null,
-      theme: AppTheme.light(appearance),
-      darkTheme: AppTheme.dark(appearance),
+      theme: overlayHost
+          ? AppTheme.light(appearance).copyWith(
+              scaffoldBackgroundColor: Colors.transparent,
+              canvasColor: Colors.transparent,
+            )
+          : AppTheme.light(appearance),
+      darkTheme: overlayHost
+          ? AppTheme.dark(appearance).copyWith(
+              scaffoldBackgroundColor: Colors.transparent,
+              canvasColor: Colors.transparent,
+            )
+          : AppTheme.dark(appearance),
       themeMode: brightnessPreference == AppBrightnessPreference.dark
           ? ThemeMode.dark
           : ThemeMode.light,

@@ -21,6 +21,8 @@ import com.algive.jizhang_app.autobookkeeping.rules.PaymentRule
 data class PaymentDetectionResult(
     val candidate: PaymentCandidate?,
     val rejectionReason: String?,
+    val matchedPage: Boolean = false,
+    val pageType: String? = null,
 )
 
 class PaymentSceneDetector(
@@ -101,9 +103,11 @@ class PaymentSceneDetector(
         }
         if (qianjiResult?.blocksLegacyFallback == true) {
             return PaymentDetectionResult(
-                qianjiResult.candidate,
-                qianjiResult.rejectionReason
+                candidate = qianjiResult.candidate,
+                rejectionReason = qianjiResult.rejectionReason
                     ?: if (qianjiResult.candidate == null) "QIANJI_PAGE_REJECTED" else null,
+                matchedPage = qianjiResult.matchedPage,
+                pageType = qianjiResult.pageType,
             )
         }
 

@@ -1,6 +1,7 @@
 package com.algive.jizhang_app.autobookkeeping
 
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -28,7 +29,9 @@ class AutoBookkeepingConfirmActivity : MainActivity() {
         instance = this
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.setFormat(PixelFormat.TRANSLUCENT)
         window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.decorView.setBackgroundColor(Color.TRANSPARENT)
         window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
