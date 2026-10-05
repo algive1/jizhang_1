@@ -1,4 +1,6 @@
 import { registerAssistantPolicy } from './assistant_policy.js';
+import { registerConsole } from './console/index.js';
+import { assertUserEnabled } from './console/auth.js';
 import { registerInsightRoutes } from './insights.js';
 import Fastify from 'fastify';
 import { registerMembershipCatalog } from './membership_catalog.js';
@@ -71,9 +73,13 @@ export async function createApp(
   const authenticate = (header:string|undefined) => {
     check(header?.startsWith('Bearer '),'请先登录',401);
     const row=store.db.prepare('SELECT u.id,u.username,u.display_name AS displayName FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').get(hashToken(header!.slice(7)),store.now()) as AuthUser|undefined;
-    check(row,'登录已失效，请重新登录',401);return row;
+    check(row,'登录已失效，请重新登录',401);
+    assertUserEnabled(store,row.id);
+    store.db.prepare('UPDATE sessions SET last_seen_at=? WHERE token_hash=? AND last_seen_at<?').run(store.now(),hashToken(header!.slice(7)),store.now()-60);
+    return row;
   };
   const session=(user:AuthUser,deviceName?:string)=>{
+    assertUserEnabled(store,user.id);
     const token=randomBytes(32).toString('base64url');
     const tokenHash=hashToken(token);
     const expiresAt=store.now()+30*86400;
@@ -84,7 +90,7 @@ export async function createApp(
     ).run(tokenHash,user.id,expiresAt,sessionId,deviceName??'当前设备',now,now);
     return {user,token,expiresAt};
   };
-  registerAppUpdateRoutes(app);
+  registerAppUpdateRoutes(app,store);
   registerAdConfigRoutes(app);
   registerAnalyticsRoutes(app,store);
   registerMembershipCatalog(app,store);
@@ -101,6 +107,7 @@ export async function createApp(
   registerMarketDataRoutes(app, marketProvider);
   registerAssistantPolicy(app,store,authenticate,modelProvider);
   registerInsightRoutes(app,store,authenticate,modelProvider);
+  await registerConsole(app,store,authenticate);
   stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password,displayName,deviceName}=registration.parse(req.body);
