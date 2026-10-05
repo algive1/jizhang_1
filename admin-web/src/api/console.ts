@@ -1,5 +1,5 @@
 import { request } from './client';
-import type {Admin,Dashboard,Page,User,Release,ReleaseInput,DocumentKind,DocumentRow,Revision,Query,Role,Administrator,AccountingEvent} from './types';
+import type {Admin,Dashboard,Page,User,Release,ReleaseInput,DocumentKind,DocumentRow,Revision,Query,Role,Administrator,AccountingEvent,AIModel,AIModelInput,AIUsage} from './types';
 export const api={
   login:(username:string,password:string)=>request<{token:string;expiresAt:number}>('/auth/login',{method:'POST',body:{username,password}}),
   me:()=>request<Admin>('/auth/me'),logout:()=>request('/auth/logout',{method:'POST'}),
@@ -19,6 +19,10 @@ export const api={
   createAdministrator:(body:{username:string;password:string;roleId:string})=>request('/administrators',{method:'POST',body}),
   updateAdministrator:(id:string,enabled:boolean,roleId:string)=>request(`/administrators/${id}`,{method:'PATCH',body:{enabled,roleId}}),
   events:(query:Query)=>request<Page<AccountingEvent>>('/events',{query}),
+  models:(query:Query)=>request<Page<AIModel>>('/ai/models',{query}),
+  saveModel:(id:string|undefined,body:AIModelInput)=>request(id?`/ai/models/${id}`:'/ai/models',{method:id?'PUT':'POST',body}),
+  aiUsage:(period:string)=>request<AIUsage>('/ai/usage',{query:{period,days:30}}),
+  aiCalls:(query:Query)=>request<Page<{id:string;feature:string;model:string;status:string;inputTokens:number|null;outputTokens:number|null;durationMs:number;costMicroUsd:number|null;createdAt:number}>>('/ai/calls',{query}),
   trace:(userId:string,traceId:string)=>request<{events:AccountingEvent[];observedStages:string[];integration:string}>(`/events/trace/${encodeURIComponent(userId)}/${encodeURIComponent(traceId)}`),
   list:<T>(path:string,query:Query)=>request<Page<T>>(path,{query}),read:<T>(path:string,query?:Query)=>request<T>(path,{query}),
 };

@@ -12,6 +12,8 @@ export const router=createRouter({history:createWebHistory(),routes:[
     {path:'administrators',component:()=>import('./pages/Administrators.vue'),meta:{permission:'system:admin'}},
     {path:'events/:type?',component:()=>import('./pages/Events.vue'),meta:{permission:'auto-accounting:event:list'}},
     {path:'trace/:userId/:traceId',component:()=>import('./pages/EventDetail.vue'),meta:{permission:'auto-accounting:event:detail'}},
+    {path:'models',component:()=>import('./pages/Models.vue'),meta:{permission:'ai:model:view'}},
+    {path:'ai-usage',component:()=>import('./pages/AIUsage.vue'),meta:{permission:'ai:usage:view'}},
     {path:':pathMatch(.*)*',component:()=>import('./pages/ResourcePage.vue')},
   ]},
 ]});

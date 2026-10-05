@@ -1,6 +1,7 @@
 import { registerAssistantPolicy } from './assistant_policy.js';
 import { registerConsole } from './console/index.js';
 import { assertUserEnabled } from './console/auth.js';
+import {ConsoleAIProvider,registerAIContext} from './console/ai.js';
 import { registerInsightRoutes } from './insights.js';
 import Fastify from 'fastify';
 import { registerMembershipCatalog } from './membership_catalog.js';
@@ -58,6 +59,8 @@ export async function createApp(
 ) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
+  const consoleModelProvider=new ConsoleAIProvider(store,modelProvider);
+  registerAIContext(app,store);
   let stopPushWorker = () => {};
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, body));
@@ -105,8 +108,8 @@ export async function createApp(
   registerAdminRoutes(app,store);
   registerOperationalRoutes(app,store);
   registerMarketDataRoutes(app, marketProvider);
-  registerAssistantPolicy(app,store,authenticate,modelProvider);
-  registerInsightRoutes(app,store,authenticate,modelProvider);
+  registerAssistantPolicy(app,store,authenticate,consoleModelProvider);
+  registerInsightRoutes(app,store,authenticate,consoleModelProvider);
   await registerConsole(app,store,authenticate);
   stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
@@ -227,6 +230,7 @@ export async function createApp(
       store.db.prepare('DELETE FROM console_events WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM console_devices WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM console_user_state WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM console_ai_calls WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_outbox WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_devices WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM announcement_reads WHERE user_id=?').run(user.id);

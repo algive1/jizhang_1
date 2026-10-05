@@ -20,7 +20,7 @@ export function registerDashboard(app:FastifyInstance,store:Store) {
         mau:count('SELECT COUNT(DISTINCT installation_id) AS n FROM analytics_events WHERE occurred_at>=? AND occurred_at<?',today-29*86400,today+86400),
         bookkeeping:count("SELECT COUNT(*) AS n FROM analytics_events WHERE event_name='bookkeeping_saved' AND occurred_at>=? AND occurred_at<?",today,today+86400),
         autoSaved:autoCounts.saved,autoSuccessRate:autoCounts.candidates?autoCounts.saved/autoCounts.candidates:null,
-        aiCalls:null,aiSuccessRate:null,backupSuccessRate:null,
+        aiCalls:count('SELECT COUNT(*) AS n FROM console_ai_calls WHERE created_at>=?',today),aiSuccessRate:null,backupSuccessRate:null,
         errors:count("SELECT COUNT(*) AS n FROM diagnostic_events WHERE level='error' AND created_at>=?",today)+count("SELECT COUNT(*) AS n FROM console_events WHERE status='failed' AND occurred_at>=? AND occurred_at<?",today*1000,(today+86400)*1000),
         latestVersion:(store.db.prepare("SELECT version_name AS version FROM console_releases WHERE platform='android' AND status='published' AND rollout=100 ORDER BY version_code DESC LIMIT 1").get() as {version:string}|undefined)?.version ?? null,
       },

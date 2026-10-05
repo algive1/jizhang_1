@@ -21,6 +21,8 @@ export function ensureConsoleSchema(store: Store) {
     CREATE INDEX IF NOT EXISTS console_events_package ON console_events(package_name,app_version,rule_version);
     CREATE INDEX IF NOT EXISTS console_events_time ON console_events(occurred_at);
     CREATE TABLE IF NOT EXISTS console_models(id TEXT PRIMARY KEY,name TEXT NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,endpoint TEXT NOT NULL,key_ref TEXT NOT NULL,input_price REAL NOT NULL,output_price REAL NOT NULL,max_tokens INTEGER NOT NULL,timeout_ms INTEGER NOT NULL,enabled INTEGER NOT NULL,priority INTEGER NOT NULL,fallback_id TEXT,updated_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS console_ai_calls(id TEXT PRIMARY KEY,user_id TEXT,feature TEXT NOT NULL,model TEXT NOT NULL,status TEXT NOT NULL,input_tokens INTEGER,output_tokens INTEGER,cost_microusd INTEGER,duration_ms INTEGER NOT NULL,created_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS console_ai_calls_time ON console_ai_calls(created_at,model,status);
     CREATE TABLE IF NOT EXISTS console_operations(id TEXT PRIMARY KEY,kind TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS console_operations_kind ON console_operations(kind,updated_at);
     CREATE TABLE IF NOT EXISTS console_migrations(version INTEGER PRIMARY KEY,applied_at INTEGER NOT NULL);

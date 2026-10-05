@@ -37,6 +37,7 @@ export function runRetention(store: Store) {
 
   if (policy.diagnosticDays > 0) {
     safeRun('consoleEvents','DELETE FROM console_events WHERE occurred_at<?',cutoff(now,policy.diagnosticDays)*1000);
+    safeRun('consoleAiCalls','DELETE FROM console_ai_calls WHERE created_at<?',cutoff(now,policy.diagnosticDays));
     safeRun(
       'diagnosticEvents',
       'DELETE FROM diagnostic_events WHERE occurred_at<?',

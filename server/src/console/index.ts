@@ -9,6 +9,7 @@ import { registerReleases } from './releases.js';
 import { getPublishedDocuments,registerDocuments } from './documents.js';
 import { pageQuery,paginate } from './query.js';
 import { registerEventManagement,registerEventIngestion } from './events.js';
+import {registerAIManagement} from './ai.js';
 
 export type Authenticate=(header:string|undefined)=>{id:string;username:string};
 export async function registerConsole(app:FastifyInstance,store:Store,authenticate:Authenticate) {
@@ -20,6 +21,7 @@ export async function registerConsole(app:FastifyInstance,store:Store,authentica
     registerAuth(consoleApp,store);registerUsers(consoleApp,store);registerDashboard(consoleApp,store);
     registerReleases(consoleApp,store);registerDocuments(consoleApp,store);
     registerEventManagement(consoleApp,store);
+    registerAIManagement(consoleApp,store);
     consoleApp.get('/audit',async request=>{
       authorize(store,request,'system:audit');const input=pageQuery.parse(request.query);
       return paginate(store,input,'SELECT l.id,a.username AS actor,l.action,l.target,l.created_at AS createdAt','FROM console_audit l LEFT JOIN console_admins a ON a.id=l.admin_id WHERE l.action LIKE ?',[`%${input.q}%`],'l.id DESC');
