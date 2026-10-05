@@ -10,6 +10,7 @@ export const permissionCatalog = {
   'app:version:publish': '发布版本', 'app:config:view': '查看配置', 'app:config:edit': '编辑配置',
   'app:config:publish': '发布配置', 'backup:status:view': '备份元数据', 'feedback:view': '查看反馈',
   'operations:view': '查看运营内容', 'operations:edit': '编辑运营内容',
+  'operations:publish': '发布公告', 'feedback:edit': '处理反馈状态',
   'system:admin': '管理员管理', 'system:role': '角色权限管理', 'system:audit': '审计日志',
 } as const;
 export type Permission = keyof typeof permissionCatalog;
@@ -24,6 +25,7 @@ export const menus = [
   { path: '/events/merges', title: '事件合并', group: '自动记账', permission: 'auto-accounting:event:list' },
   { path: '/events/failures', title: '失败案例', group: '自动记账', permission: 'auto-accounting:event:list' },
   { path: '/documents/rule', title: '识别与适配规则', group: '自动记账', permission: 'auto-accounting:rule:view' },
+  { path: '/diagnostics', title: '调试日志', group: '自动记账', permission: 'auto-accounting:event:list' },
   { path: '/models', title: '模型管理', group: 'AI 中心', permission: 'ai:model:view' },
   { path: '/documents/prompt', title: 'Prompt 管理', group: 'AI 中心', permission: 'ai:prompt:view' },
   { path: '/ai-usage', title: '用量与成本', group: 'AI 中心', permission: 'ai:usage:view' },
@@ -39,7 +41,7 @@ export const menus = [
 export const initialRoles: Array<{id:string;name:string;permissions:Permission[]}> = [
   { id:'super', name:'超级管理员', permissions: Object.keys(permissionCatalog).filter(p => p !== 'ledger:transaction:view-sensitive') as Permission[] },
   { id:'operations', name:'运营管理员', permissions:['dashboard:view','user:list','user:view','device:list','app:version:view','app:version:edit','app:config:view','operations:view','operations:edit','feedback:view'] },
-  { id:'support', name:'客服', permissions:['user:list','user:view','device:list','feedback:view','backup:status:view'] },
+  { id:'support', name:'客服', permissions:['user:list','user:view','device:list','feedback:view','feedback:edit','backup:status:view'] },
   { id:'developer', name:'开发人员', permissions:['dashboard:view','auto-accounting:event:list','auto-accounting:event:detail','auto-accounting:rule:view','auto-accounting:rule:edit','auto-accounting:rule:publish','app:config:view','device:list'] },
   { id:'analyst', name:'数据分析', permissions:['dashboard:view','transaction:statistics','ai:usage:view'] },
   { id:'ai', name:'AI 管理员', permissions:['ai:model:view','ai:model:edit','ai:prompt:view','ai:prompt:edit','ai:prompt:publish','ai:usage:view'] },

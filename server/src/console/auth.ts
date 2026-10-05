@@ -42,6 +42,8 @@ export function auditAction(store:Store,admin:Admin,action:string,target:string)
 }
 export async function bootstrapAdmin(store:Store) {
   for (const role of initialRoles) store.db.prepare('INSERT OR IGNORE INTO console_roles VALUES(?,?,?)').run(role.id,role.name,JSON.stringify(role.permissions));
+  // The protected super role follows the catalog; customized business roles remain untouched.
+  store.db.prepare('UPDATE console_roles SET permissions_json=? WHERE id=\'super\'').run(JSON.stringify(initialRoles[0]!.permissions));
   if (store.db.prepare('SELECT 1 FROM console_admins LIMIT 1').get()) return;
   if (!process.env.ADMIN_BOOTSTRAP_PASSWORD) return;
   const input = credentials.parse({username:process.env.ADMIN_BOOTSTRAP_USERNAME ?? 'admin',password:process.env.ADMIN_BOOTSTRAP_PASSWORD});

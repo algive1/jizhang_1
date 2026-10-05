@@ -22,7 +22,8 @@ const releaseSchema=z.strictObject({platform:z.enum(['android','ios']),versionNa
 export type ReleaseRow={id:string;platform:string;version_name:string;version_code:number;minimum_version:string;download_url:string;changelog:string;rollout:number;status:string};
 export function publishedRelease(store:Store,platform:string,installationId?:string) {
   const rows=store.db.prepare("SELECT * FROM console_releases WHERE platform=? AND status='published' ORDER BY version_code DESC LIMIT 100").all(platform) as ReleaseRow[];
-  return rows.find(r=>inRollout(`${platform}:${r.id}`,installationId,r.rollout));
+  return rows.find(r=>inRollout(`${platform}:${r.id}`,installationId,r.rollout)) ??
+    store.db.prepare("SELECT * FROM console_releases WHERE platform=? AND status='published' AND rollout=100 ORDER BY version_code DESC LIMIT 1").get(platform) as ReleaseRow|undefined;
 }
 export function registerReleases(app:FastifyInstance,store:Store) {
   app.get('/releases',async request => {
@@ -49,8 +50,10 @@ export function registerReleases(app:FastifyInstance,store:Store) {
     const row=store.db.prepare('SELECT * FROM console_releases WHERE id=?').get(id) as ReleaseRow|undefined;check(row,'版本不存在',404);
     const previous=store.db.prepare("SELECT * FROM console_releases WHERE platform=? AND status='published' AND rollout=100 ORDER BY version_code DESC LIMIT 1").get(row.platform) as ReleaseRow|undefined;
     const percentage=rollout??row.rollout;
+    check(!(row.status==='published' && row.rollout===100 && percentage<100),'已全量发布的版本不可重新收窄灰度，请先下线',400);
+    if(status==='published' && percentage<100 && !previous)check(compareVersions(row.minimum_version,process.env[`APP_UPDATE_${row.platform.toUpperCase()}_MINIMUM_VERSION`]??'1.0.0')<=0,'灰度发布不能提高全局最低版本',400);
     if(status==='published' && previous && previous.id!==id) {
-      check(row.version_code>previous.version_code && compareVersions(row.version_name,previous.version_name)>=0,'发布版本必须高于当前全量版本；回滚请先下线新版本',409);
+      check(row.version_code>previous.version_code && compareVersions(row.version_name,previous.version_name)>0,'发布版本必须高于当前全量版本；回滚请先下线新版本',409);
       check(percentage===100 || compareVersions(row.minimum_version,previous.minimum_version)<=0,'灰度发布不能提高全局最低版本',400);
     }
     store.db.transaction(()=>{

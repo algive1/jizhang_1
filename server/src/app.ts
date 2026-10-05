@@ -167,6 +167,7 @@ export async function createApp(
     const row=store.db.prepare('SELECT id,username,password_hash,display_name AS displayName,recovery_key_hash FROM users WHERE username=?').get(username) as (AuthUser & {password_hash:string;recovery_key_hash:string|null})|undefined;
     const provided=hashRecoveryKey(recoveryKey);
     check(row?.recovery_key_hash && timingSafeEqual(Buffer.from(provided),Buffer.from(row.recovery_key_hash)),'账号或恢复密钥无效',401);
+    assertUserEnabled(store,row.id);
     const nextPassword=await passwordHash(newPassword);
     const nextRecoveryKey=randomBytes(24).toString('base64url');
     store.db.transaction(()=>{

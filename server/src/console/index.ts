@@ -10,6 +10,7 @@ import { getPublishedDocuments,registerDocuments } from './documents.js';
 import { pageQuery,paginate } from './query.js';
 import { registerEventManagement,registerEventIngestion } from './events.js';
 import {registerAIManagement} from './ai.js';
+import {registerOperations,registerPublicOperations} from './operations.js';
 
 export type Authenticate=(header:string|undefined)=>{id:string;username:string};
 export async function registerConsole(app:FastifyInstance,store:Store,authenticate:Authenticate) {
@@ -22,12 +23,14 @@ export async function registerConsole(app:FastifyInstance,store:Store,authentica
     registerReleases(consoleApp,store);registerDocuments(consoleApp,store);
     registerEventManagement(consoleApp,store);
     registerAIManagement(consoleApp,store);
+    registerOperations(consoleApp,store);
     consoleApp.get('/audit',async request=>{
       authorize(store,request,'system:audit');const input=pageQuery.parse(request.query);
       return paginate(store,input,'SELECT l.id,a.username AS actor,l.action,l.target,l.created_at AS createdAt','FROM console_audit l LEFT JOIN console_admins a ON a.id=l.admin_id WHERE l.action LIKE ?',[`%${input.q}%`],'l.id DESC');
     });
   },{prefix:'/api/v1/console'});
   registerEventIngestion(app,store,authenticate);
+  registerPublicOperations(app,store);
   const publicQuery=z.object({installationId:z.string().regex(/^[a-f0-9]{32}$/).optional()});
   app.get('/api/v1/app/config',async request=>{
     const {installationId}=publicQuery.parse(request.query);

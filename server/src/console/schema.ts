@@ -11,6 +11,9 @@ export function ensureConsoleSchema(store: Store) {
     CREATE TABLE IF NOT EXISTS console_user_state(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,disabled INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS console_devices(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,installation_id TEXT NOT NULL,platform TEXT NOT NULL,app_version TEXT NOT NULL,android_version TEXT,brand TEXT,model TEXT,auto_enabled INTEGER,backup_enabled INTEGER,last_seen_at INTEGER NOT NULL,PRIMARY KEY(user_id,installation_id));
     CREATE INDEX IF NOT EXISTS console_devices_seen ON console_devices(last_seen_at);
+    CREATE INDEX IF NOT EXISTS console_users_created ON users(created_at);
+    CREATE INDEX IF NOT EXISTS console_sessions_user_seen ON sessions(user_id,last_seen_at);
+    CREATE INDEX IF NOT EXISTS console_members_user ON members(user_id);
     CREATE TABLE IF NOT EXISTS console_releases(id TEXT PRIMARY KEY,platform TEXT NOT NULL,version_name TEXT NOT NULL,version_code INTEGER NOT NULL,minimum_version TEXT NOT NULL,download_url TEXT NOT NULL,changelog TEXT NOT NULL,rollout INTEGER NOT NULL DEFAULT 100,status TEXT NOT NULL DEFAULT 'draft',created_at INTEGER NOT NULL,published_at INTEGER,updated_by TEXT NOT NULL,UNIQUE(platform,version_code));
     CREATE INDEX IF NOT EXISTS console_releases_platform ON console_releases(platform,status,version_code DESC);
     CREATE TABLE IF NOT EXISTS console_documents(kind TEXT NOT NULL,key TEXT NOT NULL,version INTEGER NOT NULL,payload_json TEXT NOT NULL,note TEXT NOT NULL,created_by TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(kind,key,version));
@@ -28,4 +31,5 @@ export function ensureConsoleSchema(store: Store) {
     CREATE TABLE IF NOT EXISTS console_migrations(version INTEGER PRIMARY KEY,applied_at INTEGER NOT NULL);
   `);
   store.db.prepare('INSERT OR IGNORE INTO console_migrations VALUES(1,?)').run(store.now());
+  store.db.prepare('INSERT OR IGNORE INTO console_migrations VALUES(2,?)').run(store.now());
 }

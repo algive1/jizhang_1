@@ -1,5 +1,5 @@
 import { request } from './client';
-import type {Admin,Dashboard,Page,User,Release,ReleaseInput,DocumentKind,DocumentRow,Revision,Query,Role,Administrator,AccountingEvent,AIModel,AIModelInput,AIUsage} from './types';
+import type {Admin,Dashboard,Page,User,Release,ReleaseInput,DocumentKind,DocumentRow,Revision,Query,Role,Administrator,AccountingEvent,AIModel,AIModelInput,AIUsage,Operation,FeedbackDetail,LedgerStatistics,BackupSummary} from './types';
 export const api={
   login:(username:string,password:string)=>request<{token:string;expiresAt:number}>('/auth/login',{method:'POST',body:{username,password}}),
   me:()=>request<Admin>('/auth/me'),logout:()=>request('/auth/logout',{method:'POST'}),
@@ -23,6 +23,14 @@ export const api={
   saveModel:(id:string|undefined,body:AIModelInput)=>request(id?`/ai/models/${id}`:'/ai/models',{method:id?'PUT':'POST',body}),
   aiUsage:(period:string)=>request<AIUsage>('/ai/usage',{query:{period,days:30}}),
   aiCalls:(query:Query)=>request<Page<{id:string;feature:string;model:string;status:string;inputTokens:number|null;outputTokens:number|null;durationMs:number;costMicroUsd:number|null;createdAt:number}>>('/ai/calls',{query}),
+  ledger:()=>request<LedgerStatistics>('/ledger/statistics'),
+  backupSummary:()=>request<BackupSummary>('/backups/summary'),
+  operations:(query:Query)=>request<Page<Operation>>('/operations',{query}),
+  saveOperation:(id:string|undefined,body:Omit<Operation,'id'|'updatedAt'|'enabled'>&{enabled:boolean})=>request(id?`/operations/${id}`:'/operations',{method:id?'PUT':'POST',body}),
+  announcements:(query:Query)=>request<Page<{id:string;title:string;body:string;publishedAt:number;expiresAt:number|null}>>('/announcements',{query}),
+  publishAnnouncement:(title:string,body:string)=>request('/announcements',{method:'POST',body:{title,body}}),
+  feedbackDetail:(id:string,query:Query)=>request<FeedbackDetail>(`/feedback/${id}`,{query}),
+  feedbackStatus:(id:string,status:string)=>request(`/feedback/${id}/status`,{method:'PATCH',body:{status}}),
   trace:(userId:string,traceId:string)=>request<{events:AccountingEvent[];observedStages:string[];integration:string}>(`/events/trace/${encodeURIComponent(userId)}/${encodeURIComponent(traceId)}`),
   list:<T>(path:string,query:Query)=>request<Page<T>>(path,{query}),read:<T>(path:string,query?:Query)=>request<T>(path,{query}),
 };

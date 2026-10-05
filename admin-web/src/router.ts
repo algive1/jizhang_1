@@ -14,6 +14,9 @@ export const router=createRouter({history:createWebHistory(),routes:[
     {path:'trace/:userId/:traceId',component:()=>import('./pages/EventDetail.vue'),meta:{permission:'auto-accounting:event:detail'}},
     {path:'models',component:()=>import('./pages/Models.vue'),meta:{permission:'ai:model:view'}},
     {path:'ai-usage',component:()=>import('./pages/AIUsage.vue'),meta:{permission:'ai:usage:view'}},
+    {path:'ledger',component:()=>import('./pages/Ledger.vue'),meta:{permission:'transaction:statistics'}},
+    {path:'operations',component:()=>import('./pages/Operations.vue'),meta:{permission:'operations:view'}},
+    {path:'feedback/:id',component:()=>import('./pages/FeedbackDetail.vue'),meta:{permission:'feedback:view'}},
     {path:':pathMatch(.*)*',component:()=>import('./pages/ResourcePage.vue')},
   ]},
 ]});
