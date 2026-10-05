@@ -36,6 +36,7 @@ export function runRetention(store: Store) {
   };
 
   if (policy.diagnosticDays > 0) {
+    safeRun('consoleEvents','DELETE FROM console_events WHERE occurred_at<?',cutoff(now,policy.diagnosticDays)*1000);
     safeRun(
       'diagnosticEvents',
       'DELETE FROM diagnostic_events WHERE occurred_at<?',
@@ -57,6 +58,8 @@ export function runRetention(store: Store) {
     );
   }
   if (policy.adminAuditDays > 0) {
+    safeRun('consoleAudit','DELETE FROM console_audit WHERE created_at<?',cutoff(now,policy.adminAuditDays));
+    safeRun('consoleLogins','DELETE FROM console_logins WHERE created_at<?',cutoff(now,policy.adminAuditDays));
     safeRun(
       'adminAudit',
       'DELETE FROM admin_audit_log WHERE created_at<?',

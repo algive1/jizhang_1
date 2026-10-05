@@ -10,6 +10,8 @@ export const router=createRouter({history:createWebHistory(),routes:[
     {path:'documents/:kind',component:()=>import('./pages/Documents.vue')},
     {path:'roles',component:()=>import('./pages/Roles.vue'),meta:{permission:'system:role'}},
     {path:'administrators',component:()=>import('./pages/Administrators.vue'),meta:{permission:'system:admin'}},
+    {path:'events/:type?',component:()=>import('./pages/Events.vue'),meta:{permission:'auto-accounting:event:list'}},
+    {path:'trace/:userId/:traceId',component:()=>import('./pages/EventDetail.vue'),meta:{permission:'auto-accounting:event:detail'}},
     {path:':pathMatch(.*)*',component:()=>import('./pages/ResourcePage.vue')},
   ]},
 ]});

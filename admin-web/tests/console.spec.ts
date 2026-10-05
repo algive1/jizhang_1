@@ -17,3 +17,11 @@ test('support role sees only granted menus and direct API refuses publishing',as
   await expect(page.getByRole('link',{name:'版本与灰度发布',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'禁用',exact:true})).toHaveCount(0);
   const status=await page.evaluate(async()=>{const token=sessionStorage.getItem('haohao-console-session');return (await fetch('/api/v1/console/releases',{headers:{Authorization:`Bearer ${token}`}})).status;});expect(status).toBe(403);
 });
+test('P1 failure trace and versioned rule editing use real APIs',async({page})=>{
+  await page.goto('/login');await page.getByLabel('管理员账号',{exact:true}).fill('browser_admin');await page.getByLabel('密码',{exact:true}).fill('browser-test-password-2026');await page.getByRole('button',{name:'登录',exact:true}).click();
+  await page.getByRole('link',{name:'失败案例',exact:true}).click();await expect(page.getByRole('cell',{name:'database_write_failed',exact:true})).toBeVisible();await page.getByRole('link',{name:'时间轴',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'自动记账事件时间轴'})).toBeVisible();await expect(page.getByRole('list').getByText('通知与页面匹配',{exact:true})).toBeVisible();await expect(page.getByText('database_write_failed',{exact:true})).toBeVisible();
+  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'test-results/p1-timeline-desktop.png',fullPage:true});
+  await page.getByRole('link',{name:'识别与适配规则',exact:true}).click();await page.getByRole('button',{name:'新建修订'}).click();await page.getByLabel('标识',{exact:true}).fill('browser.rule');await page.getByLabel('修改备注',{exact:true}).fill('事件规则测试');
+  await page.getByLabel('配置内容',{exact:true}).fill(JSON.stringify({packageName:'com.test.payment',pageIdentifier:'success',activity:'',nodeFeatures:[],textFeatures:['支付成功'],notificationTitlePattern:'',notificationBodyPattern:'',amountPattern:'[0-9]+',merchantPattern:'',priority:100,minAppVersion:'1.0.0',maxAppVersion:null,enabled:true}));await page.getByRole('button',{name:'保存新修订'}).click();await expect(page.getByRole('cell',{name:'browser.rule',exact:true})).toBeVisible();
+});

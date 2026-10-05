@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends object">
-import { computed,ref,watch } from 'vue';
+import { computed,ref,watch,onScopeDispose } from 'vue';
 import type { TableColumnData } from '@arco-design/web-vue';
 import { IconRefresh,IconDownload,IconSettings } from '@arco-design/web-vue/es/icon';
 import type {Page,Query} from '../api/types';
@@ -8,7 +8,9 @@ const props=defineProps<{columns:TableColumnData[];load:(query:Query)=>Promise<P
 const query=ref({page:1,pageSize:20,q:'',sort:'createdAt',order:'desc'});
 const {data,loading,error,refresh}=useResource(()=>props.load({...query.value,...props.filters}));
 const visibleKeys=ref(props.columns.map(c=>String(c.dataIndex??c.slotName)));
-const columns=computed(()=>props.columns.filter(c=>visibleKeys.value.includes(String(c.dataIndex??c.slotName))));
+const compact=ref(window.innerWidth<760);
+const resize=()=>{compact.value=window.innerWidth<760;};window.addEventListener('resize',resize);onScopeDispose(()=>window.removeEventListener('resize',resize));
+const columns=computed(()=>props.columns.filter(c=>visibleKeys.value.includes(String(c.dataIndex??c.slotName))).map(c=>compact.value?{...c,fixed:undefined}:c));
 watch(()=>props.filters,()=>{query.value.page=1;void refresh();},{deep:true});
 function search(){query.value.page=1;void refresh();}
 function value(row:T,key:string){return (row as Record<string,unknown>)[key];}
