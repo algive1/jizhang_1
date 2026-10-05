@@ -1,0 +1,24 @@
+import { request } from './client';
+import type {Admin,Dashboard,Page,User,Release,ReleaseInput,DocumentKind,DocumentRow,Revision,Query,Role,Administrator,AccountingEvent} from './types';
+export const api={
+  login:(username:string,password:string)=>request<{token:string;expiresAt:number}>('/auth/login',{method:'POST',body:{username,password}}),
+  me:()=>request<Admin>('/auth/me'),logout:()=>request('/auth/logout',{method:'POST'}),
+  dashboard:(days:number)=>request<Dashboard>('/dashboard',{query:{days}}),
+  users:(query:Query)=>request<Page<User>>('/users',{query}),user:(id:string)=>request<{user:User;counts:{books:number}}>(`/users/${encodeURIComponent(id)}`),
+  setUserStatus:(id:string,disabled:boolean)=>request(`/users/${encodeURIComponent(id)}/status`,{method:'PATCH',body:{disabled}}),
+  releases:(query:Query)=>request<Page<Release>>('/releases',{query}),createRelease:(body:ReleaseInput)=>request('/releases',{method:'POST',body}),
+  releaseState:(id:string,status:'published'|'offline',rollout?:number)=>request(`/releases/${id}/state`,{method:'PATCH',body:{status,rollout}}),
+  documents:(kind:DocumentKind,query:Query)=>request<Page<DocumentRow>>(`/documents/${kind}`,{query}),
+  revisions:(kind:DocumentKind,key:string,query:Query)=>request<Page<Revision>>(`/documents/${kind}/${encodeURIComponent(key)}/history`,{query}),
+  saveDocument:(kind:DocumentKind,key:string,baseVersion:number,payload:unknown,note:string)=>request(`/documents/${kind}`,{method:'POST',body:{key,baseVersion,payload,note}}),
+  publishDocument:(kind:DocumentKind,key:string,version:number,rollout:number)=>request(`/documents/${kind}/${encodeURIComponent(key)}/publish`,{method:'POST',body:{version,rollout}}),
+  offlineDocument:(kind:DocumentKind,key:string)=>request(`/documents/${kind}/${encodeURIComponent(key)}/publication`,{method:'DELETE'}),
+  roles:()=>request<Role[]>('/roles'),permissions:()=>request<Record<string,string>>('/permissions'),
+  updateRole:(role:Role)=>request(`/roles/${role.id}`,{method:'PUT',body:{name:role.name,permissions:role.permissions}}),
+  administrators:(query:Query)=>request<Page<Administrator>>('/administrators',{query}),
+  createAdministrator:(body:{username:string;password:string;roleId:string})=>request('/administrators',{method:'POST',body}),
+  updateAdministrator:(id:string,enabled:boolean,roleId:string)=>request(`/administrators/${id}`,{method:'PATCH',body:{enabled,roleId}}),
+  events:(query:Query)=>request<Page<AccountingEvent>>('/events',{query}),
+  trace:(userId:string,traceId:string)=>request<{events:AccountingEvent[];observedStages:string[];integration:string}>(`/events/trace/${encodeURIComponent(userId)}/${encodeURIComponent(traceId)}`),
+  list:<T>(path:string,query:Query)=>request<Page<T>>(path,{query}),read:<T>(path:string,query?:Query)=>request<T>(path,{query}),
+};
