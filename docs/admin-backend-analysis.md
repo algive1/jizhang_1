@@ -84,3 +84,7 @@ TODO：Flutter/Kotlin 统一 trace、用户主动同意诊断、离线队列/重
 新增 `admin-web/`、`server/src/console/`、`server/test/console*.test.ts`、本文与部署说明。必要修改限于 `server/src/app.ts` 注册新路由/用户禁用边界，`app_update.ts` 数据库策略回退，AI usage adapter 如接入则单独验证。保留正在修改的 `admin.ts`、`personal_cloud.ts`、会员文件、Flutter UI、Kotlin、Drift schema。
 
 每阶段依次执行后端 typecheck/build/test、前端 lint/typecheck/build、API 集成与权限测试、浏览器操作测试。只提交本任务明确文件，不使用 `git add -A`。服务运行时库与所有密钥不入 Git。
+
+## 实施后更新
+
+以上业务分析记录开发前状态。本轮已经新增 `ConsoleAIProvider`，后台启用的模型可以路由到真实 Endpoint 并记录 usage 与估算成本；原有 legacy provider 的 Token 仍未知。P0 / P1 与 AI、辅助运营管理代码已经落地。当前可用功能、APP 尚未接入的部分及验证命令详见 [交付说明](admin-console-delivery.md) 和 [启动说明](../admin-web/README.md)。
