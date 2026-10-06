@@ -1,90 +1,452 @@
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { randomUUID } from 'node:crypto';
-import { createApp } from '../src/app.js';
-import { encodePassword } from '../src/console/auth.js';
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { randomUUID } from "node:crypto";
+import { createApp } from "../src/app.js";
+import { encodePassword } from "../src/console/auth.js";
 
 async function fixture() {
-  const value=await createApp(':memory:');
-  const id=randomUUID();
-  value.store.db.prepare('INSERT INTO console_admins(id,username,password_hash,role_id,created_at) VALUES(?,?,?,?,?)').run(id,'console_test',await encodePassword('test-console-password-2026'),'super',value.store.now());
-  const result=await value.app.inject({method:'POST',url:'/api/v1/console/auth/login',payload:{username:'console_test',password:'test-console-password-2026'}});
-  assert.equal(result.statusCode,200);
-  return {...value,id,headers:{authorization:`Bearer ${result.json().data.token}`}};
+  const value = await createApp(":memory:");
+  const id = randomUUID();
+  value.store.db
+    .prepare(
+      "INSERT INTO console_admins(id,username,password_hash,role_id,created_at) VALUES(?,?,?,?,?)",
+    )
+    .run(
+      id,
+      "console_test",
+      await encodePassword("test-console-password-2026"),
+      "super",
+      value.store.now(),
+    );
+  const result = await value.app.inject({
+    method: "POST",
+    url: "/api/v1/console/auth/login",
+    payload: {
+      username: "console_test",
+      password: "test-console-password-2026",
+    },
+  });
+  assert.equal(result.statusCode, 200);
+  return {
+    ...value,
+    id,
+    headers: { authorization: `Bearer ${result.json().data.token}` },
+  };
 }
-test('console authentication separates APP and legacy tokens, hashes sessions, and logs out',async t=>{
-  const {app,store,headers}=await fixture();t.after(()=>app.close());
-  assert.equal((await app.inject({url:'/api/v1/console/dashboard'})).statusCode,401);
-  assert.equal((await app.inject({url:'/api/v1/console/dashboard',headers:{'x-admin-token':'old-token'}})).statusCode,401);
-  assert.equal((await app.inject({url:'/api/v1/auth/me',headers})).statusCode,401);
-  const me=(await app.inject({url:'/api/v1/console/auth/me',headers})).json().data;
-  assert.equal(me.permissions.includes('ledger:transaction:view-sensitive'),false);
-  assert.ok(me.menus.some((m:{path:string})=>m.path==='/users'));
-  assert.ok(!JSON.stringify(me).includes('password'));
-  const row=store.db.prepare('SELECT token_hash FROM console_sessions').get() as {token_hash:string};
-  assert.notEqual(row.token_hash,headers.authorization.slice(7));assert.equal(row.token_hash.length,64);
-  assert.equal((await app.inject({method:'POST',url:'/api/v1/console/auth/logout',headers})).statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/console/auth/me',headers})).statusCode,401);
+test("console authentication separates APP and legacy tokens, hashes sessions, and logs out", async (t) => {
+  const { app, store, headers } = await fixture();
+  t.after(() => app.close());
+  assert.equal(
+    (await app.inject({ url: "/api/v1/console/dashboard" })).statusCode,
+    401,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/console/dashboard",
+        headers: { "x-admin-token": "old-token" },
+      })
+    ).statusCode,
+    401,
+  );
+  assert.equal(
+    (await app.inject({ url: "/api/v1/auth/me", headers })).statusCode,
+    401,
+  );
+  const me = (
+    await app.inject({ url: "/api/v1/console/auth/me", headers })
+  ).json().data;
+  assert.equal(
+    me.permissions.includes("ledger:transaction:view-sensitive"),
+    false,
+  );
+  assert.ok(me.menus.some((m: { path: string }) => m.path === "/users"));
+  assert.ok(!JSON.stringify(me).includes("password"));
+  const row = store.db
+    .prepare("SELECT token_hash FROM console_sessions")
+    .get() as { token_hash: string };
+  assert.notEqual(row.token_hash, headers.authorization.slice(7));
+  assert.equal(row.token_hash.length, 64);
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/console/auth/logout",
+        headers,
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (await app.inject({ url: "/api/v1/console/auth/me", headers })).statusCode,
+    401,
+  );
 });
-test('user paging/filtering, metadata privacy, and disabling blocks old and new sessions',async t=>{
-  const {app,headers}=await fixture();t.after(()=>app.close());
-  const registered=(await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username:'managed_user',password:'test-account-password',displayName:'测试用户'}})).json();
-  const userHeaders={authorization:`Bearer ${registered.token}`};
-  const heartbeat=await app.inject({method:'POST',url:'/api/v1/app/heartbeat',headers:userHeaders,payload:{installationId:'a'.repeat(32),platform:'android',appVersion:'1.2.0',brand:'Test',autoEnabled:true,backupEnabled:false}});
-  assert.equal(heartbeat.statusCode,200);
-  const users=await app.inject({url:'/api/v1/console/users?q=managed&sort=lastSeenAt&pageSize=1',headers});assert.equal(users.statusCode,200);
-  const page=users.json().data;assert.equal(page.total,1);assert.equal(page.items[0].autoEnabled,1);assert.equal(page.items[0].backupEnabled,0);
-  assert.equal((await app.inject({url:'/api/v1/console/users?member=no',headers})).statusCode,200);
-  const detail=await app.inject({url:`/api/v1/console/users/${registered.user.id}`,headers});assert.equal(detail.statusCode,200);
-  assert.ok(!detail.body.includes('password_hash'));assert.ok(!detail.body.includes(registered.token));
-  assert.equal((await app.inject({url:'/api/v1/console/users?pageSize=10000',headers})).statusCode,400);
-  const url=`/api/v1/console/users/${registered.user.id}/status`;
-  assert.equal((await app.inject({method:'PATCH',url,headers,payload:{disabled:true}})).statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/auth/me',headers:userHeaders})).statusCode,401);
-  assert.equal((await app.inject({method:'POST',url:'/api/v1/auth/login',payload:{username:'managed_user',password:'test-account-password'}})).statusCode,403);
-  assert.equal((await app.inject({method:'PATCH',url,headers,payload:{disabled:false}})).statusCode,200);
-  assert.equal((await app.inject({method:'POST',url:'/api/v1/auth/login',payload:{username:'managed_user',password:'test-account-password'}})).statusCode,200);
+test("user paging/filtering, metadata privacy, and disabling blocks old and new sessions", async (t) => {
+  const { app, headers } = await fixture();
+  t.after(() => app.close());
+  const registered = (
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      payload: {
+        username: "managed_user",
+        password: "test-account-password",
+        displayName: "测试用户",
+      },
+    })
+  ).json();
+  const userHeaders = { authorization: `Bearer ${registered.token}` };
+  const heartbeat = await app.inject({
+    method: "POST",
+    url: "/api/v1/app/heartbeat",
+    headers: userHeaders,
+    payload: {
+      installationId: "a".repeat(32),
+      platform: "android",
+      appVersion: "1.2.0",
+      brand: "Test",
+      autoEnabled: true,
+      backupEnabled: false,
+    },
+  });
+  assert.equal(heartbeat.statusCode, 200);
+  const users = await app.inject({
+    url: "/api/v1/console/users?q=managed&sort=lastSeenAt&pageSize=1",
+    headers,
+  });
+  assert.equal(users.statusCode, 200);
+  const page = users.json().data;
+  assert.equal(page.total, 1);
+  assert.equal(page.items[0].autoEnabled, 1);
+  assert.equal(page.items[0].backupEnabled, 0);
+  assert.equal(
+    (await app.inject({ url: "/api/v1/console/users?member=no", headers }))
+      .statusCode,
+    200,
+  );
+  const detail = await app.inject({
+    url: `/api/v1/console/users/${registered.user.id}`,
+    headers,
+  });
+  assert.equal(detail.statusCode, 200);
+  assert.ok(!detail.body.includes("password_hash"));
+  assert.ok(!detail.body.includes(registered.token));
+  assert.equal(
+    (await app.inject({ url: "/api/v1/console/users?pageSize=10000", headers }))
+      .statusCode,
+    400,
+  );
+  const url = `/api/v1/console/users/${registered.user.id}/status`;
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url,
+        headers,
+        payload: { disabled: true },
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (await app.inject({ url: "/api/v1/auth/me", headers: userHeaders }))
+      .statusCode,
+    401,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          username: "managed_user",
+          password: "test-account-password",
+        },
+      })
+    ).statusCode,
+    403,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url,
+        headers,
+        payload: { disabled: false },
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          username: "managed_user",
+          password: "test-account-password",
+        },
+      })
+    ).statusCode,
+    200,
+  );
 });
-test('roles enforce API and menu permissions and changes affect existing sessions',async t=>{
-  const {app,headers}=await fixture();t.after(()=>app.close());
-  await app.inject({method:'POST',url:'/api/v1/console/administrators',headers,payload:{username:'support_test',password:'support-test-password',roleId:'support'}});
-  const login=(await app.inject({method:'POST',url:'/api/v1/console/auth/login',payload:{username:'support_test',password:'support-test-password'}})).json().data;
-  const supportHeaders={authorization:`Bearer ${login.token}`};
-  assert.equal((await app.inject({url:'/api/v1/console/users',headers:supportHeaders})).statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/console/dashboard',headers:supportHeaders})).statusCode,403);
-  const update=await app.inject({method:'PUT',url:'/api/v1/console/roles/support',headers,payload:{name:'客服',permissions:['feedback:view']}});assert.equal(update.statusCode,200);
-  assert.equal((await app.inject({url:'/api/v1/console/users',headers:supportHeaders})).statusCode,403);
-  const me=(await app.inject({url:'/api/v1/console/auth/me',headers:supportHeaders})).json().data;assert.ok(!me.menus.some((m:{path:string})=>m.path==='/users'));
-  assert.equal((await app.inject({method:'PUT',url:'/api/v1/console/roles/super',headers,payload:{name:'root',permissions:[]}})).statusCode,400);
+test("roles enforce API and menu permissions and changes affect existing sessions", async (t) => {
+  const { app, headers } = await fixture();
+  t.after(() => app.close());
+  await app.inject({
+    method: "POST",
+    url: "/api/v1/console/administrators",
+    headers,
+    payload: {
+      username: "support_test",
+      password: "support-test-password",
+      roleId: "support",
+    },
+  });
+  const login = (
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/console/auth/login",
+      payload: { username: "support_test", password: "support-test-password" },
+    })
+  ).json().data;
+  const supportHeaders = { authorization: `Bearer ${login.token}` };
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/console/users",
+        headers: supportHeaders,
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/console/dashboard",
+        headers: supportHeaders,
+      })
+    ).statusCode,
+    403,
+  );
+  const update = await app.inject({
+    method: "PUT",
+    url: "/api/v1/console/roles/support",
+    headers,
+    payload: { name: "客服", permissions: ["feedback:view"] },
+  });
+  assert.equal(update.statusCode, 200);
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/console/users",
+        headers: supportHeaders,
+      })
+    ).statusCode,
+    403,
+  );
+  const me = (
+    await app.inject({
+      url: "/api/v1/console/auth/me",
+      headers: supportHeaders,
+    })
+  ).json().data;
+  assert.ok(!me.menus.some((m: { path: string }) => m.path === "/users"));
+  assert.equal(
+    (
+      await app.inject({
+        method: "PUT",
+        url: "/api/v1/console/roles/super",
+        headers,
+        payload: { name: "root", permissions: [] },
+      })
+    ).statusCode,
+    400,
+  );
 });
-test('release drafts cannot affect APP, published policies force updates, and offline reverts',async t=>{
-  const {app,headers}=await fixture();t.after(()=>app.close());
-  const payload={platform:'android',versionName:'2.0.0',versionCode:200,minimumVersion:'1.5.0',downloadUrl:'https://example.com/app.apk',changelog:'更新说明',rollout:100};
-  const create=await app.inject({method:'POST',url:'/api/v1/console/releases',headers,payload});assert.equal(create.statusCode,200);const id=create.json().data.id;
-  const before=(await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.0'})).json();assert.notEqual(before.latestVersion,'2.0.0');
-  assert.equal((await app.inject({method:'PATCH',url:`/api/v1/console/releases/${id}/state`,headers,payload:{status:'published'}})).statusCode,200);
-  const required=(await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.0'})).json();assert.equal(required.status,'required');assert.equal(required.latestVersion,'2.0.0');
-  const gray=await app.inject({method:'POST',url:'/api/v1/console/releases',headers,payload:{...payload,versionName:'2.1.0',versionCode:210,minimumVersion:'1.6.0',rollout:10}});
-  assert.equal((await app.inject({method:'PATCH',url:`/api/v1/console/releases/${gray.json().data.id}/state`,headers,payload:{status:'published'}})).statusCode,400);
-  await app.inject({method:'PATCH',url:`/api/v1/console/releases/${id}/state`,headers,payload:{status:'offline'}});
-  assert.notEqual((await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.0'})).json().latestVersion,'2.0.0');
-  assert.equal((await app.inject({method:'POST',url:'/api/v1/console/releases',headers,payload:{...payload,downloadUrl:'javascript:alert(1)'}})).statusCode,400);
+test("release drafts cannot affect APP, published policies force updates, and offline reverts", async (t) => {
+  const { app, headers } = await fixture();
+  t.after(() => app.close());
+  const payload = {
+    platform: "android",
+    versionName: "2.0.0",
+    versionCode: 200,
+    minimumVersion: "1.5.0",
+    downloadUrl: "https://example.com/app.apk",
+    changelog: "更新说明",
+    rollout: 100,
+  };
+  const create = await app.inject({
+    method: "POST",
+    url: "/api/v1/console/releases",
+    headers,
+    payload,
+  });
+  assert.equal(create.statusCode, 200);
+  const id = create.json().data.id;
+  const before = (
+    await app.inject({
+      url: "/api/v1/app/update?platform=android&version=1.0.0",
+    })
+  ).json();
+  assert.notEqual(before.latestVersion, "2.0.0");
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `/api/v1/console/releases/${id}/state`,
+        headers,
+        payload: { status: "published" },
+      })
+    ).statusCode,
+    200,
+  );
+  const required = (
+    await app.inject({
+      url: "/api/v1/app/update?platform=android&version=1.0.0",
+    })
+  ).json();
+  assert.equal(required.status, "required");
+  assert.equal(required.latestVersion, "2.0.0");
+  const gray = await app.inject({
+    method: "POST",
+    url: "/api/v1/console/releases",
+    headers,
+    payload: {
+      ...payload,
+      versionName: "2.1.0",
+      versionCode: 210,
+      minimumVersion: "1.6.0",
+      rollout: 10,
+    },
+  });
+  assert.equal(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `/api/v1/console/releases/${gray.json().data.id}/state`,
+        headers,
+        payload: { status: "published" },
+      })
+    ).statusCode,
+    400,
+  );
+  await app.inject({
+    method: "PATCH",
+    url: `/api/v1/console/releases/${id}/state`,
+    headers,
+    payload: { status: "offline" },
+  });
+  assert.notEqual(
+    (
+      await app.inject({
+        url: "/api/v1/app/update?platform=android&version=1.0.0",
+      })
+    ).json().latestVersion,
+    "2.0.0",
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/console/releases",
+        headers,
+        payload: { ...payload, downloadUrl: "javascript:alert(1)" },
+      })
+    ).statusCode,
+    400,
+  );
 });
-test('config revisions are immutable, reject stale writes, gray falls back and rollback works',async t=>{
-  const {app,headers}=await fixture();t.after(()=>app.close());
-  const url='/api/v1/console/documents/config';const publish='/api/v1/console/documents/config/features/publish';
-  const input={key:'features',baseVersion:0,payload:{aiEnabled:true},note:'首次配置'};
-  assert.equal((await app.inject({method:'POST',url,headers,payload:input})).statusCode,200);
-  assert.equal((await app.inject({method:'POST',url,headers,payload:input})).statusCode,409);
-  await app.inject({method:'POST',url:publish,headers,payload:{version:1,rollout:100}});
-  await app.inject({method:'POST',url,headers,payload:{...input,baseVersion:1,payload:{aiEnabled:false},note:'关闭 AI'}});
-  await app.inject({method:'POST',url:publish,headers,payload:{version:2,rollout:0}});
-  const fallback=(await app.inject({url:'/api/v1/app/config'})).json().documents;assert.equal(fallback[0].version,1);assert.equal(fallback[0].payload.aiEnabled,true);
-  await app.inject({method:'POST',url:publish,headers,payload:{version:2,rollout:100}});
-  assert.equal((await app.inject({url:'/api/v1/app/config'})).json().documents[0].version,2);
-  await app.inject({method:'POST',url:publish,headers,payload:{version:1,rollout:100}});
-  assert.equal((await app.inject({url:'/api/v1/app/config'})).json().documents[0].version,1);
-  assert.equal((await app.inject({method:'POST',url,headers,payload:{...input,key:'secret',payload:{apiKey:'private'}}})).statusCode,400);
-  await app.inject({method:'DELETE',url:'/api/v1/console/documents/config/features/publication',headers});
-  assert.deepEqual((await app.inject({url:'/api/v1/app/config'})).json().documents,[]);
+test("config revisions are immutable, reject stale writes, gray falls back and rollback works", async (t) => {
+  const { app, headers } = await fixture();
+  t.after(() => app.close());
+  const url = "/api/v1/console/documents/config";
+  const publish = "/api/v1/console/documents/config/features/publish";
+  const input = {
+    key: "features",
+    baseVersion: 0,
+    payload: { aiEnabled: true },
+    note: "首次配置",
+  };
+  assert.equal(
+    (await app.inject({ method: "POST", url, headers, payload: input }))
+      .statusCode,
+    200,
+  );
+  assert.equal(
+    (await app.inject({ method: "POST", url, headers, payload: input }))
+      .statusCode,
+    409,
+  );
+  await app.inject({
+    method: "POST",
+    url: publish,
+    headers,
+    payload: { version: 1, rollout: 100 },
+  });
+  await app.inject({
+    method: "POST",
+    url,
+    headers,
+    payload: {
+      ...input,
+      baseVersion: 1,
+      payload: { aiEnabled: false },
+      note: "关闭 AI",
+    },
+  });
+  await app.inject({
+    method: "POST",
+    url: publish,
+    headers,
+    payload: { version: 2, rollout: 0 },
+  });
+  const fallback = (await app.inject({ url: "/api/v1/app/config" })).json()
+    .documents;
+  assert.equal(fallback[0].version, 1);
+  assert.equal(fallback[0].payload.aiEnabled, true);
+  await app.inject({
+    method: "POST",
+    url: publish,
+    headers,
+    payload: { version: 2, rollout: 100 },
+  });
+  assert.equal(
+    (await app.inject({ url: "/api/v1/app/config" })).json().documents[0]
+      .version,
+    2,
+  );
+  await app.inject({
+    method: "POST",
+    url: publish,
+    headers,
+    payload: { version: 1, rollout: 100 },
+  });
+  assert.equal(
+    (await app.inject({ url: "/api/v1/app/config" })).json().documents[0]
+      .version,
+    1,
+  );
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url,
+        headers,
+        payload: { ...input, key: "secret", payload: { apiKey: "private" } },
+      })
+    ).statusCode,
+    400,
+  );
+  await app.inject({
+    method: "DELETE",
+    url: "/api/v1/console/documents/config/features/publication",
+    headers,
+  });
+  assert.deepEqual(
+    (await app.inject({ url: "/api/v1/app/config" })).json().documents,
+    [],
+  );
 });

@@ -1,6 +1,78 @@
 <script setup lang="ts">
-import {ref} from 'vue';import {useRoute} from 'vue-router';import {Message} from '@arco-design/web-vue';import PageHeader from '../components/PageHeader.vue';import {api} from '../api/console';import {useResource} from '../composables/useResource';import {can} from '../state/session';
-const route=useRoute(),page=ref(1),status=ref('');const {data,loading,error,refresh}=useResource(async()=>{const result=await api.feedbackDetail(String(route.params.id),{page:page.value,pageSize:20});status.value=result.ticket.status;return result;});void refresh();
-async function save(){try{await api.feedbackStatus(String(route.params.id),status.value);Message.success('反馈状态已更新');await refresh();}catch(e){Message.error(e instanceof Error?e.message:'保存失败');}}
+import { ref } from "vue";
+import { useRoute } from "vue-router";
+import { Message } from "@arco-design/web-vue";
+import PageHeader from "../components/PageHeader.vue";
+import { api } from "../api/console";
+import { useResource } from "../composables/useResource";
+import { can } from "../state/session";
+const route = useRoute(),
+  page = ref(1),
+  status = ref("");
+const { data, loading, error, refresh } = useResource(async () => {
+  const result = await api.feedbackDetail(String(route.params.id), {
+    page: page.value,
+    pageSize: 20,
+  });
+  status.value = result.ticket.status;
+  return result;
+});
+void refresh();
+async function save() {
+  try {
+    await api.feedbackStatus(String(route.params.id), status.value);
+    Message.success("反馈状态已更新");
+    await refresh();
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "保存失败");
+  }
+}
 </script>
-<template><page-header title="反馈详情" :description="data?.ticket.subject"><a-button @click="$router.back()">返回</a-button><a-button @click="refresh">刷新</a-button></page-header><a-alert v-if="error" type="error">{{ error }}</a-alert><a-spin :loading="loading" class="block"><section v-if="data" class="surface detail-section"><div class="section-heading"><span>APP {{ data.ticket.appVersion??'未上报' }}</span><a-space><a-select v-model="status" :disabled="!can('feedback:edit')" style="width:160px"><a-option value="open">待处理</a-option><a-option value="in_progress">处理中</a-option><a-option value="resolved">已解决</a-option><a-option value="closed">已关闭</a-option></a-select><a-button v-if="can('feedback:edit')" @click="save">更新状态</a-button></a-space></div><a-alert class="notice">手机号、长号码与凭据已脱敏，联系方式不返回。</a-alert><article v-for="message in data.messages.items" :key="message.id" class="feedback-message"><span class="muted">{{ message.authorType==='user'?'用户':'管理员' }} · {{ new Date(message.createdAt*1000).toLocaleString('zh-CN') }}</span><p>{{ message.body }}</p></article><a-pagination :total="data.messages.total" :current="page" :page-size="20" @change="page=$event;refresh()"/></section></a-spin></template>
+<template>
+  <page-header title="反馈详情" :description="data?.ticket.subject"
+    ><a-button @click="$router.back()">返回</a-button
+    ><a-button @click="refresh">刷新</a-button></page-header
+  ><a-alert v-if="error" type="error">{{ error }}</a-alert
+  ><a-spin :loading="loading" class="block"
+    ><section v-if="data" class="surface detail-section">
+      <div class="section-heading">
+        <span>APP {{ data.ticket.appVersion ?? "未上报" }}</span
+        ><a-space
+          ><a-select
+            v-model="status"
+            :disabled="!can('feedback:edit')"
+            style="width: 160px"
+            ><a-option value="open">待处理</a-option
+            ><a-option value="in_progress">处理中</a-option
+            ><a-option value="resolved">已解决</a-option
+            ><a-option value="closed">已关闭</a-option></a-select
+          ><a-button v-if="can('feedback:edit')" @click="save"
+            >更新状态</a-button
+          ></a-space
+        >
+      </div>
+      <a-alert class="notice"
+        >手机号、长号码与凭据已脱敏，联系方式不返回。</a-alert
+      >
+      <article
+        v-for="message in data.messages.items"
+        :key="message.id"
+        class="feedback-message"
+      >
+        <span class="muted"
+          >{{ message.authorType === "user" ? "用户" : "管理员" }} ·
+          {{ new Date(message.createdAt * 1000).toLocaleString("zh-CN") }}</span
+        >
+        <p>{{ message.body }}</p>
+      </article>
+      <a-pagination
+        :total="data.messages.total"
+        :current="page"
+        :page-size="20"
+        @change="
+          page = $event;
+          refresh();
+        "
+      /></section
+  ></a-spin>
+</template>

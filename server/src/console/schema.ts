@@ -1,4 +1,4 @@
-import type { Store } from '../store.js';
+import type { Store } from "../store.js";
 
 export function ensureConsoleSchema(store: Store) {
   store.db.exec(`
@@ -30,6 +30,10 @@ export function ensureConsoleSchema(store: Store) {
     CREATE INDEX IF NOT EXISTS console_operations_kind ON console_operations(kind,updated_at);
     CREATE TABLE IF NOT EXISTS console_migrations(version INTEGER PRIMARY KEY,applied_at INTEGER NOT NULL);
   `);
-  store.db.prepare('INSERT OR IGNORE INTO console_migrations VALUES(1,?)').run(store.now());
-  store.db.prepare('INSERT OR IGNORE INTO console_migrations VALUES(2,?)').run(store.now());
+  store.db
+    .prepare("INSERT OR IGNORE INTO console_migrations VALUES(1,?)")
+    .run(store.now());
+  store.db
+    .prepare("INSERT OR IGNORE INTO console_migrations VALUES(2,?)")
+    .run(store.now());
 }

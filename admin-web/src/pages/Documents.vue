@@ -1,18 +1,286 @@
 <script setup lang="ts">
-import {computed,ref,reactive} from 'vue';import {useRoute} from 'vue-router';import {Message} from '@arco-design/web-vue';import type {TableColumnData} from '@arco-design/web-vue';
-import PageHeader from '../components/PageHeader.vue';import GiTable from '../components/GiTable.vue';import {api} from '../api/console';import {can} from '../state/session';import type {DocumentKind,DocumentRow,Revision,Query} from '../api/types';
-const route=useRoute(),kind=computed(()=>String(route.params.kind) as DocumentKind);const title=computed(()=>({config:'远程配置',rule:'识别与适配规则',prompt:'Prompt 管理'}[kind.value]));
-const prefix=computed(()=>({config:'app:config',rule:'auto-accounting:rule',prompt:'ai:prompt'}[kind.value]));
-const table=ref<{refresh:()=>Promise<void>}>(),editing=ref(false),historyKey=ref(''),saving=ref(false),error=ref('');
-const form=reactive({key:'',baseVersion:0,note:'',json:'{}',rollout:100});
-const templates:Record<DocumentKind,unknown>={config:{aiEnabled:true,ocrEnabled:true,voiceEnabled:true,autoAccountingEnabled:true,cloudBackupEnabled:true,logUploadPercent:0,experiments:{}},rule:{packageName:'',pageIdentifier:'',activity:'',nodeFeatures:[],textFeatures:[],notificationTitlePattern:'',notificationBodyPattern:'',amountPattern:'',merchantPattern:'',priority:100,minAppVersion:'1.0.0',maxAppVersion:null,enabled:true},prompt:{name:'',scene:'classification',systemPrompt:'',userTemplate:'',experiment:null}};
-const columns:TableColumnData[]=[{title:'配置标识',dataIndex:'key'},{title:'最新修订',dataIndex:'version'},{title:'已发布版本',slotName:'published'},{title:'修改备注',dataIndex:'note'},{title:'修改时间',slotName:'date'},{title:'操作',slotName:'actions',width:300,fixed:'right'}];
-const historyColumns:TableColumnData[]=[{title:'版本',dataIndex:'version'},{title:'备注',dataIndex:'note'},{title:'修改人',dataIndex:'createdBy'},{title:'操作',slotName:'actions'}];
-const load=(query:Query)=>api.documents(kind.value,query);const loadHistory=(query:Query)=>api.revisions(kind.value,historyKey.value,query);
-function edit(row?:DocumentRow){form.key=row?.key??'';form.baseVersion=row?.version??0;form.note='';form.json=row?.payloadJson??JSON.stringify(templates[kind.value],null,2);editing.value=true;error.value='';}
-async function save(){saving.value=true;error.value='';try{let payload:unknown;try{payload=JSON.parse(form.json);}catch{throw new Error('JSON 格式无效，请检查引号与逗号');}await api.saveDocument(kind.value,form.key,form.baseVersion,payload,form.note);editing.value=false;Message.success('新修订已保存，发布后生效');await table.value?.refresh();}catch(e){error.value=e instanceof Error?e.message:'保存失败';}finally{saving.value=false;}}
-async function publish(key:string,version:number){try{await api.publishDocument(kind.value,key,version,form.rollout);Message.success('发布版本已更新');await table.value?.refresh();}catch(e){Message.error(e instanceof Error?e.message:'发布失败');}}
-async function offline(key:string){try{await api.offlineDocument(kind.value,key);Message.success('已下线');await table.value?.refresh();}catch(e){Message.error(e instanceof Error?e.message:'下线失败');}}
-async function restore(row:Revision){const key=historyKey.value;try{const page=await api.revisions(kind.value,key,{page:1,pageSize:1});const doc=page.items[0];if(!doc)throw new Error('配置不存在，请刷新后重试');form.baseVersion=doc.version;form.json=row.payloadJson;form.key=key;form.note='';editing.value=true;error.value='';historyKey.value='';}catch(e){Message.error(e instanceof Error?e.message:'加载配置失败');}}
+import { computed, ref, reactive } from "vue";
+import { useRoute } from "vue-router";
+import { Message } from "@arco-design/web-vue";
+import type { TableColumnData } from "@arco-design/web-vue";
+import PageHeader from "../components/PageHeader.vue";
+import GiTable from "../components/GiTable.vue";
+import { api } from "../api/console";
+import { can } from "../state/session";
+import type { DocumentKind, DocumentRow, Revision, Query } from "../api/types";
+const route = useRoute(),
+  kind = computed(() => String(route.params.kind) as DocumentKind);
+const title = computed(
+  () =>
+    ({ config: "远程配置", rule: "识别与适配规则", prompt: "Prompt 管理" })[
+      kind.value
+    ],
+);
+const prefix = computed(
+  () =>
+    ({
+      config: "app:config",
+      rule: "auto-accounting:rule",
+      prompt: "ai:prompt",
+    })[kind.value],
+);
+const table = ref<{ refresh: () => Promise<void> }>(),
+  editing = ref(false),
+  historyKey = ref(""),
+  saving = ref(false),
+  error = ref("");
+const form = reactive({
+  key: "",
+  baseVersion: 0,
+  note: "",
+  json: "{}",
+  rollout: 100,
+});
+const templates: Record<DocumentKind, unknown> = {
+  config: {
+    aiEnabled: true,
+    ocrEnabled: true,
+    voiceEnabled: true,
+    autoAccountingEnabled: true,
+    cloudBackupEnabled: true,
+    logUploadPercent: 0,
+    experiments: {},
+  },
+  rule: {
+    packageName: "",
+    pageIdentifier: "",
+    activity: "",
+    nodeFeatures: [],
+    textFeatures: [],
+    notificationTitlePattern: "",
+    notificationBodyPattern: "",
+    amountPattern: "",
+    merchantPattern: "",
+    priority: 100,
+    minAppVersion: "1.0.0",
+    maxAppVersion: null,
+    enabled: true,
+  },
+  prompt: {
+    name: "",
+    scene: "classification",
+    systemPrompt: "",
+    userTemplate: "",
+    experiment: null,
+  },
+};
+const columns: TableColumnData[] = [
+  { title: "配置标识", dataIndex: "key" },
+  { title: "最新修订", dataIndex: "version" },
+  { title: "已发布版本", slotName: "published" },
+  { title: "修改备注", dataIndex: "note" },
+  { title: "修改时间", slotName: "date" },
+  { title: "操作", slotName: "actions", width: 300, fixed: "right" },
+];
+const historyColumns: TableColumnData[] = [
+  { title: "版本", dataIndex: "version" },
+  { title: "备注", dataIndex: "note" },
+  { title: "修改人", dataIndex: "createdBy" },
+  { title: "操作", slotName: "actions" },
+];
+const load = (query: Query) => api.documents(kind.value, query);
+const loadHistory = (query: Query) =>
+  api.revisions(kind.value, historyKey.value, query);
+function edit(row?: DocumentRow) {
+  form.key = row?.key ?? "";
+  form.baseVersion = row?.version ?? 0;
+  form.note = "";
+  form.json =
+    row?.payloadJson ?? JSON.stringify(templates[kind.value], null, 2);
+  editing.value = true;
+  error.value = "";
+}
+async function save() {
+  saving.value = true;
+  error.value = "";
+  try {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(form.json);
+    } catch {
+      throw new Error("JSON 格式无效，请检查引号与逗号");
+    }
+    await api.saveDocument(
+      kind.value,
+      form.key,
+      form.baseVersion,
+      payload,
+      form.note,
+    );
+    editing.value = false;
+    Message.success("新修订已保存，发布后生效");
+    await table.value?.refresh();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "保存失败";
+  } finally {
+    saving.value = false;
+  }
+}
+async function publish(key: string, version: number) {
+  try {
+    await api.publishDocument(kind.value, key, version, form.rollout);
+    Message.success("发布版本已更新");
+    await table.value?.refresh();
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "发布失败");
+  }
+}
+async function offline(key: string) {
+  try {
+    await api.offlineDocument(kind.value, key);
+    Message.success("已下线");
+    await table.value?.refresh();
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "下线失败");
+  }
+}
+async function restore(row: Revision) {
+  const key = historyKey.value;
+  try {
+    const page = await api.revisions(kind.value, key, { page: 1, pageSize: 1 });
+    const doc = page.items[0];
+    if (!doc) throw new Error("配置不存在，请刷新后重试");
+    form.baseVersion = doc.version;
+    form.json = row.payloadJson;
+    form.key = key;
+    form.note = "";
+    editing.value = true;
+    error.value = "";
+    historyKey.value = "";
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "加载配置失败");
+  }
+}
 </script>
-<template><page-header :title="title??'配置管理'" description="每次修改生成不可变修订。支持灰度、全量、下线与历史回滚。"/><a-alert class="notice" type="warning">{{ kind==='config'?'下载接口已可用；APP 功能门控尚未接入，不会改变本地开关。':kind==='rule'?'下载接口已可用；Kotlin 仍使用本地规则，远程规则应用需单独接入。':'启用后台模型路由后加载匹配场景的已发布模板；旧 provider 继续沿用原有 Prompt。' }}</a-alert><gi-table ref="table" :columns="columns" :load="load" row-key="key"><template #toolbar><a-button v-if="can(prefix+':edit')" type="primary" @click="edit()">新建修订</a-button></template><template #published="{record}"><a-tag :color="record.publishedVersion?'green':'gray'">{{ record.publishedVersion?'v'+record.publishedVersion+' · '+record.rollout+'%':'未发布' }}</a-tag></template><template #date="{record}">{{ new Date(record.createdAt*1000).toLocaleString('zh-CN') }}</template><template #actions="{record}"><a-space><a-button v-if="can(prefix+':edit')" type="text" size="small" @click="edit(record)">编辑</a-button><a-button type="text" size="small" @click="historyKey=record.key">历史</a-button><a-popconfirm v-if="can(prefix+':publish')" content="确认发布当前修订？" @ok="publish(record.key,record.version)"><a-button type="text" size="small">发布</a-button></a-popconfirm><a-popconfirm v-if="can(prefix+':publish')&&record.publishedVersion" content="确认下线此配置？客户端应回退到本地默认。" @ok="offline(record.key)"><a-button type="text" status="danger" size="small">下线</a-button></a-popconfirm></a-space></template></gi-table><div v-if="can(prefix+':publish')" class="publish-settings"><span>本次发布比例</span><a-input-number v-model="form.rollout" :min="0" :max="100" :precision="0" style="width:130px"/><span class="muted">100 为全量；灰度未命中设备使用上一全量版本</span></div><section v-if="editing" class="surface detail-section"><div class="section-heading"><h2>{{ form.baseVersion?'编辑 v'+form.baseVersion+' → 新修订':'新建配置' }}</h2><a-button @click="editing=false">取消</a-button></div><a-alert v-if="error" type="error">{{ error }}</a-alert><a-form :model="form" layout="vertical" @submit-success="save"><div class="two-columns"><a-form-item label="标识" field="key" required><a-input v-model="form.key" :input-attrs="{'aria-label':'标识'}" :disabled="form.baseVersion>0" placeholder="字母、数字、点、横线或下划线"/></a-form-item><a-form-item label="修改备注" field="note" required><a-input v-model="form.note" :input-attrs="{'aria-label':'修改备注'}"/></a-form-item></div><a-form-item label="配置内容（JSON，严格字段校验）" field="json" required><a-textarea v-model="form.json" :textarea-attrs="{'aria-label':'配置内容'}" :auto-size="{minRows:12,maxRows:24}" class="code-input"/></a-form-item><a-button html-type="submit" type="primary" :loading="saving">保存新修订</a-button></a-form></section><section v-if="historyKey" class="history-panel"><page-header :title="historyKey+' · 修订历史'"><a-button @click="historyKey=''">关闭历史</a-button></page-header><gi-table :key="historyKey" :columns="historyColumns" :load="loadHistory" row-key="version"><template #actions="{record}"><a-space><a-popconfirm v-if="can(prefix+':publish')" content="确认切换到此历史版本？" @ok="publish(historyKey,record.version)"><a-button type="text" size="small">发布 / 回滚</a-button></a-popconfirm><a-button v-if="can(prefix+':edit')" type="text" size="small" @click="restore(record)">复制为新修订</a-button></a-space></template></gi-table></section></template>
+<template>
+  <page-header
+    :title="title ?? '配置管理'"
+    description="每次修改生成不可变修订。支持灰度、全量、下线与历史回滚。"
+  /><a-alert class="notice" type="warning">{{
+    kind === "config"
+      ? "下载接口已可用；APP 功能门控尚未接入，不会改变本地开关。"
+      : kind === "rule"
+        ? "下载接口已可用；Kotlin 仍使用本地规则，远程规则应用需单独接入。"
+        : "启用后台模型路由后加载匹配场景的已发布模板；旧 provider 继续沿用原有 Prompt。"
+  }}</a-alert
+  ><gi-table ref="table" :columns="columns" :load="load" row-key="key"
+    ><template #toolbar
+      ><a-button v-if="can(prefix + ':edit')" type="primary" @click="edit()"
+        >新建修订</a-button
+      ></template
+    ><template #published="{ record }"
+      ><a-tag :color="record.publishedVersion ? 'green' : 'gray'">{{
+        record.publishedVersion
+          ? "v" + record.publishedVersion + " · " + record.rollout + "%"
+          : "未发布"
+      }}</a-tag></template
+    ><template #date="{ record }">{{
+      new Date(record.createdAt * 1000).toLocaleString("zh-CN")
+    }}</template
+    ><template #actions="{ record }"
+      ><a-space
+        ><a-button
+          v-if="can(prefix + ':edit')"
+          type="text"
+          size="small"
+          @click="edit(record)"
+          >编辑</a-button
+        ><a-button type="text" size="small" @click="historyKey = record.key"
+          >历史</a-button
+        ><a-popconfirm
+          v-if="can(prefix + ':publish')"
+          content="确认发布当前修订？"
+          @ok="publish(record.key, record.version)"
+          ><a-button type="text" size="small">发布</a-button></a-popconfirm
+        ><a-popconfirm
+          v-if="can(prefix + ':publish') && record.publishedVersion"
+          content="确认下线此配置？客户端应回退到本地默认。"
+          @ok="offline(record.key)"
+          ><a-button type="text" status="danger" size="small"
+            >下线</a-button
+          ></a-popconfirm
+        ></a-space
+      ></template
+    ></gi-table
+  >
+  <div v-if="can(prefix + ':publish')" class="publish-settings">
+    <span>本次发布比例</span
+    ><a-input-number
+      v-model="form.rollout"
+      :min="0"
+      :max="100"
+      :precision="0"
+      style="width: 130px"
+    /><span class="muted">100 为全量；灰度未命中设备使用上一全量版本</span>
+  </div>
+  <section v-if="editing" class="surface detail-section">
+    <div class="section-heading">
+      <h2>
+        {{
+          form.baseVersion
+            ? "编辑 v" + form.baseVersion + " → 新修订"
+            : "新建配置"
+        }}
+      </h2>
+      <a-button @click="editing = false">取消</a-button>
+    </div>
+    <a-alert v-if="error" type="error">{{ error }}</a-alert
+    ><a-form :model="form" layout="vertical" @submit-success="save"
+      ><div class="two-columns">
+        <a-form-item label="标识" field="key" required
+          ><a-input
+            v-model="form.key"
+            :input-attrs="{ 'aria-label': '标识' }"
+            :disabled="form.baseVersion > 0"
+            placeholder="字母、数字、点、横线或下划线" /></a-form-item
+        ><a-form-item label="修改备注" field="note" required
+          ><a-input
+            v-model="form.note"
+            :input-attrs="{ 'aria-label': '修改备注' }"
+        /></a-form-item>
+      </div>
+      <a-form-item label="配置内容（JSON，严格字段校验）" field="json" required
+        ><a-textarea
+          v-model="form.json"
+          :textarea-attrs="{ 'aria-label': '配置内容' }"
+          :auto-size="{ minRows: 12, maxRows: 24 }"
+          class="code-input" /></a-form-item
+      ><a-button html-type="submit" type="primary" :loading="saving"
+        >保存新修订</a-button
+      ></a-form
+    >
+  </section>
+  <section v-if="historyKey" class="history-panel">
+    <page-header :title="historyKey + ' · 修订历史'"
+      ><a-button @click="historyKey = ''">关闭历史</a-button></page-header
+    ><gi-table
+      :key="historyKey"
+      :columns="historyColumns"
+      :load="loadHistory"
+      row-key="version"
+      ><template #actions="{ record }"
+        ><a-space
+          ><a-popconfirm
+            v-if="can(prefix + ':publish')"
+            content="确认切换到此历史版本？"
+            @ok="publish(historyKey, record.version)"
+            ><a-button type="text" size="small"
+              >发布 / 回滚</a-button
+            ></a-popconfirm
+          ><a-button
+            v-if="can(prefix + ':edit')"
+            type="text"
+            size="small"
+            @click="restore(record)"
+            >复制为新修订</a-button
+          ></a-space
+        ></template
+      ></gi-table
+    >
+  </section>
+</template>

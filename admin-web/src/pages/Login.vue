@@ -1,8 +1,81 @@
 <script setup lang="ts">
-import {ref} from 'vue';import {useRouter} from 'vue-router';
-import {IconApps,IconSafe} from '@arco-design/web-vue/es/icon';
-import {signIn,session} from '../state/session';
-const username=ref(''),password=ref(''),loading=ref(false),error=ref(''),router=useRouter();
-async function submit(){loading.value=true;error.value='';try{await signIn(username.value,password.value);await router.replace(session.admin?.menus[0]?.path??'/');}catch(e){error.value=e instanceof Error?e.message:'登录失败';}finally{loading.value=false;}}
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import { IconApps, IconSafe } from "@arco-design/web-vue/es/icon";
+import { signIn, session } from "../state/session";
+const username = ref(""),
+  password = ref(""),
+  loading = ref(false),
+  error = ref(""),
+  router = useRouter();
+async function submit() {
+  loading.value = true;
+  error.value = "";
+  try {
+    await signIn(username.value, password.value);
+    await router.replace(session.admin?.menus[0]?.path ?? "/");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "登录失败";
+  } finally {
+    loading.value = false;
+  }
+}
 </script>
-<template><main class="login-page"><section class="login-intro"><div class="brand"><span class="brand-mark"><icon-apps/></span><div>好好记账<span>管理控制台</span></div></div><h1>让每一笔记账<br>都有迹可循。</h1><p>管理用户、诊断自动记账、维护规则与版本。<br>把产品运行情况，放在同一个工作台。</p><div class="login-principle"><icon-safe/><span>聚合统计 · 权限隔离 · 隐私保护</span></div></section><section class="login-form surface"><h2>登录管理后台</h2><p class="muted">请使用管理员账号登录</p><a-alert v-if="error" type="error">{{ error }}</a-alert><form @submit.prevent="submit"><label for="username">管理员账号</label><a-input :input-attrs="{id: 'username', 'aria-label': '管理员账号', autocomplete: 'username'}" v-model="username" placeholder="请输入账号" size="large" required/><label for="password">密码</label><a-input-password :input-attrs="{id: 'password', 'aria-label': '密码', autocomplete: 'current-password'}" v-model="password" placeholder="请输入密码" size="large" required/><a-button type="primary" html-type="submit" long size="large" :loading="loading">登录</a-button></form><p class="login-help">首次使用请在服务端设置初始化管理员环境变量。管理账号与 APP 用户账号独立。</p></section></main></template>
+<template>
+  <main class="login-page">
+    <section class="login-intro">
+      <div class="brand">
+        <span class="brand-mark"><icon-apps /></span>
+        <div>好好记账<span>管理控制台</span></div>
+      </div>
+      <h1>让每一笔记账<br />都有迹可循。</h1>
+      <p>
+        管理用户、诊断自动记账、维护规则与版本。<br />把产品运行情况，放在同一个工作台。
+      </p>
+      <div class="login-principle">
+        <icon-safe /><span>聚合统计 · 权限隔离 · 隐私保护</span>
+      </div>
+    </section>
+    <section class="login-form surface">
+      <h2>登录管理后台</h2>
+      <p class="muted">请使用管理员账号登录</p>
+      <a-alert v-if="error" type="error">{{ error }}</a-alert>
+      <form @submit.prevent="submit">
+        <label for="username">管理员账号</label
+        ><a-input
+          :input-attrs="{
+            id: 'username',
+            'aria-label': '管理员账号',
+            autocomplete: 'username',
+          }"
+          v-model="username"
+          placeholder="请输入账号"
+          size="large"
+          required
+        /><label for="password">密码</label
+        ><a-input-password
+          :input-attrs="{
+            id: 'password',
+            'aria-label': '密码',
+            autocomplete: 'current-password',
+          }"
+          v-model="password"
+          placeholder="请输入密码"
+          size="large"
+          required
+        /><a-button
+          type="primary"
+          html-type="submit"
+          long
+          size="large"
+          :loading="loading"
+          >登录</a-button
+        >
+      </form>
+      <p class="login-help">
+        首次使用请在服务端设置初始化管理员环境变量。管理账号与 APP
+        用户账号独立。
+      </p>
+    </section>
+  </main>
+</template>
