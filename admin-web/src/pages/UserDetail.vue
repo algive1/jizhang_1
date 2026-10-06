@@ -25,7 +25,7 @@ void refresh();
           data.user.username
         }}</a-descriptions-item
         ><a-descriptions-item label="状态">{{
-          data.user.disabled ? "已禁用" : "正常"
+          data.user.accountDisabled ? "已禁用" : "正常"
         }}</a-descriptions-item
         ><a-descriptions-item label="会员">{{
           data.user.member ? "会员" : "免费"

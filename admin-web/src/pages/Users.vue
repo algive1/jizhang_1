@@ -8,9 +8,12 @@ import { api } from "../api/console";
 import { can } from "../state/session";
 import type { User } from "../api/types";
 const table = ref<{ refresh: () => Promise<void> }>();
+const selected = ref<string[]>([]),
+  busy = ref(false);
 const filters = reactive({
   status: undefined as string | undefined,
   member: undefined as string | undefined,
+  appVersion: undefined as string | undefined,
 });
 const columns: TableColumnData[] = [
   { title: "用户", slotName: "user", width: 210 },
@@ -38,13 +41,49 @@ const date = (v: number | null) =>
   v ? new Date(v * 1000).toLocaleString("zh-CN") : "尚无记录";
 const flag = (v: number | null) =>
   v == null ? "未上报" : v ? "已开启" : "已关闭";
+function exported(row: User, column: TableColumnData) {
+  switch (column.slotName) {
+    case "user":
+      return `${row.displayName ?? row.username} (${row.username})`;
+    case "date":
+      return date(row.createdAt);
+    case "active":
+      return date(row.lastSeenAt);
+    case "version":
+      return `${row.appVersion ?? "未上报"} / Android ${row.androidVersion ?? "—"}`;
+    case "device":
+      return [row.brand, row.model].filter(Boolean).join(" ") || "未上报";
+    case "member":
+      return row.member ? "会员" : "免费";
+    case "auto":
+      return flag(row.autoEnabled);
+    case "backup":
+      return flag(row.backupEnabled);
+    case "status":
+      return row.accountDisabled ? "已禁用" : "正常";
+    default:
+      return row[column.dataIndex as keyof User];
+  }
+}
 async function toggle(row: User) {
   try {
-    await api.setUserStatus(row.id, !row.disabled);
+    await api.setUserStatus(row.id, !row.accountDisabled);
     Message.success("用户状态已更新");
     await table.value?.refresh();
   } catch (e) {
     Message.error(e instanceof Error ? e.message : "操作失败");
+  }
+}
+async function batch(disabled: boolean) {
+  busy.value = true;
+  try {
+    await api.setUsersStatus(selected.value, disabled);
+    Message.success("所选用户状态已更新");
+    await table.value?.refresh();
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "操作失败");
+  } finally {
+    busy.value = false;
   }
 }
 </script>
@@ -57,6 +96,9 @@ async function toggle(row: User) {
     :columns="columns"
     :load="api.users"
     :filters="filters"
+    :export-value="exported"
+    :selection="can('user:disable')"
+    @selection-change="selected = $event.map(String)"
     ><template #filters
       ><a-select
         v-model="filters.status"
@@ -72,6 +114,26 @@ async function toggle(row: User) {
         style="width: 140px"
         ><a-option value="yes">会员</a-option
         ><a-option value="no">非会员</a-option></a-select
+      ><a-input
+        v-model="filters.appVersion"
+        allow-clear
+        placeholder="APP 版本"
+        style="width: 140px" /></template
+    ><template #batch
+      ><a-space v-if="can('user:disable') && selected.length"
+        ><a-popconfirm
+          :content="
+            '禁用所选 ' + selected.length + ' 个用户并撤销会话，确认执行？'
+          "
+          @ok="batch(true)"
+          ><a-button status="danger" :loading="busy"
+            >批量禁用</a-button
+          ></a-popconfirm
+        ><a-popconfirm
+          content="解禁所选账号，用户可重新登录。"
+          @ok="batch(false)"
+          ><a-button :loading="busy">批量解禁</a-button></a-popconfirm
+        ></a-space
       ></template
     ><template #user="{ record }"
       ><router-link :to="'/users/' + record.id">{{
@@ -95,8 +157,8 @@ async function toggle(row: User) {
     ><template #auto="{ record }">{{ flag(record.autoEnabled) }}</template
     ><template #backup="{ record }">{{ flag(record.backupEnabled) }}</template
     ><template #status="{ record }"
-      ><a-tag :color="record.disabled ? 'red' : 'green'">{{
-        record.disabled ? "已禁用" : "正常"
+      ><a-tag :color="record.accountDisabled ? 'red' : 'green'">{{
+        record.accountDisabled ? "已禁用" : "正常"
       }}</a-tag></template
     ><template #actions="{ record }"
       ><a-space
@@ -104,7 +166,7 @@ async function toggle(row: User) {
         ><a-popconfirm
           v-if="can('user:disable')"
           :content="
-            record.disabled
+            record.accountDisabled
               ? '解禁后用户可重新登录'
               : '禁用将撤销用户的在线会话，确认执行？'
           "
@@ -112,8 +174,8 @@ async function toggle(row: User) {
           ><a-button
             type="text"
             size="small"
-            :status="record.disabled ? 'normal' : 'danger'"
-            >{{ record.disabled ? "解禁" : "禁用" }}</a-button
+            :status="record.accountDisabled ? 'normal' : 'danger'"
+            >{{ record.accountDisabled ? "解禁" : "禁用" }}</a-button
           ></a-popconfirm
         ></a-space
       ></template

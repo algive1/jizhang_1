@@ -72,9 +72,9 @@ const templates: Record<DocumentKind, unknown> = {
 const columns: TableColumnData[] = [
   { title: "配置标识", dataIndex: "key" },
   { title: "最新修订", dataIndex: "version" },
-  { title: "已发布版本", slotName: "published" },
+  { title: "已发布版本", dataIndex: "publishedVersion", slotName: "published" },
   { title: "修改备注", dataIndex: "note" },
-  { title: "修改时间", slotName: "date" },
+  { title: "修改时间", dataIndex: "createdAt", slotName: "date" },
   { title: "操作", slotName: "actions", width: 300, fixed: "right" },
 ];
 const historyColumns: TableColumnData[] = [

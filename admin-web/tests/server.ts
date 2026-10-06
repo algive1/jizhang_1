@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createApp } from "../../server/src/app.js";
 import { encodePassword } from "../../server/src/console/auth.js";
+process.env.PUSH_WORKER_ENABLED = "false";
 const { app, store } = await createApp(":memory:");
 for (const [username, role] of [
   ["browser_admin", "super"],
@@ -29,6 +30,20 @@ const user = (
     },
   })
 ).json();
+store.db
+  .prepare("INSERT INTO console_ai_calls VALUES(?,?,?,?,?,?,?,?,?,?)")
+  .run(
+    "browser-ai-call",
+    user.user.id,
+    "assistant",
+    "legacy",
+    "failed",
+    null,
+    null,
+    null,
+    5,
+    store.now(),
+  );
 await app.inject({
   method: "POST",
   url: "/api/v1/support/tickets",

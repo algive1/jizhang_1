@@ -32,12 +32,17 @@ const columns: TableColumnData[] = [
   { title: "模型 ID", dataIndex: "id", width: 220 },
   { title: "Provider", dataIndex: "provider" },
   { title: "Model", dataIndex: "model" },
-  { title: "密钥引用", slotName: "key" },
+  { title: "密钥引用", dataIndex: "keyRef", slotName: "key" },
   { title: "单价 / 百万 Token", slotName: "price" },
   { title: "优先级", dataIndex: "priority" },
-  { title: "状态", slotName: "status" },
+  { title: "状态", dataIndex: "enabled", slotName: "status" },
   { title: "操作", slotName: "actions", fixed: "right", width: 100 },
 ];
+function exported(row: AIModel, column: TableColumnData) {
+  if (column.slotName === "price")
+    return `${row.inputPrice} / ${row.outputPrice} USD`;
+  return row[column.dataIndex as keyof AIModel];
+}
 const load = api.models;
 const fallbackId = computed({
   get: () => form.fallbackId ?? "",
@@ -91,7 +96,11 @@ async function save() {
   /><a-alert class="notice"
     >启用模型需配置服务端 AI_ENDPOINT_ALLOWLIST
     与对应密钥环境变量。未启用任何模型时，保留现有 provider。</a-alert
-  ><gi-table ref="table" :columns="columns" :load="load"
+  ><gi-table
+    ref="table"
+    :columns="columns"
+    :load="load"
+    :export-value="exported"
     ><template #toolbar
       ><a-button v-if="can('ai:model:edit')" type="primary" @click="edit()"
         >新增模型</a-button

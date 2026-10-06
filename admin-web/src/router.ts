@@ -29,6 +29,11 @@ export const router = createRouter({
           meta: { permission: "app:version:view" },
         },
         {
+          path: "releases/:id",
+          component: () => import("./pages/ReleaseDetail.vue"),
+          meta: { permission: "app:version:view" },
+        },
+        {
           path: "documents/:kind",
           component: () => import("./pages/Documents.vue"),
         },
@@ -61,6 +66,21 @@ export const router = createRouter({
           path: "ai-usage",
           component: () => import("./pages/AIUsage.vue"),
           meta: { permission: "ai:usage:view" },
+        },
+        {
+          path: "ai-calls/:id",
+          component: () => import("./pages/AICallDetail.vue"),
+          meta: { permission: "ai:usage:view" },
+        },
+        {
+          path: "push",
+          component: () => import("./pages/Push.vue"),
+          meta: { permission: "operations:push:view" },
+        },
+        {
+          path: "push/:id",
+          component: () => import("./pages/PushDetail.vue"),
+          meta: { permission: "operations:push:view" },
         },
         {
           path: "ledger",

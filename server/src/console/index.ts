@@ -11,6 +11,7 @@ import { pageQuery, paginate } from "./query.js";
 import { registerEventManagement, registerEventIngestion } from "./events.js";
 import { registerAIManagement } from "./ai.js";
 import { registerOperations, registerPublicOperations } from "./operations.js";
+import { registerPushManagement } from "./push.js";
 
 export type Authenticate = (header: string | undefined) => {
   id: string;
@@ -42,6 +43,7 @@ export async function registerConsole(
       registerEventManagement(consoleApp, store);
       registerAIManagement(consoleApp, store);
       registerOperations(consoleApp, store);
+      registerPushManagement(consoleApp, store);
       consoleApp.get("/audit", async (request) => {
         authorize(store, request, "system:audit");
         const input = pageQuery.parse(request.query);

@@ -18,12 +18,42 @@ const columns = (values: Array<[string, string]>): TableColumnData[] =>
     width: dataIndex.includes("Id") ? 220 : 150,
   }));
 export const resources: Record<string, ResourceDefinition> = {
+  "/logins": {
+    title: "登录日志",
+    description: "管理员登录结果；不保存密码与请求正文。",
+    permission: "system:audit",
+    rowKey: "id",
+    columns: columns([
+      ["username", "账号"],
+      ["success", "结果（1 成功 / 0 失败）"],
+      ["createdAt", "登录时间"],
+    ]),
+    load: (query) => api.list("/logins", query),
+  },
+  "/sessions": {
+    title: "在线会话",
+    description: "尚未到期的管理会话；最近活跃按接口访问更新，可撤销其他会话。",
+    permission: "system:session",
+    rowKey: "id",
+    columns: [
+      ...columns([
+        ["id", "会话 ID"],
+        ["username", "账号"],
+        ["roleId", "角色"],
+        ["createdAt", "登录时间"],
+        ["lastSeenAt", "最近活跃"],
+        ["expiresAt", "过期时间"],
+      ]),
+      { title: "操作", slotName: "actions", fixed: "right", width: 120 },
+    ],
+    load: (query) => api.list("/sessions", query),
+  },
   "/diagnostics": {
     title: "调试日志",
     description:
       "复用现有通用诊断事件；为保护隐私，仅返回事件元数据，不返回 message 和 data_json。",
     permission: "auto-accounting:event:list",
-    rowKey: "eventId",
+    rowKey: "id",
     columns: columns([
       ["userId", "用户 ID"],
       ["eventId", "事件 ID"],
@@ -37,7 +67,7 @@ export const resources: Record<string, ResourceDefinition> = {
     title: "用户设备",
     description: "由已登录 APP 上报设备版本与功能状态。缺失字段表示尚未上报。",
     permission: "device:list",
-    rowKey: "installationId",
+    rowKey: "id",
     columns: columns([
       ["userId", "用户 ID"],
       ["installationId", "安装 ID"],

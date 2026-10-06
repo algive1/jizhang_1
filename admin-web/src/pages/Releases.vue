@@ -4,6 +4,7 @@ import { Message } from "@arco-design/web-vue";
 import type { TableColumnData } from "@arco-design/web-vue";
 import PageHeader from "../components/PageHeader.vue";
 import GiTable from "../components/GiTable.vue";
+import ReleaseForm from "../components/ReleaseForm.vue";
 import { api } from "../api/console";
 import { can } from "../state/session";
 import type { Release, ReleaseInput } from "../api/types";
@@ -15,31 +16,22 @@ const filters = reactive({
   platform: undefined as string | undefined,
   status: undefined as string | undefined,
 });
-const form = reactive<ReleaseInput>({
-  platform: "android",
-  versionName: "",
-  versionCode: 1,
-  minimumVersion: "",
-  downloadUrl: "",
-  changelog: "",
-  rollout: 100,
-});
 const drawerWidth = Math.min(520, Math.max(320, 0.9 * window.innerWidth));
 const columns: TableColumnData[] = [
   { title: "平台", dataIndex: "platform", width: 100 },
   { title: "版本", dataIndex: "versionName" },
   { title: "versionCode", dataIndex: "versionCode" },
   { title: "最低支持", dataIndex: "minimumVersion" },
-  { title: "灰度范围", slotName: "rollout" },
-  { title: "发布状态", slotName: "status" },
-  { title: "更新时间", slotName: "date" },
+  { title: "灰度范围（%）", dataIndex: "rollout", slotName: "rollout" },
+  { title: "发布状态", dataIndex: "status", slotName: "status" },
+  { title: "更新时间", dataIndex: "updatedAt", slotName: "date" },
   { title: "操作", slotName: "actions", fixed: "right", width: 220 },
 ];
-async function save() {
+async function save(form: ReleaseInput) {
   saving.value = true;
   error.value = "";
   try {
-    await api.createRelease({ ...form });
+    await api.createRelease(form);
     editing.value = false;
     Message.success("版本草稿已创建");
     await table.value?.refresh();
@@ -111,24 +103,27 @@ async function state(
       )
     }}</template
     ><template #actions="{ record }"
-      ><a-space v-if="can('app:version:publish')"
-        ><a-popconfirm
-          v-if="record.status !== 'published'"
-          content="确认发布此版本策略？"
-          @ok="state(record, 'published')"
-          ><a-button type="text" size="small">发布</a-button></a-popconfirm
-        ><a-popconfirm
-          v-else
-          content="确认下线？APP 将回退到上一已发布版本或环境配置。"
-          @ok="state(record, 'offline')"
-          ><a-button type="text" size="small" status="danger"
-            >下线</a-button
-          ></a-popconfirm
-        ><a-popconfirm
-          v-if="record.status === 'published' && record.rollout < 100"
-          content="确认向所有设备发布？"
-          @ok="state(record, 'published', 100)"
-          ><a-button type="text" size="small">全量</a-button></a-popconfirm
+      ><a-space
+        ><router-link :to="'/releases/' + record.id">详情</router-link
+        ><template v-if="can('app:version:publish')"
+          ><a-popconfirm
+            v-if="record.status !== 'published'"
+            content="确认发布此版本策略？"
+            @ok="state(record, 'published')"
+            ><a-button type="text" size="small">发布</a-button></a-popconfirm
+          ><a-popconfirm
+            v-else
+            content="确认下线？APP 将回退到上一已发布版本或环境配置。"
+            @ok="state(record, 'offline')"
+            ><a-button type="text" size="small" status="danger"
+              >下线</a-button
+            ></a-popconfirm
+          ><a-popconfirm
+            v-if="record.status === 'published' && record.rollout < 100"
+            content="确认向所有设备发布？"
+            @ok="state(record, 'published', 100)"
+            ><a-button type="text" size="small">全量</a-button></a-popconfirm
+          ></template
         ></a-space
       ></template
     ></gi-table
@@ -138,46 +133,6 @@ async function state(
     :width="drawerWidth"
     :footer="false"
     ><a-alert v-if="error" type="error">{{ error }}</a-alert
-    ><a-form :model="form" layout="vertical" @submit-success="save"
-      ><a-form-item label="平台" field="platform"
-        ><a-select v-model="form.platform"
-          ><a-option value="android">Android</a-option
-          ><a-option value="ios">iOS</a-option></a-select
-        ></a-form-item
-      ><a-form-item label="versionName" field="versionName" required
-        ><a-input
-          v-model="form.versionName"
-          :input-attrs="{ 'aria-label': 'versionName' }"
-          placeholder="例如 1.3.0" /></a-form-item
-      ><a-form-item label="versionCode" field="versionCode" required
-        ><a-input-number
-          v-model="form.versionCode"
-          :input-attrs="{ 'aria-label': 'versionCode' }"
-          :min="1"
-          :precision="0" /></a-form-item
-      ><a-form-item label="最低支持版本" field="minimumVersion" required
-        ><a-input
-          v-model="form.minimumVersion"
-          :input-attrs="{ 'aria-label': '最低支持版本' }"
-          placeholder="例如 1.1.0；低于此版本强制更新" /></a-form-item
-      ><a-form-item label="下载地址（HTTPS）" field="downloadUrl" required
-        ><a-input
-          v-model="form.downloadUrl"
-          :input-attrs="{ 'aria-label': '下载地址（HTTPS）' }" /></a-form-item
-      ><a-form-item label="灰度百分比" field="rollout"
-        ><a-input-number
-          v-model="form.rollout"
-          :min="0"
-          :max="100"
-          :precision="0" /></a-form-item
-      ><a-form-item label="更新日志" field="changelog" required
-        ><a-textarea
-          v-model="form.changelog"
-          :textarea-attrs="{ 'aria-label': '更新日志' }"
-          :auto-size="{ minRows: 4, maxRows: 10 }" /></a-form-item
-      ><a-button type="primary" html-type="submit" :loading="saving"
-        >保存草稿</a-button
-      ></a-form
-    ></a-drawer
-  >
+    ><release-form v-if="editing" :saving="saving" @save="save"
+  /></a-drawer>
 </template>

@@ -14,7 +14,11 @@ const props = defineProps<{
   filters?: Query;
   rowKey?: string;
   emptyText?: string;
+  selection?: boolean;
+  exportValue?: (row: T, column: TableColumnData) => unknown;
 }>();
+const emit = defineEmits<{ selectionChange: [keys: Array<string | number>] }>();
+const selectedKeys = ref<Array<string | number>>([]);
 const query = ref({
   page: 1,
   pageSize: 20,
@@ -25,6 +29,10 @@ const query = ref({
 const { data, loading, error, refresh } = useResource(() =>
   props.load({ ...query.value, ...props.filters }),
 );
+watch(data, () => {
+  selectedKeys.value = [];
+});
+watch(selectedKeys, (keys) => emit("selectionChange", keys));
 const visibleKeys = ref(
   props.columns.map((c) => String(c.dataIndex ?? c.slotName)),
 );
@@ -68,15 +76,26 @@ function exportPage() {
   const quote = (v: unknown) =>
     '"' +
     format(v)
-      .replace(/^[=+@-]/, "'$&")
+      .replace(/^[\s\u0000-\u001f]*[=+@-]/, "'$&")
       .replaceAll('"', '""') +
     '"';
+  const exportedColumns = columns.value.filter((c) => c.slotName !== "actions");
+  const exportedValue = (row: T, column: TableColumnData) => {
+    if (props.exportValue) return props.exportValue(row, column);
+    const key = String(column.dataIndex ?? column.slotName ?? "");
+    const raw = value(row, key);
+    if (raw != null && key.endsWith("At")) {
+      const timestamp = Number(raw);
+      return new Date(
+        timestamp < 1e12 ? timestamp * 1000 : timestamp,
+      ).toLocaleString("zh-CN");
+    }
+    return raw != null && key === "costMicroUsd" ? Number(raw) / 1000000 : raw;
+  };
   const body = [
-    columns.value.map((c) => quote(c.title)).join(","),
+    exportedColumns.map((c) => quote(c.title)).join(","),
     ...data.value.items.map((row) =>
-      columns.value
-        .map((c) => quote(value(row, String(c.dataIndex ?? ""))))
-        .join(","),
+      exportedColumns.map((c) => quote(exportedValue(row, c))).join(","),
     ),
   ].join("\r\n");
   const url = URL.createObjectURL(
@@ -117,9 +136,10 @@ defineExpose({ refresh });
     </form>
     <div class="table-toolbar">
       <div>
-        <slot name="toolbar" /><span class="muted"
-          >共 {{ data?.total ?? 0 }} 条</span
-        >
+        <slot name="toolbar" /><slot
+          name="batch"
+          :selected-keys="selectedKeys"
+        /><span class="muted">共 {{ data?.total ?? 0 }} 条</span>
       </div>
       <a-space
         ><a-button aria-label="刷新列表" @click="refresh"
@@ -147,6 +167,10 @@ defineExpose({ refresh });
         ><a-button size="small" @click="refresh">重试</a-button></template
       ></a-alert
     ><a-table
+      v-model:selected-keys="selectedKeys"
+      :row-selection="
+        selection ? { type: 'checkbox', showCheckedAll: true } : undefined
+      "
       :columns="columns"
       :data="data?.items ?? []"
       :loading="loading"

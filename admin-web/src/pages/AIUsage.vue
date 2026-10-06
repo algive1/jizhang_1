@@ -36,10 +36,22 @@ const columns: TableColumnData[] = [
   { title: "输入 Token", dataIndex: "inputTokens" },
   { title: "输出 Token", dataIndex: "outputTokens" },
   { title: "耗时 ms", dataIndex: "durationMs" },
-  { title: "估算成本 USD", slotName: "cost" },
-  { title: "调用时间", slotName: "time", width: 180 },
+  { title: "估算成本 USD", dataIndex: "costMicroUsd", slotName: "cost" },
+  { title: "调用时间", dataIndex: "createdAt", slotName: "time", width: 180 },
+  { title: "操作", slotName: "actions", fixed: "right", width: 90 },
 ];
 const load = api.aiCalls;
+const cost = (value: number | null) =>
+  value == null ? "未知" : "$" + (value / 1000000).toFixed(6);
+const groupedColumns: TableColumnData[] = [
+  { title: "调用", dataIndex: "calls" },
+  { title: "可估价调用", dataIndex: "pricedCalls" },
+  {
+    title: "已知部分成本 USD",
+    dataIndex: "costMicroUsd",
+    render: ({ record }) => cost(record.costMicroUsd as number | null),
+  },
+];
 </script>
 <template>
   <page-header
@@ -93,6 +105,12 @@ const load = api.aiCalls;
           >
         </article>
       </div>
+      <p class="notice muted">
+        单用户平均成本 USD：{{ cost(data.totals.averageUserCostMicroUsd) }} ·
+        单次记账平均成本 USD：{{
+          cost(data.totals.averageBookkeepingCostMicroUsd)
+        }}
+      </p>
       <a-alert class="notice">{{ data.integration }}</a-alert>
       <section class="surface chart-panel">
         <h2>调用趋势</h2>
@@ -100,10 +118,33 @@ const load = api.aiCalls;
           v-if="data.trend.length"
           :option="chart"
           label="AI 调用量趋势"
-        /><a-empty
-          v-else
-          description="尚无上游调用记录"
-        /></section></template></a-spin
+        /><a-empty v-else description="尚无上游调用记录" />
+      </section>
+      <div class="two-columns">
+        <section class="surface chart-panel">
+          <h2>按模型成本</h2>
+          <a-table
+            :data="data.byModel"
+            :columns="[
+              { title: '模型', dataIndex: 'model' },
+              ...groupedColumns,
+            ]"
+            :pagination="false"
+            row-key="model"
+          />
+        </section>
+        <section class="surface chart-panel">
+          <h2>按功能成本</h2>
+          <a-table
+            :data="data.byFeature"
+            :columns="[
+              { title: '功能', dataIndex: 'feature' },
+              ...groupedColumns,
+            ]"
+            :pagination="false"
+            row-key="feature"
+          />
+        </section></div></template></a-spin
   ><page-header
     title="调用日志"
     description="仅保存模型、状态、Token 与耗时，不保存用户输入与模型输出。"
@@ -115,6 +156,9 @@ const load = api.aiCalls;
     }}</template
     ><template #time="{ record }">{{
       new Date(record.createdAt * 1000).toLocaleString("zh-CN")
-    }}</template></gi-table
+    }}</template
+    ><template #actions="{ record }"
+      ><router-link :to="'/ai-calls/' + record.id">详情</router-link></template
+    ></gi-table
   >
 </template>

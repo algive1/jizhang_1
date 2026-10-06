@@ -6,13 +6,42 @@ import { authorize, auditAction } from "./auth.js";
 import { pageQuery, paginate } from "./query.js";
 
 const userSelect = `SELECT u.id,u.username,u.display_name AS displayName,u.created_at AS createdAt,
-  COALESCE(st.disabled,0) AS disabled,(SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id=u.id) AS lastSeenAt,
+  COALESCE(st.disabled,0) AS accountDisabled,(SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id=u.id) AS lastSeenAt,
   d.app_version AS appVersion,d.android_version AS androidVersion,d.brand,d.model,d.auto_enabled AS autoEnabled,d.backup_enabled AS backupEnabled,
   CASE WHEN COALESCE((SELECT expires_at FROM membership_adjustments WHERE user_id=u.id),0)>:now
     OR COALESCE((SELECT expires_at FROM membership_subscriptions WHERE user_id=u.id),0)>:now
     OR EXISTS(SELECT 1 FROM apple_transactions WHERE user_id=u.id AND revoked_at IS NULL AND expires_at>:now) THEN 1 ELSE 0 END AS member`;
 const userFrom = `FROM users u LEFT JOIN console_user_state st ON st.user_id=u.id LEFT JOIN console_devices d ON d.rowid=(SELECT rowid FROM console_devices WHERE user_id=u.id ORDER BY last_seen_at DESC LIMIT 1)`;
 export function registerUsers(app: FastifyInstance, store: Store) {
+  const setStatus = (
+    request: Parameters<typeof authorize>[1],
+    ids: string[],
+    disabled: boolean,
+  ) => {
+    const admin = authorize(store, request, "user:disable");
+    return store.db.transaction(() => {
+      const exists = store.db.prepare(
+        "SELECT 1 FROM users WHERE id=? AND username NOT LIKE 'deleted_%'",
+      );
+      for (const id of ids)
+        check(exists.get(id), "用户不存在，未修改任何账号", 404);
+      const upsert = store.db.prepare(
+        "INSERT INTO console_user_state VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET disabled=excluded.disabled",
+      );
+      const revoke = store.db.prepare("DELETE FROM sessions WHERE user_id=?");
+      for (const id of ids) {
+        upsert.run(id, Number(disabled));
+        if (disabled) revoke.run(id);
+        auditAction(
+          store,
+          admin,
+          disabled ? "user:disable" : "user:enable",
+          id,
+        );
+      }
+      return { changed: ids.length };
+    })();
+  };
   app.get("/users", async (request) => {
     authorize(store, request, "user:list");
     const input = pageQuery
@@ -63,31 +92,22 @@ export function registerUsers(app: FastifyInstance, store: Store) {
     };
   });
   app.patch("/users/:id/status", async (request) => {
-    const admin = authorize(store, request, "user:disable");
+    authorize(store, request, "user:disable");
     const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
     const { disabled } = z
       .strictObject({ disabled: z.boolean() })
       .parse(request.body);
-    check(
-      store.db
-        .prepare(
-          "SELECT 1 FROM users WHERE id=? AND username NOT LIKE 'deleted_%'",
-        )
-        .get(id),
-      "用户不存在",
-      404,
-    );
-    store.db.transaction(() => {
-      store.db
-        .prepare(
-          "INSERT INTO console_user_state VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET disabled=excluded.disabled",
-        )
-        .run(id, Number(disabled));
-      if (disabled)
-        store.db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
-      auditAction(store, admin, disabled ? "user:disable" : "user:enable", id);
-    })();
-    return { ok: true };
+    return setStatus(request, [id], disabled);
+  });
+  app.post("/users/batch-status", async (request) => {
+    authorize(store, request, "user:disable");
+    const { ids, disabled } = z
+      .strictObject({
+        ids: z.array(z.string().min(1).max(100)).min(1).max(100),
+        disabled: z.boolean(),
+      })
+      .parse(request.body);
+    return setStatus(request, [...new Set(ids)], disabled);
   });
   app.get("/devices", async (request) => {
     authorize(store, request, "device:list");
@@ -107,7 +127,7 @@ export function registerUsers(app: FastifyInstance, store: Store) {
     return paginate(
       store,
       input,
-      "SELECT user_id AS userId,installation_id AS installationId,platform,app_version AS appVersion,android_version AS androidVersion,brand,model,auto_enabled AS autoEnabled,backup_enabled AS backupEnabled,last_seen_at AS lastSeenAt",
+      "SELECT user_id||':'||installation_id AS id,user_id AS userId,installation_id AS installationId,platform,app_version AS appVersion,android_version AS androidVersion,brand,model,auto_enabled AS autoEnabled,backup_enabled AS backupEnabled,last_seen_at AS lastSeenAt",
       `FROM console_devices ${filters.length ? "WHERE " + filters.join(" AND ") : ""}`,
       args,
       "last_seen_at DESC",

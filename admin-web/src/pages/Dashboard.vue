@@ -85,6 +85,39 @@ const versions = computed<EChartsOption>(() => ({
     },
   ],
 }));
+const pipeline = computed<EChartsOption>(() => ({
+  animation: false,
+  color: ["#42695a", "#8a98b4"],
+  tooltip: { trigger: "axis" },
+  legend: { bottom: 0 },
+  grid: { left: 45, right: 45, top: 20, bottom: 55 },
+  xAxis: {
+    type: "category",
+    data: data.value?.trends.map((r) => r.day.slice(5)),
+  },
+  yAxis: [
+    { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
+    { type: "value", minInterval: 1 },
+  ],
+  series: [
+    {
+      name: "候选写库成功率",
+      type: "line",
+      data: data.value?.trends.map((r) =>
+        r.autoSuccessRate == null
+          ? null
+          : +(r.autoSuccessRate * 100).toFixed(1),
+      ),
+    },
+    {
+      name: "AI 调用次数",
+      type: "bar",
+      yAxisIndex: 1,
+      barMaxWidth: 18,
+      data: data.value?.trends.map((r) => r.aiCalls),
+    },
+  ],
+}));
 const sources = computed<EChartsOption>(() => ({
   animation: false,
   color: ["#42695a"],
@@ -136,6 +169,20 @@ const sources = computed<EChartsOption>(() => ({
         v-if="data"
         :option="trend"
         label="用户与记账趋势图" /><a-empty v-else description="暂无统计数据"
+    /></a-spin>
+  </section>
+  <section class="surface chart-panel">
+    <div class="section-heading">
+      <h2>自动记账成功率与 AI 调用</h2>
+      <span class="muted">无候选时成功率为未知</span>
+    </div>
+    <a-spin :loading="loading" class="block"
+      ><stat-chart
+        v-if="data"
+        :option="pipeline"
+        label="自动记账成功率与 AI 调用趋势" /><a-empty
+        v-else
+        description="暂无统计数据"
     /></a-spin>
   </section>
   <div class="two-columns">

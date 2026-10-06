@@ -41,6 +41,18 @@ test("P0 login, dashboard, user detail, versions and responsive layout", async (
   await expect(
     page.getByRole("cell", { name: "3.0.0", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "3.0.0", exact: true }) })
+    .getByRole("link", { name: "详情" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "APP 版本详情" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "编辑草稿" }).click();
+  await page.getByLabel("更新日志", { exact: true }).fill("已在详情页修订");
+  await page.getByRole("button", { name: "保存草稿" }).click();
+  await expect(page.getByText("已在详情页修订", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "远程配置", exact: true }).click();
   await page.getByRole("button", { name: "新建修订" }).click();
   await page.getByLabel("标识", { exact: true }).fill("browser.features");
@@ -121,25 +133,23 @@ test("P1 failure trace and versioned rule editing use real APIs", async ({
   await page.getByRole("button", { name: "新建修订" }).click();
   await page.getByLabel("标识", { exact: true }).fill("browser.rule");
   await page.getByLabel("修改备注", { exact: true }).fill("事件规则测试");
-  await page
-    .getByLabel("配置内容", { exact: true })
-    .fill(
-      JSON.stringify({
-        packageName: "com.test.payment",
-        pageIdentifier: "success",
-        activity: "",
-        nodeFeatures: [],
-        textFeatures: ["支付成功"],
-        notificationTitlePattern: "",
-        notificationBodyPattern: "",
-        amountPattern: "[0-9]+",
-        merchantPattern: "",
-        priority: 100,
-        minAppVersion: "1.0.0",
-        maxAppVersion: null,
-        enabled: true,
-      }),
-    );
+  await page.getByLabel("配置内容", { exact: true }).fill(
+    JSON.stringify({
+      packageName: "com.test.payment",
+      pageIdentifier: "success",
+      activity: "",
+      nodeFeatures: [],
+      textFeatures: ["支付成功"],
+      notificationTitlePattern: "",
+      notificationBodyPattern: "",
+      amountPattern: "[0-9]+",
+      merchantPattern: "",
+      priority: 100,
+      minAppVersion: "1.0.0",
+      maxAppVersion: null,
+      enabled: true,
+    }),
+  );
   await page.getByRole("button", { name: "保存新修订" }).click();
   await expect(
     page.getByRole("cell", { name: "browser.rule", exact: true }),
@@ -171,8 +181,99 @@ test("P2 model configuration persists and AI metrics show unknown usage honestly
   await expect(
     page.getByRole("heading", { name: "AI 用量与成本" }),
   ).toBeVisible();
-  await expect(page.getByText("尚无上游调用记录")).toBeVisible();
-  await expect(page.getByText("0 / 0 次可估价")).toBeVisible();
+  await expect(page.getByText("0 / 1 次可估价")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("cell", { name: "browser-ai-call", exact: true }),
+    })
+    .getByRole("link", { name: "详情" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "AI 调用详情" }),
+  ).toBeVisible();
+  await expect(page.getByText("未知", { exact: true })).toHaveCount(3);
+});
+test("system sessions and Push drafts provide real management workflows", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.getByLabel("管理员账号", { exact: true }).fill("browser_admin");
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill("browser-test-password-2026");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "工作台", exact: true }),
+  ).toBeVisible();
+  const other = await page.evaluate(async () => {
+    const token = (
+      await (
+        await fetch("/api/v1/console/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: "browser_admin",
+            password: "browser-test-password-2026",
+          }),
+        })
+      ).json()
+    ).data.token as string;
+    const sessions = (
+      await (
+        await fetch("/api/v1/console/sessions", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ).json()
+    ).data.items as Array<{ id: string; current: boolean }>;
+    return { token, id: sessions.find((s) => s.current)!.id };
+  });
+  await page.getByRole("link", { name: "在线会话", exact: true }).click();
+  await expect(page.getByText("当前会话", { exact: true })).toBeVisible();
+  const lastRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: other.id, exact: true }) });
+  await lastRow.getByRole("button", { name: "撤销" }).click();
+  await page.getByRole("button", { name: "确定", exact: true }).click();
+  await expect(page.getByText("会话已撤销", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      async (token) =>
+        (
+          await fetch("/api/v1/console/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ).status,
+      other.token,
+    ),
+  ).toBe(401);
+  await page.getByRole("link", { name: "登录日志", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "登录日志" })).toBeVisible();
+  const userId = await page.evaluate(async () => {
+    const token = sessionStorage.getItem("haohao-console-session");
+    return (
+      await (
+        await fetch("/api/v1/console/users?q=browser_user", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ).json()
+    ).data.items[0].id as string;
+  });
+  await page.getByRole("link", { name: "Push 推送", exact: true }).click();
+  await page.getByRole("button", { name: "新建推送草稿" }).click();
+  await page.getByLabel("目标用户 ID").fill(userId);
+  await page.getByLabel("推送标题").fill("浏览器推送草稿");
+  await page.getByLabel("推送正文").fill("仅测试草稿，不发送消息");
+  await page.getByRole("button", { name: "保存推送草稿" }).click();
+  await expect(
+    page.getByRole("heading", { name: "推送任务详情" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("目标用户尚未注册推送设备，草稿可保留。"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "发布推送", exact: true }),
+  ).toBeDisabled();
 });
 test("P3 FAQ persistence, feedback processing and backup privacy states", async ({
   page,
@@ -210,4 +311,57 @@ test("P3 FAQ persistence, feedback processing and backup privacy states", async 
       "现有备份为 gzip 压缩，尚未端到端加密。加密协议、任务遥测和恢复记录待 APP 接入。",
     ),
   ).toBeVisible();
+});
+test("batch user management and password workflows invalidate sessions correctly", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.getByLabel("管理员账号", { exact: true }).fill("browser_admin");
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill("browser-test-password-2026");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "工作台", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "用户管理", exact: true }).click();
+  const row = page.getByRole("row").filter({
+    has: page.getByRole("link", { name: "浏览器测试用户", exact: true }),
+  });
+  await row.getByRole("checkbox").locator("..").click();
+  await page.getByRole("button", { name: "批量禁用", exact: true }).click();
+  await page.getByRole("button", { name: "确定", exact: true }).click();
+  await expect(row.getByText("已禁用", { exact: true })).toBeVisible();
+  await row.getByRole("checkbox").locator("..").click();
+  await page.getByRole("button", { name: "批量解禁", exact: true }).click();
+  await page.getByRole("button", { name: "确定", exact: true }).click();
+  await expect(row.getByText("正常", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "管理员", exact: true }).click();
+  await page.getByRole("button", { name: "新增管理员", exact: true }).click();
+  await page.getByLabel("管理员账号名称").fill("browser_managed");
+  await page.getByLabel("管理员初始密码").fill("browser-managed-password");
+  await page.getByRole("button", { name: "创建", exact: true }).click();
+  const admin = page.getByRole("row").filter({
+    has: page.getByRole("cell", { name: "browser_managed", exact: true }),
+  });
+  await admin.getByRole("button", { name: "重置密码", exact: true }).click();
+  await page
+    .getByLabel("新密码（至少 12 位）")
+    .fill("browser-managed-reset-password");
+  await page.getByLabel("确认新密码").fill("browser-managed-reset-password");
+  await page.getByRole("button", { name: "保存密码", exact: true }).click();
+  await expect(
+    page.getByText("密码已重置，旧会话已撤销", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "修改我的密码", exact: true }).click();
+  await page.getByLabel("当前密码").fill("browser-test-password-2026");
+  await page
+    .getByLabel("新密码（至少 12 位）")
+    .fill("browser-admin-changed-password");
+  await page.getByLabel("确认新密码").fill("browser-admin-changed-password");
+  await page.getByRole("button", { name: "保存密码", exact: true }).click();
+  await expect(page).toHaveURL(/login/);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("haohao-console-session")),
+  ).toBeNull();
 });

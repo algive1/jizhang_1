@@ -4,17 +4,30 @@ import { Message } from "@arco-design/web-vue";
 import type { TableColumnData } from "@arco-design/web-vue";
 import PageHeader from "../components/PageHeader.vue";
 import GiTable from "../components/GiTable.vue";
+import PasswordEditor from "../components/PasswordEditor.vue";
 import { api } from "../api/console";
 import { session } from "../state/session";
 import type { Role, Administrator } from "../api/types";
 const table = ref<{ refresh: () => Promise<void> }>(),
-  roles = ref<Role[]>([]),
+  roles = ref<Array<Pick<Role, "id" | "name">>>([]),
   editing = ref(false),
   error = ref(""),
   saving = ref(false);
 const form = reactive({ username: "", password: "", roleId: "support" });
+const target = ref<Administrator | null>(null),
+  passwordTarget = ref<Administrator | null>(null);
+function edit(row?: Administrator) {
+  target.value = row ?? null;
+  Object.assign(form, {
+    username: row?.username ?? "",
+    password: "",
+    roleId: row?.roleId ?? "support",
+  });
+  error.value = "";
+  editing.value = true;
+}
 void api
-  .roles()
+  .roleOptions()
   .then((v) => {
     roles.value = v;
   })
@@ -23,19 +36,29 @@ void api
   });
 const columns: TableColumnData[] = [
   { title: "账号", dataIndex: "username" },
-  { title: "角色", slotName: "role" },
-  { title: "状态", slotName: "status" },
-  { title: "创建时间", slotName: "date" },
+  { title: "角色", dataIndex: "roleId", slotName: "role" },
+  {
+    title: "状态（1 启用 / 0 禁用）",
+    dataIndex: "enabled",
+    slotName: "status",
+  },
+  { title: "创建时间", dataIndex: "createdAt", slotName: "date" },
   { title: "操作", slotName: "actions" },
 ];
 async function save() {
   saving.value = true;
   error.value = "";
   try {
-    await api.createAdministrator({ ...form });
+    if (target.value)
+      await api.updateAdministrator(
+        target.value.id,
+        Boolean(target.value.enabled),
+        form.roleId,
+      );
+    else await api.createAdministrator({ ...form });
     form.password = "";
     editing.value = false;
-    Message.success("管理员已创建");
+    Message.success(target.value ? "角色已更新，旧会话已撤销" : "管理员已创建");
     await table.value?.refresh();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "创建失败";
@@ -59,9 +82,7 @@ async function toggle(row: Administrator) {
   /><a-alert v-if="error" type="error">{{ error }}</a-alert
   ><gi-table ref="table" :load="api.administrators" :columns="columns"
     ><template #toolbar
-      ><a-button type="primary" @click="editing = true"
-        >新增管理员</a-button
-      ></template
+      ><a-button type="primary" @click="edit()">新增管理员</a-button></template
     ><template #role="{ record }">{{
       roles.find((r) => r.id === record.roleId)?.name ?? record.roleId
     }}</template
@@ -73,25 +94,38 @@ async function toggle(row: Administrator) {
       new Date(record.createdAt * 1000).toLocaleString("zh-CN")
     }}</template
     ><template #actions="{ record }"
-      ><a-popconfirm
-        v-if="record.id !== session.admin?.id"
-        content="确认更新状态？此账号的会话将撤销。"
-        @ok="toggle(record)"
-        ><a-button type="text" size="small">{{
-          record.enabled ? "禁用" : "启用"
-        }}</a-button></a-popconfirm
+      ><a-space v-if="record.id !== session.admin?.id"
+        ><a-button type="text" size="small" @click="edit(record)">角色</a-button
+        ><a-button type="text" size="small" @click="passwordTarget = record"
+          >重置密码</a-button
+        ><a-popconfirm
+          content="确认更新状态？此账号的会话将撤销。"
+          @ok="toggle(record)"
+          ><a-button type="text" size="small">{{
+            record.enabled ? "禁用" : "启用"
+          }}</a-button></a-popconfirm
+        ></a-space
       ></template
     ></gi-table
   >
   <section v-if="editing" class="surface detail-section">
-    <h2>新增管理员</h2>
+    <h2>{{ target ? "调整管理员角色" : "新增管理员" }}</h2>
     <a-form :model="form" layout="vertical" @submit-success="save"
       ><a-form-item label="账号" field="username" required
-        ><a-input v-model="form.username" autocomplete="off" /></a-form-item
-      ><a-form-item label="密码（至少 12 位）" field="password" required
+        ><a-input
+          v-model="form.username"
+          autocomplete="off"
+          :disabled="Boolean(target)"
+          :input-attrs="{ 'aria-label': '管理员账号名称' }" /></a-form-item
+      ><a-form-item
+        v-if="!target"
+        label="密码（至少 12 位）"
+        field="password"
+        required
         ><a-input-password
           v-model="form.password"
-          autocomplete="new-password" /></a-form-item
+          autocomplete="new-password"
+          :input-attrs="{ 'aria-label': '管理员初始密码' }" /></a-form-item
       ><a-form-item label="角色" field="roleId"
         ><a-select v-model="form.roleId"
           ><a-option v-for="role in roles" :key="role.id" :value="role.id">{{
@@ -99,8 +133,9 @@ async function toggle(row: Administrator) {
           }}</a-option></a-select
         ></a-form-item
       ><a-space
-        ><a-button type="primary" html-type="submit" :loading="saving"
-          >创建</a-button
+        ><a-button type="primary" html-type="submit" :loading="saving">{{
+          target ? "保存角色" : "创建"
+        }}</a-button
         ><a-button
           @click="
             editing = false;
@@ -111,4 +146,9 @@ async function toggle(row: Administrator) {
       ></a-form
     >
   </section>
+  <password-editor
+    v-if="passwordTarget"
+    :target="passwordTarget"
+    @close="passwordTarget = null"
+  />
 </template>

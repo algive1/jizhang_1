@@ -89,9 +89,15 @@ export function registerDashboard(app: FastifyInstance, store: Store) {
           `WITH RECURSIVE dates(day) AS (SELECT date(:since,'unixepoch','+8 hours') UNION ALL SELECT date(day,'+1 day') FROM dates WHERE day<date(:today,'unixepoch','+8 hours')),
         registrations AS (SELECT date(created_at,'unixepoch','+8 hours') AS day,COUNT(*) AS n FROM users WHERE created_at>=:since AND created_at<:until AND username NOT LIKE 'deleted_%' GROUP BY day),
         activity AS (SELECT date(occurred_at,'unixepoch','+8 hours') AS day,COUNT(DISTINCT installation_id) AS active,SUM(CASE WHEN event_name='bookkeeping_saved' THEN 1 ELSE 0 END) AS bookkeeping FROM analytics_events WHERE occurred_at>=:since AND occurred_at<:until GROUP BY day),
-        automatic AS (SELECT date(occurred_at/1000,'unixepoch','+8 hours') AS day,COUNT(DISTINCT user_id||':'||trace_id) AS saved FROM console_events WHERE stage='saved' AND status='success' AND occurred_at>=:since*1000 AND occurred_at<:until*1000 GROUP BY day)
-        SELECT dates.day,COALESCE(registrations.n,0) AS users,COALESCE(activity.active,0) AS active,COALESCE(activity.bookkeeping,0) AS bookkeeping,COALESCE(automatic.saved,0) AS autoSaved
-        FROM dates LEFT JOIN registrations USING(day) LEFT JOIN activity USING(day) LEFT JOIN automatic USING(day) ORDER BY dates.day`,
+        automatic AS (SELECT date(occurred_at/1000,'unixepoch','+8 hours') AS day,
+          COUNT(DISTINCT CASE WHEN stage='saved' AND status='success' THEN user_id||':'||trace_id END) AS saved,
+          COUNT(DISTINCT CASE WHEN stage='candidate' THEN user_id||':'||trace_id END) AS candidates,
+          COUNT(DISTINCT CASE WHEN stage='candidate' AND EXISTS(SELECT 1 FROM console_events result WHERE result.user_id=console_events.user_id AND result.trace_id=console_events.trace_id AND result.stage='saved' AND result.status='success') THEN user_id||':'||trace_id END) AS converted
+          FROM console_events WHERE occurred_at>=:since*1000 AND occurred_at<:until*1000 GROUP BY day),
+        ai AS (SELECT date(created_at,'unixepoch','+8 hours') AS day,COUNT(*) AS calls FROM console_ai_calls WHERE created_at>=:since AND created_at<:until GROUP BY day)
+        SELECT dates.day,COALESCE(registrations.n,0) AS users,COALESCE(activity.active,0) AS active,COALESCE(activity.bookkeeping,0) AS bookkeeping,COALESCE(automatic.saved,0) AS autoSaved,
+          CASE WHEN automatic.candidates>0 THEN 1.0*automatic.converted/automatic.candidates ELSE NULL END AS autoSuccessRate,COALESCE(ai.calls,0) AS aiCalls
+        FROM dates LEFT JOIN registrations USING(day) LEFT JOIN activity USING(day) LEFT JOIN automatic USING(day) LEFT JOIN ai USING(day) ORDER BY dates.day`,
         )
         .all({ since, today, until: today + 86400 }),
       versions: store.db

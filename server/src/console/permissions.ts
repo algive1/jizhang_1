@@ -28,10 +28,14 @@ export const permissionCatalog = {
   "operations:view": "查看运营内容",
   "operations:edit": "编辑运营内容",
   "operations:publish": "发布公告",
+  "operations:push:view": "查看推送任务",
+  "operations:push:edit": "创建推送草稿",
+  "operations:push:publish": "发布和停止推送",
   "feedback:edit": "处理反馈状态",
   "system:admin": "管理员管理",
   "system:role": "角色权限管理",
   "system:audit": "审计日志",
+  "system:session": "管理会话与撤销",
 } as const;
 export type Permission = keyof typeof permissionCatalog;
 export const menus = [
@@ -162,6 +166,24 @@ export const menus = [
     group: "系统管理",
     permission: "system:audit",
   },
+  {
+    path: "/logins",
+    title: "登录日志",
+    group: "系统管理",
+    permission: "system:audit",
+  },
+  {
+    path: "/sessions",
+    title: "在线会话",
+    group: "系统管理",
+    permission: "system:session",
+  },
+  {
+    path: "/push",
+    title: "Push 推送",
+    group: "运营中心",
+    permission: "operations:push:view",
+  },
 ] satisfies Array<{
   path: string;
   title: string;
@@ -193,6 +215,8 @@ export const initialRoles: Array<{
       "app:config:view",
       "operations:view",
       "operations:edit",
+      "operations:push:view",
+      "operations:push:edit",
       "feedback:view",
     ],
   },

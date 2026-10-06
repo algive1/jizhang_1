@@ -28,6 +28,10 @@ export function ensureConsoleSchema(store: Store) {
     CREATE INDEX IF NOT EXISTS console_ai_calls_time ON console_ai_calls(created_at,model,status);
     CREATE TABLE IF NOT EXISTS console_operations(id TEXT PRIMARY KEY,kind TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS console_operations_kind ON console_operations(kind,updated_at);
+    CREATE TABLE IF NOT EXISTS console_push_campaigns(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL,route TEXT,state TEXT NOT NULL DEFAULT 'draft',device_count INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created_at INTEGER NOT NULL,published_at INTEGER);
+    CREATE TABLE IF NOT EXISTS console_push_jobs(job_id TEXT PRIMARY KEY REFERENCES push_outbox(id) ON DELETE CASCADE,campaign_id TEXT NOT NULL REFERENCES console_push_campaigns(id) ON DELETE CASCADE);
+    CREATE INDEX IF NOT EXISTS console_push_campaign_time ON console_push_campaigns(created_at DESC);
+    CREATE INDEX IF NOT EXISTS console_push_campaign_jobs ON console_push_jobs(campaign_id);
     CREATE TABLE IF NOT EXISTS console_migrations(version INTEGER PRIMARY KEY,applied_at INTEGER NOT NULL);
   `);
   store.db
@@ -36,4 +40,24 @@ export function ensureConsoleSchema(store: Store) {
   store.db
     .prepare("INSERT OR IGNORE INTO console_migrations VALUES(2,?)")
     .run(store.now());
+  if (
+    !store.db.prepare("SELECT 1 FROM console_migrations WHERE version=3").get()
+  ) {
+    store.db.transaction(() => {
+      store.db.exec(`
+        ALTER TABLE console_releases ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE console_releases ADD COLUMN updated_at INTEGER;
+        UPDATE console_releases SET updated_at=created_at;
+        ALTER TABLE console_sessions ADD COLUMN session_id TEXT;
+        ALTER TABLE console_sessions ADD COLUMN created_at INTEGER;
+        ALTER TABLE console_sessions ADD COLUMN last_seen_at INTEGER;
+        UPDATE console_sessions SET session_id=lower(hex(randomblob(16)));
+        CREATE UNIQUE INDEX console_session_id ON console_sessions(session_id);
+        CREATE INDEX console_logins_time ON console_logins(created_at DESC);
+      `);
+      store.db
+        .prepare("INSERT INTO console_migrations VALUES(3,?)")
+        .run(store.now());
+    })();
+  }
 }

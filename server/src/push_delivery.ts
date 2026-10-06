@@ -236,6 +236,7 @@ export function queuePushForUser(
   store: Store,
   userId: string,
   payload: PushPayload,
+  onQueued?: (jobId: string) => void,
 ) {
   ensurePushDeliverySchema(store);
   const devices = store.db.prepare(
@@ -249,8 +250,9 @@ export function queuePushForUser(
   );
   store.db.transaction(() => {
     for (const device of devices) {
+      const jobId = randomUUID();
       insert.run(
-        randomUUID(),
+        jobId,
         device.user_id,
         device.device_id,
         device.platform,
@@ -262,6 +264,7 @@ export function queuePushForUser(
         now,
         now,
       );
+      onQueued?.(jobId);
     }
   })();
   return devices.length;
@@ -328,6 +331,7 @@ export async function dispatchPushOutbox(store: Store, limit = 50) {
 
 export function startPushWorker(store: Store) {
   ensurePushDeliverySchema(store);
+  if (process.env.PUSH_WORKER_ENABLED === 'false') return () => {};
   let running = false;
   const tick = async () => {
     if (running) return;

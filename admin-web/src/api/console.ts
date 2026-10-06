@@ -16,10 +16,14 @@ import type {
   AIModel,
   AIModelInput,
   AIUsage,
+  AICall,
   Operation,
   FeedbackDetail,
   LedgerStatistics,
   BackupSummary,
+  PushCampaign,
+  PushDetail,
+  PushJob,
 } from "./types";
 export const api = {
   login: (username: string, password: string) =>
@@ -29,6 +33,16 @@ export const api = {
     }),
   me: () => request<Admin>("/auth/me"),
   logout: () => request("/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request("/auth/password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
+  resetAdminPassword: (id: string, password: string) =>
+    request(`/administrators/${encodeURIComponent(id)}/password`, {
+      method: "POST",
+      body: { password },
+    }),
   dashboard: (days: number) =>
     request<Dashboard>("/dashboard", { query: { days } }),
   users: (query: Query) => request<Page<User>>("/users", { query }),
@@ -41,9 +55,15 @@ export const api = {
       method: "PATCH",
       body: { disabled },
     }),
+  setUsersStatus: (ids: string[], disabled: boolean) =>
+    request("/users/batch-status", { method: "POST", body: { ids, disabled } }),
   releases: (query: Query) => request<Page<Release>>("/releases", { query }),
   createRelease: (body: ReleaseInput) =>
     request("/releases", { method: "POST", body }),
+  release: (id: string) =>
+    request<Release>(`/releases/${encodeURIComponent(id)}`),
+  editRelease: (id: string, body: ReleaseInput & { revision: number }) =>
+    request(`/releases/${encodeURIComponent(id)}`, { method: "PUT", body }),
   releaseState: (
     id: string,
     status: "published" | "offline",
@@ -86,6 +106,7 @@ export const api = {
       method: "DELETE",
     }),
   roles: () => request<Role[]>("/roles"),
+  roleOptions: () => request<Array<Pick<Role, "id" | "name">>>("/role-options"),
   permissions: () => request<Record<string, string>>("/permissions"),
   updateRole: (role: Role) =>
     request(`/roles/${role.id}`, {
@@ -114,20 +135,31 @@ export const api = {
     }),
   aiUsage: (period: string) =>
     request<AIUsage>("/ai/usage", { query: { period, days: 30 } }),
-  aiCalls: (query: Query) =>
-    request<
-      Page<{
-        id: string;
-        feature: string;
-        model: string;
-        status: string;
-        inputTokens: number | null;
-        outputTokens: number | null;
-        durationMs: number;
-        costMicroUsd: number | null;
-        createdAt: number;
-      }>
-    >("/ai/calls", { query }),
+  aiCalls: (query: Query) => request<Page<AICall>>("/ai/calls", { query }),
+  aiCall: (id: string) =>
+    request<AICall>(`/ai/calls/${encodeURIComponent(id)}`),
+  revokeSession: (id: string) =>
+    request(`/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  pushCampaigns: (query: Query) =>
+    request<Page<PushCampaign>>("/push/campaigns", { query }),
+  createPush: (
+    body: Pick<PushCampaign, "userId" | "title" | "body" | "route">,
+  ) => request<{ id: string }>("/push/campaigns", { method: "POST", body }),
+  pushDetail: (id: string) =>
+    request<PushDetail>(`/push/campaigns/${encodeURIComponent(id)}`),
+  pushJobs: (id: string, query: Query) =>
+    request<Page<PushJob>>(`/push/campaigns/${encodeURIComponent(id)}/jobs`, {
+      query,
+    }),
+  publishPush: (id: string) =>
+    request(`/push/campaigns/${encodeURIComponent(id)}/publish`, {
+      method: "POST",
+      body: { confirmed: true },
+    }),
+  stopPush: (id: string) =>
+    request(`/push/campaigns/${encodeURIComponent(id)}/stop`, {
+      method: "POST",
+    }),
   ledger: () => request<LedgerStatistics>("/ledger/statistics"),
   backupSummary: () => request<BackupSummary>("/backups/summary"),
   operations: (query: Query) =>

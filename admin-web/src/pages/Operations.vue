@@ -22,13 +22,17 @@ const form = reactive<{
 const columns: TableColumnData[] = [
   { title: "标题", dataIndex: "title" },
   { title: "类型", dataIndex: "kind" },
-  { title: "状态", slotName: "status" },
+  {
+    title: "状态（1 启用 / 0 禁用）",
+    dataIndex: "enabled",
+    slotName: "status",
+  },
   { title: "操作", slotName: "actions" },
 ];
 const announcementColumns: TableColumnData[] = [
   { title: "标题", dataIndex: "title" },
   { title: "正文", dataIndex: "body" },
-  { title: "发布时间", slotName: "date" },
+  { title: "发布时间", dataIndex: "publishedAt", slotName: "date" },
 ];
 function edit(row?: Operation) {
   id.value = row?.id ?? "";

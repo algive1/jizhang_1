@@ -120,6 +120,8 @@ test("user paging/filtering, metadata privacy, and disabling blocks old and new 
   assert.equal(page.total, 1);
   assert.equal(page.items[0].autoEnabled, 1);
   assert.equal(page.items[0].backupEnabled, 0);
+  assert.equal(page.items[0].accountDisabled, 0);
+  assert.equal("disabled" in page.items[0], false);
   assert.equal(
     (await app.inject({ url: "/api/v1/console/users?member=no", headers }))
       .statusCode,

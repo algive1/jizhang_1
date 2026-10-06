@@ -6,11 +6,14 @@ import {
   IconMenuFold,
   IconPoweroff,
   IconSafe,
+  IconLock,
 } from "@arco-design/web-vue/es/icon";
 import { session, signOut } from "../state/session";
+import PasswordEditor from "./PasswordEditor.vue";
 const route = useRoute(),
   router = useRouter(),
   open = ref(false);
+const changingPassword = ref(false);
 const groups = computed(() => [
   ...new Set(session.admin?.menus.map((m) => m.group) ?? []),
 ]);
@@ -72,6 +75,11 @@ async function logout() {
             session.admin?.username.slice(0, 1).toUpperCase()
           }}</a-avatar
           ><span>{{ session.admin?.username }}</span
+          ><a-button
+            type="text"
+            aria-label="修改我的密码"
+            @click="changingPassword = true"
+            ><icon-lock /></a-button
           ><a-button type="text" aria-label="退出登录" @click="logout"
             ><icon-poweroff /></a-button
         ></a-space>
@@ -81,5 +89,9 @@ async function logout() {
         好好记账管理控制台<span>仅展示服务端已接入数据</span>
       </footer>
     </main>
+    <password-editor
+      v-if="changingPassword"
+      @close="changingPassword = false"
+    />
   </div>
 </template>

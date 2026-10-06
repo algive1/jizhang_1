@@ -21,7 +21,7 @@ export function registerOperations(app: FastifyInstance, store: Store) {
     return paginate(
       store,
       query,
-      "SELECT user_id AS userId,event_id AS eventId,occurred_at AS occurredAt,level,kind",
+      "SELECT user_id||':'||event_id AS id,user_id AS userId,event_id AS eventId,occurred_at AS occurredAt,level,kind",
       "FROM diagnostic_events WHERE kind LIKE ?",
       [`%${query.q}%`],
       "occurred_at DESC",

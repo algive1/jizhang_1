@@ -49,6 +49,8 @@ const promptSchema = z.strictObject({
     "voice",
     "ocr",
     "natural-language",
+    "assistant",
+    "insight",
   ]),
   systemPrompt: z.string().min(1).max(12000),
   userTemplate: z.string().min(1).max(12000),

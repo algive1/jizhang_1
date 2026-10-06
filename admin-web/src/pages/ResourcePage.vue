@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import type { TableColumnData } from "@arco-design/web-vue";
+import { Message } from "@arco-design/web-vue";
 import PageHeader from "../components/PageHeader.vue";
 import GiTable from "../components/GiTable.vue";
 import { resources } from "../api/resources";
@@ -9,6 +10,16 @@ import { can } from "../state/session";
 import { api } from "../api/console";
 import { useResource } from "../composables/useResource";
 const route = useRoute();
+const table = ref<{ refresh: () => Promise<void> }>();
+async function revoke(id: string) {
+  try {
+    await api.revokeSession(id);
+    Message.success("会话已撤销");
+    await table.value?.refresh();
+  } catch (e) {
+    Message.error(e instanceof Error ? e.message : "撤销失败");
+  }
+}
 const definition = computed(() => resources[route.path]);
 const filters = computed(() => ({
   userId:
@@ -30,8 +41,15 @@ const columns = computed<TableColumnData[]>(
     }) ?? [],
 );
 const summary = useResource(api.backupSummary);
-if (route.path === "/backups" && can("backup:status:view"))
-  void summary.refresh();
+watch(
+  () => route.path,
+  (path) => {
+    summary.data.value = null;
+    if (path === "/backups" && can("backup:status:view"))
+      void summary.refresh();
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <template v-if="definition && can(definition.permission)"
@@ -47,6 +65,8 @@ if (route.path === "/backups" && can("backup:status:view"))
       {{ (summary.data.value.storage.bytes / 1048576).toFixed(2) }} MiB
     </p>
     <gi-table
+      :key="route.path"
+      ref="table"
       :columns="columns"
       :load="definition.load"
       :filters="filters"
@@ -56,6 +76,16 @@ if (route.path === "/backups" && can("backup:status:view"))
           v-if="route.path === '/feedback'"
           :to="'/feedback/' + record.id"
           >详情</router-link
+        ><template v-else-if="route.path === '/sessions'"
+          ><span v-if="record.current">当前会话</span
+          ><a-popconfirm
+            v-else
+            content="撤销后该会话需要重新登录，确认继续？"
+            @ok="revoke(String(record.id))"
+            ><a-button type="text" status="danger" size="small"
+              >撤销</a-button
+            ></a-popconfirm
+          ></template
         ></template
       ></gi-table
     ></template

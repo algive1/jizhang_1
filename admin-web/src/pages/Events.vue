@@ -49,7 +49,7 @@ const labels: Record<string, string> = {
 };
 const columns: TableColumnData[] = [
   { title: "事件链", dataIndex: "traceId", width: 210 },
-  { title: "时间", slotName: "time", width: 200 },
+  { title: "时间", dataIndex: "occurredAt", slotName: "time", width: 200 },
   { title: "阶段", slotName: "stage" },
   { title: "结果", slotName: "status" },
   { title: "支付 APP", dataIndex: "packageName", width: 180 },

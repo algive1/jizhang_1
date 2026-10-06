@@ -87,6 +87,8 @@ export function publishedRelease(
   );
 }
 export function registerReleases(app: FastifyInstance, store: Store) {
+  const projection =
+    "SELECT r.id,platform,version_name AS versionName,version_code AS versionCode,minimum_version AS minimumVersion,download_url AS downloadUrl,changelog,rollout,status,r.created_at AS createdAt,published_at AS publishedAt,revision,updated_at AS updatedAt,a.username AS updatedBy";
   app.get("/releases", async (request) => {
     authorize(store, request, "app:version:view");
     const input = pageQuery
@@ -112,11 +114,68 @@ export function registerReleases(app: FastifyInstance, store: Store) {
     return paginate(
       store,
       input,
-      "SELECT id,platform,version_name AS versionName,version_code AS versionCode,minimum_version AS minimumVersion,download_url AS downloadUrl,changelog,rollout,status,created_at AS createdAt,published_at AS publishedAt",
-      `FROM console_releases ${filters.length ? "WHERE " + filters.join(" AND ") : ""}`,
+      projection,
+      `FROM console_releases r LEFT JOIN console_admins a ON a.id=r.updated_by ${filters.length ? "WHERE " + filters.join(" AND ") : ""}`,
       args,
       "version_code DESC",
     );
+  });
+  app.get("/releases/:id", async (request) => {
+    authorize(store, request, "app:version:view");
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const row = store.db
+      .prepare(
+        `${projection} FROM console_releases r LEFT JOIN console_admins a ON a.id=r.updated_by WHERE r.id=?`,
+      )
+      .get(id);
+    check(row, "版本不存在", 404);
+    return row;
+  });
+  app.put("/releases/:id", async (request) => {
+    const admin = authorize(store, request, "app:version:edit");
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const input = releaseSchema
+      .safeExtend({ revision: z.number().int().positive() })
+      .parse(request.body);
+    const row = store.db
+      .prepare("SELECT status,revision FROM console_releases WHERE id=?")
+      .get(id) as { status: string; revision: number } | undefined;
+    check(row, "版本不存在", 404);
+    check(
+      row.status === "draft",
+      "仅未发布草稿可编辑；已发布策略请创建新版本",
+      409,
+    );
+    check(row.revision === input.revision, "草稿已被修改，请刷新后重试", 409);
+    check(
+      !store.db
+        .prepare(
+          "SELECT 1 FROM console_releases WHERE platform=? AND version_code=? AND id<>?",
+        )
+        .get(input.platform, input.versionCode, id),
+      "该平台 versionCode 已存在",
+      409,
+    );
+    store.db.transaction(() => {
+      store.db
+        .prepare(
+          "UPDATE console_releases SET platform=?,version_name=?,version_code=?,minimum_version=?,download_url=?,changelog=?,rollout=?,revision=revision+1,updated_at=?,updated_by=? WHERE id=?",
+        )
+        .run(
+          input.platform,
+          input.versionName,
+          input.versionCode,
+          input.minimumVersion,
+          input.downloadUrl,
+          input.changelog,
+          input.rollout,
+          store.now(),
+          admin.id,
+          id,
+        );
+      auditAction(store, admin, "release:edit-draft", id);
+    })();
+    return { ok: true };
   });
   app.post("/releases", async (request) => {
     const admin = authorize(store, request, "app:version:edit");
@@ -134,7 +193,7 @@ export function registerReleases(app: FastifyInstance, store: Store) {
     store.db.transaction(() => {
       store.db
         .prepare(
-          "INSERT INTO console_releases(id,platform,version_name,version_code,minimum_version,download_url,changelog,rollout,created_at,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO console_releases(id,platform,version_name,version_code,minimum_version,download_url,changelog,rollout,created_at,updated_at,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           id,
@@ -145,6 +204,7 @@ export function registerReleases(app: FastifyInstance, store: Store) {
           v.downloadUrl,
           v.changelog,
           v.rollout,
+          store.now(),
           store.now(),
           admin.id,
         );
@@ -204,9 +264,17 @@ export function registerReleases(app: FastifyInstance, store: Store) {
     store.db.transaction(() => {
       store.db
         .prepare(
-          "UPDATE console_releases SET status=?,rollout=?,published_at=CASE WHEN ?='published' THEN ? ELSE published_at END,updated_by=? WHERE id=?",
+          "UPDATE console_releases SET status=?,rollout=?,published_at=CASE WHEN ?='published' THEN ? ELSE published_at END,revision=revision+1,updated_at=?,updated_by=? WHERE id=?",
         )
-        .run(status, percentage, status, store.now(), admin.id, id);
+        .run(
+          status,
+          percentage,
+          status,
+          store.now(),
+          store.now(),
+          admin.id,
+          id,
+        );
       auditAction(store, admin, `release:${status}:${percentage}`, id);
     })();
     return { ok: true };

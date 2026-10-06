@@ -248,6 +248,8 @@ export class ConsoleAIProvider implements AssistantModelProvider {
   }
 }
 export function registerAIManagement(app: FastifyInstance, store: Store) {
+  const callProjection =
+    "SELECT id,user_id AS userId,feature,model,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_microusd AS costMicroUsd,duration_ms AS durationMs,created_at AS createdAt";
   app.get("/ai/models", async (request) => {
     authorize(store, request, "ai:model:view");
     const input = pageQuery.parse(request.query);
@@ -348,10 +350,19 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
     return paginate(
       store,
       input,
-      "SELECT id,user_id AS userId,feature,model,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_microusd AS costMicroUsd,duration_ms AS durationMs,created_at AS createdAt",
+      callProjection,
       "FROM console_ai_calls WHERE model LIKE ?",
       [`%${input.q}%`],
     );
+  });
+  app.get("/ai/calls/:id", async (request) => {
+    authorize(store, request, "ai:usage:view");
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const row = store.db
+      .prepare(`${callProjection} FROM console_ai_calls WHERE id=?`)
+      .get(id);
+    check(row, "调用记录不存在", 404);
+    return row;
   });
   app.get("/ai/usage", async (request) => {
     authorize(store, request, "ai:usage:view");
@@ -364,9 +375,15 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
     const since = store.now() - days * 86400;
     const totals = store.db
       .prepare(
-        "SELECT COUNT(*) AS calls,SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS successes,SUM(input_tokens) AS inputTokens,SUM(output_tokens) AS outputTokens,SUM(cost_microusd) AS costMicroUsd,COUNT(cost_microusd) AS pricedCalls,AVG(duration_ms) AS averageDurationMs,COUNT(DISTINCT user_id) AS users FROM console_ai_calls WHERE created_at>=?",
+        "SELECT COUNT(*) AS calls,SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS successes,SUM(input_tokens) AS inputTokens,SUM(output_tokens) AS outputTokens,SUM(cost_microusd) AS costMicroUsd,COUNT(cost_microusd) AS pricedCalls,AVG(duration_ms) AS averageDurationMs,COUNT(DISTINCT user_id) AS users,COUNT(user_id) AS attributedCalls FROM console_ai_calls WHERE created_at>=?",
       )
-      .get(since);
+      .get(since) as {
+      calls: number;
+      pricedCalls: number;
+      users: number;
+      attributedCalls: number;
+      costMicroUsd: number | null;
+    };
     const date =
       period === "day"
         ? "date(created_at,'unixepoch','+8 hours')"
@@ -374,12 +391,21 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
           ? "date(created_at,'unixepoch','+8 hours','weekday 0','-6 days')"
           : "strftime('%Y-%m',created_at,'unixepoch','+8 hours')";
     return {
-      totals,
+      totals: {
+        ...totals,
+        averageUserCostMicroUsd:
+          totals.users &&
+          totals.attributedCalls === totals.calls &&
+          totals.pricedCalls === totals.calls
+            ? totals.costMicroUsd! / totals.users
+            : null,
+        averageBookkeepingCostMicroUsd: null,
+      },
       period,
       currency: "USD",
       priceUnit: "每百万 Token；费用为配置单价估算，非供应商结算账单",
       integration:
-        "调用日志不保存输入、输出、API Key。legacy provider 未返回 usage 时 Token / 成本为未知；上游成功不等于业务解析成功。",
+        "调用日志不保存输入、输出、API Key。legacy provider 未返回 usage 时 Token / 成本为未知；上游成功不等于业务解析成功。单用户平均成本仅在全部调用可归属且可估价时计算；单次记账成本等待 APP 账单与调用关联回执。",
       trend: store.db
         .prepare(
           `SELECT ${date} AS period,COUNT(*) AS calls,SUM(input_tokens) AS inputTokens,SUM(output_tokens) AS outputTokens,SUM(cost_microusd) AS costMicroUsd FROM console_ai_calls WHERE created_at>=? GROUP BY period ORDER BY period`,
@@ -387,12 +413,12 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
         .all(since),
       byModel: store.db
         .prepare(
-          "SELECT model,COUNT(*) AS calls,SUM(cost_microusd) AS costMicroUsd FROM console_ai_calls WHERE created_at>=? GROUP BY model",
+          "SELECT model,COUNT(*) AS calls,COUNT(cost_microusd) AS pricedCalls,SUM(cost_microusd) AS costMicroUsd FROM console_ai_calls WHERE created_at>=? GROUP BY model ORDER BY calls DESC LIMIT 100",
         )
         .all(since),
       byFeature: store.db
         .prepare(
-          "SELECT feature,COUNT(*) AS calls,SUM(cost_microusd) AS costMicroUsd FROM console_ai_calls WHERE created_at>=? GROUP BY feature",
+          "SELECT feature,COUNT(*) AS calls,COUNT(cost_microusd) AS pricedCalls,SUM(cost_microusd) AS costMicroUsd FROM console_ai_calls WHERE created_at>=? GROUP BY feature ORDER BY calls DESC LIMIT 100",
         )
         .all(since),
     };

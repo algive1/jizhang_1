@@ -23,7 +23,7 @@ export interface User {
   username: string;
   displayName: string | null;
   createdAt: number;
-  disabled: number;
+  accountDisabled: number;
   lastSeenAt: number | null;
   appVersion: string | null;
   androidVersion: string | null;
@@ -45,6 +45,9 @@ export interface Release {
   status: "draft" | "published" | "offline";
   createdAt: number;
   publishedAt: number | null;
+  revision: number;
+  updatedAt: number;
+  updatedBy: string | null;
 }
 export type ReleaseInput = Pick<
   Release,
@@ -92,6 +95,8 @@ export interface Trend {
   active: number;
   bookkeeping: number;
   autoSaved: number;
+  autoSuccessRate: number | null;
+  aiCalls: number;
 }
 export interface Dashboard {
   generatedAt: number;
@@ -147,6 +152,8 @@ export interface AIUsage {
     pricedCalls: number;
     averageDurationMs: number | null;
     users: number;
+    averageUserCostMicroUsd: number | null;
+    averageBookkeepingCostMicroUsd: number | null;
   };
   period: string;
   currency: string;
@@ -159,12 +166,30 @@ export interface AIUsage {
     outputTokens: number | null;
     costMicroUsd: number | null;
   }>;
-  byModel: Array<{ model: string; calls: number; costMicroUsd: number | null }>;
+  byModel: Array<{
+    model: string;
+    calls: number;
+    pricedCalls: number;
+    costMicroUsd: number | null;
+  }>;
   byFeature: Array<{
     feature: string;
     calls: number;
+    pricedCalls: number;
     costMicroUsd: number | null;
   }>;
+}
+export interface AICall {
+  id: string;
+  userId: string | null;
+  feature: string;
+  model: string;
+  status: "success" | "failed";
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number;
+  costMicroUsd: number | null;
+  createdAt: number;
 }
 export interface Operation {
   id: string;
@@ -198,4 +223,29 @@ export interface BackupSummary {
   storage: { datasets: number; snapshots: number | null; bytes: number };
   encryption: string;
   integration: string;
+}
+export interface PushCampaign {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  route: "/profile/messages" | "/profile" | "/" | null;
+  state: "draft" | "queued" | "stopped";
+  deviceCount: number;
+  createdAt: number;
+  publishedAt: number | null;
+}
+export interface PushDetail {
+  campaign: PushCampaign;
+  providers: Array<{ provider: string; devices: number; configured: boolean }>;
+  delivery: Array<{ status: string; count: number }>;
+}
+export interface PushJob {
+  id: string;
+  platform: string;
+  provider: string;
+  status: string;
+  attempts: number;
+  createdAt: number;
+  sentAt: number | null;
 }

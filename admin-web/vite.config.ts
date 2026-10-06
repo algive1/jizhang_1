@@ -1,6 +1,6 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   optimizeDeps: {
     include: [
@@ -12,7 +12,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: { "/api": process.env.ADMIN_API_TARGET ?? "http://127.0.0.1:8787" },
+    proxy: {
+      "/api":
+        loadEnv(mode, process.cwd(), "ADMIN_").ADMIN_API_TARGET ??
+        "http://127.0.0.1:8787",
+    },
   },
   build: {
     rollupOptions: {
@@ -21,4 +25,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
