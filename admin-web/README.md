@@ -16,7 +16,7 @@ npm ci
 npm run dev
 ```
 
-访问 `http://127.0.0.1:5173`。Vite 将 `/api` 同源代理至 8787，可用 `ADMIN_API_TARGET` 调整。首次启动空管理账号表时创建超级管理员；已有账号不会被环境变量重置。
+访问 `http://127.0.0.1:5173`。Vite 将 `/api` 同源代理至 8787，可用 `ADMIN_API_TARGET` 调整；本机 `.env.development.local` 的 `ADMIN_LOCAL_API_TARGET` 可覆盖预览目标并触发 Vite 重载。首次启动空管理账号表时创建超级管理员；已有账号不会被环境变量重置。
 
 `.env.local` 保持私有。前端只读取 `VITE_` 前缀变量，本工程不使用任何前端密钥变量。初始化后可以删除密码环境变量。
 
@@ -55,13 +55,15 @@ npm test
 
 ## 容器部署
 
-先复制 `server/.env.example` 为 `server/.env` 配置现有服务。在 `admin-web/.env.local` 配置初始化管理员，然后：
+正式部署统一使用 `server/docker-compose.production.yml`，APP API 与管理 API 共用同一个数据库。复制 `server/.env.example` 为 `server/.env` 并配置初始化管理员、API/后台域名和密钥，在 `server` 执行：
 
 ```powershell
-docker compose --env-file .env.local up --build -d
+docker compose -f docker-compose.production.yml up --build -d
 ```
 
-访问 `http://127.0.0.1:8080`。API 不向主机直接暴露，SQLite 位于持久卷。公网使用现有 TLS 网关转发；该 compose 启动新的数据库卷，接入已有生产数据库时必须明确挂载现有数据卷，先备份，不能把空卷误当原业务数据。
+访问 `ADMIN_DOMAIN` 配置的 HTTPS 域名。API 不向主机直接暴露，SQLite 位于持久卷。已有数据库要使用原有卷与 Compose 项目名，迁移前先完成备份。
+
+`admin-web/compose.yaml` 只启动控制台前端，不再创建另一套 API/数据库。单独使用时设置 `BACKEND_NETWORK` 为既有后端网络名，`ADMIN_API_UPSTREAM` 为该网络中的既有 API 地址；默认 `app:8787`。它在本机 8080 提供页面。
 
 当前环境未运行 Docker 验证；前后端构建和真实 HTTP / 浏览器流程已验证。
 
@@ -73,7 +75,9 @@ docker compose --env-file .env.local up --build -d
 
 ## AI 配置
 
-服务端设置 `AI_ENDPOINT_ALLOWLIST`（精确主机名列表）及密钥环境变量，如 `MY_MODEL_API_KEY`。后台模型只保存 `MY_MODEL_API_KEY` 的引用；启用前服务端验证白名单和密钥存在。价格单位为 USD / 百万 Token，成本按配置价格估算。未启用后台模型时继续使用现有 DeepSeek provider。
+服务端设置 `AI_ENDPOINT_ALLOWLIST`（精确主机名列表）。模型密钥可引用环境变量，或设置 64 位十六进制 `INTEGRATION_ENCRYPTION_KEY` 后在模型页面加密保存；页面不回显密钥。启用前验证白名单和密钥存在。支持场景路由、备用模型、连接测试和每日估算费用上限，价格单位为 USD / 百万 Token。费用为估算，不是供应商账单。未启用后台模型时继续使用现有 DeepSeek provider。
+
+会员/支付、腾讯 ASR、后端更新与备份的配置、验证及剩余联调项见 [本次实施说明](../docs/backend-implementation-2026-10-06.md)。
 
 ## APP 增量接入
 

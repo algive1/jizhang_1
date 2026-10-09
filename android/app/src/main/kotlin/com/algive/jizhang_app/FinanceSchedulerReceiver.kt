@@ -35,8 +35,34 @@ class FinanceSchedulerReceiver : BroadcastReceiver() {
                 engine.dartExecutor.binaryMessenger,
                 "jizhang/finance_scheduler",
             )
+            val budgetChannel = MethodChannel(engine.dartExecutor.binaryMessenger, "jizhang/budget_notifications")
+            budgetChannel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isGranted" -> result.success(
+                        androidx.core.app.NotificationManagerCompat.from(appContext).areNotificationsEnabled() &&
+                            (android.os.Build.VERSION.SDK_INT < 33 || appContext.checkSelfPermission(
+                                android.Manifest.permission.POST_NOTIFICATIONS,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED),
+                    )
+                    "requestPermission" -> result.success(null)
+                    "show" -> {
+                        val id = call.argument<String>("id")
+                        val title = call.argument<String>("title")
+                        val body = call.argument<String>("body")
+                        val route = call.argument<String>("route")
+                        if (id.isNullOrBlank() || title == null || body == null || route.isNullOrBlank()) {
+                            result.error("INVALID_BUDGET_NOTICE", "预算提醒参数不完整", null)
+                        } else {
+                            BudgetNotificationScheduler.show(appContext, id, title, body, route)
+                            result.success(null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
             val finish = {
                 channel.setMethodCallHandler(null)
+                budgetChannel.setMethodCallHandler(null)
                 engine.destroy()
                 pendingResult.finish()
             }

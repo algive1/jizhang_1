@@ -21,6 +21,8 @@ import 'package:jizhang_app/core/database/app_database.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/category.dart';
+import 'package:jizhang_app/core/models/account.dart';
+import 'package:jizhang_app/features/accounts/data/account_repository.dart';
 import 'package:jizhang_app/core/models/transaction_record.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/quick_add_sheet.dart';
 import 'package:jizhang_app/features/bookkeeping/presentation/components/category_grid.dart';
@@ -129,7 +131,10 @@ void main() {
     await _openCategoryPopover(tester, database, theme: theme);
 
     final surface = tester.widget<AppGlassSurface>(
-      find.byKey(const ValueKey('quick-subcategory-bubble')),
+      find.descendant(
+        of: find.byKey(const ValueKey('quick-subcategory-bubble')),
+        matching: find.byType(AppGlassSurface),
+      ),
     );
     expect(surface.tint?.a, 1);
   });
@@ -148,7 +153,7 @@ void main() {
     expect(surface.tint, Colors.white);
     expect(surface.glassOpacity, .94);
     expect(surface.themeColorAccents, isFalse);
-    expect(surface.borderRadius, AppNavGeometry.barHeight / 2);
+    expect(surface.borderRadius, 24);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('quick-subcategory-bubble')),
@@ -209,7 +214,7 @@ void main() {
     expect(icons.every((icon) => icon.size == 24), isTrue);
   });
 
-  testWidgets('一级分类其他在首位，其余按 sortOrder 倒序', (tester) async {
+  testWidgets('一级分类统一正序，餐饮第一，其他最后', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final database = createMemoryDatabase();
@@ -222,18 +227,6 @@ void main() {
       final roots = allCategories
           .where((item) => item.parentId == null && item.type == type)
           .toList();
-      roots.sort((a, b) {
-        final aIsOther =
-            a.name.startsWith('其他') ||
-            a.id == 'expense-other' ||
-            a.id == 'income-other';
-        final bIsOther =
-            b.name.startsWith('其他') ||
-            b.id == 'expense-other' ||
-            b.id == 'income-other';
-        if (aIsOther != bIsOther) return aIsOther ? -1 : 1;
-        return b.sortOrder.compareTo(a.sortOrder);
-      });
       return roots.map((item) => item.id).toList();
     }
 
@@ -248,60 +241,74 @@ void main() {
       expect(
         grid.categories.map((item) => item.id).toList(),
         expectedIds(type),
-        reason: '${type.name} 一级分类应将“其他”放首位，其余倒序',
+        reason: '${type.name} 一级分类应与公共分类顺序一致',
       );
     }
   });
 
-  testWidgets('液态玻璃子分类点击显示导航同款移动选中胶囊', (tester) async {
-    final database = createMemoryDatabase();
-    addTearDown(database.close);
-    await DatabaseSeeder(database).seedIfNeeded();
-    final theme = AppTheme.light(BuiltInThemes.liquidGlass);
-    final categories = await DriftCategoryRepository(database).getActive();
-    final child = categories.firstWhere(
-      (category) => category.parentId == 'expense-food',
-    );
-    await _openCategoryPopover(tester, database, theme: theme);
+  for (final appearance in BuiltInThemes.all) {
+    testWidgets('${appearance.id}: 子分类点击显示统一移动选中胶囊', (tester) async {
+      final database = createMemoryDatabase();
+      addTearDown(database.close);
+      await DatabaseSeeder(database).seedIfNeeded();
+      final theme = AppTheme.light(appearance);
+      final categories = await DriftCategoryRepository(database).getActive();
+      final child = categories.firstWhere(
+        (category) => category.parentId == 'expense-food',
+      );
+      await _openCategoryPopover(tester, database, theme: theme);
 
-    await tester.tap(find.byKey(ValueKey('quick-subcategory-${child.id}')));
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey('quick-subcategory-liquid-pill')),
-      findsOneWidget,
-    );
-    final pill = tester.widget<AnimatedPositioned>(
-      find.byKey(const ValueKey('quick-subcategory-liquid-pill')),
-    );
-    expect(pill.duration, const Duration(milliseconds: 220));
-    final movingSurface = tester.widget<AppLiquidGlassSurface>(
-      find.byKey(const ValueKey('quick-subcategory-liquid-pill-surface')),
-    );
-    expect(movingSurface.blurSigma, AppBottomNavigation.capsuleBlurSigma);
-    expect(movingSurface.themeColorAccents, isFalse);
-    final movingLens = tester.widget<LiquidGlassLens>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('quick-subcategory-liquid-pill-surface'),
-        ),
-        matching: find.byType(LiquidGlassLens),
-      ),
-    );
-    final movingTint = movingLens.style.appearance.color;
-    expect(movingTint.r, closeTo(movingTint.g, .001));
-    expect(movingTint.g, closeTo(movingTint.b, .001));
-    expect(movingLens.style.refraction.effectiveDistortion, greaterThan(0));
-    expect(movingLens.style.refraction.chromaticAberration, greaterThan(0));
-    expect(
-      find.byKey(const ValueKey('quick-subcategory-picker')),
-      findsOneWidget,
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('quick-subcategory-picker')),
-      findsNothing,
-    );
-  });
+      await tester.tap(find.byKey(ValueKey('quick-subcategory-${child.id}')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-liquid-pill')),
+        findsOneWidget,
+      );
+      final pill = tester.widget<AnimatedPositioned>(
+        find.byKey(const ValueKey('quick-subcategory-liquid-pill')),
+      );
+      expect(pill.duration, const Duration(milliseconds: 220));
+      final movingSurface = tester.widget<AppLiquidGlassSurface>(
+        find.byKey(const ValueKey('quick-subcategory-liquid-pill-surface')),
+      );
+      expect(movingSurface.blurSigma, AppBottomNavigation.capsuleBlurSigma);
+      expect(movingSurface.themeColorAccents, isFalse);
+      if (appearance.style == AppThemeStyle.liquidGlass) {
+        final movingLens = tester.widget<LiquidGlassLens>(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('quick-subcategory-liquid-pill-surface'),
+            ),
+            matching: find.byType(LiquidGlassLens),
+          ),
+        );
+        final movingTint = movingLens.style.appearance.color;
+        expect(movingTint.r, closeTo(movingTint.g, .001));
+        expect(movingTint.g, closeTo(movingTint.b, .001));
+        expect(movingLens.style.refraction.effectiveDistortion, greaterThan(0));
+        expect(movingLens.style.refraction.chromaticAberration, greaterThan(0));
+      } else {
+        expect(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('quick-subcategory-liquid-pill-surface'),
+            ),
+            matching: find.byType(LiquidGlassLens),
+          ),
+          findsNothing,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-picker')),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('quick-subcategory-picker')),
+        findsNothing,
+      );
+    });
+  }
 
   testWidgets(
     'many subcategories scroll without selecting and last item saves',
@@ -354,11 +361,7 @@ void main() {
     },
   );
 
-  for (final theme in [
-    BuiltInThemes.freshGreen,
-    BuiltInThemes.mistBlue,
-    BuiltInThemes.liquidGlass,
-  ]) {
+  for (final theme in [BuiltInThemes.freshGreen, BuiltInThemes.liquidGlass]) {
     testWidgets('category bubble follows theme ${theme.id}', (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -535,10 +538,13 @@ void main() {
     expect(find.byKey(const ValueKey('quick-book-selector')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-date-chip')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick-attachment-chip')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-image-chip')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('quick-ledger-only-chip')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('quick-recurring-chip')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-ai-entry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-voice-entry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-ai-entry')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-voice-entry')), findsNothing);
     expect(find.text('今天'), findsOneWidget);
 
     expect(find.byKey(const ValueKey('amount-key-1')), findsOneWidget);
@@ -581,21 +587,10 @@ void main() {
         .widget<TextField>(find.byKey(const ValueKey('quick-note-field')))
         .decoration!;
 
-    final ai = tester.getRect(find.byKey(const ValueKey('quick-ai-entry')));
-    final voice = tester.getRect(
-      find.byKey(const ValueKey('quick-voice-entry')),
-    );
-
     expect(note.height, closeTo(40, .1));
-    expect(ai.height, closeTo(36, .1));
-    expect(ai.width, lessThan(104));
-    expect(voice.width, closeTo(36, .1));
-    expect(voice.height, closeTo(36, .1));
-    expect(
-      note.width,
-      greaterThan(ai.width * 1.7),
-      reason: 'AI/语音入口压缩后，备注输入区应继续占据这一行的主要宽度',
-    );
+    expect(note.width, greaterThan(300));
+    expect(find.byKey(const ValueKey('quick-ai-entry')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-voice-entry')), findsNothing);
     expect(note.bottom, lessThan(amount.top));
     expect(detail.top, lessThanOrEqualTo(note.top));
     expect(detail.bottom, greaterThanOrEqualTo(amount.bottom));
@@ -652,6 +647,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('仅计流水保存、重新编辑开关及删除保持账户余额正确', (tester) async {
+    final database = await _openSheet(tester);
+    await _tapKeys(tester, ['1', '2']);
+    await tester.tap(find.byKey(const ValueKey('quick-ledger-only-chip')));
+    await tester.tap(find.byKey(const ValueKey('quick-done')));
+    await tester.pumpAndSettle();
+    final repository = DriftTransactionRepository(database);
+    final first = (await repository.getAll()).single;
+    expect(first.amount, 12);
+    expect(first.isConsumptionExpense, isTrue);
+    expect(first.metadataJson, contains('"ignoreAccountBalanceEffect":true'));
+    expect(
+      (await database.accountDao.findById(first.accountId))!.balanceInCents,
+      0,
+    );
+
+    for (final expectedCents in [-1200, 0]) {
+      final current = (await repository.getAll()).single;
+      final editing = showQuickAddSheet(
+        tester.element(find.text('打开记一笔')),
+        initialTransaction: current,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('quick-ledger-only-chip')));
+      await tester.tap(find.byKey(const ValueKey('quick-done')));
+      await tester.pumpAndSettle();
+      await editing;
+      expect(
+        (await database.accountDao.findById(first.accountId))!.balanceInCents,
+        expectedCents,
+      );
+    }
+    await repository.softDelete(first.id);
+    expect(
+      (await database.accountDao.findById(first.accountId))!.balanceInCents,
+      0,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('附件入口同时提供文件、图片和拍照，关闭不会改变金额', (tester) async {
+    await _openSheet(tester);
+    await _tapKeys(tester, ['2', '5']);
+    await tester.tap(find.byKey(const ValueKey('quick-attachment-chip')));
+    await tester.pumpAndSettle();
+    expect(find.text('选择文件'), findsOneWidget);
+    expect(find.text('从相册选择'), findsOneWidget);
+    expect(find.text('拍照'), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-image-chip')), findsNothing);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('= ¥25.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('未完成的表达式会被拒绝保存', (tester) async {
     final database = await _openSheet(tester);
 
@@ -668,6 +718,7 @@ void main() {
     final database = await _openSheet(tester);
 
     await _tapKeys(tester, ['1', '2']);
+    await tester.tap(find.byKey(const ValueKey('quick-ledger-only-chip')));
     await tester.tap(find.byKey(const ValueKey('quick-repeat')));
     await tester.pumpAndSettle();
 
@@ -683,6 +734,15 @@ void main() {
     saved = await _saved(database);
     expect(saved, hasLength(1));
     expect(saved.single.amountInCents, 500);
+    expect(
+      saved.single.metadataJson,
+      contains('"ignoreAccountBalanceEffect":false'),
+    );
+    expect(
+      (await database.accountDao.findById(saved.single.accountId))!
+          .balanceInCents,
+      -500,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -708,6 +768,23 @@ void main() {
 
   testWidgets('债务页签的还款走双账户且不带分类', (tester) async {
     final database = await _openSheet(tester);
+    final now = DateTime.now();
+    await DriftAccountRepository(database).create(
+      Account(
+        id: 'repayment-debt',
+        name: '待还款',
+        type: AccountType.liability,
+        balance: -100,
+        currency: 'CNY',
+        icon: 'wallet',
+        color: 0xff73963b,
+        sortOrder: 100,
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('quick-type-debt')));
     await tester.pumpAndSettle();
@@ -726,7 +803,7 @@ void main() {
     expect(saved, hasLength(1));
     expect(saved.single.type, TransactionType.repayment.name);
     expect(saved.single.amountInCents, 5000);
-    expect(saved.single.destinationAccountId, isNotNull);
+    expect(saved.single.destinationAccountId, 'repayment-debt');
     expect(saved.single.destinationAccountId, isNot(saved.single.accountId));
     expect(saved.single.categoryId, isNull);
     expect(tester.takeException(), isNull);

@@ -7,6 +7,8 @@ import '../../../core/models/book.dart';
 import '../../../core/models/family.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_bottom_panel.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
@@ -94,7 +96,7 @@ class _ConsumptionCalendarPageState
     final selected = _selectedDay == null
         ? const <TransactionRecord>[]
         : monthData.transactionsByDay[_selectedDay] ??
-            const <TransactionRecord>[];
+              const <TransactionRecord>[];
     final previousRecorded = monthData.previousRecorded;
     final nextRecorded = monthData.nextRecorded;
     final totalExpense = monthData.totalExpense;
@@ -118,119 +120,124 @@ class _ConsumptionCalendarPageState
         weekData?.maxDailyExpense ?? monthData.maxDailyExpense;
 
     return Scaffold(
-      backgroundColor: context.appBackground,
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * .4,
-            ),
-            child: SingleChildScrollView(
-              child: _MonthlyOverviewCard(
-                month: _month,
-                totalExpense: totalExpense,
-                totalIncome: totalIncome,
-                balance: balance,
-                consumptionDays: monthData.consumptionDays,
-              ),
+      extendBody: true,
+      backgroundColor: Colors.transparent,
+      bottomNavigationBar: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .4,
+        ),
+        child: AppBottomPanel(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          child: SingleChildScrollView(
+            child: _MonthlyOverviewCard(
+              month: _month,
+              totalExpense: totalExpense,
+              totalIncome: totalIncome,
+              balance: balance,
+              consumptionDays: monthData.consumptionDays,
             ),
           ),
         ),
       ),
-      body: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _CalendarHeroHeader(
-            previousRecordedMonth: previousRecorded,
-            nextRecordedMonth: nextRecorded,
-            onBack: () => context.canPop() ? context.pop() : context.go('/'),
-            onAnalytics: _openAnalysis,
-            onAction: (action) {
-              switch (action) {
-                case _CalendarHeaderAction.bookFilter:
-                  _openBookFilter();
-                case _CalendarHeaderAction.today:
-                  _goToday();
-                case _CalendarHeaderAction.previousRecordedMonth:
-                  if (previousRecorded != null) _setMonth(previousRecorded);
-                case _CalendarHeaderAction.nextRecordedMonth:
-                  if (nextRecorded != null) _setMonth(nextRecorded);
-              }
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            child: Column(
-              children: [
-                AppCard(
-                  borderRadius: 28,
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  child: Column(
-                    children: [
-                      _CalendarToolbar(
-                        month: _month,
-                        mode: _viewMode,
-                        canGoNext: !_isCurrentMonth,
-                        onPrevious: () => _moveMonth(-1),
-                        onNext: () => _moveMonth(1),
-                        onModeChanged: _setViewMode,
-                      ),
-                      const SizedBox(height: 6),
-                      if (_viewMode != _CalendarViewMode.stats) ...[
-                        const _WeekdayHeader(),
-                        const SizedBox(height: 6),
-                        _CalendarGrid(
-                          month: _month,
-                          dates: calendarDates,
-                          dailyExpense: calendarExpense,
-                          dailyIncome: calendarIncome,
-                          dailyOther: calendarOther,
-                          maxDailyExpense: calendarMaxDailyExpense,
-                          showDataOutsideMonth:
-                              _viewMode == _CalendarViewMode.week,
-                          selectedDay: _selectedDay,
-                          today: _today,
-                          onDateTap: (date) => setState(() {
-                            _month = DateTime(date.year, date.month);
-                            _selectedDay = date.day;
-                          }),
-                        ),
-                      ] else
-                        _CalendarInlineStats(
-                          totalExpense: totalExpense,
-                          totalIncome: totalIncome,
-                          balance: balance,
-                          consumptionDays: monthData.consumptionDays,
-                          highestExpenseDay: highest?.key,
-                          highestExpenseCents: highest?.value,
-                        ),
-                      const SizedBox(height: 8),
-                      _CalendarFooter(
-                        books: books,
-                        selectedBookId: effectiveBookFilterId,
-                        onBookTap: _openBookFilter,
-                        onToday: _goToday,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (selectedDate != null)
-                  _SelectedDayCard(
-                    date: selectedDate,
-                    transactions: selected,
-                    accountNames: accountNames,
-                    onAdd: _addForSelectedDate,
-                    onLongPress: (record) =>
-                        showTransactionActions(context, ref, record),
-                  ),
-                if (selectedDate != null) const SizedBox(height: 12),
-              ],
+      body: AppPageBackground(
+        child: Builder(
+          builder: (context) => ListView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.paddingOf(context).bottom,
             ),
+            children: [
+              _CalendarHeroHeader(
+                previousRecordedMonth: previousRecorded,
+                nextRecordedMonth: nextRecorded,
+                onBack: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
+                onAnalytics: _openAnalysis,
+                onAction: (action) {
+                  switch (action) {
+                    case _CalendarHeaderAction.bookFilter:
+                      _openBookFilter();
+                    case _CalendarHeaderAction.today:
+                      _goToday();
+                    case _CalendarHeaderAction.previousRecordedMonth:
+                      if (previousRecorded != null) _setMonth(previousRecorded);
+                    case _CalendarHeaderAction.nextRecordedMonth:
+                      if (nextRecorded != null) _setMonth(nextRecorded);
+                  }
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                child: Column(
+                  children: [
+                    AppCard(
+                      borderRadius: 28,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        children: [
+                          _CalendarToolbar(
+                            month: _month,
+                            mode: _viewMode,
+                            canGoNext: !_isCurrentMonth,
+                            onPrevious: () => _moveMonth(-1),
+                            onNext: () => _moveMonth(1),
+                            onModeChanged: _setViewMode,
+                          ),
+                          const SizedBox(height: 6),
+                          if (_viewMode != _CalendarViewMode.stats) ...[
+                            const _WeekdayHeader(),
+                            const SizedBox(height: 6),
+                            _CalendarGrid(
+                              month: _month,
+                              dates: calendarDates,
+                              dailyExpense: calendarExpense,
+                              dailyIncome: calendarIncome,
+                              dailyOther: calendarOther,
+                              maxDailyExpense: calendarMaxDailyExpense,
+                              showDataOutsideMonth:
+                                  _viewMode == _CalendarViewMode.week,
+                              selectedDay: _selectedDay,
+                              today: _today,
+                              onDateTap: (date) => setState(() {
+                                _month = DateTime(date.year, date.month);
+                                _selectedDay = date.day;
+                              }),
+                            ),
+                          ] else
+                            _CalendarInlineStats(
+                              totalExpense: totalExpense,
+                              totalIncome: totalIncome,
+                              balance: balance,
+                              consumptionDays: monthData.consumptionDays,
+                              highestExpenseDay: highest?.key,
+                              highestExpenseCents: highest?.value,
+                            ),
+                          const SizedBox(height: 8),
+                          _CalendarFooter(
+                            books: books,
+                            selectedBookId: effectiveBookFilterId,
+                            onBookTap: _openBookFilter,
+                            onToday: _goToday,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (selectedDate != null)
+                      _SelectedDayCard(
+                        date: selectedDate,
+                        transactions: selected,
+                        accountNames: accountNames,
+                        onAdd: _addForSelectedDate,
+                        onLongPress: (record) =>
+                            showTransactionActions(context, ref, record),
+                      ),
+                    if (selectedDate != null) const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -257,8 +264,8 @@ class _ConsumptionCalendarPageState
     final filtered = effectiveBookFilterId == null
         ? all
         : all
-            .where((item) => item.bookId == effectiveBookFilterId)
-            .toList(growable: false);
+              .where((item) => item.bookId == effectiveBookFilterId)
+              .toList(growable: false);
     final transactionsByDay = <int, List<TransactionRecord>>{};
     final dailyExpense = <int, double>{};
     final dailyIncome = <int, double>{};
@@ -609,27 +616,22 @@ class _CalendarHeroHeader extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/微信图片_20260919140237_156_240.png',
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            cacheWidth:
-                (MediaQuery.sizeOf(context).width *
-                        MediaQuery.devicePixelRatioOf(context))
-                    .ceil(),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  context.appBackground.withValues(alpha: .08),
-                  context.appBackground,
-                ],
-                stops: const [0, .78, 1],
-              ),
+          ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.white, Color(0xEBFFFFFF), Colors.transparent],
+              stops: [0, .78, 1],
+            ).createShader(bounds),
+            child: Image.asset(
+              'assets/images/微信图片_20260919140237_156_240.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              cacheWidth:
+                  (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .ceil(),
             ),
           ),
           SafeArea(
@@ -1572,91 +1574,88 @@ class _MonthlyOverviewCard extends StatelessWidget {
       1.0,
     ].reduce((a, b) => a > b ? a : b);
 
-    return AppCard(
-      borderRadius: 26,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final textScale = MediaQuery.textScalerOf(context).scale(1);
-              final range = Text(
-                '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
-                ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
-                style: TextStyle(fontSize: 11, color: context.appSecondaryText),
-              );
-              const title = Text(
-                '本月概览',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              );
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = MediaQuery.textScalerOf(context).scale(1);
+            final range = Text(
+              '${month.year}.${month.month.toString().padLeft(2, '0')}.01'
+              ' - ${month.month.toString().padLeft(2, '0')}.${lastDay.toString().padLeft(2, '0')}',
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
+            );
+            const title = Text(
+              '本月概览',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            );
 
-              if (textScale > 1.2 || constraints.maxWidth < 300) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [title, const SizedBox(height: 4), range],
-                );
-              }
+            if (textScale > 1.2 || constraints.maxWidth < 300) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [title, const SizedBox(height: 4), range],
+              );
+            }
 
-              return Row(
-                children: [
-                  title,
-                  const SizedBox(width: 12),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: range,
-                    ),
+            return Row(
+              children: [
+                title,
+                const SizedBox(width: 12),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: range,
                   ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MonthlyMetric(
-                  value: _formatMoneyLabel(totalExpense),
-                  label: '月支出',
-                  progress: totalExpense.abs() / scale,
-                  color: const Color(0xFFFF7A45),
                 ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _MonthlyMetric(
+                value: _formatMoneyLabel(totalExpense),
+                label: '月支出',
+                progress: totalExpense.abs() / scale,
+                color: const Color(0xFFFF7A45),
               ),
-              const _MetricDivider(),
-              Expanded(
-                child: _MonthlyMetric(
-                  value: _formatMoneyLabel(totalIncome),
-                  label: '月收入',
-                  progress: totalIncome.abs() / scale,
-                  color: const Color(0xFF5BAE61),
-                ),
+            ),
+            const _MetricDivider(),
+            Expanded(
+              child: _MonthlyMetric(
+                value: _formatMoneyLabel(totalIncome),
+                label: '月收入',
+                progress: totalIncome.abs() / scale,
+                color: const Color(0xFF5BAE61),
               ),
-              const _MetricDivider(),
-              Expanded(
-                child: _MonthlyMetric(
-                  value: _formatMoneyLabel(balance),
-                  label: '结余',
-                  progress: balance.abs() / scale,
-                  color: context.appPrimary,
-                ),
+            ),
+            const _MetricDivider(),
+            Expanded(
+              child: _MonthlyMetric(
+                value: _formatMoneyLabel(balance),
+                label: '结余',
+                progress: balance.abs() / scale,
+                color: context.appPrimary,
               ),
-              const _MetricDivider(),
-              Expanded(
-                child: _MonthlyMetric(
-                  value: '$consumptionDays天',
-                  label: '有消费',
-                  progress: consumptionDays / lastDay,
-                  color: context.appPrimary,
-                ),
+            ),
+            const _MetricDivider(),
+            Expanded(
+              child: _MonthlyMetric(
+                value: '$consumptionDays天',
+                label: '有消费',
+                progress: consumptionDays / lastDay,
+                color: context.appPrimary,
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
+    return content;
   }
 }
 

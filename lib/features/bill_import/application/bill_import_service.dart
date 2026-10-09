@@ -88,10 +88,18 @@ class BillImportResult {
 }
 
 class BillImportService {
-  const BillImportService();
+  const BillImportService({
+    this.maxFileBytes = 20 * 1024 * 1024,
+    this.maxRows = 10000,
+  });
+  final int maxFileBytes, maxRows;
 
   Future<BillImportResult> parseFile(String path) async {
-    final bytes = await File(path).readAsBytes();
+    final file = File(path);
+    if (await file.length() > maxFileBytes)
+      throw FormatException('文件超过 ${maxFileBytes ~/ (1024 * 1024)} MB，请分批导入');
+    final bytes = await file.readAsBytes();
+    if (bytes.length > maxFileBytes) throw const FormatException('文件超过大小限制');
     final lowerPath = path.toLowerCase();
     final looksLikeXlsx =
         lowerPath.endsWith('.xlsx') ||
@@ -102,12 +110,15 @@ class BillImportService {
             bytes[3] == 0x04);
     if (looksLikeXlsx) return parseXlsx(bytes);
 
-    final text = utf8.decode(bytes, allowMalformed: true).replaceFirst('\ufeff', '');
+    final text = utf8
+        .decode(bytes, allowMalformed: true)
+        .replaceFirst('\ufeff', '');
     return parseCsv(text);
   }
 
   BillImportResult parseXlsx(List<int> bytes) {
-    final sheets = const XlsxTableReader().readSheets(bytes);
+    if (bytes.length > maxFileBytes) throw const FormatException('文件超过大小限制');
+    final sheets = XlsxTableReader(maxRows: maxRows + 100).readSheets(bytes);
     FormatException? lastError;
     for (final sheet in sheets) {
       final rows = sheet
@@ -115,13 +126,12 @@ class BillImportService {
           .toList(growable: false);
       if (rows.isEmpty) continue;
       try {
-        return _parseRows(rows);
+        return _checked(_parseRows(rows));
       } on FormatException catch (error) {
         lastError = error;
       }
     }
-    throw lastError ??
-        const FormatException('Excel 文件中没有识别到可导入的账单工作表');
+    throw lastError ?? const FormatException('Excel 文件中没有识别到可导入的账单工作表');
   }
 
   BillImportResult parseMumuXlsx(List<int> bytes) {
@@ -136,20 +146,24 @@ class BillImportService {
     final rows = _parseDelimited(input)
         .where((row) => row.any((cell) => cell.trim().isNotEmpty))
         .toList(growable: false);
-    return _parseRows(rows);
+    return _checked(_parseRows(rows));
+  }
+
+  BillImportResult _checked(BillImportResult result) {
+    if (result.rows.length > maxRows)
+      throw FormatException('每次最多导入 $maxRows 笔，请拆分文件');
+    return result;
   }
 
   BillImportResult _parseRows(List<List<String>> rows) {
     if (rows.isEmpty) throw const FormatException('账单文件为空');
+    if (rows.length > maxRows + 100) throw FormatException('文件行数超过限制，请分批导入');
 
     final officialHeaderIndex = rows.indexWhere((row) {
       final normalized = row.map(_normalizeHeader).toSet();
       final hasAmount = normalized.any((h) => h.contains('金额'));
       final hasTime = normalized.any(
-        (h) =>
-            h.contains('交易时间') ||
-            h.contains('付款时间') ||
-            h.contains('交易创建时间'),
+        (h) => h.contains('交易时间') || h.contains('付款时间') || h.contains('交易创建时间'),
       );
       return hasAmount && hasTime;
     });
@@ -160,12 +174,7 @@ class BillImportService {
           .toList(growable: false);
       final provider = _providerOrNull(headers);
       if (provider != null) {
-        return _parseOfficialRows(
-          provider,
-          rows,
-          officialHeaderIndex,
-          headers,
-        );
+        return _parseOfficialRows(provider, rows, officialHeaderIndex, headers);
       }
     }
 
@@ -177,15 +186,22 @@ class BillImportService {
 
     final headerIndex = rows.indexWhere((row) {
       final normalized = row.map(_normalizeHeader).toSet();
-      final hasTime = _hasAny(
-        normalized,
-        const ['日期', '时间', '交易时间', '记账时间', '发生时间', '创建时间'],
-      );
+      final hasTime = _hasAny(normalized, const [
+        '日期',
+        '时间',
+        '交易时间',
+        '记账时间',
+        '发生时间',
+        '创建时间',
+      ]);
       final hasAmount = normalized.any((value) => value.contains('金额'));
-      final hasType = _hasAny(
-        normalized,
-        const ['收支类型', '类型', '收/支', '收支', '交易类型'],
-      );
+      final hasType = _hasAny(normalized, const [
+        '收支类型',
+        '类型',
+        '收/支',
+        '收支',
+        '交易类型',
+      ]);
       return hasTime && hasAmount && hasType;
     });
     if (headerIndex < 0) {
@@ -194,7 +210,9 @@ class BillImportService {
       );
     }
 
-    final headers = rows[headerIndex].map(_normalizeHeader).toList(growable: false);
+    final headers = rows[headerIndex]
+        .map(_normalizeHeader)
+        .toList(growable: false);
     final normalizedSet = headers.toSet();
     final isMumu =
         _hasAny(normalizedSet, const ['类别', '分类']) &&
@@ -202,8 +220,9 @@ class BillImportService {
         (_hasAny(normalizedSet, const ['所属账本', '账本']) ||
             _hasAny(normalizedSet, const ['子类', '二级分类']));
 
-    final provider =
-        isMumu ? BillImportProvider.mumu : BillImportProvider.generic;
+    final provider = isMumu
+        ? BillImportProvider.mumu
+        : BillImportProvider.generic;
     final output = <ImportedBillRow>[];
     var skipped = 0;
     for (final values in rows.skip(headerIndex + 1)) {
@@ -224,11 +243,7 @@ class BillImportService {
     if (output.isEmpty) {
       throw const FormatException('账单中没有可导入的收支记录');
     }
-    return BillImportResult(
-      provider: provider,
-      rows: output,
-      skipped: skipped,
-    );
+    return BillImportResult(provider: provider, rows: output, skipped: skipped);
   }
 
   BillImportResult _parseOfficialRows(
@@ -255,11 +270,7 @@ class BillImportService {
     if (output.isEmpty) {
       throw const FormatException('账单中没有可导入的收支记录');
     }
-    return BillImportResult(
-      provider: provider,
-      rows: output,
-      skipped: skipped,
-    );
+    return BillImportResult(provider: provider, rows: output, skipped: skipped);
   }
 
   BillImportProvider? _providerOrNull(List<String> headers) {
@@ -288,32 +299,27 @@ class BillImportService {
     final status = _first(map, const ['当前状态', '交易状态', '资金状态']);
     if (_isIgnoredStatus(status)) return null;
 
-    final amountText = _first(
-      map,
-      const ['金额(元)', '金额（元）', '金额', '交易金额(元)', '交易金额（元）'],
-    );
+    final amountText = _first(map, const [
+      '金额(元)',
+      '金额（元）',
+      '金额',
+      '交易金额(元)',
+      '交易金额（元）',
+    ]);
     final amount = _money(amountText);
     if (amount == null || amount <= 0) return null;
 
-    final timeText = _first(
-      map,
-      const ['交易时间', '付款时间', '交易创建时间', '创建时间'],
-    );
+    final timeText = _first(map, const ['交易时间', '付款时间', '交易创建时间', '创建时间']);
     final occurredAt = _time(timeText);
     if (occurredAt == null) return null;
 
-    final merchant = _first(
-      map,
-      const ['交易对方', '商户', '对方', '收款方'],
-    );
+    final merchant = _first(map, const ['交易对方', '商户', '对方', '收款方']);
     final goods = _first(map, const ['商品', '商品名称']);
     final note = _first(map, const ['备注', '交易备注']);
     final externalId = _emptyToNull(
       _first(map, const ['交易单号', '交易号', '商家订单号', '商户单号']),
     );
-    final paymentMethod = _emptyToNull(
-      _first(map, const ['支付方式', '付款方式']),
-    );
+    final paymentMethod = _emptyToNull(_first(map, const ['支付方式', '付款方式']));
 
     return ImportedBillRow(
       provider: provider,
@@ -321,10 +327,10 @@ class BillImportService {
       type: type,
       amount: amount,
       merchant: merchant.isNotEmpty ? merchant : goods,
-      note: [goods, note]
-          .where((value) => value.trim().isNotEmpty)
-          .toSet()
-          .join(' · '),
+      note: [
+        goods,
+        note,
+      ].where((value) => value.trim().isNotEmpty).toSet().join(' · '),
       externalId: externalId,
       paymentMethod: paymentMethod,
       raw: map,
@@ -334,9 +340,7 @@ class BillImportService {
   ImportedBillRow? _parseMumuRow(Map<String, String> map) {
     final direction = _first(map, const ['收支类型', '类型']).replaceAll(' ', '');
     final sourceCategory = _emptyToNull(_first(map, const ['类别', '分类']));
-    final sourceSubcategory = _emptyToNull(
-      _first(map, const ['子类', '二级分类']),
-    );
+    final sourceSubcategory = _emptyToNull(_first(map, const ['子类', '二级分类']));
 
     final type = _semanticType(direction, sourceCategory);
     if (type == null) return null;
@@ -385,10 +389,7 @@ class BillImportService {
   }
 
   ImportedBillRow? _parseGenericRow(Map<String, String> map) {
-    final direction = _first(
-      map,
-      const ['收支类型', '类型', '收/支', '收支', '交易类型'],
-    );
+    final direction = _first(map, const ['收支类型', '类型', '收/支', '收支', '交易类型']);
     final sourceCategory = _emptyToNull(
       _first(map, const ['分类', '类别', '一级分类', '大类']),
     );
@@ -397,10 +398,7 @@ class BillImportService {
     );
 
     final amountValue = _money(
-      _first(
-        map,
-        const ['金额', '金额(元)', '金额（元）', '交易金额', '交易金额(元)', '交易金额（元）'],
-      ),
+      _first(map, const ['金额', '金额(元)', '金额（元）', '交易金额', '交易金额(元)', '交易金额（元）']),
     );
     if (amountValue == null || amountValue == 0) return null;
 
@@ -409,26 +407,12 @@ class BillImportService {
         (amountValue < 0 ? TransactionType.expense : TransactionType.income);
 
     final occurredAt = _time(
-      _first(
-        map,
-        const ['日期', '时间', '交易时间', '记账时间', '发生时间', '创建时间'],
-      ),
+      _first(map, const ['日期', '时间', '交易时间', '记账时间', '发生时间', '创建时间']),
     );
     if (occurredAt == null) return null;
 
     final sourceAccount = _emptyToNull(
-      _first(
-        map,
-        const [
-          '转出账户',
-          '账户',
-          '账户名称',
-          '支付账户',
-          '付款账户',
-          '来源账户',
-          '资金账户',
-        ],
-      ),
+      _first(map, const ['转出账户', '账户', '账户名称', '支付账户', '付款账户', '来源账户', '资金账户']),
     );
     final destinationAccount = _emptyToNull(
       _first(map, const ['转入账户', '目标账户', '收款账户']),
@@ -438,19 +422,10 @@ class BillImportService {
       return null;
     }
 
-    final merchant = _first(
-      map,
-      const ['交易对方', '商户', '商家', '对方', '收款方'],
-    );
-    final note = _first(
-      map,
-      const ['备注', '交易备注', '说明', '描述', '商品', '商品名称'],
-    );
+    final merchant = _first(map, const ['交易对方', '商户', '商家', '对方', '收款方']);
+    final note = _first(map, const ['备注', '交易备注', '说明', '描述', '商品', '商品名称']);
     final externalId = _emptyToNull(
-      _first(
-        map,
-        const ['交易单号', '交易号', '订单号', '流水号', '商家订单号', '商户单号'],
-      ),
+      _first(map, const ['交易单号', '交易号', '订单号', '流水号', '商家订单号', '商户单号']),
     );
     final tagText = _first(map, const ['标签', 'Tag', 'Tags']);
 
@@ -501,8 +476,7 @@ class BillImportService {
     return null;
   }
 
-  TransactionType? _transactionType(String value) =>
-      _semanticType(value, null);
+  TransactionType? _transactionType(String value) => _semanticType(value, null);
 
   bool _isIgnoredStatus(String status) {
     final value = status.replaceAll(' ', '');

@@ -408,7 +408,7 @@ class _TrendPeriodControl extends StatelessWidget {
                       item.$2,
                       style: TextStyle(
                         color: item.$1 == selected
-                            ? Colors.white
+                            ? context.appColors.onPrimary
                             : context.appSecondaryText,
                         fontSize: 12,
                         height: 1,

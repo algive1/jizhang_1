@@ -1,5 +1,4 @@
 import 'package:go_router/go_router.dart';
-import 'package:jizhang_app/core/widgets/app_action_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -66,11 +65,9 @@ void main() {
         );
         await tester.pumpAndSettle();
         if (archiveAll) expect(find.text('添加'), findsNothing);
-        final menu = find.byType(AppActionMenuButton<String>);
-        await tester.ensureVisible(menu);
-        await tester.tap(menu);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('调整').last);
+        final row = find.byKey(ValueKey('budget-category-${category.id}'));
+        await tester.ensureVisible(row);
+        await tester.tap(row);
         await tester.pumpAndSettle();
         expect(find.byType(AlertDialog), findsOneWidget);
         expect(

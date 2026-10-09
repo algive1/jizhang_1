@@ -19,6 +19,7 @@ class AutoBookkeepingRecommendation {
     this.tags = const [],
     this.useCount = 0,
     this.categorySource = ClassificationSource.pending,
+    this.categoryConfidence = 0,
   });
 
   final String? bookId;
@@ -28,6 +29,7 @@ class AutoBookkeepingRecommendation {
   final List<String> tags;
   final int useCount;
   final ClassificationSource categorySource;
+  final double categoryConfidence;
 
   bool get learnedFromMerchant => useCount > 0;
 }
@@ -87,6 +89,9 @@ class AutoBookkeepingLearningService {
       categorySource: rememberedCategory != null
           ? ClassificationSource.personalRule
           : classification.source,
+      categoryConfidence: rememberedCategory != null
+          ? 1
+          : classification.confidence,
     );
   }
 
@@ -139,10 +144,8 @@ class AutoBookkeepingLearningService {
     }
   }
 
-  String _typedMerchantKey(
-    TransactionType type,
-    String merchantKey,
-  ) => '${type.name}|$merchantKey';
+  String _typedMerchantKey(TransactionType type, String merchantKey) =>
+      '${type.name}|$merchantKey';
 
   TransactionType _transactionType(String value) => switch (value) {
     'INCOME' => TransactionType.income,
@@ -157,9 +160,7 @@ class AutoBookkeepingLearningService {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
     } on FormatException {
       // Corrupt optional learning data should never block bookkeeping.
@@ -177,13 +178,12 @@ class AutoBookkeepingLearningService {
     return text == null || text.isEmpty ? null : text;
   }
 
-  List<String> _stringList(Object? value) =>
-      value is List
-          ? value
-                .map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false)
-          : const [];
+  List<String> _stringList(Object? value) => value is List
+      ? value
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false)
+      : const [];
 }
 
 final autoBookkeepingLearningServiceProvider =

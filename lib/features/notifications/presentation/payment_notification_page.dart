@@ -23,6 +23,9 @@ class _PaymentNotificationPageState
   bool _connected = false;
   bool _enabled = false;
   bool _loading = true;
+  bool _saving = false;
+  int _loadRevision = 0;
+  int _changeRevision = 0;
   String? _message;
 
   @override
@@ -44,30 +47,49 @@ class _PaymentNotificationPageState
   }
 
   Future<void> _load() async {
-    final bridge = ref.read(paymentNotificationBridgeProvider);
-    final accessGranted = await bridge.isAccessGranted();
-    final enabled = await bridge.isEnabled();
-    final connected = accessGranted ? await bridge.isConnected() : false;
-    if (!mounted) return;
-    setState(() {
-      _accessGranted = accessGranted;
-      _connected = connected;
-      _enabled = enabled;
-      _loading = false;
-    });
-    if (enabled) await _processPending(showFeedback: false);
+    final revision = ++_loadRevision;
+    try {
+      final bridge = ref.read(paymentNotificationBridgeProvider);
+      final accessGranted = await bridge.isAccessGranted();
+      final enabled = await bridge.isEnabled();
+      final connected = accessGranted ? await bridge.isConnected() : false;
+      if (!mounted || revision != _loadRevision) return;
+      setState(() {
+        _accessGranted = accessGranted;
+        _connected = connected;
+        _enabled = enabled;
+        _loading = false;
+      });
+      if (enabled) await _processPending(showFeedback: false);
+    } on Object {
+      if (mounted && revision == _loadRevision)
+        setState(() {
+          _loading = false;
+          _message = '状态读取失败，请返回后重试';
+        });
+    }
   }
 
   Future<void> _enableOrOpenSettings() async {
+    if (_saving || _loading) return;
+    final revision = ++_changeRevision;
+    ++_loadRevision;
+    setState(() => _saving = true);
+    try {
+      await _changeEnabled(revision);
+    } finally {
+      if (mounted && revision == _changeRevision)
+        setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _changeEnabled(int revision) async {
     final bridge = ref.read(paymentNotificationBridgeProvider);
     if (!(_accessGranted ?? false) && !_enabled) {
       try {
         await bridge.openAccessSettings();
         if (mounted) {
-          setState(
-            () => _message =
-                '请在系统设置中允许「好好记账」读取通知，返回本页后会自动刷新授权状态。',
-          );
+          setState(() => _message = '请在系统设置中允许「好好记账」读取通知，返回本页后会自动刷新授权状态。');
         }
       } on Object catch (error) {
         if (mounted) setState(() => _message = '$error');
@@ -80,26 +102,23 @@ class _PaymentNotificationPageState
         final granted = await bridge.requestNotificationPermission();
         if (!mounted) return;
         if (!granted) {
-          setState(
-            () => _message =
-                '请允许「好好记账」发送通知，然后返回本页继续开启。',
-          );
+          setState(() => _message = '请允许「好好记账」发送通知，然后返回本页继续开启。');
           return;
         }
       }
       await bridge.setEnabled(nextEnabled);
       if (!mounted) return;
       setState(() {
+        _saving = false;
         _enabled = nextEnabled;
-        _message = _enabled
-            ? '已开启，系统通知监听会实时参与交易识别并进入待确认。'
-            : '已关闭支付通知兜底。';
+        _message = _enabled ? '已开启，系统通知监听会实时参与交易识别并进入待确认。' : '已关闭支付通知兜底。';
       });
       if (_enabled) {
         for (var attempt = 0; attempt < 4 && !_connected; attempt++) {
           await Future<void>.delayed(const Duration(milliseconds: 350));
+          if (!mounted || revision != _changeRevision) return;
           await _load();
-          if (!mounted) return;
+          if (!mounted || revision != _changeRevision) return;
         }
         await _processPending(showFeedback: true);
       }
@@ -132,10 +151,7 @@ class _PaymentNotificationPageState
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: context.pop,
-                icon: Icon(Icons.arrow_back),
-              ),
+              IconButton(onPressed: context.pop, icon: Icon(Icons.arrow_back)),
               const SizedBox(width: 4),
               Text('支付通知记账', style: Theme.of(context).textTheme.headlineSmall),
             ],
@@ -193,7 +209,9 @@ class _PaymentNotificationPageState
                         contentPadding: EdgeInsets.zero,
                         title: const Text('自动记账支付通知'),
                         subtitle: Text(
-                          !_enabled
+                          _saving
+                              ? '正在保存设置…'
+                              : !_enabled
                               ? '已关闭'
                               : _accessGranted != true
                               ? '已开启，但系统通知读取权限已失效'
@@ -202,7 +220,9 @@ class _PaymentNotificationPageState
                               : '已开启 · 已授权，等待系统连接监听服务',
                         ),
                         value: _enabled,
-                        onChanged: (_) => _enableOrOpenSettings(),
+                        onChanged: _saving
+                            ? null
+                            : (_) => _enableOrOpenSettings(),
                       ),
                     ],
                   ),

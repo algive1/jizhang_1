@@ -312,7 +312,7 @@ class AssetTrendPeriodSelector extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 8,
                       color: days == option.$1
-                          ? Colors.white
+                          ? context.appColors.onPrimary
                           : context.appSecondaryText,
                     ),
                   ),

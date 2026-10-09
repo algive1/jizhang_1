@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import '../../sharing/data/session_repository.dart';
+import '../../../core/analytics/product_analytics.dart';
+import '../../../core/utils/entity_id.dart';
 
 enum AppUpdateKind { none, optional, required }
 
@@ -66,10 +68,7 @@ class MethodChannelAppUpdatePlatform implements AppUpdatePlatform {
 
   @override
   Future<bool> openStore(String url) async {
-    return await _channel.invokeMethod<bool>(
-          'openStore',
-          {'url': url},
-        ) ??
+    return await _channel.invokeMethod<bool>('openStore', {'url': url}) ??
         false;
   }
 }
@@ -93,18 +92,28 @@ class AppUpdateService {
     if (!force) {
       final raw = await _settings.get(_lastCheckKey);
       final last = raw == null ? null : DateTime.tryParse(raw);
-      if (last != null && DateTime.now().difference(last) < minimumCheckInterval) {
+      if (last != null &&
+          DateTime.now().difference(last) < minimumCheckInterval) {
         return null;
       }
     }
 
     final app = await _platform.appInfo();
     if (app.platform != 'android' && app.platform != 'ios') return null;
+    var installationId = await _settings.get(
+      ProductAnalytics.installationIdKey,
+    );
+    if (installationId == null ||
+        !RegExp(r'^[a-f0-9]{32}$').hasMatch(installationId)) {
+      installationId = newEntityId();
+      await _settings.set(ProductAnalytics.installationIdKey, installationId);
+    }
 
     final response = await _api.request(
       '/app/update'
       '?platform=${Uri.encodeQueryComponent(app.platform)}'
-      '&version=${Uri.encodeQueryComponent(app.version)}',
+      '&version=${Uri.encodeQueryComponent(app.version)}'
+      '&build=${app.build}&installationId=$installationId',
     );
 
     final status = response['status'];

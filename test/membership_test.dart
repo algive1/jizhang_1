@@ -48,7 +48,22 @@ void main() {
     );
 
     expect(snapshot.entitlements, contains(grant));
+    expect(snapshot.membership.effectivePlan, MembershipPlan.free);
     expect(snapshot.has(EntitlementKey.multiDevice, now: now), isFalse);
+    final testing = MembershipSnapshot(
+      membership: snapshot.membership,
+      entitlements: [
+        grant,
+        EntitlementGrant(
+          key: EntitlementKey.multiDevice,
+          source: 'testing_free_access',
+          grantedAt: now.subtract(const Duration(days: 1)),
+        ),
+      ],
+      quotas: const [],
+    );
+    expect(testing.membership.effectivePlan, MembershipPlan.free);
+    expect(testing.has(EntitlementKey.multiDevice, now: now), isTrue);
   });
 
   test('current test phase grants every local entitlement', () async {

@@ -10,6 +10,7 @@ import '../../../core/models/account.dart';
 import '../../../core/models/account_balance_effect.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../books/data/book_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
@@ -21,6 +22,7 @@ import '../domain/asset_overview.dart';
 import '../../investments/data/investment_repository.dart';
 import '../../home/presentation/home_asset_card.dart';
 import 'account_forms.dart';
+import 'account_actions.dart';
 import 'asset_dashboard_cards.dart';
 import 'asset_dashboard_icons.dart';
 import 'asset_liability_section.dart';
@@ -38,6 +40,8 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
   int _days = 30;
   String? _currency;
   final _trendKey = GlobalKey();
+  Object? _historyInputs;
+  AssetHistory? _history;
 
   @override
   Widget build(BuildContext context) {
@@ -66,28 +70,30 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
       });
     }
     final records = transactionState.value ?? const <TransactionRecord>[];
-    final history = selected == null
-        ? null
-        : AssetHistory(
-            selected.accounts
-                .where(
-                  (account) =>
-                      !excludedAssetAccountIds.contains(account.id),
-                )
-                .toList(growable: false),
-            records,
-            DateTime.now(),
-          );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [context.appPrimarySoft.withValues(alpha: .72), context.appBackground],
-        ),
-      ),
+    final historyInputs = (
+      allAccounts,
+      records,
+      excludedAssetAccountIds,
+      selected?.currency,
+      DateUtils.dateOnly(DateTime.now()),
+    );
+    if (_historyInputs != historyInputs) {
+      _historyInputs = historyInputs;
+      _history = selected == null
+          ? null
+          : AssetHistory(
+              selected.accounts
+                  .where(
+                    (account) => !excludedAssetAccountIds.contains(account.id),
+                  )
+                  .toList(growable: false),
+              records,
+              DateTime.now(),
+            );
+    }
+    final history = _history;
+    return AppPageBackground(
       child: SafeArea(
-        bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
@@ -167,11 +173,13 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
                 onTrend: () => _showTrendSheet(context, selected, history),
               ),
               const SizedBox(height: 8),
-              if (selected.accounts.isNotEmpty)
-                AssetLiabilitySection(
-                  accounts: selected.accounts,
-                  onAccounts: () => context.push('/profile/accounts'),
+              AssetLiabilitySection(
+                accounts: selected.accounts,
+                overview: selected,
+                onAccounts: () => context.push(
+                  '/profile/accounts?filter=debt&currency=${selected.currency}',
                 ),
+              ),
               const SizedBox(height: 8),
               _RecentChanges(
                 records: records,
@@ -247,45 +255,7 @@ class _AssetOverviewPageState extends ConsumerState<AssetOverviewPage> {
       context.push('/profile/accounts/${account.id}');
       return;
     }
-    if (action == 'edit') {
-      await showAccountEditor(context, account: account);
-      return;
-    }
-    if (action == 'calibrate') {
-      await showBalanceCalibration(context, account);
-      return;
-    }
-    if (action == 'archive') {
-      final shouldArchive = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('归档账户？'),
-          content: const Text('历史流水和余额仍保留，继续计入资产。以后可恢复使用。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('归档'),
-            ),
-          ],
-        ),
-      );
-      if (shouldArchive != true) return;
-    }
-    try {
-      final repository = ref.read(accountRepositoryProvider);
-      if (action == 'restore')
-        await repository.restore(account.id);
-      else
-        await repository.archive(account.id);
-    } on Object catch (error) {
-      if (context.mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
-    }
+    await performAccountAction(context, ref, account, action);
   }
 }
 
@@ -510,7 +480,9 @@ class _AccountAssetCard extends StatelessWidget {
                 currency: account.currency,
                 hidden: hidden,
                 size: 14,
-                color: account.type.isDebt ? assetCoral : context.appPrimaryText,
+                color: account.type.isDebt
+                    ? assetCoral
+                    : context.appPrimaryText,
               ),
               const SizedBox(height: 2),
               Text(
@@ -564,26 +536,26 @@ class _ChartPair extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 51,
-            child: AssetDistribution(overview: selected, onTap: onDistribution),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 51,
+          child: AssetDistribution(overview: selected, onTap: onDistribution),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 49,
+          child: AssetTrend(
+            history: history,
+            currency: selected.currency,
+            currentInvestmentValue: selected.investmentValue,
+            days: days,
+            onDays: onDays,
+            onTap: onTrend,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 49,
-            child: AssetTrend(
-              history: history,
-              currency: selected.currency,
-              currentInvestmentValue: selected.investmentValue,
-              days: days,
-              onDays: onDays,
-              onTap: onTrend,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -660,7 +632,9 @@ class _RecentChangesState extends State<_RecentChanges> {
                       ),
                       labelStyle: TextStyle(
                         fontSize: 10,
-                        color: _filter == filter ? Colors.white : context.appSecondaryText,
+                        color: _filter == filter
+                            ? context.appColors.onPrimary
+                            : context.appSecondaryText,
                       ),
                       backgroundColor: context.appSurfaceSoft,
                       selectedColor: context.appPrimary,
@@ -712,12 +686,19 @@ class _RecentChangesState extends State<_RecentChanges> {
                       '小贴士：定期更新资产信息，才能更准确地掌握你的财务状况哦～',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, color: context.appSecondaryText),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.appSecondaryText,
+                      ),
                     ),
                   ),
                   IconButton(
                     onPressed: () => setState(() => _showTip = false),
-                    icon: Icon(Icons.close, size: 16, color: context.appPrimary),
+                    icon: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: context.appPrimary,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints.tightFor(
                       width: 22,
@@ -1008,9 +989,7 @@ class _AssetSheetFrame extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              child: SafeArea(top: false, child: child),
-            ),
+            Expanded(child: SafeArea(top: false, child: child)),
           ],
         ),
       ),

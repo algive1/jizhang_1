@@ -110,6 +110,17 @@ export async function bootstrapAdmin(store: Store) {
       .prepare("INSERT OR IGNORE INTO console_roles VALUES(?,?,?)")
       .run(role.id, role.name, JSON.stringify(role.permissions));
   // The protected super role follows the catalog; customized business roles remain untouched.
+  const aiRole = initialRoles.find((role) => role.id === "ai")!;
+  store.db
+    .prepare(
+      "UPDATE console_roles SET permissions_json=? WHERE id='ai' AND permissions_json=?",
+    )
+    .run(
+      JSON.stringify(aiRole.permissions),
+      JSON.stringify(
+        aiRole.permissions.filter((p) => !p.startsWith("ai:policy:")),
+      ),
+    );
   store.db
     .prepare("UPDATE console_roles SET permissions_json=? WHERE id='super'")
     .run(JSON.stringify(initialRoles[0]!.permissions));

@@ -1,0 +1,12 @@
+{
+  "id": "profile-account-glass",
+  "kind": "theme-companion-to-profile-account",
+  "tool": "image_gen.imagegen",
+  "prompt": "Produce a highest-quality alternate THEME rendering of the first attached native mobile app mockup. Preserve its exact portrait viewport, Chinese content, account/membership hierarchy, record summary, six tools, three service rows and bottom navigation. This is the SAME 账号整合页 composition, not an additional layout candidate. No physical phone bezel or perspective.\n\nThe first attached image is the NEW composition to preserve. The second attached image is the app's EXISTING 液态玻璃 theme and is the authority for theme background and glass materials only. Preserve the established theme character from the second reference: atmospheric sunset landscape background, softly translucent frosted white panels, subtle highlights and delicate borders, soft cool blue-gray accents around #527C98, readable dark text on glass surfaces and clear light text where over background. Do not import the second reference's old functional layout, app recommendations, loyalty levels or promotional content. No new illustrations or unrelated scenes. Typography is crisp Chinese native-app text, not poster design.\n\nKeep these exact labels from the first image: 我的; 小陈; 账号中心; 基础版; 会员中心; 当前账本 · 生活账本. Three modest summary numerals 18, 4, 12 with labels 记账天数, 连续天数, 账单照片. 常用功能 with 全部功能 ›, six consistent outline icons and labels 我的账本, 账户资产, 自动记账, 账单导入, 预算管理, 分类管理. The lower list is 备份与数据 / 云备份 · 本地备份 · 导入导出; 安全与隐私 / 应用锁 · 权限设置; 帮助与反馈 / 使用说明 · 我的工单. Keep integrated pale gold membership row subtle. A translucent bottom dock with 首页, 流水, central plus, 洞察, 我的 active.\nPrioritize legibility over transparency: glass panels must support real Chinese reading contrast. Account, sample statistics and statuses are illustrative. No debug controls, points, fake testimonials, security slogans or extra copy.",
+  "references": [
+    "E:\\jizhang_1\\repo\\.impeccable\\mocks\\decision\\profile-account.png",
+    "E:\\jizhang_1\\repo\\.agent\\theme-unification-20261004\\liquid_glass-light-profile.png"
+  ],
+  "approved": false,
+  "generatedFile": "C:\\Users\\97030\\.codex\\generated_images\\01a10d1e-fa65-74a3-a94e-0212f933d72a\\exec-f4dd844f-fd1e-451c-8d5e-b2a318604694.png"
+}

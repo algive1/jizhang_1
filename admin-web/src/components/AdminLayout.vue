@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   IconApps,
@@ -7,6 +7,7 @@ import {
   IconPoweroff,
   IconSafe,
   IconLock,
+  IconDown,
 } from "@arco-design/web-vue/es/icon";
 import { session, signOut } from "../state/session";
 import PasswordEditor from "./PasswordEditor.vue";
@@ -14,12 +15,29 @@ const route = useRoute(),
   router = useRouter(),
   open = ref(false);
 const changingPassword = ref(false);
+const expanded = ref<Record<string, boolean>>({});
 const groups = computed(() => [
   ...new Set(session.admin?.menus.map((m) => m.group) ?? []),
 ]);
-const title = computed(
+const activeMenu = computed(
   () =>
-    session.admin?.menus.find((m) => m.path === route.path)?.title ?? "详情",
+    session.admin?.menus
+      .filter(
+        (m) =>
+          m.path === route.path ||
+          (m.path !== "/" && route.path.startsWith(m.path + "/")) ||
+          (m.path === "/events" && route.path.startsWith("/trace/")) ||
+          (m.path === "/ai-usage" && route.path.startsWith("/ai-calls/")),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0],
+);
+const title = computed(() => activeMenu.value?.title ?? "详情");
+watch(
+  () => activeMenu.value?.group,
+  (group) => {
+    if (group) expanded.value[group] = true;
+  },
+  { immediate: true },
 );
 async function logout() {
   await signOut();
@@ -44,17 +62,29 @@ async function logout() {
       >
       <nav aria-label="主导航">
         <div v-for="group in groups" :key="group" class="nav-group">
-          <p v-if="group">{{ group }}</p>
-          <router-link
-            v-for="menu in session.admin?.menus.filter(
-              (m) => m.group === group,
-            )"
-            :key="menu.path"
-            :to="menu.path"
-            :class="{ selected: route.path === menu.path }"
-            @click="open = false"
-            >{{ menu.title }}</router-link
+          <button
+            v-if="group"
+            class="nav-heading"
+            :aria-expanded="!!expanded[group]"
+            @click="expanded[group] = !expanded[group]"
           >
+            {{ group }}<icon-down :class="{ collapsed: !expanded[group] }" />
+          </button>
+          <div v-show="!group || expanded[group]" class="nav-items">
+            <router-link
+              v-for="menu in session.admin?.menus.filter(
+                (m) => m.group === group,
+              )"
+              :key="menu.path"
+              :to="menu.path"
+              :class="{ selected: activeMenu?.path === menu.path }"
+              :aria-current="
+                activeMenu?.path === menu.path ? 'page' : undefined
+              "
+              @click="open = false"
+              >{{ menu.title }}</router-link
+            >
+          </div>
         </div>
       </nav>
       <div class="sidebar-footer"><icon-safe /> 隐私优先 · 最小权限</div>
@@ -69,12 +99,17 @@ async function logout() {
             ><icon-menu-fold /></a-button
           ><span class="muted">管理控制台</span
           ><span class="breadcrumb-separator">/</span
-          ><span>{{ title }}</span></a-space
+          ><template v-if="activeMenu?.group"
+            ><span class="muted">{{ activeMenu.group }}</span
+            ><span class="breadcrumb-separator">/</span></template
+          ><span class="breadcrumb-current">{{ title }}</span></a-space
         ><a-space
-          ><a-avatar :size="30" class="admin-avatar">{{
-            session.admin?.username.slice(0, 1).toUpperCase()
-          }}</a-avatar
-          ><span>{{ session.admin?.username }}</span
+          ><a-avatar
+            :size="30"
+            class="admin-avatar"
+            :title="session.admin?.username"
+            >{{ session.admin?.username.slice(0, 1).toUpperCase() }}</a-avatar
+          ><span class="admin-name">{{ session.admin?.username }}</span
           ><a-button
             type="text"
             aria-label="修改我的密码"

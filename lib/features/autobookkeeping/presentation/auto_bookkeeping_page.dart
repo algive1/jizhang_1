@@ -1,18 +1,49 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
-import '../../../app/theme/app_colors.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../core/models/transaction_record.dart';
+import '../../../core/platform/app_notice.dart';
+import '../../books/data/book_repository.dart';
+import '../../transactions/data/transactions_repository.dart';
+import '../auto_bookkeeping_inbox.dart';
 import '../auto_bookkeeping_settings.dart';
-import '../../../app/theme/app_theme_tokens.dart';
+import '../auto_bookkeeping_strategy.dart';
+import 'auto_bookkeeping_visuals.dart';
+
+final recentAutoBookkeepingProvider = StreamProvider<List<TransactionRecord>>((
+  ref,
+) {
+  final database = ref.watch(databaseProvider);
+  final bookId = ref.watch(activeBookIdProvider);
+  final repository = ref.watch(transactionRepositoryProvider);
+  final query = database.select(database.transactionEntries)
+    ..where(
+      (row) =>
+          row.bookId.equals(bookId) &
+          row.source.equals('auto') &
+          row.deletedAt.isNull(),
+    )
+    ..orderBy([(row) => OrderingTerm.desc(row.occurredAt)])
+    ..limit(2);
+  return query.watch().asyncMap(
+    (rows) async => [
+      for (final row in rows)
+        if (await repository.getById(row.id)
+            case final TransactionRecord record)
+          record,
+    ],
+  );
+});
 
 class AutoBookkeepingPage extends ConsumerStatefulWidget {
   const AutoBookkeepingPage({super.key});
-
   @override
   ConsumerState<AutoBookkeepingPage> createState() =>
       _AutoBookkeepingPageState();
@@ -20,34 +51,19 @@ class AutoBookkeepingPage extends ConsumerStatefulWidget {
 
 class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
     with WidgetsBindingObserver {
-  bool? _accessibilityGranted;
-  bool? _overlayGranted;
-  bool? _notificationGranted;
-  bool? _paymentNotificationAccessGranted;
-  bool _paymentNotificationEnabled = false;
-  bool _paymentNotificationConnected = false;
-  bool _accessibilityConnected = false;
-  bool _foregroundRunning = false;
-  bool _screenshotSupported = false;
-  bool _screenshotEnabled = false;
-  int _ruleSchemaVersion = 0;
-  String _ruleVersions = '';
-  String _ruleSource = 'unknown';
-  bool _enabled = false;
-  bool _shortcutAvailable = false;
-  bool _loading = true;
-  String? _message;
-
+  AutoBookkeepingRuntimeStatus? get _status =>
+      ref.read(autoBookkeepingRuntimeProvider).value;
+  bool? _enabled;
+  bool _busy = false;
+  bool _checking = false;
+  bool _connecting = false;
+  int _refreshRevision = 0;
+  int _toggleRevision = 0;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _load();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _load();
+    _refresh();
   }
 
   @override
@@ -56,542 +72,493 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
     super.dispose();
   }
 
-  Future<void> _load() async {
-    if (Platform.isIOS) {
-      var shortcutAvailable = false;
-      try {
-        shortcutAvailable =
-            await const MethodChannel('jizhang/ios_shortcut')
-                    .invokeMethod<bool>('isAvailable') ??
-                false;
-      } on MissingPluginException {
-        shortcutAvailable = false;
-      }
-      if (!mounted) return;
-      setState(() {
-        _shortcutAvailable = shortcutAvailable;
-        _loading = false;
-      });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh({bool refreshInbox = true}) async {
+    final revision = ++_refreshRevision;
+    try {
+      final status = await ref
+          .read(autoBookkeepingRuntimeProvider.notifier)
+          .refresh();
+      if (mounted && revision == _refreshRevision)
+        setState(() {
+          _enabled = status?.enabled ?? _enabled;
+        });
+    } on Object {
+      // The shared runtime clears a failed read instead of reporting stale health.
+    }
+    if (mounted && revision == _refreshRevision && refreshInbox)
+      ref.invalidate(pendingPaymentInboxProvider);
+  }
+
+  Future<void> _check() async {
+    if (_checking || _busy) return;
+    _checking = true;
+    try {
+      await context.push('/profile/autobookkeeping/check');
+      if (mounted) await _refresh();
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<void> _toggle(bool enabled) async {
+    if (_busy || _checking) return;
+    if (Platform.isIOS ||
+        (enabled && (_status == null || _status!.diagnosisIssues.isNotEmpty))) {
+      await _check();
       return;
     }
-    final bridge = ref.read(autoBookkeepingSettingsProvider);
-    final status = await bridge.runtimeStatus();
-    if (!mounted) return;
+    final revision = ++_toggleRevision;
+    ++_refreshRevision;
     setState(() {
-      _accessibilityGranted = status.accessibilityGranted;
-      _accessibilityConnected = status.accessibilityConnected;
-      _overlayGranted = status.overlayGranted;
-      _notificationGranted = status.notificationGranted;
-      _foregroundRunning = status.foregroundRunning;
-      _paymentNotificationAccessGranted = status.notificationListenerGranted;
-      _paymentNotificationEnabled = status.notificationListenerEnabled;
-      _paymentNotificationConnected = status.notificationListenerConnected;
-      _screenshotSupported = status.screenshotSupported;
-      _screenshotEnabled = status.screenshotEnabled;
-      _ruleSchemaVersion = status.ruleSchemaVersion;
-      _ruleVersions = status.ruleVersions;
-      _ruleSource = status.ruleSource;
-      _enabled = status.enabled;
-      _loading = false;
+      _busy = true;
+      _connecting = false;
     });
-  }
-
-  Future<void> _toggle(bool value) async {
-    final bridge = ref.read(autoBookkeepingSettingsProvider);
-    if (!value) {
-      await _setEnabled(bridge, false);
-      return;
-    }
-    if (!(_accessibilityGranted ?? false)) {
-      await _openSettings(
-        bridge.openAccessibilitySettings,
-        '请在系统设置中开启「好好记账」无障碍服务，然后返回本页。',
-      );
-      return;
-    }
-    if (!(_overlayGranted ?? false)) {
-      await _openSettings(bridge.openOverlaySettings, '请允许「好好记账」显示悬浮窗，然后返回本页。');
-      return;
-    }
-    if (!(_notificationGranted ?? false)) {
-      try {
-        final granted = await bridge.requestNotificationPermission();
-        if (!mounted) return;
-        await _load();
-        if (!granted) {
-          if (mounted) {
-            setState(
-              () => _message =
-                  '请允许通知，并确保系统中的「自动记账状态」通知渠道已开启，然后返回本页。',
-            );
-          }
-          return;
-        }
-      } on Object catch (error) {
-        if (mounted) setState(() => _message = '$error');
-        return;
-      }
-    }
-    await _setEnabled(bridge, true);
-  }
-
-  Future<void> _openSettings(
-    Future<void> Function() action,
-    String successMessage,
-  ) async {
     try {
-      await action();
-      if (mounted) setState(() => _message = successMessage);
-    } on Object catch (error) {
-      if (mounted) setState(() => _message = '$error');
-    }
-  }
-
-  Future<void> _setEnabled(
-    AutoBookkeepingSettingsBridge bridge,
-    bool enabled,
-  ) async {
-    try {
-      await bridge.setEnabled(enabled);
+      // Paint the pending state before native service startup can block a frame.
+      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
+      await ref.read(autoBookkeepingSettingsProvider).setEnabled(enabled);
+      if (!mounted || revision != _toggleRevision) return;
+      setState(() => _enabled = enabled);
+      await _refresh(refreshInbox: false);
+      if (!mounted || revision != _toggleRevision) return;
+      // The native save is complete. Service connection checks must not lock
+      // the switch: users can turn it off while the service is connecting.
       setState(() {
-        _enabled = enabled;
-        _message = enabled ? '已开启。识别到可信交易结果后会先确认，再保存流水。' : '已关闭自动记账。';
+        _busy = false;
+        _connecting = enabled && _status?.healthy != true;
       });
-      if (enabled) {
-        for (var attempt = 0; attempt < 4; attempt++) {
-          await _load();
-          if (!mounted || (_foregroundRunning && _accessibilityConnected)) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 350));
-        }
-      } else {
-        await _load();
+      for (var attempt = 0; attempt < 4; attempt++) {
+        if (!enabled || _status?.healthy == true || attempt == 3) break;
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (!mounted || revision != _toggleRevision) return;
+        await _refresh(refreshInbox: false);
+        if (!mounted || revision != _toggleRevision) return;
       }
-    } on Object catch (error) {
-      if (mounted) setState(() => _message = '$error');
+      if (mounted && revision == _toggleRevision) {
+        setState(() => _connecting = false);
+        await AppNotice.show(
+          context,
+          enabled
+              ? (_status?.healthy == true ? '自动记账已开启' : '服务未正常连接，请点击一键检测')
+              : '自动记账已关闭',
+        );
+      }
+    } on Object {
+      if (mounted && revision == _toggleRevision) {
+        await _refresh(refreshInbox: false);
+        if (mounted && revision == _toggleRevision) {
+          setState(() {
+            _busy = false;
+            _connecting = false;
+          });
+          await AppNotice.show(context, '设置失败，请重新检测');
+        }
+      }
+    } finally {
+      if (mounted && revision == _toggleRevision)
+        setState(() {
+          _busy = false;
+          _connecting = false;
+        });
     }
   }
 
+  Future<void> _selectStrategy(AutoBookkeepingStrategy value) async {
+    try {
+      await ref.read(autoBookkeepingStrategyProvider.notifier).select(value);
+    } on Object {
+      if (mounted) await AppNotice.show(context, '策略保存失败，请重试');
+    }
+  }
+
+  void _showExamples() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('识别示例', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            const Text(
+              '微信支付 · 星巴克咖啡 ¥32.00 → 餐饮美食\n\n支付宝 · 地铁 ¥4.00 → 交通出行\n\n美团 · 午餐 ¥28.50 → 餐饮美食',
+            ),
+            const SizedBox(height: 16),
+            const Text('以上为示例。实际分类使用当前账本规则；信息不完整时保留待确认。'),
+          ],
+        ),
+      ),
+    ),
+  );
   @override
   Widget build(BuildContext context) {
-    if (Platform.isIOS) return _buildIos(context);
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-        children: [
-          Row(
+    final runtime = ref.watch(autoBookkeepingRuntimeProvider);
+    final strategy = ref.watch(autoBookkeepingStrategyProvider);
+    final saved = ref.watch(recentAutoBookkeepingProvider);
+    final pending = ref.watch(pendingPaymentInboxProvider);
+    final records = [
+      for (final item
+          in pending.asData?.value ?? const <PendingPaymentReview>[])
+        if (!item.ignored)
+          _AutoRecord(
+            item.candidate.merchant,
+            item.candidate.timestamp,
+            item.candidate.paymentMethod,
+            item.candidate.amountInCents / 100,
+            false,
+            () async {
+              if (await ref
+                      .read(autoBookkeepingInboxBridgeProvider)
+                      .select(item.candidate.fingerprint) &&
+                  context.mounted) {
+                await context.push('/profile/autobookkeeping/confirm');
+                if (mounted) await _refresh();
+              }
+            },
+          ),
+      for (final item in saved.asData?.value ?? const <TransactionRecord>[])
+        _AutoRecord(
+          item.merchant ?? item.categoryName ?? '自动记账',
+          item.occurredAt,
+          _paymentMethod(item),
+          item.amount,
+          true,
+          () => context.push('/transactions/${item.id}'),
+        ),
+    ]..sort((a, b) => b.time.compareTo(a.time));
+    return Stack(
+      children: [
+        const Positioned.fill(child: AutoBookkeepingBackground()),
+        SafeArea(
+          child: Column(
             children: [
-              IconButton(
-                onPressed: context.pop,
-                icon: Icon(Icons.arrow_back),
+              SizedBox(
+                height: 42,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => context.canPop()
+                          ? context.pop()
+                          : context.go('/profile'),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 21,
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          '自动记账',
+                          style: autoText(16, weight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _showExamples,
+                      icon: const Icon(
+                        Icons.help_outline_rounded,
+                        size: 21,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 4),
-              Text('自动记账', style: Theme.of(context).textTheme.headlineSmall),
-            ],
-          ),
-          const SizedBox(height: 12),
-          AppCard(
-            color: context.appPrimarySoft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  color: context.appPrimary,
-                  size: 34,
-                ),
-                SizedBox(height: 10),
-                Text(
-                  '识别交易结果，少填一遍账',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '自动记账支持微信、支付宝、云闪付、美团、京东、拼多多和抖音的高置信度交易结果；支出、明确收款和明确退款会先弹出本机确认卡片，未确认前不会写入流水。',
-                  style: TextStyle(height: 1.5),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          AppCard(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : Material(
-                    color: Colors.transparent,
-                    child: Column(
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: BackdropGroup(
+                    child: ListView(
+                      key: const ValueKey('autobookkeeping-scroll'),
+                      padding: const EdgeInsets.fromLTRB(11, 5, 11, 64),
                       children: [
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('自动记账'),
-                          subtitle: Text(
-                            !_enabled
-                                ? '已关闭'
-                                : _foregroundRunning &&
-                                      _accessibilityConnected &&
-                                      _notificationGranted == true
-                                ? '已开启 · 后台服务运行中 · 常驻通知可见'
-                                : '已开启 · 运行条件不完整，请检查下方状态',
-                          ),
-                          value: _enabled,
-                          onChanged: _toggle,
-                        ),
-                        const Divider(height: 1),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            _foregroundRunning && _accessibilityConnected
-                                ? Icons.check_circle_outline
-                                : Icons.error_outline,
-                            color:
-                                _foregroundRunning && _accessibilityConnected
-                                ? context.appPrimary
-                                : AppColors.warning,
-                          ),
-                          title: const Text('运行状态'),
-                          subtitle: Text(
-                            !_enabled
-                                ? '自动记账未开启'
-                                : _foregroundRunning &&
-                                      _accessibilityConnected
-                                ? '前台服务与无障碍服务均已运行'
-                                : !_accessibilityConnected
-                                ? '无障碍权限存在，但服务尚未连接或已被系统停止'
-                                : '前台常驻服务未运行，请检查通知权限和运行日志',
-                          ),
-                          trailing: TextButton(
-                            onPressed: () =>
-                                context.push('/profile/autobookkeeping/logs'),
-                            child: const Text('诊断'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: AutoBookkeepingHero(
+                            enabled: (_status?.enabled ?? _enabled) == true,
+                            healthy: _status?.healthy == true,
+                            statusMessage: runtime.isLoading
+                                ? '正在检测服务状态…'
+                                : _status?.summary ?? '无法读取服务状态，请重新检测',
+                            busy: _busy,
+                            connecting: _connecting,
+                            onChanged: _busy ? null : _toggle,
                           ),
                         ),
-                        const Divider(height: 1),
-                        _PermissionRow(
-                          icon: Icons.accessibility_new_outlined,
-                          title: '无障碍服务',
-                          enabled: _accessibilityGranted == true,
-                          onTap: () => _openSettings(
-                            ref
-                                .read(autoBookkeepingSettingsProvider)
-                                .openAccessibilitySettings,
-                            '请在系统设置中开启「好好记账」无障碍服务，然后返回本页。',
-                          ),
+                        const SizedBox(height: 6),
+                        RecognitionSources(
+                          healthy: _status?.healthy == true,
+                          onCheck: _check,
                         ),
-                        _PermissionRow(
-                          icon: Icons.open_in_new_outlined,
-                          title: '悬浮窗权限',
-                          enabled: _overlayGranted == true,
-                          onTap: () => _openSettings(
-                            ref
-                                .read(autoBookkeepingSettingsProvider)
-                                .openOverlaySettings,
-                            '请允许「好好记账」显示悬浮窗，然后返回本页。',
-                          ),
+                        const SizedBox(height: 6),
+                        RecognitionRules(
+                          healthy: _status?.healthy == true,
+                          onCheck: _check,
                         ),
-                        _PermissionRow(
-                          icon: Icons.notifications_none_outlined,
-                          title: '常驻通知权限',
-                          enabled: _notificationGranted == true,
-                          onTap: () async {
-                            final bridge = ref.read(
-                              autoBookkeepingSettingsProvider,
-                            );
-                            try {
-                              final granted =
-                                  await bridge.requestNotificationPermission();
-                              if (!mounted) return;
-                              await _load();
-                              setState(
-                                () => _message = granted
-                                    ? '通知权限已允许，自动记账开启后会显示常驻状态。'
-                                    : '请在系统通知设置中允许通知，并开启「自动记账状态」渠道。',
-                              );
-                            } on Object catch (error) {
-                              if (mounted) {
-                                setState(() => _message = '$error');
-                              }
-                            }
-                          },
+                        const SizedBox(height: 6),
+                        AutoConfirmationStrategies(
+                          value:
+                              strategy.asData?.value ??
+                              AutoBookkeepingStrategy.conservative,
+                          onSelected: strategy.hasValue
+                              ? _selectStrategy
+                              : null,
                         ),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            _paymentNotificationConnected
-                                ? Icons.check_circle_outline
-                                : Icons.notifications_active_outlined,
-                            color: _paymentNotificationConnected
-                                ? context.appPrimary
-                                : AppColors.warning,
+                        const SizedBox(height: 6),
+                        RecognitionExample(onMore: _showExamples),
+                        const SizedBox(height: 6),
+                        AutoSection(
+                          title: '最近自动记账记录',
+                          headerPadding: 5,
+                          bottomPadding: 4,
+                          more: '查看全部',
+                          onMore: () => context.push('/transactions'),
+                          child: AutoSurface(
+                            radius: 15,
+                            blur: false,
+                            padding: const EdgeInsets.symmetric(horizontal: 9),
+                            child: records.isEmpty
+                                ? SizedBox(
+                                    height: 80,
+                                    child: Center(
+                                      child: Text(
+                                        saved.hasError || pending.hasError
+                                            ? '记录读取失败，下拉重试'
+                                            : '暂无自动记账记录',
+                                        style: autoText(10, color: autoMuted),
+                                      ),
+                                    ),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final (i, record)
+                                          in records.take(2).indexed)
+                                        _AutoRecordRow(
+                                          record,
+                                          divider:
+                                              i < records.take(2).length - 1,
+                                        ),
+                                    ],
+                                  ),
                           ),
-                          title: const Text('支付通知兜底'),
-                          subtitle: Text(
-                            _paymentNotificationAccessGranted != true
-                                ? '未授权通知读取权限'
-                                : !_paymentNotificationEnabled
-                                ? '已授权 · 未开启'
-                                : _paymentNotificationConnected
-                                ? '已开启 · 监听服务已连接'
-                                : '已开启 · 等待系统连接监听服务',
-                          ),
-                          trailing: TextButton(
-                            onPressed: () => context.push(
-                              '/profile/payment-notifications',
-                            ),
-                            child: const Text('设置'),
-                          ),
-                        ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          secondary: Icon(
-                            Icons.photo_camera_outlined,
-                            color: _screenshotEnabled
-                                ? context.appPrimary
-                                : context.appSecondaryText,
-                          ),
-                          title: const Text('保存支付结果截图'),
-                          subtitle: Text(
-                            !_screenshotSupported
-                                ? '需要 Android 11 或更高版本'
-                                : _screenshotEnabled
-                                ? '已开启 · 仅在无障碍识别成功页本机截图'
-                                : '可选 · 忽略交易时截图会自动删除',
-                          ),
-                          value: _screenshotEnabled,
-                          onChanged: !_screenshotSupported
-                              ? null
-                              : (value) async {
-                                  final bridge = ref.read(
-                                    autoBookkeepingSettingsProvider,
-                                  );
-                                  final actual =
-                                      await bridge.setScreenshotEnabled(value);
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _screenshotEnabled = actual;
-                                    _message = actual
-                                        ? '支付截图已开启。识别与临时截图只在本机处理；确认保留后会成为普通账单附件，若已开启云备份，会按现有附件规则备份。'
-                                        : '支付截图已关闭。';
-                                  });
-                                },
                         ),
                       ],
                     ),
                   ),
-          ),
-          if (_message != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Text(
-                _message!,
-                style: TextStyle(color: context.appSecondaryText),
-              ),
-            ),
-          const SizedBox(height: 14),
-          AppCard(
-            child: Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.article_outlined),
-                title: Text('运行日志'),
-                subtitle: Text('查看最近一次交易识别和弹窗处理结果'),
-                trailing: Icon(Icons.chevron_right),
-                onTap: () => context.push('/profile/autobookkeeping/logs'),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.rule_folder_outlined),
-                title: const Text('页面识别规则'),
-                subtitle: Text(
-                  _ruleVersions.isEmpty
-                      ? '规则服务尚未连接；开启无障碍服务后会显示当前规则版本'
-                      : 'schema v$_ruleSchemaVersion · $_ruleVersions · ${_ruleSource == 'asset' ? '随 App 发布规则' : '内置回退规则'}',
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.extension_outlined),
-                title: const Text('自定义应用'),
-                subtitle: const Text('内置规则以外的应用可以手动加入识别范围'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/profile/autobookkeeping/apps'),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Text(
-              '双通道说明：无障碍负责实时读取交易结果页面；“支付通知兜底”会在页面结构变化或漏识别时，用高置信度交易通知补充候选。两条通道会在本机去重，只保留一条待确认记录。',
-              style: TextStyle(height: 1.5, color: context.appSecondaryText),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Text(
-              '通知栏说明：开启后会有一条低打扰的常驻通知。点击通知正文会打开自动记账设置，通知上的“关闭自动记账”按钮可直接关闭。关闭后通知会自动消失。',
-              style: TextStyle(height: 1.5, color: context.appSecondaryText),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Text(
-              '隐私说明：自动识别只处理支持的交易结果页面和高置信度交易通知中的必要信息；解析与去重均在本机完成。支付截图默认关闭，临时截图只在本机保存，忽略或过期会自动删除；用户确认保留后会成为普通账单附件，若已开启云备份，会随其他附件按现有规则备份。',
-              style: TextStyle(height: 1.5, color: context.appSecondaryText),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-  Widget _buildIos(BuildContext context) {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: context.pop,
-                icon: Icon(Icons.arrow_back),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '自动记账',
-                style: Theme.of(context).textTheme.headlineSmall,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          AppCard(
-            color: context.appPrimarySoft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  color: context.appPrimary,
-                  size: 34,
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(
+            top: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(11, 0, 11, 12),
+                child: SizedBox(
+                  width: 170,
+                  height: 44,
+                  child: AutoSurface(
+                    radius: 22,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFF9D4), Color(0xFFFFD88D)],
+                    ),
+                    child: InkWell(
+                      key: const ValueKey('autobookkeeping-check'),
+                      onTap: _check,
+                      borderRadius: BorderRadius.circular(22),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.settings_outlined,
+                            size: 23,
+                            color: autoGold,
+                          ),
+                          const SizedBox(width: 11),
+                          Text(
+                            '一键检测',
+                            style: autoText(
+                              14,
+                              weight: FontWeight.w700,
+                              color: const Color(0xFF442804),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                SizedBox(height: 10),
-                Text(
-                  'iPhone 使用系统允许的替代流程',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'iOS 不允许第三方 App 监听微信、支付宝等其他 App 的通知内容或页面。好好记账不会伪造这一能力，而是用快捷指令、截图 OCR 和官方账单导入完成确认式记账。',
-                  style: TextStyle(height: 1.5),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          AppCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                Icons.shortcut_outlined,
-                color: _shortcutAvailable
-                    ? context.appPrimary
-                    : context.appSecondaryText,
-              ),
-              title: Text('系统快捷指令记账'),
-              subtitle: Text(
-                _loading
-                    ? '正在检查…'
-                    : _shortcutAvailable
-                    ? 'iOS 16+ 已注册「记一笔到好好记账」动作'
-                    : '当前系统版本不支持 App Intents，使用下方 OCR 或账单导入',
-              ),
-              trailing: Icon(
-                _shortcutAvailable ? Icons.check_circle : Icons.info_outline,
-                color: _shortcutAvailable
-                    ? context.appPrimary
-                    : context.appSecondaryText,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Column(
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.document_scanner_outlined),
-                  title: const Text('截图 / 小票识别'),
-                  subtitle: const Text('本地 OCR 识别文字，确认后再保存'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/profile/receipt-ocr'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.upload_file_outlined),
-                  title: Text('微信 / 支付宝账单导入'),
-                  subtitle: Text('导入官方 CSV，预览去重后批量保存'),
-                  trailing: Icon(Icons.chevron_right),
-                  onTap: () => context.push('/profile/bill-import'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          AppCard(
-            child: Text(
-              '快捷指令用法：在系统「快捷指令」App 中搜索“好好记账”，选择「记一笔到好好记账」，把剪贴板文字、语音转写或你自己自动化得到的账单文本传入。运行后会打开好好记账的确认页，不会后台静默保存。',
-              style: TextStyle(
-                height: 1.5,
-                color: context.appSecondaryText,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
 }
 
-class _PermissionRow extends StatelessWidget {
-  const _PermissionRow({
-    required this.icon,
-    required this.title,
-    required this.enabled,
-    required this.onTap,
-  });
+String _paymentMethod(TransactionRecord record) {
+  try {
+    final metadata = jsonDecode(record.metadataJson ?? '{}') as Map;
+    return (metadata['autobookkeeping'] as Map?)?['paymentMethod']
+            ?.toString() ??
+        metadata['paymentChannel']?.toString() ??
+        '自动识别';
+  } on Object {
+    return '自动识别';
+  }
+}
 
-  final IconData icon;
-  final String title;
-  final bool enabled;
+class _AutoRecord {
+  const _AutoRecord(
+    this.merchant,
+    this.time,
+    this.method,
+    this.amount,
+    this.saved,
+    this.onTap,
+  );
+  final String merchant, method;
+  final DateTime time;
+  final double amount;
+  final bool saved;
   final VoidCallback onTap;
+}
 
+class _AutoRecordRow extends StatelessWidget {
+  const _AutoRecordRow(this.record, {required this.divider});
+  final _AutoRecord record;
+  final bool divider;
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        icon,
-        color: enabled ? context.appPrimary : AppColors.warning,
-      ),
-      title: Text(title),
-      subtitle: Text(enabled ? '已允许' : '未允许'),
-      trailing: TextButton(
-        onPressed: onTap,
-        child: Text(enabled ? '查看' : '去开启'),
+    final today = DateUtils.dateOnly(DateTime.now()),
+        day = DateUtils.dateOnly(record.time);
+    final label = day == today
+        ? '今天'
+        : day == today.subtract(const Duration(days: 1))
+        ? '昨天'
+        : DateFormat('M月d日').format(day);
+    final source = autoSources
+        .where((source) => record.method.contains(source.$1))
+        .firstOrNull;
+    return InkWell(
+      onTap: record.onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 39.25),
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        decoration: BoxDecoration(
+          border: divider
+              ? const Border(
+                  bottom: BorderSide(color: Color(0xFFECECF0), width: .5),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            if (record.merchant.contains('星巴克'))
+              ClipOval(
+                child: Image.asset(
+                  'assets/images/autobookkeeping/starbucks.png',
+                  width: 29,
+                  height: 29,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else if (record.merchant.contains('麦当劳'))
+              Container(
+                width: 29,
+                height: 29,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8C00),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.restaurant_rounded,
+                  size: 22,
+                  color: Colors.white,
+                ),
+              )
+            else if (source != null)
+              AutoSourceIcon(source.$2, size: 29)
+            else
+              Container(
+                width: 29,
+                height: 29,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFA123),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  size: 21,
+                  color: Colors.white,
+                ),
+              ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.merchant,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: autoText(10.5, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '$label ${DateFormat('HH:mm').format(record.time)} · ${record.method}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: autoText(9.5, color: autoMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '¥ ${record.amount.toStringAsFixed(2)}',
+              style: autoText(11, weight: FontWeight.w700),
+            ),
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+              decoration: BoxDecoration(
+                color: record.saved
+                    ? const Color(0xFFDDF9E9)
+                    : const Color(0xFFFFEFD2),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(
+                record.saved ? '已入账' : '待确认',
+                style: autoText(
+                  9.5,
+                  weight: FontWeight.w500,
+                  color: record.saved ? autoGreen : const Color(0xFFFF8B00),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded, size: 16, color: autoMuted),
+          ],
+        ),
       ),
     );
   }

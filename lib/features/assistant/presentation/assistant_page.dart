@@ -1,7 +1,6 @@
 import '../../../core/widgets/app_action_sheet.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +8,8 @@ import 'package:intl/intl.dart';
 
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/app_bottom_panel.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../../../core/models/membership.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
@@ -20,6 +21,8 @@ import '../../membership/presentation/membership_upgrade_prompt.dart';
 import '../application/assistant_conversation.dart';
 import '../application/assistant_engine.dart';
 import '../application/assistant_policy.dart';
+import '../application/assistant_input_policy.dart';
+import '../../books/data/book_repository.dart';
 import 'assistant_entry_button.dart';
 
 class AssistantPage extends ConsumerStatefulWidget {
@@ -32,6 +35,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _sending = false;
+  bool _reviewing = false;
   late AssistantConversation _conversation;
   @override
   void initState() {
@@ -88,15 +92,46 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   }
 
   Future<void> _image() async {
+    final policy = await ref.read(assistantInputPolicyServiceProvider).load();
+    if (!mounted) return;
+    if (!policy.enabled) {
+      _notice('记账助手暂时停用');
+      return;
+    }
+    context.push('/profile/receipt-ocr');
+  }
+
+  Future<void> _attachment() async {
+    final policy = await ref.read(assistantInputPolicyServiceProvider).load();
+    if (!mounted) return;
+    if (!policy.enabled) {
+      _notice('记账助手暂时停用');
+      return;
+    }
+    context.push('/profile/bill-import');
+  }
+
+  Future<void> _review(AssistantMessage message) async {
+    if (_reviewing) return;
+    _reviewing = true;
     try {
-      final selected = await FilePicker.pickFile(
-        dialogTitle: '选择图片',
-        type: FileType.image,
+      final saved = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => VoiceBookkeepingSheet(
+          textOnly: true,
+          initialText: message.draftText,
+          bookId: ref.read(activeBookIdProvider),
+          requestId: message.requestId,
+          referenceTime: message.time,
+        ),
       );
-      if (selected != null && mounted)
-        _notice('已选择 ${selected.name}，图片记账识别开发中，尚未上传或创建账单');
+      if (saved == true) await _conversation.completeReview(message.id);
     } on Object {
-      if (mounted) _notice('当前设备暂时无法选择图片');
+      if (mounted) _notice('会话状态保存失败，请检查流水，避免重复记账');
+    } finally {
+      _reviewing = false;
     }
   }
 
@@ -146,7 +181,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         .read(assistantPolicyServiceProvider)
         .authorize(feature: 'voice');
     if (!mounted) return;
-    if (!access.allowed && access.requiresMembership) {
+    if (!access.allowed) {
+      if (!access.requiresMembership) {
+        _notice(access.message);
+        return;
+      }
       await showMembershipUpgradePrompt(
         context,
         MembershipFeature.automaticBookkeeping,
@@ -167,20 +206,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final pending = ref.watch(pendingInboxProvider).value?.length ?? 0;
     final processingError = ref.watch(notificationProcessingErrorProvider);
     return Scaffold(
-      backgroundColor: context.appBackground,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(-.8, -.3),
-            radius: 1.5,
-            colors: [
-              context.appPrimarySoft.withValues(alpha: .74),
-              context.appSurface.withValues(
-                alpha: context.appUsesLiquidGlass ? .36 : 1,
-              ),
-            ],
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      body: AppPageBackground(
         child: Stack(
           children: [
             Positioned(
@@ -193,8 +220,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     'assets/images/assistant-chat-leaf-decoration.png',
                     width: 100,
                     height: 130,
-                    cacheWidth:
-                        (100 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                    cacheWidth: (100 * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -203,6 +230,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             DefaultTextStyle.merge(
               style: TextStyle(color: context.appPrimaryText),
               child: SafeArea(
+                bottom: false,
                 child: Column(
                   children: [
                     SizedBox(
@@ -333,7 +361,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                       ),
                                     ),
                                     TextSpan(
-                                      text: '\n我可以帮你快速记账、查询数据、分析收支、设置预算，有任何问题都可以随时告诉我～',
+                                      text: '\n我可以帮你快速记账、查询消费、分析收支和查看预算。试试“最近一个月消费了多少”或“分析最近消费并给建议”。',
                                     ),
                                   ],
                                 ),
@@ -453,14 +481,26 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                                                 onPressed: () => context.push(
                                                   items[i].route!,
                                                 ),
-                                                child: const Text('打开查看'),
+                                                child: Text(
+                                                  items[i].route!.startsWith(
+                                                        '/transactions/search',
+                                                      )
+                                                      ? '查看明细'
+                                                      : '打开查看',
+                                                ),
+                                              ),
+                                            if (items[i].draftText != null)
+                                              TextButton(
+                                                onPressed: () =>
+                                                    _review(items[i]),
+                                                child: const Text('检查并确认账单'),
                                               ),
                                           ],
                                         ),
                                       ),
                               ),
                             ],
-                            if (_sending) _assistant(const Text('正在按规则处理…')),
+                            if (_sending) _assistant(const Text('正在处理…')),
                           ],
                         ),
                       ),
@@ -527,9 +567,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   }) => Material(
     color: outline ? Colors.transparent : context.appSurface,
     shape: StadiumBorder(
-      side: outline
-          ? BorderSide(color: context.appDivider)
-          : BorderSide.none,
+      side: outline ? BorderSide(color: context.appDivider) : BorderSide.none,
     ),
     child: InkWell(
       customBorder: const StadiumBorder(),
@@ -558,12 +596,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       ),
     ),
   );
-  Widget _composer() => Container(
-    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-    color: context.appSurface.withValues(
-      alpha: context.appUsesLiquidGlass ? .88 : .96,
-    ),
-    child: Column(
+  Widget _composer() {
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         SingleChildScrollView(
@@ -632,48 +669,72 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                         textInputAction: TextInputAction.send,
                         style: const TextStyle(fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: '输入消息，试试“帮我记一笔…”',
+                          hintText: compact ? '输入消息' : '输入消息，试试“帮我记一笔…”',
                           hintMaxLines: 1,
                           hintStyle: TextStyle(
-                            color: context.appSecondaryText.withValues(alpha: .72),
+                            color: context.appSecondaryText,
                             fontSize: 13,
                           ),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
                           filled: false,
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: '选择图片',
-                      onPressed: _image,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 44,
+                    if (compact)
+                      PopupMenuButton<String>(
+                        tooltip: '更多输入方式',
+                        icon: Icon(
+                          Icons.add_rounded,
+                          color: context.appSecondaryText,
+                        ),
+                        onSelected: (action) {
+                          if (action == 'image') {
+                            _image();
+                          } else {
+                            _attachment();
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'image', child: Text('选择图片')),
+                          PopupMenuItem(value: 'attachment', child: Text('附件')),
+                        ],
+                      )
+                    else ...[
+                      IconButton(
+                        tooltip: '选择图片',
+                        onPressed: _image,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 30,
+                          height: 44,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.image_outlined,
+                          size: 23,
+                          color: Colors.grey,
+                        ),
                       ),
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        Icons.image_outlined,
-                        size: 23,
-                        color: Colors.grey,
+                      IconButton(
+                        tooltip: '附件',
+                        onPressed: _attachment,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 44,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.attach_file,
+                          size: 23,
+                          color: Colors.grey,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: '附件',
-                      onPressed: () => _notice('文件上传功能开发中'),
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 44,
-                      ),
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        Icons.attach_file,
-                        size: 23,
-                        color: Colors.grey,
-                      ),
-                    ),
+                    ],
                     IconButton.filled(
                       tooltip: '发送',
                       style: IconButton.styleFrom(
@@ -692,8 +753,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
           ],
         ),
       ],
-    ),
-  );
+    );
+    return AppBottomPanel(child: content);
+  }
 }
 
 class AssistantRecordCard extends ConsumerWidget {
@@ -703,9 +765,7 @@ class AssistantRecordCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ref
         .watch(
-          transactionsByIdsProvider(
-            transactionIdsProviderKey([transactionId]),
-          ),
+          transactionsByIdsProvider(transactionIdsProviderKey([transactionId])),
         )
         .when(
           loading: () => const Padding(
@@ -848,20 +908,17 @@ class AssistantRecordCard extends ConsumerWidget {
       ],
     ),
   );
-  Widget _button(
-    BuildContext context,
-    String text,
-    VoidCallback action,
-  ) => TextButton(
-    style: TextButton.styleFrom(
-      backgroundColor: context.appPrimarySoft,
-      foregroundColor: context.appPrimary,
-      minimumSize: const Size(0, 28),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-    ),
-    onPressed: action,
-    child: Text(text, style: const TextStyle(fontSize: 13)),
-  );
+  Widget _button(BuildContext context, String text, VoidCallback action) =>
+      TextButton(
+        style: TextButton.styleFrom(
+          backgroundColor: context.appPrimarySoft,
+          foregroundColor: context.appPrimary,
+          minimumSize: const Size(0, 28),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        ),
+        onPressed: action,
+        child: Text(text, style: const TextStyle(fontSize: 13)),
+      );
 }

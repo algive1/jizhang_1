@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/category.dart';
 import '../../../../core/widgets/app_glass_surface.dart';
 import '../../../../core/widgets/category_icon.dart';
-import '../../../../../app/theme/app_theme_tokens.dart';
+import '../../../../app/theme/app_theme_tokens.dart';
 
 typedef CategoryGridSelection = void Function(
   Category category,
@@ -20,6 +20,7 @@ class CategoryGrid extends StatelessWidget {
     required this.onSelected,
     this.tileHeight,
     this.iconSize = 42,
+    this.reviewMode = false,
   });
 
   final List<Category> categories;
@@ -29,6 +30,7 @@ class CategoryGrid extends StatelessWidget {
   final CategoryGridSelection onSelected;
   final double? tileHeight;
   final double iconSize;
+  final bool reviewMode;
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +45,21 @@ class CategoryGrid extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       borderRadius: 24,
       tint: context.appSurface,
+      glassOpacity: reviewMode
+          ? (MediaQuery.highContrastOf(context) ? 1 : .28)
+          : null,
+      border: reviewMode
+          ? Border.all(
+              color: context.appPrimary.withValues(alpha: .30),
+              width: 1.2,
+            )
+          : null,
       blurSigma: 12,
       chromaticEdge: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = MediaQuery.textScalerOf(context).scale(14) > 19
-              ? 4
+              ? (MediaQuery.sizeOf(context).width < 380 ? 3 : 4)
               : 5;
           return SingleChildScrollView(
             key: const ValueKey('quick-category-section'),

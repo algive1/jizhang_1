@@ -14,7 +14,8 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       "/api":
-        loadEnv(mode, process.cwd(), "ADMIN_").ADMIN_API_TARGET ??
+        (loadEnv(mode, process.cwd(), "ADMIN_").ADMIN_LOCAL_API_TARGET ||
+          loadEnv(mode, process.cwd(), "ADMIN_").ADMIN_API_TARGET) ??
         "http://127.0.0.1:8787",
     },
   },

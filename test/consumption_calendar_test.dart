@@ -87,80 +87,106 @@ void main() {
     },
   );
 
-  testWidgets('monthly overview stays visible while calendar body scrolls', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(320, 640));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final database = createMemoryDatabase();
-    addTearDown(database.close);
-    await DatabaseSeeder(database).seedIfNeeded();
-    await DriftTransactionRepository(database).create(
-      _record(
-        id: 'calendar-bottom-record',
-        type: TransactionType.expense,
-        amount: 12,
-        occurredAt: DateTime.now(),
-        note: '底部消费记录',
-      ),
-    );
-    final container = ProviderContainer(
-      overrides: [databaseProvider.overrideWithValue(database)],
-    );
-    addTearDown(() async {
-      await tester.pumpWidget(const SizedBox.shrink());
-      container.dispose();
-    });
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(320, 640),
-              textScaler: TextScaler.linear(1.8),
-            ),
-            child: const ConsumptionCalendarPage(),
+  for (final theme in BuiltInThemes.all) {
+    testWidgets(
+      '${theme.id}: monthly overview stays visible while calendar body scrolls',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(320, 640));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final database = createMemoryDatabase();
+        addTearDown(database.close);
+        await DatabaseSeeder(database).seedIfNeeded();
+        await DriftTransactionRepository(database).create(
+          _record(
+            id: 'calendar-bottom-record',
+            type: TransactionType.expense,
+            amount: 12,
+            occurredAt: DateTime.now(),
+            note: '底部消费记录',
           ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+        );
+        final container = ProviderContainer(
+          overrides: [databaseProvider.overrideWithValue(database)],
+        );
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          container.dispose();
+        });
 
-    final body = find.descendant(
-      of: find.byType(ConsumptionCalendarPage),
-      matching: find.byType(ListView),
-    );
-    final position = tester
-        .state<ScrollableState>(
-          find.descendant(of: body, matching: find.byType(Scrollable)).first,
-        )
-        .position;
-    expect(position.maxScrollExtent, greaterThan(0));
-    position.jumpTo(position.maxScrollExtent);
-    await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: AppTheme.light(theme),
+              home: MediaQuery(
+                data: const MediaQueryData(
+                  size: Size(320, 640),
+                  textScaler: TextScaler.linear(1.8),
+                ),
+                child: const ConsumptionCalendarPage(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-    expect(
-      find.ancestor(
-        of: find.text('本月概览'),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is Scaffold && widget.bottomNavigationBar != null,
-        ),
-      ),
-      findsOneWidget,
+        final body = find.descendant(
+          of: find.byType(ConsumptionCalendarPage),
+          matching: find.byType(ListView),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: body, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+        expect(position.maxScrollExtent, greaterThan(0));
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.ancestor(
+            of: find.text('本月概览'),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scaffold && widget.bottomNavigationBar != null,
+            ),
+          ),
+          findsOneWidget,
+        );
+        final overviewRect = tester.getRect(find.text('本月概览'));
+        final bodyRect = tester.getRect(body);
+        final scaffold = tester.widget<Scaffold>(
+          find.ancestor(
+            of: find.text('本月概览'),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scaffold && widget.bottomNavigationBar != null,
+            ),
+          ),
+        );
+        final overviewTop = tester
+            .getTopLeft(find.byWidget(scaffold.bottomNavigationBar!))
+            .dy;
+        expect(bodyRect.bottom, greaterThan(overviewRect.bottom));
+        expect(
+          tester.getRect(find.text('记一笔')).bottom,
+          lessThanOrEqualTo(overviewTop),
+        );
+        expect(
+          tester.getRect(find.text('底部消费记录')).bottom,
+          lessThanOrEqualTo(overviewTop),
+        );
+        expect(overviewRect.top, greaterThanOrEqualTo(0));
+        expect(overviewRect.bottom, lessThanOrEqualTo(640));
+        expect(find.text('本月概览').hitTestable(), findsOneWidget);
+        expect(find.text('底部消费记录').hitTestable(), findsOneWidget);
+        expect(find.text('记一笔').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
     );
-    final overviewRect = tester.getRect(find.text('本月概览'));
-    final bodyRect = tester.getRect(body);
-    expect(bodyRect.bottom, lessThanOrEqualTo(overviewRect.top));
-    expect(overviewRect.top, greaterThanOrEqualTo(0));
-    expect(overviewRect.bottom, lessThanOrEqualTo(640));
-    expect(find.text('本月概览').hitTestable(), findsOneWidget);
-    expect(find.text('底部消费记录').hitTestable(), findsOneWidget);
-    expect(find.text('记一笔').hitTestable(), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  }
 
   testWidgets('calendar transaction long press opens the action sheet', (
     tester,

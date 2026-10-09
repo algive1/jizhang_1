@@ -17,6 +17,8 @@ export const permissionCatalog = {
   "ai:prompt:edit": "编辑 Prompt",
   "ai:prompt:publish": "发布 Prompt",
   "ai:usage:view": "AI 用量",
+  "ai:policy:view": "查看助手策略",
+  "ai:policy:edit": "编辑助手策略",
   "app:version:view": "查看版本",
   "app:version:edit": "编辑版本",
   "app:version:publish": "发布版本",
@@ -36,10 +38,56 @@ export const permissionCatalog = {
   "system:role": "角色权限管理",
   "system:audit": "审计日志",
   "system:session": "管理会话与撤销",
+  "membership:view": "查看会员套餐与权益",
+  "membership:edit": "编辑会员套餐",
+  "membership:publish": "发布会员套餐",
+  "membership:adjust": "人工调整用户会员",
+  "payment:view": "查看支付配置与订单",
+  "payment:configure": "配置支付渠道",
+  "payment:reconcile": "查询和关闭支付订单",
+  "payment:refund": "申请会员退款",
+  "system:maintenance:view": "查看服务版本与维护任务",
+  "system:backup": "创建后台数据库备份",
+  "system:update": "创建及执行后端更新任务",
 } as const;
 export type Permission = keyof typeof permissionCatalog;
+const menuOrder = [
+  "",
+  "用户中心",
+  "会员与支付",
+  "记账管理",
+  "AI 中心",
+  "数据安全",
+  "APP 管理",
+  "运营中心",
+  "系统管理",
+];
 export const menus = [
   { path: "/", title: "工作台", group: "", permission: "dashboard:view" },
+  {
+    path: "/system-maintenance",
+    title: "后端更新与备份",
+    group: "系统管理",
+    permission: "system:maintenance:view",
+  },
+  {
+    path: "/membership",
+    title: "套餐与权益",
+    group: "会员与支付",
+    permission: "membership:view",
+  },
+  {
+    path: "/payments",
+    title: "订单与退款",
+    group: "会员与支付",
+    permission: "payment:view",
+  },
+  {
+    path: "/payment-channels",
+    title: "支付渠道",
+    group: "会员与支付",
+    permission: "payment:view",
+  },
   {
     path: "/users",
     title: "用户管理",
@@ -108,7 +156,7 @@ export const menus = [
   },
   {
     path: "/documents/prompt",
-    title: "Prompt 管理",
+    title: "提示词管理",
     group: "AI 中心",
     permission: "ai:prompt:view",
   },
@@ -117,6 +165,18 @@ export const menus = [
     title: "用量与成本",
     group: "AI 中心",
     permission: "ai:usage:view",
+  },
+  {
+    path: "/asr",
+    title: "腾讯语音识别",
+    group: "AI 中心",
+    permission: "ai:model:view",
+  },
+  {
+    path: "/assistant-policy",
+    title: "助手策略",
+    group: "AI 中心",
+    permission: "ai:policy:view",
   },
   {
     path: "/backups",
@@ -190,6 +250,21 @@ export const menus = [
   group: string;
   permission: Permission;
 }>;
+for (const menu of menus)
+  if (menu.group === "自动记账") menu.group = "记账管理";
+menus.sort((a, b) => menuOrder.indexOf(a.group) - menuOrder.indexOf(b.group));
+const aiOrder = [
+  "/assistant-policy",
+  "/models",
+  "/documents/prompt",
+  "/asr",
+  "/ai-usage",
+];
+menus.sort((a, b) =>
+  a.group === "AI 中心" && b.group === "AI 中心"
+    ? aiOrder.indexOf(a.path) - aiOrder.indexOf(b.path)
+    : 0,
+);
 export const initialRoles: Array<{
   id: string;
   name: string;
@@ -255,6 +330,8 @@ export const initialRoles: Array<{
     id: "ai",
     name: "AI 管理员",
     permissions: [
+      "ai:policy:view",
+      "ai:policy:edit",
       "ai:model:view",
       "ai:model:edit",
       "ai:prompt:view",

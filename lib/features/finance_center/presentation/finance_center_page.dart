@@ -8,6 +8,16 @@ import '../../../core/widgets/app_date_picker.dart';
 import '../data/finance_center_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
+final _invoicesProvider = FutureProvider(
+  (ref) => ref.watch(financeCenterRepositoryProvider).invoices(),
+);
+final _taxFilingsProvider = FutureProvider(
+  (ref) => ref.watch(financeCenterRepositoryProvider).taxFilings(),
+);
+final _statementsProvider = FutureProvider(
+  (ref) => ref.watch(financeCenterRepositoryProvider).statements(),
+);
+
 class FinanceCenterPage extends ConsumerStatefulWidget {
   const FinanceCenterPage({super.key});
 
@@ -17,7 +27,6 @@ class FinanceCenterPage extends ConsumerStatefulWidget {
 
 class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
   int _tab = 0;
-  int _revision = 0;
 
   FinanceCenterRepository get _repo =>
       ref.read(financeCenterRepositoryProvider);
@@ -27,7 +36,7 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final key = ValueKey('finance-center-$_revision-$_tab');
+    final key = ValueKey('finance-center-$_tab');
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -94,17 +103,17 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
                   key: key,
                   child: switch (_tab) {
                     0 => _InvoiceList(
-                      future: _repo.invoices(),
+                      future: ref.watch(_invoicesProvider.future),
                       onEdit: _editInvoice,
                       onDelete: _deleteInvoice,
                     ),
                     1 => _TaxList(
-                      future: _repo.taxFilings(),
+                      future: ref.watch(_taxFilingsProvider.future),
                       onEdit: _editTax,
                       onDelete: _deleteTax,
                     ),
                     _ => _StatementList(
-                      future: _repo.statements(),
+                      future: ref.watch(_statementsProvider.future),
                       onEdit: _editStatement,
                       onDelete: _deleteStatement,
                     ),
@@ -194,7 +203,9 @@ class _FinanceCenterPageState extends ConsumerState<FinanceCenterPage> {
     try {
       await action();
       if (!mounted) return;
-      setState(() => _revision++);
+      ref.invalidate(_invoicesProvider);
+      ref.invalidate(_taxFilingsProvider);
+      ref.invalidate(_statementsProvider);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
     } on Object catch (error) {
@@ -340,7 +351,8 @@ class _FutureList<T> extends StatelessWidget {
   Widget build(BuildContext context) => FutureBuilder<List<T>>(
     future: future,
     builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
+      if (!snapshot.hasData &&
+          snapshot.connectionState != ConnectionState.done) {
         return Padding(
           padding: EdgeInsets.all(30),
           child: Center(child: CircularProgressIndicator()),

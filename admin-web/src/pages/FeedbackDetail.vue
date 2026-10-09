@@ -9,6 +9,8 @@ import { can } from "../state/session";
 const route = useRoute(),
   page = ref(1),
   status = ref("");
+const reply = ref(""),
+  sending = ref(false);
 const { data, loading, error, refresh } = useResource(async () => {
   const result = await api.feedbackDetail(String(route.params.id), {
     page: page.value,
@@ -25,6 +27,23 @@ async function save() {
     await refresh();
   } catch (e) {
     Message.error(e instanceof Error ? e.message : "保存失败");
+  }
+}
+async function send() {
+  sending.value = true;
+  try {
+    await api.replyFeedback(String(route.params.id), reply.value);
+    reply.value = "";
+    Message.success("回复已发送至 APP 工单");
+    page.value = Math.max(
+      1,
+      Math.ceil(((data.value?.messages.total ?? 0) + 1) / 20),
+    );
+    await refresh();
+  } catch (e) {
+    Message.error(String(e));
+  } finally {
+    sending.value = false;
   }
 }
 </script>
@@ -73,6 +92,25 @@ async function save() {
           page = $event;
           refresh();
         "
-      /></section
-  ></a-spin>
+      />
+      <a-form
+        v-if="can('feedback:edit')"
+        :model="{ reply }"
+        layout="vertical"
+        style="margin-top: 20px"
+        ><a-form-item label="客服回复"
+          ><a-textarea
+            v-model="reply"
+            :max-length="4000"
+            placeholder="回复将进入 APP 工单，已登录用户会收到消息提醒" /></a-form-item
+        ><a-button
+          type="primary"
+          :loading="sending"
+          :disabled="!reply.trim()"
+          @click="send"
+          >发送回复</a-button
+        ></a-form
+      >
+    </section></a-spin
+  >
 </template>

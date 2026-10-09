@@ -2,11 +2,15 @@ package com.algive.jizhang_app
 
 import android.app.Notification
 import android.content.Intent
+import android.content.ComponentName
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
@@ -16,6 +20,7 @@ import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.parser.PaymentNotificationCandidateParser
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
+import com.algive.jizhang_app.autobookkeeping.BookkeepingChangeBus
 import com.algive.jizhang_app.autobookkeeping.rules.AutoBookkeepingRuleRegistry
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -51,6 +56,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         connected = true
+        rebindHandler.removeCallbacksAndMessages(null)
         refreshRules()
         AutoBookkeepingLogStore.record(
             this,
@@ -77,27 +83,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             PaymentNotificationStore.PREFS_NAME,
             MODE_PRIVATE,
         ).getBoolean(KEY_ENABLED, false)
-        if (enabled) {
-            mainHandler.postDelayed(
-                {
-                    runCatching {
-                        requestRebind(
-                            android.content.ComponentName(
-                                this,
-                                PaymentNotificationListenerService::class.java,
-                            ),
-                        )
-                    }.onFailure { error ->
-                        AutoBookkeepingLogStore.record(
-                            this,
-                            "notification_listener_rebind_failed",
-                            error.javaClass.simpleName,
-                        )
-                    }
-                },
-                LISTENER_REBIND_DELAY_MS,
-            )
-        }
+        if (enabled) ensureConnected(this, force = true)
         super.onListenerDisconnected()
     }
 
@@ -187,6 +173,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     "source=${candidate.sourceApp}",
                 )
             }
+            PendingEnqueueDecision.QUEUED -> {
+                BookkeepingChangeBus.publish(this)
+                PaymentNotificationStore.acknowledge(this, listOf(id))
+                AutoBookkeepingNotificationController.notifyConfirmationAvailable(this, showToast = false)
+            }
             PendingEnqueueDecision.BUSY -> {
                 // Keep the raw notification in PaymentNotificationStore. The
                 // foreground recovery processor can retry it after the current
@@ -273,6 +264,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         PaymentNotificationStore.acknowledge(this, listOf(id))
                     }
                 }
+                PendingEnqueueDecision.QUEUED -> {
+                    BookkeepingChangeBus.publish(this)
+                    if (id.isNotEmpty()) PaymentNotificationStore.acknowledge(this, listOf(id))
+                    AutoBookkeepingNotificationController.notifyConfirmationAvailable(this, showToast = false)
+                }
                 PendingEnqueueDecision.BUSY -> return
             }
         }
@@ -321,6 +317,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     private fun showRealtimeCandidate(candidate: PaymentCandidate) {
+        BookkeepingChangeBus.publish(this)
         AutoBookkeepingLogStore.recordDetailed(
             this,
             "notification_candidate_presentation_requested",
@@ -381,6 +378,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        AutoBookkeepingLogStore.record(this, "notification_listener_destroyed", "notification listener stopped")
         AutoBookkeepingLogStore.recordDetailed(this, "notification_listener_destroyed", "service destroyed")
         connected = false
         if (instance === this) instance = null
@@ -399,7 +397,38 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         private const val KEY_ENABLED = "enabled"
         private const val OVERLAY_START_GRACE_MS = 350L
-        private const val LISTENER_REBIND_DELAY_MS = 1000L
+        private val rebindHandler = Handler(Looper.getMainLooper())
+        private var lastRebindAt = -15_000L
+
+        fun ensureConnected(context: Context, force: Boolean = false) {
+            val app = context.applicationContext
+            fun requested() = app.getSharedPreferences(PaymentNotificationStore.PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_ENABLED, false) &&
+                app.packageName in NotificationManagerCompat.getEnabledListenerPackages(app)
+            if (connected || !requested()) return
+            val now = SystemClock.uptimeMillis()
+            if (!force && now - lastRebindAt < 15_000) return
+            lastRebindAt = now
+            rebindHandler.removeCallbacksAndMessages(null)
+            val component = ComponentName(app, PaymentNotificationListenerService::class.java)
+            fun attempt(number: Int) {
+                if (connected || !requested()) return
+                runCatching { requestRebind(component) }.onFailure {
+                    AutoBookkeepingLogStore.record(app, "notification_listener_rebind_failed", it.javaClass.simpleName)
+                }
+                AutoBookkeepingLogStore.record(app, "notification_rebind_requested", "attempt=$number connected=$connected")
+                if (number < 3) {
+                    rebindHandler.postDelayed({ attempt(number + 1) }, if (number == 1) 2000 else 6000)
+                } else {
+                    rebindHandler.postDelayed({
+                        if (!connected && requested()) AutoBookkeepingLogStore.record(
+                            app, "notification_listener_unavailable", "permission granted but disconnected; check autostart and battery settings",
+                        )
+                    }, 2000)
+                }
+            }
+            attempt(1)
+        }
 
     }
 }

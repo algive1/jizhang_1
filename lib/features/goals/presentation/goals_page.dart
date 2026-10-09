@@ -49,7 +49,7 @@ class GoalsPage extends ConsumerWidget {
                 ),
               ),
               FilledButton.icon(
-                onPressed: () => _createGoal(context, ref),
+                onPressed: () => createGoalFromSheet(context, ref),
                 icon: const Icon(Icons.add),
                 label: const Text('新建目标'),
               ),
@@ -75,7 +75,7 @@ class GoalsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             if (active.isEmpty)
-              _EmptyGoal(onCreate: () => _createGoal(context, ref))
+              _EmptyGoal(onCreate: () => createGoalFromSheet(context, ref))
             else
               ...active.map((goal) => _GoalItem(goal: goal)),
             if (paused.isNotEmpty) ...[
@@ -101,39 +101,44 @@ class GoalsPage extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _createGoal(BuildContext context, WidgetRef ref) async {
-    final draft = await showGoalCreationSheet(context);
-    if (draft == null || !context.mounted) return;
-    final now = DateTime.now();
-    try {
-      final goal = await ref
-          .read(goalRepositoryProvider)
-          .create(
-            goal: Goal(
-              id: 'goal-${newEntityId()}',
-              name: draft.name,
-              goalType: draft.type,
-              icon: draft.type.name,
-              targetAmount: draft.targetAmount,
-              currentAmount: draft.currentAmount,
-              targetDate: draft.targetDate,
-              status: GoalStatus.active,
-              createdAt: now,
-              milestones: const [],
-              description: draft.description,
-              coverPath: draft.coverPath,
-              bookId: ref.read(activeBookIdProvider),
-            ),
-            milestoneAmounts: draft.milestones,
-            initialAmount: draft.currentAmount,
-          );
-      if (context.mounted) context.go('/goals/${goal.id}');
-    } on Object {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('目标创建失败，请检查金额和节点')));
-    }
+Future<void> createGoalFromSheet(BuildContext context, WidgetRef ref) async {
+  final bookId = ref.read(activeBookIdProvider);
+  final repository = ref.read(goalRepositoryProvider);
+  final draft = await showGoalCreationSheet(context);
+  if (draft == null || !context.mounted) return;
+  if (ref.read(activeBookIdProvider) != bookId) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('账本已切换，请重新创建目标')));
+    return;
+  }
+  final now = DateTime.now();
+  try {
+    final goal = await repository.create(
+      goal: Goal(
+        id: 'goal-${newEntityId()}',
+        name: draft.name,
+        goalType: draft.type,
+        icon: draft.type.name,
+        targetAmount: draft.targetAmount,
+        currentAmount: draft.currentAmount,
+        targetDate: draft.targetDate,
+        status: GoalStatus.active,
+        createdAt: now,
+        milestones: const [],
+        description: draft.description,
+        coverPath: draft.coverPath,
+        bookId: bookId,
+      ),
+      milestoneAmounts: draft.milestones,
+      initialAmount: draft.currentAmount,
+    );
+    if (context.mounted) context.push('/goals/${goal.id}');
+  } on Object {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('目标创建失败，请检查金额和节点')));
   }
 }
 

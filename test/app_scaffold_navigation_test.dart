@@ -281,7 +281,7 @@ void main() {
 
         // The backdrop the glass has to sample, and the page above it.
         expect(
-          find.byType(AppPageBackground),
+          find.byWidgetPredicate((widget) => widget is AppPageBackground && !widget.solidDay),
           findsOneWidget,
           reason: '${theme.id} must paint a backdrop for the glass to bend',
         );
@@ -679,7 +679,7 @@ List<Type> _shellStackChildren(WidgetTester tester) {
   final stack = tester.widget<Stack>(
     find
         .ancestor(
-          of: find.byType(AppPageBackground),
+          of: find.byWidgetPredicate((widget) => widget is AppPageBackground && !widget.solidDay),
           matching: find.byType(Stack),
         )
         .first,

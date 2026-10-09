@@ -2,59 +2,101 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The page backdrop every theme paints **behind** its content.
-///
-/// Glass only ever shows what is painted under it, so a bar sitting on a
-/// flat `scaffoldBackgroundColor` refracts a flat colour and reads as a
-/// tinted slab no matter how strong the distortion is. The reference app
-/// solves this the same way: its `MMGlassPageBackground` returns a
-/// decorated box whose decoration is a mesh gradient — one theme base
-/// colour plus **three radial glows** — and the navigation bar is just the
-/// layer that blurs and bends that already-painted backdrop.
-///
-/// Colours are derived from the **active `ColorScheme`** rather than from a
-/// theme record, so the backdrop follows any theme that reaches the widget
-/// tree — the four built-ins, a catalogue theme pushed from the server, or
-/// a platform-brightness override — with no per-theme table to keep in
-/// sync:
-///
-///  * the base is the theme's own `scaffoldBackgroundColor`;
-///  * the glows tint with `primaryContainer`, `primary` and `surface`.
-///
-/// The three glows are spread across the whole surface rather than
-/// concentrated near the bottom edge, because their job is to give the
-/// glass something with **variation** to refract — a gradient that is flat
-/// where the bar sits would defeat the point.
-class AppPageBackground extends StatelessWidget {
-  const AppPageBackground({required this.child, super.key});
+import '../../app/theme/app_theme_definition.dart';
 
+/// Change the backdrop without replacing the Navigator or its page state.
+class AppAppearanceBackground extends StatelessWidget {
+  const AppAppearanceBackground({required this.child, super.key});
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: dark
+                ? const AppPageBackground(child: SizedBox.expand())
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          theme.scaffoldBackgroundColor,
+                          Color.alphaBlend(
+                            scheme.primary.withValues(alpha: .08),
+                            scheme.surface,
+                          ),
+                          scheme.surface,
+                        ],
+                        stops: const [0, .52, 1],
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+        Theme(
+          data: dark
+              ? theme.copyWith(scaffoldBackgroundColor: Colors.transparent)
+              : theme,
+          child: child,
+        ),
+      ],
+    );
+  }
+}
+
+/// Shared backdrop behind page content and the floating navigation.
+/// Night uses the reference's black base and three HSL glows at intensity 50.
+/// [AppThemeMaterial.pageTint] preserves the original theme hue independently
+/// of the brighter foreground accent. Day keeps its existing composition.
+class AppPageBackground extends StatelessWidget {
+  const AppPageBackground({
+    required this.child,
+    this.solidDay = false,
+    super.key,
+  });
+
+  final Widget child;
+  final bool solidDay;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final base = Theme.of(context).scaffoldBackgroundColor;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final base = isDark ? Colors.black : theme.scaffoldBackgroundColor;
+    final tint =
+        theme.extension<AppThemeMaterial>()?.pageTint ?? colors.primary;
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: base,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            base,
-            Color.alphaBlend(
-              colors.primary.withValues(alpha: isDark ? .12 : .055),
-              colors.surface,
-            ),
-            base,
-          ],
-          stops: const [0, .52, 1],
-        ),
+        gradient: isDark || solidDay
+            ? null
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  base,
+                  Color.alphaBlend(
+                    colors.primary.withValues(alpha: .055),
+                    colors.surface,
+                  ),
+                  base,
+                ],
+                stops: const [0, .52, 1],
+              ),
       ),
       child: CustomPaint(
-        painter: _MeshGlowPainter(colors: colors, isDark: isDark),
+        painter: !isDark && solidDay
+            ? null
+            : _MeshGlowPainter(colors: colors, isDark: isDark, tint: tint),
         child: child,
       ),
     );
@@ -63,10 +105,15 @@ class AppPageBackground extends StatelessWidget {
 
 /// The three-glow mesh on top of [AppPageBackground]'s base gradient.
 class _MeshGlowPainter extends CustomPainter {
-  const _MeshGlowPainter({required this.colors, required this.isDark});
+  const _MeshGlowPainter({
+    required this.colors,
+    required this.isDark,
+    required this.tint,
+  });
 
   final ColorScheme colors;
   final bool isDark;
+  final Color tint;
 
   /// Glow centres and radius factors, ported from the reference app's
   /// recovered decoration: lower-left, upper-right, upper-left. Alignment
@@ -86,12 +133,14 @@ class _MeshGlowPainter extends CustomPainter {
 
     for (var index = 0; index < _glows.length; index++) {
       final (alignment, radiusFactor) = _glows[index];
-      // `Alignment` counts y upwards from the centre, canvas pixels count
-      // it downwards, hence the flip.
-      final focal = Offset(
-        (alignment.x + 1) / 2 * size.width,
-        (1 - alignment.y) / 2 * size.height,
-      );
+      // Flutter Alignment and canvas both count y downwards. Preserve the
+      // existing daytime composition; night follows the reference positions.
+      final focal = isDark
+          ? alignment.alongSize(size)
+          : Offset(
+              (alignment.x + 1) / 2 * size.width,
+              (1 - alignment.y) / 2 * size.height,
+            );
       final radius = shortest * radiusFactor;
       final color = glowColors[index];
       canvas.drawCircle(
@@ -110,12 +159,33 @@ class _MeshGlowPainter extends CustomPainter {
   /// and pushed away from the base so it reads as a soft wash.
   List<Color> _glowColors() {
     if (isDark) {
-      // On a dark base the wash has to *lift*, so the glows take the
-      // container tones and stay low-alpha.
+      final hsl = HSLColor.fromColor(tint);
+      if (hsl.saturation < .08) {
+        final strength = tint.computeLuminance() > .5 ? .18 : .08;
+        return [
+          tint.withValues(alpha: strength * .55 * .48),
+          tint.withValues(alpha: strength * .55 * .72),
+          tint.withValues(alpha: strength * .92),
+        ];
+      }
+      Color glow(
+        double hue,
+        double minS,
+        double maxS,
+        double minL,
+        double maxL,
+        double alpha,
+      ) => hsl
+          .withHue((hsl.hue + hue) % 360)
+          .withSaturation(hsl.saturation.clamp(minS, maxS))
+          .withLightness(hsl.lightness.clamp(minL, maxL))
+          .toColor()
+          .withValues(alpha: alpha);
+      // Default saved intensity 50: bottom, right, then upper-left.
       return [
-        _wash(colors.primaryContainer, lightness: .26, saturation: .34),
-        _wash(colors.primary, lightness: .30, saturation: .40),
-        _wash(colors.surfaceContainerHighest, lightness: .24, saturation: .16),
+        glow(-22, .50, .82, .30, .44, .1152),
+        glow(28, .58, .88, .34, .48, .1728),
+        glow(0, .68, .95, .38, .52, .2944),
       ];
     }
     return [
@@ -146,6 +216,7 @@ class _MeshGlowPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MeshGlowPainter oldDelegate) =>
       oldDelegate.isDark != isDark ||
+      oldDelegate.tint != tint ||
       oldDelegate.colors.primary != colors.primary ||
       oldDelegate.colors.primaryContainer != colors.primaryContainer ||
       oldDelegate.colors.surface != colors.surface ||

@@ -67,7 +67,7 @@ class ProfilePage extends ConsumerWidget {
     ].where((s) => s.hasError);
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: context.appIsDark ? null : LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [

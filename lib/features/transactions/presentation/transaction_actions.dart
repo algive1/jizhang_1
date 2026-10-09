@@ -1,5 +1,4 @@
 import '../../../core/widgets/app_bottom_sheet.dart';
-import '../../../core/widgets/app_form.dart';
 
 import 'dart:async';
 
@@ -9,7 +8,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/category.dart';
+import '../../../core/database/database_provider.dart';
 import '../../../core/models/transaction_record.dart';
+import '../../bookkeeping/presentation/components/category_grid.dart';
 import '../../books/data/book_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
@@ -46,9 +47,8 @@ void openTransactionDetail(
 Future<void> showTransactionActions(
   BuildContext context,
   WidgetRef ref,
-  TransactionRecord transaction, {
-  Future<void> Function()? onCorrectCategory,
-}) async {
+  TransactionRecord transaction,
+) async {
   if (transaction.bookId != ref.read(activeBookIdProvider)) {
     final action = await AppBottomSheet.show<_CrossBookTransactionAction>(
       context: context,
@@ -97,12 +97,7 @@ Future<void> showTransactionActions(
       return;
     }
     if (!context.mounted) return;
-    await showTransactionActions(
-      context,
-      ref,
-      transaction,
-      onCorrectCategory: onCorrectCategory,
-    );
+    await showTransactionActions(context, ref, transaction);
     return;
   }
 
@@ -148,11 +143,10 @@ Future<void> showTransactionActions(
                 _TransactionAction.editReimbursement,
               ),
             ),
-          if (onCorrectCategory != null &&
-              transaction.type != TransactionType.adjustment)
+          if (transaction.isIncome || transaction.isExpense)
             ListTile(
               leading: const Icon(Icons.category_outlined),
-              title: const Text('修改分类'),
+              title: const Text('编辑分类'),
               onTap: () =>
                   Navigator.pop(sheetContext, _TransactionAction.category),
             ),
@@ -217,7 +211,7 @@ Future<void> showTransactionActions(
     case _TransactionAction.editReimbursement:
       await _editReimbursement(context, ref, transaction);
     case _TransactionAction.category:
-      await onCorrectCategory?.call();
+      await showTransactionCategoryCorrection(context, ref, transaction);
     case _TransactionAction.refund:
       await _registerRefund(context, ref, transaction);
     case _TransactionAction.voidRefund:
@@ -493,58 +487,115 @@ class _AmountInputDialogState extends State<_AmountInputDialog> {
   );
 }
 
-Future<void> showTransactionCategoryCorrection(
+Future<bool> showTransactionCategoryCorrection(
   BuildContext context,
   WidgetRef ref,
   TransactionRecord transaction,
 ) async {
-  final allCategories = ref.read(categoriesProvider).value ?? const [];
+  late final List<Category> allCategories;
+  try {
+    await ref.read(databaseBootstrapProvider.future);
+    allCategories =
+        (await DriftCategoryRepository(
+              ref.read(databaseProvider),
+              bookId: transaction.bookId,
+            ).getAll())
+            .where(
+              (category) =>
+                  !category.isArchived ||
+                  category.id == transaction.categoryId ||
+                  category.id == transaction.subcategoryId,
+            )
+            .toList();
+  } on Object catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('读取分类失败：$error')));
+    }
+    return false;
+  }
+  if (!context.mounted) return false;
   final type = transaction.isIncome
       ? CategoryType.income
       : CategoryType.expense;
-  final options = allCategories.where((item) => item.type == type).toList();
-  if (options.isEmpty) return;
-  var selectedId = transaction.categoryId ?? options.first.id;
+  final options = orderCategories(
+    allCategories.where((item) => item.type == type && item.parentId == null),
+  );
+  if (options.isEmpty) return false;
+  var selectedId = options.any((item) => item.id == transaction.categoryId)
+      ? transaction.categoryId
+      : null;
+  var selectedSubcategoryId =
+      allCategories.any(
+        (item) =>
+            item.parentId == selectedId && item.id == transaction.subcategoryId,
+      )
+      ? transaction.subcategoryId
+      : null;
   var remember = false;
-  final shouldSave = await showModalBottomSheet<bool>(
+  final shouldSave = await AppBottomSheet.show<bool>(
     context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setModalState) => SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            18,
-            20,
-            20 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '修改分类',
+                '编辑分类',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              AppSelect<String>(
-                initialValue: selectedId,
-                decoration: const InputDecoration(labelText: '分类'),
-                items: options
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item.id,
-                        child: Text(item.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setModalState(() => selectedId = value);
-                  }
-                },
+              SizedBox(
+                height: (MediaQuery.sizeOf(context).height * .4).clamp(
+                  160.0,
+                  340.0,
+                ),
+                child: CategoryGrid(
+                  categories: options,
+                  selected: options
+                      .where((item) => item.id == selectedId)
+                      .firstOrNull,
+                  subcategories: allCategories
+                      .where((item) => item.parentId == selectedId)
+                      .toList(),
+                  selectedSubcategoryId: selectedSubcategoryId,
+                  reviewMode: true,
+                  onSelected: (category, anchorRect) async {
+                    final children = allCategories
+                        .where((item) => item.parentId == category.id)
+                        .toList();
+                    setModalState(() {
+                      if (selectedId != category.id)
+                        selectedSubcategoryId = null;
+                      selectedId = category.id;
+                    });
+                    if (children.isEmpty) return;
+                    final selection = await showSubcategoryPopover(
+                      context,
+                      anchorRect: anchorRect,
+                      parent: category,
+                      categories: children,
+                      selectedId: selectedId == category.id
+                          ? selectedSubcategoryId
+                          : null,
+                    );
+                    if (!context.mounted || selection == null) return;
+                    setModalState(() {
+                      selectedId = category.id;
+                      selectedSubcategoryId = selection.subcategoryId;
+                    });
+                  },
+                ),
               ),
+              if (selectedSubcategoryId != null)
+                TextButton(
+                  onPressed: () =>
+                      setModalState(() => selectedSubcategoryId = null),
+                  child: const Text('仅保留一级分类'),
+                ),
               if ((transaction.merchant ?? '').trim().isNotEmpty)
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -558,7 +609,9 @@ Future<void> showTransactionCategoryCorrection(
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
+                  onPressed: selectedId == null
+                      ? null
+                      : () => Navigator.pop(context, true),
                   child: Text(remember ? '保存并记住规则' : '仅修改本次'),
                 ),
               ),
@@ -568,18 +621,29 @@ Future<void> showTransactionCategoryCorrection(
       ),
     ),
   );
-  if (!context.mounted || shouldSave != true) return;
-  await ref
-      .read(merchantRuleRepositoryProvider)
-      .correctTransaction(
-        transactionId: transaction.id,
-        categoryId: selectedId,
-        rememberForMerchant: remember,
-      );
-  if (!context.mounted) return;
+  if (!context.mounted || shouldSave != true || selectedId == null)
+    return false;
+  try {
+    await ref
+        .read(merchantRuleRepositoryProvider)
+        .correctTransaction(
+          transactionId: transaction.id,
+          categoryId: selectedId!,
+          subcategoryId: selectedSubcategoryId,
+          rememberForMerchant: remember,
+        );
+  } on Object catch (error) {
+    if (context.mounted)
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('分类更新失败：$error')));
+    return false;
+  }
+  ref.invalidate(transactionsProvider);
+  if (!context.mounted) return true;
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(remember ? '已修改，并记住该商户' : '已修改本次分类')));
+  return true;
 }
 
 Future<void> _deleteTransaction(

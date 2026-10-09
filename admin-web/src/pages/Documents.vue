@@ -12,7 +12,7 @@ const route = useRoute(),
   kind = computed(() => String(route.params.kind) as DocumentKind);
 const title = computed(
   () =>
-    ({ config: "远程配置", rule: "识别与适配规则", prompt: "Prompt 管理" })[
+    ({ config: "远程配置", rule: "识别与适配规则", prompt: "提示词管理" })[
       kind.value
     ],
 );
@@ -63,9 +63,9 @@ const templates: Record<DocumentKind, unknown> = {
   },
   prompt: {
     name: "",
-    scene: "classification",
+    scene: "assistant",
     systemPrompt: "",
-    userTemplate: "",
+    userTemplate: "{{text}}",
     experiment: null,
   },
 };
@@ -83,6 +83,22 @@ const historyColumns: TableColumnData[] = [
   { title: "修改人", dataIndex: "createdBy" },
   { title: "操作", slotName: "actions" },
 ];
+const promptScene = computed({
+  get: () => {
+    try {
+      return JSON.parse(form.json).scene as string;
+    } catch {
+      return "";
+    }
+  },
+  set: (scene: string) => {
+    try {
+      form.json = JSON.stringify({ ...JSON.parse(form.json), scene }, null, 2);
+    } catch {
+      error.value = "请先修正 JSON 格式再选择场景";
+    }
+  },
+});
 const load = (query: Query) => api.documents(kind.value, query);
 const loadHistory = (query: Query) =>
   api.revisions(kind.value, historyKey.value, query);
@@ -244,6 +260,20 @@ async function restore(row: Revision) {
             :input-attrs="{ 'aria-label': '修改备注' }"
         /></a-form-item>
       </div>
+      <a-form-item v-if="kind === 'prompt'" label="调用场景">
+        <a-select v-model="promptScene"
+          ><a-option value="assistant">助手对话</a-option
+          ><a-option value="natural-language">文字交易解析</a-option
+          ><a-option value="voice">语音交易解析</a-option
+          ><a-option value="ocr">图片文字解析</a-option
+          ><a-option value="insight">消费洞察</a-option></a-select
+        >
+        <template #extra
+          >systemPrompt 填写场景补充要求；userTemplate 必须保留
+          <code v-pre>{{ text }}</code
+          >。语音和图片未单独配置时沿用文字解析场景。</template
+        >
+      </a-form-item>
       <a-form-item label="配置内容（JSON，严格字段校验）" field="json" required
         ><a-textarea
           v-model="form.json"

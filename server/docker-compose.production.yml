@@ -1,10 +1,14 @@
 services:
   app:
+    image: ${BACKEND_IMAGE:-haohao-backend:local}
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      BACKEND_IMAGE: ${BACKEND_IMAGE:-haohao-backend:local}
+      BACKEND_VERSION: ${BACKEND_VERSION:-development}
     volumes:
       - ledger-data:/data
       - ledger-backups:/backups
@@ -18,8 +22,8 @@ services:
 
   backup:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     env_file: .env
     command: ["node", "scripts/backup_loop.mjs"]
@@ -32,8 +36,8 @@ services:
 
   monitor:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     env_file: .env
     command: ["node", "scripts/monitor.mjs"]
@@ -48,6 +52,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      admin-web:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
@@ -55,6 +61,17 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+
+  admin-web:
+    build: ../admin-web
+    restart: unless-stopped
+    environment:
+      ADMIN_API_UPSTREAM: app:8787
+    expose:
+      - "80"
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   ledger-data:

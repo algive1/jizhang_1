@@ -10,6 +10,8 @@ data class AccessibilityTreeSnapshot(
     val visited: Int,
     val maxDepth: Int,
     val truncated: Boolean,
+    val elapsedMs: Long = 0,
+    val truncationReason: String? = null,
 )
 
 class AccessibilityTreeReader {
@@ -22,11 +24,18 @@ class AccessibilityTreeReader {
         var visited = 0
         var maxDepth = 0
         var truncated = false
-        val deadline = SystemClock.elapsedRealtime() + 250
+        var truncationReason: String? = null
+        val startedAt = SystemClock.elapsedRealtime()
+        val deadline = startedAt + 250
 
         fun visit(node: AccessibilityNodeInfo, depth: Int) {
             if (visited >= MAX_NODES || depth > MAX_DEPTH || SystemClock.elapsedRealtime() >= deadline) {
                 truncated = true
+                truncationReason = when {
+                    visited >= MAX_NODES -> "NODE_LIMIT"
+                    depth > MAX_DEPTH -> "DEPTH_LIMIT"
+                    else -> "TIME_LIMIT"
+                }
                 return
             }
             visited += 1
@@ -48,10 +57,11 @@ class AccessibilityTreeReader {
             }
 
             val childLimit = node.childCount.coerceAtMost(MAX_CHILDREN_PER_NODE)
-            if (node.childCount > childLimit) truncated = true
+            if (node.childCount > childLimit) { truncated = true; truncationReason = "CHILD_LIMIT" }
             for (i in 0 until childLimit) {
                 if (visited >= MAX_NODES || SystemClock.elapsedRealtime() >= deadline) {
                     truncated = true
+                    truncationReason = if (visited >= MAX_NODES) "NODE_LIMIT" else "TIME_LIMIT"
                     break
                 }
                 val child = node.getChild(i) ?: continue
@@ -69,12 +79,14 @@ class AccessibilityTreeReader {
             visited = visited,
             maxDepth = maxDepth,
             truncated = truncated,
+            elapsedMs = SystemClock.elapsedRealtime() - startedAt,
+            truncationReason = truncationReason,
         )
     }
 
     private companion object {
         const val MAX_NODES = 480
-        const val MAX_DEPTH = 24
+        const val MAX_DEPTH = 48
         const val MAX_CHILDREN_PER_NODE = 120
     }
 }

@@ -169,8 +169,8 @@ class TransactionRecord {
     final afterRefund = netExpenseAmount;
     final reimbursable = switch (reimbursementStatus) {
       ReimbursementStatus.none => 0.0,
-      ReimbursementStatus.pending || ReimbursementStatus.reimbursed =>
-        reimbursementAmount ?? afterRefund,
+      ReimbursementStatus.pending ||
+      ReimbursementStatus.reimbursed => reimbursementAmount ?? afterRefund,
       ReimbursementStatus.partial => reimbursementAmount ?? 0.0,
     };
     return (afterRefund - reimbursable).clamp(0, afterRefund).toDouble();
@@ -190,7 +190,9 @@ class TransactionRecord {
 
   String get displayCategoryPath {
     final child = _displayValue(subcategoryName);
-    return child == null ? displayCategoryLabel : '$displayCategoryLabel · $child';
+    return child == null
+        ? displayCategoryLabel
+        : '$displayCategoryLabel · $child';
   }
 
   String get displayLeafCategoryLabel =>
@@ -220,7 +222,10 @@ class TransactionRecord {
 
   String? _displayValue(String? value) {
     final cleaned = value?.trim();
-    if (cleaned == null || cleaned.isEmpty || cleaned == '/' || cleaned == '／') {
+    if (cleaned == null ||
+        cleaned.isEmpty ||
+        cleaned == '/' ||
+        cleaned == '／') {
       return null;
     }
     return cleaned;
@@ -233,6 +238,7 @@ class TransactionRecord {
     String? categoryId,
     Object? categoryName = _copyWithUnset,
     String? subcategoryId,
+    bool clearSubcategory = false,
     String? accountId,
     String? destinationAccountId,
     String? merchant,
@@ -276,13 +282,17 @@ class TransactionRecord {
       categoryIcon: (categoryId != null && categoryId != this.categoryId)
           ? null
           : categoryIcon,
-      subcategoryId: subcategoryId ?? this.subcategoryId,
+      subcategoryId: clearSubcategory
+          ? null
+          : subcategoryId ?? this.subcategoryId,
       subcategoryName:
-          (subcategoryId != null && subcategoryId != this.subcategoryId)
+          clearSubcategory ||
+              (subcategoryId != null && subcategoryId != this.subcategoryId)
           ? null
           : subcategoryName,
       subcategoryIcon:
-          (subcategoryId != null && subcategoryId != this.subcategoryId)
+          clearSubcategory ||
+              (subcategoryId != null && subcategoryId != this.subcategoryId)
           ? null
           : subcategoryIcon,
       accountId: accountId ?? this.accountId,

@@ -16,7 +16,10 @@ import '../../bookkeeping/application/quick_bookkeeping_service.dart';
 import '../../categories/data/category_repository.dart';
 import '../../intelligence/data/merchant_rule_repository.dart';
 import '../application/speech_recognition_service.dart';
+import '../application/cloud_speech_recognition_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../assistant/application/assistant_input_policy.dart';
+import '../../assistant/application/assistant_scope.dart';
 
 class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
   const VoiceBookkeepingSheet({
@@ -24,11 +27,17 @@ class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
     this.textOnly = false,
     this.initialText,
     this.bookId,
+    this.returnDraft = false,
+    this.requestId,
+    this.referenceTime,
   });
 
   final bool textOnly;
   final String? initialText;
   final String? bookId;
+  final bool returnDraft;
+  final String? requestId;
+  final DateTime? referenceTime;
 
   @override
   ConsumerState<VoiceBookkeepingSheet> createState() =>
@@ -38,13 +47,14 @@ class VoiceBookkeepingSheet extends ConsumerStatefulWidget {
 class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
   final _transcriptController = TextEditingController();
   StreamSubscription<SpeechRecognitionEvent>? _subscription;
-  late final SpeechRecognitionService _speechService;
+  late SpeechRecognitionService _speechService;
   List<ParsedVoiceTransaction> _transactions = const [];
   final Set<int> _categoryCorrections = {};
   bool _listening = false;
   bool _parsing = false;
   bool _saving = false;
   bool _onDevice = true;
+  bool _recognizing = false;
   String? _error;
   List<String> _unresolved = const [];
 
@@ -74,8 +84,15 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     super.dispose();
   }
 
-  Future<void> _startListening() async {
+  Future<void> _startListening({bool cloud = false}) async {
     await _subscription?.cancel();
+    await _speechService.cancel();
+    if (!mounted) return;
+    _speechService = ref.read(
+      cloud
+          ? cloudSpeechRecognitionServiceProvider
+          : speechRecognitionServiceProvider,
+    );
     _subscription = _speechService.events.listen(_handleSpeechEvent);
     setState(() {
       _error = null;
@@ -85,10 +102,32 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     await _speechService.start();
   }
 
+  Future<void> _startCloud() async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('使用云端语音识别'),
+        content: const Text('本次录音将通过后台发送至腾讯云进行识别，最长 60 秒。后台不会保存录音或识别文本。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('同意并录音'),
+          ),
+        ],
+      ),
+    );
+    if (agreed == true && mounted) await _startListening(cloud: true);
+  }
+
   void _handleSpeechEvent(SpeechRecognitionEvent event) {
     if (!mounted) return;
     setState(() {
       _listening = event.status == SpeechRecognitionStatus.listening;
+      _recognizing = event.status == SpeechRecognitionStatus.processing;
       _onDevice = event.onDevice;
       if (event.transcript.isNotEmpty) {
         _transcriptController.text = event.transcript;
@@ -106,9 +145,35 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     setState(() {
       _parsing = true;
       _error = null;
+      _transactions = const [];
+      _unresolved = const [];
     });
     try {
-      final result = await ref.read(voiceTransactionParserProvider).parse(text);
+      final policy = await ref.read(assistantInputPolicyServiceProvider).load();
+      if (!policy.enabled) throw const FormatException('记账助手暂时停用');
+      if (text.runes.length > policy.maxInputLength)
+        throw FormatException('每条文字最多 ${policy.maxInputLength} 字');
+      if (RegExp(r'\d+\.\d{3,}|[-负]\s*\d').hasMatch(text))
+        throw const FormatException('金额必须为正数，最多两位小数');
+      if (assistantOutOfScope(text) ||
+          RegExp(r'不要|别记|假如|如果|还是|或者|退款|转账|明天|下周|下月').hasMatch(text))
+        throw const FormatException('请只输入明确的真实收支，疑问、退款和转账请使用对应记账页面');
+      final result = await ref
+          .read(
+            transactionParserProvider((
+              source: widget.textOnly ? 'natural-language' : 'voice',
+              requestId: text == widget.initialText ? widget.requestId : null,
+              referenceTime: text == widget.initialText
+                  ? widget.referenceTime
+                  : null,
+            )),
+          )
+          .parse(
+            text,
+            now: text == widget.initialText ? widget.referenceTime : null,
+          );
+      if (result.transactions.length > policy.maxTransactions)
+        throw FormatException('每次最多 ${policy.maxTransactions} 笔，请分批处理');
       if (!mounted) return;
       setState(() {
         _transactions = result.transactions;
@@ -185,7 +250,9 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                     Text(
                       widget.textOnly
                           ? '本机优先'
-                          : (_onDevice ? '设备端优先' : '系统识别降级'),
+                          : (_speechService is CloudSpeechRecognitionService
+                                ? '腾讯云识别'
+                                : (_onDevice ? '设备端优先' : '系统识别降级')),
                       style: TextStyle(
                         color: context.appSecondaryText,
                         fontSize: 12,
@@ -200,6 +267,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                 TextField(
                   key: const ValueKey('voice-transcript'),
                   controller: _transcriptController,
+                  enabled: !_parsing && !_saving,
                   minLines: 2,
                   maxLines: 4,
                   decoration: const InputDecoration(
@@ -215,6 +283,11 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                       onPressed: _parsing ? null : _parseTranscript,
                       child: Text(_parsing ? '解析中…' : '智能解析'),
                     ),
+                  )
+                else if (_recognizing)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('腾讯云正在识别录音…'),
                   )
                 else if (_listening)
                   Row(
@@ -252,6 +325,18 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                       style: const TextStyle(color: AppColors.warning),
                     ),
                   ),
+                if (!widget.textOnly &&
+                    !_listening &&
+                    !_recognizing &&
+                    ref.watch(cloudAsrEnabledProvider).value == true)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _startCloud,
+                      icon: const Icon(Icons.cloud_outlined),
+                      label: const Text('腾讯云语音识别'),
+                    ),
+                  ),
                 if (_unresolved.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -267,9 +352,7 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                             widget.textOnly
                                 ? '先在本机解析金额、时间、分类和账户，再由你确认保存'
                                 : '规则会先在本机解析金额、时间、分类和账户',
-                            style: TextStyle(
-                              color: context.appSecondaryText,
-                            ),
+                            style: TextStyle(color: context.appSecondaryText),
                           ),
                         )
                       : ListView.separated(
@@ -306,7 +389,11 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
                           : () => _save(accounts, categories),
                       icon: const Icon(Icons.check),
                       label: Text(
-                        _saving ? '保存中…' : '确认 ${_transactions.length} 笔并保存',
+                        _saving
+                            ? '保存中…'
+                            : widget.returnDraft
+                            ? '应用到当前账单'
+                            : '确认 ${_transactions.length} 笔并保存',
                       ),
                     ),
                   ),
@@ -326,6 +413,10 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
     final resolvedTransactions = _transactions
         .map((item) => _resolveAccount(item, accounts))
         .toList(growable: false);
+    if (widget.returnDraft && resolvedTransactions.length != 1) {
+      setState(() => _error = '当前付款只确认一笔，请保留当前账单的内容');
+      return;
+    }
     if (resolvedTransactions.any(
       (item) =>
           item.amount <= 0 ||
@@ -334,6 +425,10 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
           !categories.any((category) => category.id == item.categoryId),
     )) {
       setState(() => _error = '请补全每笔账单的金额、分类和账户');
+      return;
+    }
+    if (widget.returnDraft) {
+      Navigator.pop(context, resolvedTransactions.single);
       return;
     }
     setState(() => _saving = true);

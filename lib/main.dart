@@ -22,6 +22,16 @@ import 'features/recurring/data/recurring_bill_repository.dart';
 import 'features/settings/data/app_settings_repository.dart';
 import 'features/sharing/data/shared_api.dart';
 import 'features/transactions/data/transactions_repository.dart';
+import 'features/autobookkeeping/presentation/auto_bookkeeping_overlay_app.dart';
+import 'features/budgets/application/budget_weekly_review_service.dart';
+import 'features/budgets/application/budget_alert_notification_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> autoBookkeepingOverlayMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('zh_CN');
+  runApp(const ProviderScope(child: AutoBookkeepingOverlayApp()));
+}
 
 Future<void> main() async {
   GlobalCrashReporter.install();
@@ -94,6 +104,14 @@ Future<void> scheduledFinanceMain() async {
         database,
         bookId: book.id,
       ).processDueRepayments();
+      try {
+        await BudgetWeeklyReviewService(
+          settings, const MethodChannelBudgetNotificationBridge(),
+        ).sync(bookId: book.id,
+          transactions: DriftTransactionRepository(database, bookId: book.id));
+      } on Object {
+        // Auxiliary reports must not interrupt scheduled finance processing.
+      }
     }
 
     // Investment snapshots piggyback on the same daily isolate instead of

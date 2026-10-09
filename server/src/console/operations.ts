@@ -6,6 +6,7 @@ import { requireCondition as check } from "../contract.js";
 import { authorize, auditAction } from "./auth.js";
 import { pageQuery, paginate, redact } from "./query.js";
 import { createAnnouncement } from "../message_center.js";
+import { replySupportTicket } from '../support.js';
 
 const operationKind = z.enum(["faq", "banner", "activity"]);
 const input = z.strictObject({
@@ -164,6 +165,10 @@ export function registerOperations(app: FastifyInstance, store: Store) {
       auditAction(store, admin, "feedback:status:" + status, id);
     })();
     return { ok: true };
+  });
+  app.post('/feedback/:id/messages',async request=>{
+    const admin=authorize(store,request,'feedback:edit'),{id}=z.object({id:z.uuid()}).parse(request.params),{body}=z.strictObject({body:z.string().trim().min(1).max(4000)}).parse(request.body);
+    return store.db.transaction(()=>{const result=replySupportTicket(store,id,body);auditAction(store,admin,'feedback:reply',id);return {...result,body:redact(result.body)};})();
   });
   app.get("/operations", async (request) => {
     authorize(store, request, "operations:view");

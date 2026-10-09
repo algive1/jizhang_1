@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -17,10 +16,13 @@ import '../../../core/models/category.dart';
 import '../../../core/models/recurring_bill.dart';
 import '../../../core/models/transaction_record.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/database/database_seeder.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_glass_surface.dart';
 import '../../bookkeeping/presentation/components/category_grid.dart';
 import '../../bookkeeping/presentation/quick_add_sheet.dart';
 import '../../../core/platform/bookkeeping_feedback.dart';
+import '../../../core/platform/app_notice.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
@@ -37,16 +39,25 @@ import '../../recurring/application/recurring_bill_notification_service.dart';
 import '../../notifications/application/payment_notification_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../auto_bookkeeping_logs.dart';
+import '../auto_bookkeeping_inbox.dart';
+import '../auto_bookkeeping_strategy.dart';
+import '../../settings/data/app_settings_repository.dart';
 
 class AutoBookkeepingConfirmPage extends ConsumerStatefulWidget {
   const AutoBookkeepingConfirmPage({
     super.key,
     this.overlayMode = false,
     this.onReady,
+    this.initialCandidate,
+    this.embedded = false,
+    this.allowAutomaticSave = false,
   });
 
   final bool overlayMode;
   final VoidCallback? onReady;
+  final PendingAutoBookkeepingCandidate? initialCandidate;
+  final bool embedded;
+  final bool allowAutomaticSave;
 
   @override
   ConsumerState<AutoBookkeepingConfirmPage> createState() =>
@@ -76,18 +87,21 @@ class _AutoBookkeepingConfirmPageState
   bool _rememberForMerchant = true;
   bool _keepScreenshot = true;
   bool _loading = true;
+  bool _readyReported = false;
   bool _saving = false;
   bool _closing = false;
+  bool _automaticRun = false;
+  AutoBookkeepingStrategy _strategy = AutoBookkeepingStrategy.conservative;
 
-  static const _nativeReviewChannel = MethodChannel(
-    'jizhang/autobookkeeping_native_review',
-  );
-
-  Future<void> _record(String stage, Map<String, Object?> detail) =>
-      const AutoBookkeepingLogsBridge().recordDetailed(
-        stage,
-        jsonEncode(detail),
-      );
+  Future<void> _record(String stage, Map<String, Object?> detail) async {
+    try {
+      await const AutoBookkeepingLogsBridge()
+          .recordDetailed(stage, jsonEncode(detail))
+          .timeout(const Duration(seconds: 1));
+    } on Object {
+      // Diagnostics cannot hold up saving or closing a committed bill.
+    }
+  }
 
   Map<String, Object?> _candidateLog(
     PendingAutoBookkeepingCandidate candidate,
@@ -110,225 +124,20 @@ class _AutoBookkeepingConfirmPageState
   @override
   void initState() {
     super.initState();
-    if (widget.overlayMode) {
-      _nativeReviewChannel.setMethodCallHandler(_handleNativeReviewCall);
-    }
     unawaited(_loadCandidateWithTimeout());
   }
 
-  @override
-  void dispose() {
-    if (widget.overlayMode) {
-      _nativeReviewChannel.setMethodCallHandler(null);
-    }
-    super.dispose();
-  }
-
-  String? _nonBlank(Object? value) {
-    final text = value?.toString().trim();
-    return text == null || text.isEmpty ? null : text;
-  }
-
-  Future<Object?> _handleNativeReviewCall(MethodCall call) async {
-    if (call.method != 'submit') return null;
-    final raw = call.arguments;
-    if (raw is! Map) {
-      return const <String, Object?>{
-        'success': false,
-        'message': '原生确认参数无效',
-      };
-    }
-    final success = await _saveNativeReview(Map<Object?, Object?>.from(raw));
-    return <String, Object?>{
-      'success': success,
-      'message': _message,
-    };
-  }
-
-  Future<bool> _saveNativeReview(Map<Object?, Object?> raw) async {
-    final candidate = _candidate;
-    final books = _overlayBooks;
-    if (candidate == null || books == null || books.isEmpty || _saving) {
-      return false;
-    }
-
-    final requestedBookId = raw['bookId']?.toString();
-    final bookId = requestedBookId != null &&
-            books.any((book) => book.id == requestedBookId)
-        ? requestedBookId
-        : (_bookId ?? books.first.id);
-    final selectedBook = books.where((book) => book.id == bookId).firstOrNull;
-    if (selectedBook == null) return false;
-
-    final accounts =
-        bookId == _bookId && _overlayAccounts != null
-            ? _overlayAccounts!
-            : await DriftAccountRepository(
-                ref.read(databaseProvider),
-                bookId: selectedBook.assetBookId,
-              ).getActive();
-    final categories =
-        bookId == _bookId && _overlayCategories != null
-            ? _overlayCategories!
-            : await DriftCategoryRepository(
-                ref.read(databaseProvider),
-                bookId: bookId,
-              ).getActive();
-
-    final typeName = raw['type']?.toString();
-    final type = switch (typeName) {
-      'income' => TransactionType.income,
-      'refund' => TransactionType.refund,
-      'reimbursement' => TransactionType.reimbursement,
-      'transfer' => TransactionType.transfer,
-      _ => TransactionType.expense,
-    };
-    final amount = raw['amountInCents'];
-    final amountInCents = amount is num ? amount.toInt() : 0;
-    if (amountInCents <= 0) {
-      setState(() => _message = '请输入有效金额');
-      return false;
-    }
-
-    final reimbursementName =
-        raw['reimbursementStatus']?.toString() ?? 'none';
-    final reimbursementStatus = ReimbursementStatus.values.firstWhere(
-      (value) => value.name == reimbursementName,
-      orElse: () => ReimbursementStatus.none,
-    );
-    final occurredAtRaw = raw['occurredAt'];
-    final occurredAt = occurredAtRaw is num
-        ? DateTime.fromMillisecondsSinceEpoch(occurredAtRaw.toInt())
-        : candidate.timestamp;
-    _keepScreenshot = raw['screenshotEnabled'] != false;
-
-    final draft = QuickAddReviewDraft(
-      bookId: bookId,
-      type: type,
-      amountInCents: amountInCents,
-      note: raw['note']?.toString() ?? candidate.merchant,
-      occurredAt: occurredAt,
-      accounts: accounts,
-      categories: categories,
-      categoryId: _nonBlank(raw['categoryId']),
-      accountId: _nonBlank(raw['accountId']),
-      destinationAccountId:
-          _nonBlank(raw['destinationAccountId']),
-      subcategoryId: _nonBlank(raw['subcategoryId']),
-      reimbursementStatus: reimbursementStatus,
-      reimbursementNote: '',
-      attachmentPaths: const <String>[],
-      tags: const <String>[],
-      payerUserId: null,
-      recurringDraft: null,
-      isPlanned: false,
-      isOneTime: true,
-      isRecurring: false,
-    );
-    return _saveOverlayDraft(draft);
-  }
-
-  Future<void> _syncNativeReview() async {
-    if (!widget.overlayMode || !mounted) return;
-    final candidate = _candidate;
-    final books = _overlayBooks;
-    final accounts = _overlayAccounts;
-    final categories = _overlayCategories;
-    if (candidate == null ||
-        books == null ||
-        accounts == null ||
-        categories == null ||
-        books.isEmpty) {
-      return;
-    }
-
-    final selectedBookId = _bookId != null &&
-            books.any((book) => book.id == _bookId)
-        ? _bookId!
-        : books.first.id;
-    final resolvedType =
-        _overlayTransactionType ?? _transactionTypeFor(candidate.transactionType);
-    // A parser-level TRANSFER only becomes an internal account transfer after
-    // the existing resolver finds strong evidence. Until then the established
-    // behavior is to review/save it as an expense.
-    final type =
-        candidate.transactionType == 'TRANSFER' &&
-            resolvedType == TransactionType.transfer &&
-            !_internalTransfer
-        ? TransactionType.expense
-        : resolvedType;
-    final categoryType = _categoryTypeFor(type);
-    final roots = categories
-        .where((item) => item.parentId == null && item.type == categoryType)
-        .toList()
-      ..sort((a, b) {
-        bool isOther(Category item) =>
-            item.id == 'expense-other' || item.name.trim().startsWith('其他');
-        final aOther = isOther(a);
-        final bOther = isOther(b);
-        if (aOther != bOther) return aOther ? -1 : 1;
-        return b.sortOrder.compareTo(a.sortOrder);
-      });
-    final children = categories
-        .where((item) => item.parentId != null)
-        .toList()
-      ..sort((a, b) => b.sortOrder.compareTo(a.sortOrder));
-    final selectedCategoryId = _validCategoryId(roots);
-    final selectedAccountId = _validAccountId(accounts);
-    final selectedDestinationAccountId = _validDestinationAccountId(
-      accounts,
-      sourceAccountId: selectedAccountId,
-    );
-
-    try {
-      await _nativeReviewChannel.invokeMethod<void>('sync', {
-        'selectedBookId': selectedBookId,
-        'selectedAccountId': selectedAccountId,
-        'selectedDestinationAccountId': selectedDestinationAccountId,
-        'selectedCategoryId': selectedCategoryId,
-        'selectedSubcategoryId': _subcategoryId,
-        'transactionType': switch (type) {
-          TransactionType.income => 'income',
-          TransactionType.refund => 'refund',
-          TransactionType.reimbursement => 'reimbursement',
-          TransactionType.transfer => 'transfer',
-          _ => 'expense',
-        },
-        'occurredAt': (_editedOccurredAt ?? candidate.timestamp)
-            .millisecondsSinceEpoch,
-        'screenshotAvailable': candidate.screenshotPath != null,
-        'screenshotEnabled':
-            candidate.screenshotPath != null && _keepScreenshot,
-        'books': [
-          for (final book in books) {'id': book.id, 'label': book.name},
-        ],
-        'accounts': [
-          for (final account in accounts)
-            {
-              'id': account.id,
-              'label': account.displayName,
-              'type': account.type.name,
-            },
-        ],
-        'categories': [
-          for (final category in <Category>[...roots, ...children])
-            {
-              'id': category.id,
-              'label': category.name,
-              'type': category.type.name,
-              'parentId': category.parentId,
-              'sortOrder': category.sortOrder,
-            },
-        ],
-      });
-    } on MissingPluginException {
-      // Widget tests and non-Android hosts intentionally have no native overlay.
-    }
+  void _reportReady() {
+    if (!mounted || _readyReported) return;
+    _readyReported = true;
+    widget.onReady?.call();
   }
 
   Future<void> _loadCandidateWithTimeout() async {
     try {
-      await _loadCandidate().timeout(const Duration(seconds: 7));
+      await _loadCandidate().timeout(
+        Duration(seconds: widget.allowAutomaticSave ? 18 : 7),
+      );
     } on TimeoutException {
       unawaited(
         _record('confirmation_candidate_load_timeout', {
@@ -340,14 +149,15 @@ class _AutoBookkeepingConfirmPageState
         _loading = false;
         _message = '账本加载超时，请稍后从通知重新打开';
       });
+      _reportReady();
     }
   }
 
   Future<void> _loadCandidate() async {
     try {
-      final candidate = await ref
-          .read(autoBookkeepingPendingBridgeProvider)
-          .getPending();
+      final candidate =
+          widget.initialCandidate ??
+          await ref.read(autoBookkeepingPendingBridgeProvider).getPending();
       unawaited(
         _record('confirmation_candidate_loaded', {
           'overlayMode': widget.overlayMode,
@@ -363,7 +173,16 @@ class _AutoBookkeepingConfirmPageState
       String? sourceAccountId;
       String? resolvedBookId;
       if (candidate != null) {
-        final fallbackBookId = ref.read(activeBookIdProvider);
+        if (widget.overlayMode)
+          await ref.read(databaseBootstrapProvider.future);
+        final booksFuture = widget.overlayMode
+            ? ref.read(bookRepositoryProvider).getForUser(SeedIds.localUser)
+            : ref.read(booksProvider.future);
+        final String fallbackBookId =
+            (await ref
+                .read(appSettingsRepositoryProvider)
+                .get(activeBookIdSettingKey)) ??
+            ref.read<String>(activeBookIdProvider);
         recommendation = await ref
             .read(autoBookkeepingLearningServiceProvider)
             .recommend(
@@ -371,7 +190,7 @@ class _AutoBookkeepingConfirmPageState
               fallbackBookId: fallbackBookId,
               transactionType: _transactionTypeFor(candidate.transactionType),
             );
-        final books = await ref.read(booksProvider.future);
+        final books = await booksFuture;
         if (widget.overlayMode) overlayBooks = books;
         final requestedBookId = recommendation.bookId ?? fallbackBookId;
         final targetBookId = books.any((book) => book.id == requestedBookId)
@@ -387,18 +206,22 @@ class _AutoBookkeepingConfirmPageState
           final selectedBook = books
               .where((book) => book.id == targetBookId)
               .firstOrNull;
-          final accounts = widget.overlayMode
-              ? await DriftAccountRepository(
+          final accountsFuture = widget.overlayMode
+              ? DriftAccountRepository(
                   ref.read(databaseProvider),
                   bookId: selectedBook?.assetBookId ?? targetBookId,
                 ).getActive()
-              : await ref.read(accountsByBookProvider(targetBookId).future);
+              : ref.read(accountsByBookProvider(targetBookId).future);
+          final categoriesFuture = widget.overlayMode
+              ? DriftCategoryRepository(
+                  ref.read(databaseProvider),
+                  bookId: targetBookId,
+                ).getActive()
+              : null;
+          final accounts = await accountsFuture;
           if (widget.overlayMode) {
             overlayAccounts = accounts;
-            overlayCategories = await DriftCategoryRepository(
-              ref.read(databaseProvider),
-              bookId: targetBookId,
-            ).getActive();
+            overlayCategories = await categoriesFuture;
           }
           sourceAccountId =
               matchedRefundOriginal?.accountId ??
@@ -443,14 +266,19 @@ class _AutoBookkeepingConfirmPageState
             transferRecommendation?.suggestsInternalTransfer == true;
         _destinationAccountId = transferRecommendation?.destinationAccountId;
         _loading = false;
+        _automaticRun = candidate != null && widget.allowAutomaticSave;
       });
-      if (widget.overlayMode && candidate != null) {
-        unawaited(_syncNativeReview());
-      }
       if (candidate != null && candidate.screenshotPath == null) {
         unawaited(_refreshScreenshot(candidate.fingerprint));
       }
-      widget.onReady?.call();
+      try {
+        if (widget.allowAutomaticSave && await _tryAutomaticSave()) return;
+      } on TimeoutException {
+        if (!mounted) return;
+        setState(() => _message = '自动入账检测超时，请手动确认');
+      }
+      if (mounted) setState(() => _automaticRun = false);
+      _reportReady();
     } on Object catch (error) {
       unawaited(
         _record('confirmation_candidate_load_failed', {
@@ -460,9 +288,97 @@ class _AutoBookkeepingConfirmPageState
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _automaticRun = false;
         _message = '无法读取待确认账单：$error';
       });
+      _reportReady();
     }
+  }
+
+  Future<bool> _tryAutomaticSave() async {
+    final settings = ref.read(appSettingsRepositoryProvider);
+    _strategy = AutoBookkeepingStrategy.parse(
+      await settings
+          .get(AutoBookkeepingStrategy.settingKey)
+          .timeout(const Duration(seconds: 2)),
+    );
+    if (_strategy == AutoBookkeepingStrategy.conservative ||
+        !mounted ||
+        _closing)
+      return false;
+    final current = await ref
+        .read(autoBookkeepingPendingBridgeProvider)
+        .getPending()
+        .timeout(const Duration(seconds: 2));
+    if (!mounted ||
+        current == null ||
+        current.fingerprint != _candidate?.fingerprint)
+      return false;
+    final runtimeHealthy =
+        await const MethodChannel('jizhang/autobookkeeping_pending')
+            .invokeMethod<bool>('canAutoRecord')
+            .timeout(const Duration(seconds: 2)) ??
+        false;
+    if (!mounted || _closing) return false;
+    final recommendation =
+        _recommendation ?? const AutoBookkeepingRecommendation();
+    final decision = decideAutoBookkeeping(
+      strategy: _strategy,
+      candidate: current,
+      recommendation: recommendation,
+      accounts: _overlayAccounts ?? const [],
+      categories: _overlayCategories ?? const [],
+      runtimeHealthy: runtimeHealthy,
+      bookAvailable:
+          _bookId == recommendation.bookId &&
+          (_overlayBooks?.any((book) => book.id == _bookId) ?? false),
+      refundMatched: _matchedRefundOriginal != null,
+      transferResolved:
+          _transferRecommendation?.suggestsInternalTransfer == true,
+      matchedAccountId: _matchedRefundOriginal?.accountId,
+      matchedCategoryId: _matchedRefundOriginal?.categoryId,
+    );
+    await _record('autobookkeeping_strategy_decision', {
+      'strategy': _strategy.name,
+      'autoRecord': decision.autoRecord,
+      'confidence': decision.confidence,
+      'reason': decision.reason,
+    });
+    if (!mounted || _closing || !decision.autoRecord) return false;
+    // A strategy change while resolving the bill must take effect before saving.
+    if (_strategy !=
+            AutoBookkeepingStrategy.parse(
+              await settings
+                  .get(AutoBookkeepingStrategy.settingKey)
+                  .timeout(const Duration(seconds: 2)),
+            ) ||
+        !mounted ||
+        _closing)
+      return false;
+    setState(() {
+      _candidate = current;
+      _accountId = decision.account!.id;
+      _categoryId = decision.category?.id;
+      _rememberForMerchant = false;
+      _automaticRun = true;
+    });
+    final destination = _overlayAccounts
+        ?.where((item) => item.id == _destinationAccountId && !item.isArchived)
+        .firstOrNull;
+    // The loaded form can render its saving state while the write completes.
+    _reportReady();
+    final saved = await _save(
+      bookId: _bookId!,
+      account: decision.account!,
+      category: decision.category,
+      destinationAccount: destination,
+    );
+    if (!saved && mounted) {
+      _automaticRun = false;
+      _rememberForMerchant = true;
+      await AppNotice.show(context, '自动入账未完成，账单已保留待确认');
+    }
+    return saved;
   }
 
   Future<void> _refreshScreenshot(String fingerprint) async {
@@ -479,23 +395,23 @@ class _AutoBookkeepingConfirmPageState
       }
       if (refreshed.screenshotPath != null) {
         setState(() => _candidate = refreshed);
-        if (widget.overlayMode) unawaited(_syncNativeReview());
         return;
       }
     }
   }
 
   Future<void> _completePending({
+    required String fingerprint,
     bool keepScreenshot = false,
     String reason = 'user_dismissed',
     String? transactionId,
   }) async {
-    if (_closing) return;
+    if (_closing && reason != 'saved') return;
     _closing = true;
     try {
       await ref
           .read(autoBookkeepingPendingBridgeProvider)
-          .complete(keepScreenshot: keepScreenshot);
+          .complete(keepScreenshot: keepScreenshot, fingerprint: fingerprint);
       await _record('confirmation_completed', {
         'reason': reason,
         'transactionId': transactionId,
@@ -503,6 +419,7 @@ class _AutoBookkeepingConfirmPageState
         'candidate': _candidate == null ? null : _candidateLog(_candidate!),
       });
     } on Object catch (error) {
+      _closing = false;
       await _record('confirmation_complete_failed', {
         'reason': reason,
         'transactionId': transactionId,
@@ -513,22 +430,37 @@ class _AutoBookkeepingConfirmPageState
     // A second notification may have remained in the raw recovery queue while
     // this confirmation slot was occupied. Drain it immediately instead of
     // waiting for the next app resume.
-    try {
-      await ref
-          .read(paymentNotificationAutoBookkeepingProvider)
-          .processPending();
-    } on Object {
-      // Recovery remains best-effort; app startup/resume will retry again.
-    }
+    unawaited(() async {
+      try {
+        await ref
+            .read(paymentNotificationAutoBookkeepingProvider)
+            .processPending();
+      } on Object {
+        // Recovery remains best-effort; app startup/resume will retry again.
+      }
+    }());
   }
 
   Future<void> _close() async {
-    await _completePending(reason: 'user_dismissed');
+    if (_saving || _closing) return;
+    final candidate = _candidate;
+    try {
+      if (candidate != null) {
+        await ref
+            .read(autoBookkeepingInboxBridgeProvider)
+            .defer(candidate.fingerprint);
+        ref.invalidate(pendingPaymentInboxProvider);
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _message = '保留账单失败，请重试：$error');
+      return;
+    }
+    _closing = true;
     if (!mounted) return;
-    if (widget.overlayMode) {
-      await _closeOverlayHost();
+    if (widget.overlayMode && !widget.embedded) {
+      await _closeOverlayHost(preservePending: true);
     } else {
-      context.pop();
+      Navigator.of(context).pop();
     }
   }
 
@@ -550,7 +482,7 @@ class _AutoBookkeepingConfirmPageState
     QuickAddReviewDraft? reviewDraft,
   }) async {
     final candidate = _candidate;
-    if (candidate == null || _saving) return false;
+    if (candidate == null || _saving || _closing) return false;
     await _record('confirmation_save_started', {
       'candidate': _candidateLog(candidate),
       'bookId': bookId,
@@ -564,11 +496,26 @@ class _AutoBookkeepingConfirmPageState
       'note': reviewDraft?.note ?? _editedNote ?? candidate.note,
       'overlayMode': widget.overlayMode,
     });
+    if (!mounted || _closing) return false;
     setState(() {
       _saving = true;
       _message = null;
     });
     try {
+      if (_automaticRun &&
+          (AutoBookkeepingStrategy.parse(
+                    await ref
+                        .read(appSettingsRepositoryProvider)
+                        .get(AutoBookkeepingStrategy.settingKey)
+                        .timeout(const Duration(seconds: 2)),
+                  ) !=
+                  _strategy ||
+              await const MethodChannel('jizhang/autobookkeeping_pending')
+                      .invokeMethod<bool>('canAutoRecord')
+                      .timeout(const Duration(seconds: 2)) !=
+                  true)) {
+        throw StateError('策略或权限已变化，请重新确认');
+      }
       final isTransferScene = reviewDraft != null
           ? candidate.transactionType == 'TRANSFER' ||
                 reviewDraft.type == TransactionType.transfer
@@ -604,6 +551,8 @@ class _AutoBookkeepingConfirmPageState
       }
 
       final metadata = <String, Object?>{
+        'ignoreAccountBalanceEffect':
+            reviewDraft?.ignoreAccountBalanceEffect ?? false,
         'paymentChannel': _paymentChannel(candidate),
         if (recurringDraft != null) 'recurring_bill_id': recurringDraft.id,
         if (candidate.orderId != null) 'orderId': candidate.orderId,
@@ -628,6 +577,8 @@ class _AutoBookkeepingConfirmPageState
           if (candidate.discountAmountInCents != null)
             'discountAmountInCents': candidate.discountAmountInCents,
           'confirmedIn': 'autobookkeeping_confirm_page',
+          'strategy': _strategy.name,
+          'automaticallyRecorded': _automaticRun,
         },
       };
       final screenshotPath = _keepScreenshot && candidate.screenshotPath != null
@@ -642,7 +593,17 @@ class _AutoBookkeepingConfirmPageState
           : null;
       TransactionRecord saved;
       String? committedWarning;
-      if (matchedRefund != null) {
+      unawaited(_record('confirmation_lookup_started', {}));
+      final existing =
+          await DriftTransactionRepository(ref.read(databaseProvider))
+              .getById('auto-${candidate.fingerprint}')
+              .timeout(const Duration(seconds: 8));
+      unawaited(
+        _record('confirmation_lookup_finished', {'existing': existing != null}),
+      );
+      if (existing != null) {
+        saved = existing;
+      } else if (matchedRefund != null) {
         saved = await RefundService(ref.read(databaseProvider), bookId: bookId)
             .register(
               original: matchedRefund,
@@ -687,13 +648,16 @@ class _AutoBookkeepingConfirmPageState
                 : amountInCents / 100,
             reimbursementNote: reviewDraft?.reimbursementNote,
             source: TransactionSource.auto,
-            userCorrected: true,
+            userCorrected: !_automaticRun,
             metadata: metadata,
           );
           if (recurringDraft == null) {
+            unawaited(_record('confirmation_write_started', {}));
             saved = await ref
                 .read(quickBookkeepingServiceProvider)
-                .save(request);
+                .save(request)
+                .timeout(const Duration(seconds: 15));
+            unawaited(_record('confirmation_write_finished', {}));
           } else {
             if (transactionType != TransactionType.expense &&
                 transactionType != TransactionType.income) {
@@ -770,7 +734,8 @@ class _AutoBookkeepingConfirmPageState
         try {
           promotedPath = await ref
               .read(autoBookkeepingPendingBridgeProvider)
-              .promoteScreenshot(screenshotPath);
+              .promoteScreenshot(screenshotPath)
+              .timeout(const Duration(seconds: 5));
           screenshotWarning = promotedPath == null;
         } on Object {
           screenshotWarning = true;
@@ -788,11 +753,12 @@ class _AutoBookkeepingConfirmPageState
                 transactionId: saved.id,
                 bookId: saved.bookId,
                 paths: savedAttachmentPaths,
-              );
-        } on Object {
+              )
+              .timeout(const Duration(seconds: 5));
+        } on Object catch (error) {
           screenshotWarning = screenshotWarning || screenshotPath != null;
           attachmentWarning = reviewDraft?.attachmentPaths.isNotEmpty ?? false;
-          if (promotedPath != null) {
+          if (promotedPath != null && error is! TimeoutException) {
             try {
               final promotedFile = File(promotedPath);
               if (await promotedFile.exists()) await promotedFile.delete();
@@ -804,7 +770,7 @@ class _AutoBookkeepingConfirmPageState
       }
 
       try {
-        if (isTransferScene) {
+        if (existing == null && isTransferScene) {
           await ref
               .read(autoBookkeepingTransferResolverProvider)
               .rememberDecision(
@@ -813,9 +779,12 @@ class _AutoBookkeepingConfirmPageState
                 internalTransfer: transactionType == TransactionType.transfer,
                 destinationAccountId: saved.destinationAccountId,
                 remember: _rememberForMerchant,
-              );
+              )
+              .timeout(const Duration(seconds: 5));
         }
-        if (transactionType != TransactionType.transfer && category != null) {
+        if (existing == null &&
+            transactionType != TransactionType.transfer &&
+            category != null) {
           await ref
               .read(autoBookkeepingLearningServiceProvider)
               .remember(
@@ -826,7 +795,8 @@ class _AutoBookkeepingConfirmPageState
                 categoryId: category.id,
                 subcategoryId: _subcategoryId,
                 rememberForMerchant: _rememberForMerchant,
-              );
+              )
+              .timeout(const Duration(seconds: 5));
         }
       } on Object {
         // Learning is a secondary local enhancement. A successful transaction
@@ -844,15 +814,35 @@ class _AutoBookkeepingConfirmPageState
         'screenshotWarning': screenshotWarning,
         'attachmentWarning': attachmentWarning,
       });
-      await _completePending(reason: 'saved', transactionId: saved.id);
-      await BookkeepingFeedback.notifySuccess(count: 1);
+      try {
+        await _completePending(
+          fingerprint: candidate.fingerprint,
+          reason: 'saved',
+          transactionId: saved.id,
+        ).timeout(const Duration(seconds: 5));
+      } on Object {
+        // The transaction is committed. The inbox reconciles its stable ID on the next read.
+        _closing = true;
+      }
+      ref.invalidate(pendingPaymentInboxProvider);
       if (!mounted) return true;
-      if (widget.overlayMode) {
+      void notifySaved() => unawaited(
+        BookkeepingFeedback.notifySuccess(count: 1)
+            .timeout(const Duration(seconds: 2))
+            .catchError((Object _) {}),
+      );
+      if (widget.overlayMode && !widget.embedded) {
+        setState(() => _message = '已记账');
+        if (!_automaticRun)
+          await Future<void>.delayed(const Duration(milliseconds: 450));
         await _closeOverlayHost();
+        notifySaved();
         return true;
       }
+      notifySaved();
+      if (!mounted) return true;
       final messenger = ScaffoldMessenger.of(context);
-      context.pop();
+      Navigator.of(context).pop();
       final warningParts = <String>[
         if (committedWarning != null) '部分本地增强处理未完成',
         if (screenshotWarning) '支付截图未能附加',
@@ -876,28 +866,48 @@ class _AutoBookkeepingConfirmPageState
       if (!mounted) return false;
       setState(() {
         _saving = false;
-        _message = '保存失败：$error';
+        _message = error is TimeoutException
+            ? '保存耗时较长，账单已保留，请稍后从收件箱查看'
+            : '保存失败：$error';
       });
       return false;
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _closeOverlayHost({bool preservePending = false}) async {
+    _closing = true;
     try {
       await const MethodChannel('jizhang/autobookkeeping_overlay')
-          .invokeMethod<void>('close', {'preservePending': preservePending});
-    } on MissingPluginException {
-      await SystemNavigator.pop();
+          .invokeMethod<void>('close', {
+            'preservePending': preservePending,
+            if (!preservePending &&
+                _strategy != AutoBookkeepingStrategy.conservative)
+              'drainAutomatic': true,
+          })
+          .timeout(const Duration(seconds: 2));
+    } on Object {
+      try {
+        await SystemNavigator.pop().timeout(const Duration(seconds: 2));
+      } on Object {
+        /* Host may already be detached. */
+      }
     }
   }
 
   Future<void> _dismissLoadingOverlay() async {
+    if (_saving || _closing) return;
     unawaited(
       _record('confirmation_loading_dismissed', {
         'overlayMode': widget.overlayMode,
       }),
     );
-    await _closeOverlayHost(preservePending: true);
+    if (widget.embedded) {
+      await _close();
+    } else {
+      await _closeOverlayHost(preservePending: true);
+    }
   }
 
   @override
@@ -926,12 +936,15 @@ class _AutoBookkeepingConfirmPageState
                       key: const ValueKey('autobookkeeping-overlay-panel'),
                       width: double.infinity,
                       height: panelHeight,
-                      child: Material(
-                        color: Theme.of(context).colorScheme.surface,
-                        elevation: 12,
-                        shadowColor: Colors.black.withValues(alpha: .22),
-                        clipBehavior: Clip.antiAlias,
-                        borderRadius: BorderRadius.circular(24),
+                      child: AppGlassSurface(
+                        padding: EdgeInsets.zero,
+                        tint: context.appSurface,
+                        glassOpacity: MediaQuery.highContrastOf(context)
+                            ? 1
+                            : .64,
+                        borderRadius: 22,
+                        blurSigma: 16,
+                        chromaticEdge: false,
                         child: Column(
                           children: [
                             SizedBox(
@@ -951,7 +964,7 @@ class _AutoBookkeepingConfirmPageState
                               ),
                             ),
                             Expanded(
-                              child: _loading
+                              child: _loading || _automaticRun
                                   ? Stack(
                                       children: [
                                         const Center(
@@ -1067,7 +1080,24 @@ class _AutoBookkeepingConfirmPageState
   Future<bool> _saveOverlayDraft(QuickAddReviewDraft draft) async {
     final candidate = _candidate;
     if (candidate == null || _saving) return false;
+    // Keep late order/account evidence, without replacing any of the user's edited fields.
+    PendingAutoBookkeepingCandidate? current;
+    try {
+      current = await ref
+          .read(autoBookkeepingPendingBridgeProvider)
+          .getPending()
+          .timeout(const Duration(seconds: 5));
+    } on Object catch (error) {
+      if (mounted) setState(() => _message = '读取待确认账单失败，请重试：$error');
+      return false;
+    }
+    if (!mounted) return false;
+    if (current == null || current.fingerprint != candidate.fingerprint) {
+      setState(() => _message = '待确认账单已发生变化，请关闭后从收件箱重试');
+      return false;
+    }
     setState(() {
+      _candidate = current;
       _bookId = draft.bookId;
       _accountId = draft.accountId;
       _destinationAccountId = draft.destinationAccountId;
@@ -1117,6 +1147,9 @@ class _AutoBookkeepingConfirmPageState
     targetIdentifierSuffix: candidate.targetIdentifierSuffix,
     targetAccountHint: candidate.targetAccountHint,
     screenshotPath: candidate.screenshotPath,
+    amountConfidence: candidate.amountConfidence,
+    merchantConfidence: candidate.merchantConfidence,
+    sceneConfidence: candidate.sceneConfidence,
   );
 
   Future<bool> _saveSelection({

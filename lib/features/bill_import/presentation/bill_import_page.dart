@@ -19,6 +19,7 @@ import '../application/bill_import_category_mapper.dart';
 import '../application/bill_import_deduplicator.dart';
 import '../application/bill_import_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../assistant/application/assistant_input_policy.dart';
 
 class BillImportPage extends ConsumerStatefulWidget {
   const BillImportPage({super.key});
@@ -64,58 +65,58 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: context.pop,
-                      icon: const Icon(Icons.arrow_back),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: context.pop,
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '账单导入',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _loading ? null : _pick,
+                          icon: Icon(Icons.upload_file, size: 18),
+                          label: Text('选择文件'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        '账单导入',
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          height: 1.45,
+                        ),
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: _loading ? null : _pick,
-                      icon: Icon(Icons.upload_file, size: 18),
-                      label: Text('选择文件'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    '支持 CSV、TXT、TSV、XLSX；微信/支付宝官方账单会自动识别，其他记账 App 按通用表头导入。导入前可预览、确认账户与分类。',
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      height: 1.45,
-                    ),
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  AppCard(
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: AppColors.warning),
-                    ),
-                  ),
-                ],
-                if (_loading) ...[
-                  const SizedBox(height: 24),
-                  const Center(child: CircularProgressIndicator()),
-                ],
-                if (result != null) ...[
-                  const SizedBox(height: 14),
-                  _summary(result),
-                  const SizedBox(height: 12),
-                  _mapping(accounts, categories),
-                  const SizedBox(height: 12),
-                  _preview(result, categories),
-                ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      AppCard(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: AppColors.warning),
+                        ),
+                      ),
+                    ],
+                    if (_loading) ...[
+                      const SizedBox(height: 24),
+                      const Center(child: CircularProgressIndicator()),
+                    ],
+                    if (result != null) ...[
+                      const SizedBox(height: 14),
+                      _summary(result),
+                      const SizedBox(height: 12),
+                      _mapping(accounts, categories),
+                      const SizedBox(height: 12),
+                      _preview(result, categories),
+                    ],
                   ]),
                 ),
               ),
@@ -146,9 +147,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                             )
                           : const Icon(Icons.check),
                       label: Text(
-                        _saving
-                            ? '正在导入…'
-                            : '确认导入已选 ${_selected.length} 笔',
+                        _saving ? '正在导入…' : '确认导入已选 ${_selected.length} 笔',
                       ),
                     ),
                   ),
@@ -178,18 +177,15 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                 '${_providerLabel(result.provider)}'
                 ' · 可导入 ${result.rows.length} 笔'
                 '${result.skipped == 0 ? '' : ' · 已跳过 ${result.skipped} 行'}',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
               ),
             ],
           ),
         ),
         Checkbox(
           value: _selected.length == result.rows.length,
-          tristate: _selected.isNotEmpty &&
-              _selected.length != result.rows.length,
+          tristate:
+              _selected.isNotEmpty && _selected.length != result.rows.length,
           onChanged: (checked) {
             setState(() {
               _selected = checked == true
@@ -287,16 +283,18 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: DropdownButtonFormField<String>(
-                      initialValue: accounts.any(
-                        (item) => item.id == _accountMappings[name],
-                      )
+                      initialValue:
+                          accounts.any(
+                            (item) => item.id == _accountMappings[name],
+                          )
                           ? _accountMappings[name]
                           : null,
                       isExpanded: true,
                       decoration: InputDecoration(labelText: name),
                       items: [
-                        for (final account
-                            in accounts.where((item) => !item.isArchived))
+                        for (final account in accounts.where(
+                          (item) => !item.isArchived,
+                        ))
                           DropdownMenuItem(
                             value: account.id,
                             child: Text(
@@ -305,9 +303,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                             ),
                           ),
                       ],
-                      onChanged: (value) => setState(
-                        () => _accountMappings[name] = value,
-                      ),
+                      onChanged: (value) =>
+                          setState(() => _accountMappings[name] = value),
                     ),
                   ),
               ],
@@ -368,43 +365,40 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       final source = row.sourceAccount?.trim();
       final destination = row.destinationAccount?.trim();
       if (source != null && source.isNotEmpty) values.add(source);
-      if (destination != null && destination.isNotEmpty) values.add(destination);
+      if (destination != null && destination.isNotEmpty)
+        values.add(destination);
     }
     final sorted = values.toList(growable: false)..sort();
     return sorted;
   }
 
-  Widget _preview(
-    BillImportResult result,
-    List<Category> categories,
-  ) => AppCard(
-    padding: EdgeInsets.zero,
-    child: Column(
-      children: [
-        for (var index = 0;
-            index < result.rows.length && index < 200;
-            index++) ...[
-          _row(index, result.rows[index], categories),
-          if (index != result.rows.length - 1 && index != 199)
-            const Divider(height: 1),
-        ],
-        if (result.rows.length > 200)
-          Padding(
-            padding: EdgeInsets.all(12),
-            child: Text(
-              '预览仅展示前 200 笔；导入仍按全部已选记录执行。',
-              style: TextStyle(color: context.appSecondaryText),
-            ),
-          ),
-      ],
-    ),
-  );
+  Widget _preview(BillImportResult result, List<Category> categories) =>
+      AppCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            for (
+              var index = 0;
+              index < result.rows.length && index < 200;
+              index++
+            ) ...[
+              _row(index, result.rows[index], categories),
+              if (index != result.rows.length - 1 && index != 199)
+                const Divider(height: 1),
+            ],
+            if (result.rows.length > 200)
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  '预览仅展示前 200 笔；导入仍按全部已选记录执行。',
+                  style: TextStyle(color: context.appSecondaryText),
+                ),
+              ),
+          ],
+        ),
+      );
 
-  Widget _row(
-    int index,
-    ImportedBillRow row,
-    List<Category> categories,
-  ) {
+  Widget _row(int index, ImportedBillRow row, List<Category> categories) {
     final sourceCategory = [
       row.sourceCategory,
       row.sourceSubcategory,
@@ -427,7 +421,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
               : '未命名交易');
     final subtitleParts = <String>[
       _dateTime(row.occurredAt),
-      if (row.paymentMethod?.trim().isNotEmpty == true) row.paymentMethod!.trim(),
+      if (row.paymentMethod?.trim().isNotEmpty == true)
+        row.paymentMethod!.trim(),
       if (sourceCategory.isNotEmpty)
         mappedCategory.isEmpty
             ? sourceCategory
@@ -477,18 +472,17 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     List<Account> accounts,
     List<Category> categories,
   ) {
-    _expenseCategoryId ??=
-        _preferred(_rootCategories(categories, CategoryType.expense))?.id;
-    _incomeCategoryId ??=
-        _preferred(_rootCategories(categories, CategoryType.income))?.id;
+    _expenseCategoryId ??= _preferred(
+      _rootCategories(categories, CategoryType.expense),
+    )?.id;
+    _incomeCategoryId ??= _preferred(
+      _rootCategories(categories, CategoryType.income),
+    )?.id;
 
     final result = _result;
     if (result?.provider.needsAccountMapping != true) return;
     for (final name in _mumuAccountNames(result!)) {
-      _accountMappings.putIfAbsent(
-        name,
-        () => _guessAccountId(name, accounts),
-      );
+      _accountMappings.putIfAbsent(name, () => _guessAccountId(name, accounts));
     }
   }
 
@@ -535,14 +529,13 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       .replaceAll(RegExp(r'[\s_\-·/]+'), '')
       .replaceAll(RegExp(r'银行|储蓄卡|信用卡|银行卡|账户'), '');
 
-
-  List<Category> _rootCategories(
-    List<Category> values,
-    CategoryType type,
-  ) => values
-      .where((item) =>
-          item.type == type && item.parentId == null && !item.isArchived)
-      .toList(growable: false);
+  List<Category> _rootCategories(List<Category> values, CategoryType type) =>
+      values
+          .where(
+            (item) =>
+                item.type == type && item.parentId == null && !item.isArchived,
+          )
+          .toList(growable: false);
 
   Category? _preferred(List<Category> values) {
     for (final name in const ['其他', '其他支出', '其他收入']) {
@@ -563,7 +556,11 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         allowedExtensions: const ['csv', 'txt', 'tsv', 'xlsx'],
       );
       if (file == null || file.path == null) return;
-      final result = await const BillImportService().parseFile(file.path!);
+      final policy = await ref.read(assistantInputPolicyServiceProvider).load();
+      final result = await BillImportService(
+        maxFileBytes: policy.maxImportFileMb * 1024 * 1024,
+        maxRows: policy.maxImportRows,
+      ).parseFile(file.path!);
       if (!mounted) return;
       setState(() {
         _fileName = file.name;
@@ -585,10 +582,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     }
   }
 
-  Future<void> _save(
-    List<Account> accounts,
-    List<Category> categories,
-  ) async {
+  Future<void> _save(List<Account> accounts, List<Category> categories) async {
     final result = _result;
     if (result == null) return;
     final targetBookId = ref.read(activeBookIdProvider);
@@ -625,25 +619,24 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
     final rowsWithoutExternalId = selectedRows
         .where((row) => row.externalId?.trim().isEmpty ?? true)
         .toList(growable: false);
-    final transactions = await DriftTransactionRepository(
-      ref.read(databaseProvider),
-      bookId: ref.read(activeBookIdProvider),
-    ).getImportDedupCandidates(
-      occurredAt: [
-        for (final row in rowsWithoutExternalId) row.occurredAt,
-      ],
-      externalIds: [
-        for (final row in selectedRows)
-          if (row.externalId?.trim().isNotEmpty == true)
-            row.externalId!.trim(),
-      ],
-      importFingerprints: [
-        for (final row in rowsWithoutExternalId) row.importFingerprint,
-      ],
-      naturalFingerprints: [
-        for (final row in rowsWithoutExternalId) row.naturalFingerprint,
-      ],
-    );
+    final transactions =
+        await DriftTransactionRepository(
+          ref.read(databaseProvider),
+          bookId: ref.read(activeBookIdProvider),
+        ).getImportDedupCandidates(
+          occurredAt: [for (final row in rowsWithoutExternalId) row.occurredAt],
+          externalIds: [
+            for (final row in selectedRows)
+              if (row.externalId?.trim().isNotEmpty == true)
+                row.externalId!.trim(),
+          ],
+          importFingerprints: [
+            for (final row in rowsWithoutExternalId) row.importFingerprint,
+          ],
+          naturalFingerprints: [
+            for (final row in rowsWithoutExternalId) row.naturalFingerprint,
+          ],
+        );
     if (!mounted) return;
     final deduplicator = BillImportDeduplicator.fromTransactions(transactions);
 
@@ -716,18 +709,15 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
             'importProvider': row.provider.name,
             'importFingerprint': row.importFingerprint,
             'importNaturalFingerprint': row.naturalFingerprint,
-            if (_preserveCurrentBalances)
-              'ignoreAccountBalanceEffect': true,
+            if (_preserveCurrentBalances) 'ignoreAccountBalanceEffect': true,
             if (row.externalId != null) 'externalId': row.externalId!,
-            if (row.paymentMethod != null)
-              'paymentMethod': row.paymentMethod!,
+            if (row.paymentMethod != null) 'paymentMethod': row.paymentMethod!,
             if (row.sourceCategory != null)
               'sourceCategory': row.sourceCategory!,
             if (row.sourceSubcategory != null)
               'sourceSubcategory': row.sourceSubcategory!,
             if (row.sourceBook != null) 'sourceBook': row.sourceBook!,
-            if (row.sourceAccount != null)
-              'sourceAccount': row.sourceAccount!,
+            if (row.sourceAccount != null) 'sourceAccount': row.sourceAccount!,
             if (row.destinationAccount != null)
               'destinationAccount': row.destinationAccount!,
             if (row.raw['报销']?.trim().isNotEmpty == true)
@@ -746,9 +736,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
 
     if (requests.isEmpty) {
       setState(() {
-        _error = duplicates > 0
-            ? '所选记录均已导入，无需重复导入'
-            : '没有可导入记录';
+        _error = duplicates > 0 ? '所选记录均已导入，无需重复导入' : '没有可导入记录';
       });
       return;
     }
@@ -783,9 +771,8 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
         return;
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(recovery.notice)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(recovery.notice)));
       context.pop();
     } on Object catch (error) {
       if (!mounted) return;
@@ -989,9 +976,7 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
                         ),
                       ),
                 child: Text(
-                  sourceName?.trim().isNotEmpty == true
-                      ? '全部同来源'
-                      : '全部未标账户',
+                  sourceName?.trim().isNotEmpty == true ? '全部同来源' : '全部未标账户',
                 ),
               ),
             ],
@@ -1000,7 +985,6 @@ class _BillImportPageState extends ConsumerState<BillImportPage> {
       ),
     );
   }
-
 }
 
 class _AccountAssignmentDecision {
@@ -1027,11 +1011,9 @@ String _amountPrefix(TransactionType type) => switch (type) {
   _ => '+',
 };
 
-
 String _providerLabel(BillImportProvider provider) => switch (provider) {
   BillImportProvider.wechat => '微信支付',
   BillImportProvider.alipay => '支付宝',
   BillImportProvider.mumu => '木木记账',
   BillImportProvider.generic => '第三方账单',
 };
-

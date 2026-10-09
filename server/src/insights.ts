@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import type { Store } from './store.js';
+import { hasMembershipEntitlement, membershipAiDailyLimit } from './payment.js';
 import { allFeaturesFreeForTesting } from './testing_access.js';
 import { ApiError, requireCondition as check } from './contract.js';
 import { outOfScope } from './assistant_policy.js';
@@ -258,15 +259,8 @@ function hasActivePaidInsightMembership(
   userId: string,
 ): boolean {
   if (allFeaturesFreeForTesting()) return true;
-  const now = store.now();
   try {
-    if (store.db.prepare(
-      'SELECT 1 FROM membership_subscriptions WHERE user_id=? AND expires_at>?',
-    ).get(userId, now)) return true;
-    if (store.db.prepare(
-      'SELECT 1 FROM apple_transactions WHERE user_id=? '
-        + 'AND revoked_at IS NULL AND expires_at>?',
-    ).get(userId, now)) return true;
+    return hasMembershipEntitlement(store,userId,'aiAnalysis');
   } catch {
     // Isolated tests may not initialize every payment table.
   }
@@ -305,7 +299,7 @@ function readSharedAiQuota(
     const policy = JSON.parse(row.data_json) as {
       memberDailyLimit?: number;
     };
-    const limit = Number(policy.memberDailyLimit ?? 0);
+    const limit = Number(membershipAiDailyLimit(store,userId)??policy.memberDailyLimit ?? 0);
     if (!Number.isInteger(limit) || limit < 0) return null;
     const now = store.now();
     const day = new Date((now + 8 * 3600) * 1000)

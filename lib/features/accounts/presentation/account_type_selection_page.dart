@@ -4,9 +4,17 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import 'account_management_visuals.dart';
+import '../../../core/models/account.dart';
+import 'account_forms.dart';
 
 class AccountTypeSelectionPage extends StatelessWidget {
-  const AccountTypeSelectionPage({super.key});
+  const AccountTypeSelectionPage({
+    this.debtOnly = false,
+    this.currency = 'CNY',
+    super.key,
+  });
+  final bool debtOnly;
+  final String currency;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -21,11 +29,10 @@ class AccountTypeSelectionPage extends StatelessWidget {
             ),
             Expanded(
               child: Text(
-                '添加账户',
+                debtOnly ? '添加负债账户' : '添加账户',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 48),
@@ -55,9 +62,8 @@ class AccountTypeSelectionPage extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           '请选择账户类型',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         Text(
@@ -65,40 +71,65 @@ class AccountTypeSelectionPage extends StatelessWidget {
           style: TextStyle(color: context.appSecondaryText, fontSize: 12),
         ),
         const SizedBox(height: 16),
+        if (!debtOnly) ...[
+          _TypeCard(
+            icon: Icons.account_balance_wallet_outlined,
+            title: '日常资金',
+            subtitle: '用于日常收支，可随时使用的资金',
+            color: context.appPrimary,
+            onTap: () => context.push('/profile/accounts/add/basic/available'),
+          ),
+          _TypeCard(
+            icon: Icons.toll_outlined,
+            title: '储值资金',
+            subtitle: '预先充值、存放在平台内的资金',
+            color: const Color(0xffE79B3A),
+            onTap: () =>
+                context.push('/profile/accounts/add/basic/storedValue'),
+          ),
+          _TypeCard(
+            icon: Icons.lock_outline_rounded,
+            title: '受限资金',
+            subtitle: '在特定条件下才能使用，如保证金、押金',
+            color: const Color(0xff5B8DEF),
+            onTap: () => context.push('/profile/accounts/add/restricted'),
+          ),
+          _TypeCard(
+            icon: Icons.schedule_rounded,
+            title: '应收资金',
+            subtitle: '预计将要收回的资金，如报销、退款、待收款',
+            color: const Color(0xff8867D8),
+            onTap: () => context.push('/profile/accounts/receivables/add'),
+          ),
+          _TypeCard(
+            icon: Icons.grid_view_rounded,
+            title: '自定义账户',
+            subtitle: '根据个人需要，自定义账户类型',
+            color: context.appPrimary,
+            onTap: () => context.push('/profile/accounts/add/basic/custom'),
+          ),
+        ],
         _TypeCard(
-          icon: Icons.account_balance_wallet_outlined,
-          title: '日常资金',
-          subtitle: '用于日常收支，可随时使用的资金',
-          color: context.appPrimary,
-          onTap: () => context.push('/profile/accounts/add/basic/available'),
+          icon: Icons.credit_card,
+          title: '信用卡',
+          subtitle: '管理信用卡欠款、还款和溢缴余额',
+          color: const Color(0xffE05C5C),
+          onTap: () => showAccountEditor(
+            context,
+            initialType: AccountType.creditCard,
+            initialCurrency: currency,
+          ),
         ),
         _TypeCard(
-          icon: Icons.toll_outlined,
-          title: '储值资金',
-          subtitle: '预先充值、存放在平台内的资金',
-          color: const Color(0xffE79B3A),
-          onTap: () => context.push('/profile/accounts/add/basic/storedValue'),
-        ),
-        _TypeCard(
-          icon: Icons.lock_outline_rounded,
-          title: '受限资金',
-          subtitle: '在特定条件下才能使用，如保证金、押金',
-          color: const Color(0xff5B8DEF),
-          onTap: () => context.push('/profile/accounts/add/restricted'),
-        ),
-        _TypeCard(
-          icon: Icons.schedule_rounded,
-          title: '应收资金',
-          subtitle: '预计将要收回的资金，如报销、退款、待收款',
-          color: const Color(0xff8867D8),
-          onTap: () => context.push('/profile/accounts/receivables/add'),
-        ),
-        _TypeCard(
-          icon: Icons.grid_view_rounded,
-          title: '自定义账户',
-          subtitle: '根据个人需要，自定义账户类型',
-          color: context.appPrimary,
-          onTap: () => context.push('/profile/accounts/add/basic/custom'),
+          icon: Icons.account_balance_outlined,
+          title: '负债账户',
+          subtitle: '管理借款和其他待偿还债务',
+          color: const Color(0xffE88B37),
+          onTap: () => showAccountEditor(
+            context,
+            initialType: AccountType.liability,
+            initialCurrency: currency,
+          ),
         ),
         const SizedBox(height: 12),
         Row(

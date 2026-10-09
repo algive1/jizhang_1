@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
 import 'account_management_visuals.dart';
@@ -48,19 +49,8 @@ class _ReceivableOverviewPageState
         return aDate.compareTo(bDate);
       });
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            context.appPrimarySoft.withValues(alpha: .55),
-            context.appBackground,
-          ],
-        ),
-      ),
+    return AppPageBackground(
       child: SafeArea(
-        bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [

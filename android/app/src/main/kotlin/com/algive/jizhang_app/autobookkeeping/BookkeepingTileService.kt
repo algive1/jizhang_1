@@ -7,7 +7,6 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
-import android.widget.Toast
 import com.algive.jizhang_app.MainActivity
 import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
@@ -54,7 +53,7 @@ class BookkeepingTileService : TileService() {
             return
         }
         service.triggerManualCapture()
-        Toast.makeText(this, "好好记账：正在识别当前页面…", Toast.LENGTH_SHORT).show()
+        AppNotice.show(this, "好好记账：正在识别当前页面…")
         refreshTile()
     }
 

@@ -25,35 +25,41 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (material == AppCardMaterial.content) {
+    final dark = context.appIsDark;
+    final radius = dark ? 16.0 : borderRadius;
+    if (dark || material == AppCardMaterial.content) {
       final tint = color ?? context.appSurface;
       return Container(
         padding: padding,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: context.appUsesLiquidGlass
+          color: context.appUsesLiquidGlass && !dark
               ? tint.withValues(alpha: .96)
               : tint,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: border ?? Border.all(color: context.appDivider),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x12000000),
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(radius),
+          border:
+              border ?? (dark ? null : Border.all(color: context.appDivider)),
+          boxShadow: dark
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
+                  ),
+                ],
         ),
-        child: child,
+        child: Material(type: MaterialType.transparency, child: child),
       );
     }
 
     return AppGlassSurface(
       padding: padding,
-      borderRadius: borderRadius,
+      borderRadius: radius,
       tint: color ?? context.appSurface,
       border: border,
       blurSigma: 12,
+      grouped: true,
       chromaticEdge: false,
       child: child,
     );

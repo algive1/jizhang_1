@@ -6,6 +6,7 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.28-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+ENV ADMIN_API_UPSTREAM=admin-api:8787
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /web/dist /usr/share/nginx/html
 EXPOSE 80

@@ -80,6 +80,17 @@ void main() {
         findsOneWidget,
       );
       expect(container.read(activeBookIdProvider), SeedIds.personalBook);
+      await tester.tap(
+        find.byKey(ValueKey('quick-category-${familyExpense.id}')),
+      );
+      await tester.pumpAndSettle();
+      final child = familyCategories
+          .where((item) => item.parentId == familyExpense.id)
+          .firstOrNull;
+      if (child != null) {
+        await tester.tap(find.byKey(ValueKey('quick-subcategory-${child.id}')));
+        await tester.pumpAndSettle();
+      }
 
       await tester.tap(find.byKey(const ValueKey('quick-amount-input')));
       await tester.pumpAndSettle();

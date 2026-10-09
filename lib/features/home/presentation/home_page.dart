@@ -95,9 +95,6 @@ class _HomePageState extends ConsumerState<HomePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshDay();
-      ref.invalidate(homeCurrentMonthSummaryProvider);
-      ref.invalidate(homeExpenseCategorySummaryProvider);
-      ref.invalidate(homeSelectedMonthSummaryProvider);
     }
   }
 
@@ -153,18 +150,19 @@ class _HomePageState extends ConsumerState<HomePage>
       });
     }
     return SafeArea(
-      child: ListView(
-        // The liquid-glass navigation bar floats over the page, so the body
-        // has to leave its whole footprint free — capsule, raised action
-        // button and safe area. The value comes from the bar's own geometry
-        // rather than a hand-tuned constant.
-        padding: EdgeInsets.fromLTRB(
-          16,
-          10,
-          16,
-          AppScaffold.reservedBottomInset(context),
-        ),
-        children: [
+      child: BackdropGroup(
+        child: ListView(
+          // The liquid-glass navigation bar floats over the page, so the body
+          // has to leave its whole footprint free — capsule, raised action
+          // button and safe area. The value comes from the bar's own geometry
+          // rather than a hand-tuned constant.
+          padding: EdgeInsets.fromLTRB(
+            16,
+            10,
+            16,
+            AppScaffold.reservedBottomInset(context),
+          ),
+          children: [
             _HomeHeader(
               onSearch: () => context.push('/transactions/search'),
               onProfile: () => context.go('/profile'),
@@ -237,6 +235,7 @@ class _HomePageState extends ConsumerState<HomePage>
             ],
           ],
         ),
+      ),
     );
   }
 
@@ -411,8 +410,7 @@ class _HomePageState extends ConsumerState<HomePage>
                             const SizedBox(width: 8),
                             _CategoryExpenseSortButton(
                               label: '日期',
-                              selected:
-                                  sortField == _CategoryExpenseSort.date,
+                              selected: sortField == _CategoryExpenseSort.date,
                               descending: descending,
                               onPressed: () => setSheetState(() {
                                 if (sortField == _CategoryExpenseSort.date) {
@@ -454,7 +452,12 @@ class _HomePageState extends ConsumerState<HomePage>
                                 ),
                               )
                             : ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  4,
+                                  20,
+                                  16,
+                                ),
                                 itemCount: records.length,
                                 itemBuilder: (context, index) {
                                   final record = records[index];
@@ -463,9 +466,8 @@ class _HomePageState extends ConsumerState<HomePage>
                                   final destination =
                                       record.destinationAccountId == null
                                       ? null
-                                      : sheetAccountNames[
-                                          record.destinationAccountId!
-                                        ];
+                                      : sheetAccountNames[record
+                                            .destinationAccountId!];
                                   return TransactionTile(
                                     transaction: record,
                                     homeStyle: true,
@@ -498,7 +500,6 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 }
 
-
 class _HomeInsightSection extends ConsumerWidget {
   const _HomeInsightSection({
     required this.bookId,
@@ -524,10 +525,7 @@ class _HomeInsightSection extends ConsumerWidget {
       onTap: () {
         final item = insight;
         if (item == null) return;
-        context.push(
-          '/insights/${Uri.encodeComponent(item.id)}',
-          extra: item,
-        );
+        context.push('/insights/${Uri.encodeComponent(item.id)}', extra: item);
       },
     );
   }
@@ -548,20 +546,13 @@ class _HomeSharedStatus extends ConsumerWidget {
         padding: const EdgeInsets.only(top: 8),
         child: Row(
           children: [
-            Icon(
-              Icons.people_outline,
-              size: 16,
-              color: context.appPrimary,
-            ),
+            Icon(Icons.people_outline, size: 16, color: context.appPrimary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 '${(sharedState?['pending'] as List? ?? []).length} 项待同步 · '
                 '${sharedState?['error'] != null ? '需要处理' : '共享成员'}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.appPrimary,
-                ),
+                style: TextStyle(fontSize: 12, color: context.appPrimary),
               ),
             ),
             const Icon(Icons.chevron_right, size: 18),
@@ -615,8 +606,7 @@ class _HomeBudgetGoalSection extends ConsumerWidget {
       goal: goal,
       onBudget: () => context.push('/profile/budgets'),
       onCalculation: () => onCalculation(snapshot),
-      onGoal: () =>
-          context.push(goal == null ? '/goals' : '/goals/${goal.id}'),
+      onGoal: () => context.push(goal == null ? '/goals' : '/goals/${goal.id}'),
       todayAmountHidden: visibility.today,
       goalAmountHidden: visibility.goal,
       onTodayAmountHiddenChanged: (hidden) => ref
@@ -630,10 +620,7 @@ class _HomeBudgetGoalSection extends ConsumerWidget {
 }
 
 class _HomeAssetSection extends ConsumerWidget {
-  const _HomeAssetSection({
-    required this.book,
-    required this.visibility,
-  });
+  const _HomeAssetSection({required this.book, required this.visibility});
 
   final LedgerBook book;
   final HomeCardVisibility visibility;
@@ -689,11 +676,7 @@ class _HomeCategoryExpenseSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeading(
-            title: '分类支出',
-            action: '查看全部',
-            onTap: onAnalysis,
-          ),
+          _SectionHeading(title: '分类支出', action: '查看全部', onTap: onAnalysis),
           const SizedBox(height: 10),
           if (state.isLoading && !state.hasValue)
             const Padding(
@@ -705,10 +688,7 @@ class _HomeCategoryExpenseSection extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 '记下一笔支出，在这里了解钱花在哪里',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
               ),
             )
           else
@@ -890,7 +870,9 @@ class _CategoryExpenseSortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? Colors.white : context.appSecondaryText;
+    final foreground = selected
+        ? context.appColors.onPrimary
+        : context.appSecondaryText;
     return Semantics(
       button: true,
       selected: selected,
@@ -1072,10 +1054,7 @@ class _SectionHeading extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 5),
           child: Text(
             '$action ›',
-            style: TextStyle(
-              fontSize: 11,
-              color: context.appSecondaryText,
-            ),
+            style: TextStyle(fontSize: 11, color: context.appSecondaryText),
           ),
         ),
       ),
@@ -1119,10 +1098,7 @@ class _CategoryExpense extends StatelessWidget {
               category.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: context.appPrimaryText,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: context.appPrimaryText, fontSize: 11),
             ),
             SizedBox(height: 2),
             FittedBox(

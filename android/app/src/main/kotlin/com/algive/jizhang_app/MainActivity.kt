@@ -1,11 +1,13 @@
 package com.algive.jizhang_app
 
 import android.content.ActivityNotFoundException
+import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -27,22 +29,26 @@ import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingOverlayPermission
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
+import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingChannels
+import com.algive.jizhang_app.autobookkeeping.BookkeepingChangeBus
 import com.algive.jizhang_app.autobookkeeping.overlay.AutoBillOverlayService
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
-import com.algive.jizhang_app.autobookkeeping.repository.PendingEnqueueDecision
 import java.io.File
 
 open class MainActivity : FlutterFragmentActivity() {
     private val channelName = "jizhang/payment_notifications"
     private val fileChannelName = "jizhang/file_opener"
     private var navigationChannel: MethodChannel? = null
+    private var navigationReady = false
     private var pendingNotificationPermissionResult: MethodChannel.Result? = null
     private var pendingNotificationPermissionRequiresAutoStatus = false
 
     override fun onResume() {
         super.onResume()
-        reconcileAutoBookkeepingRuntime()
+        // Payment pages can temporarily suppress overlay permission. The review
+        // host must not stop its own service while it is preparing the content.
+        if (this !is AutoBookkeepingConfirmActivity) reconcileAutoBookkeepingRuntime()
     }
 
     override fun onRequestPermissionsResult(
@@ -82,6 +88,13 @@ open class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "jizhang/navigation",
         )
+        navigationChannel?.setMethodCallHandler { call, result ->
+            if (call.method == "ready") {
+                navigationReady = true
+                dispatchPendingRoute()
+                result.success(null)
+            } else result.notImplemented()
+        }
         dispatchPendingRoute()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/push")
             .setMethodCallHandler { call, result ->
@@ -197,21 +210,7 @@ open class MainActivity : FlutterFragmentActivity() {
                                 "listenerConnected=${PaymentNotificationListenerService.connected}",
                         )
                         if (enabled) {
-                            runCatching {
-                                android.service.notification.NotificationListenerService
-                                    .requestRebind(
-                                        ComponentName(
-                                            this,
-                                            PaymentNotificationListenerService::class.java,
-                                        ),
-                                    )
-                            }.onFailure { error ->
-                                AutoBookkeepingLogStore.recordDetailed(
-                                    this,
-                                    "payment_notification_rebind_failed",
-                                    Log.getStackTraceString(error),
-                                )
-                            }
+                            PaymentNotificationListenerService.ensureConnected(this, force = true)
                         }
                         result.success(null)
                     }
@@ -239,6 +238,28 @@ open class MainActivity : FlutterFragmentActivity() {
                     "openOverlaySettings" -> {
                         openOverlaySettings(result)
                     }
+                    "reconnectNotificationListener" -> {
+                        PaymentNotificationListenerService.ensureConnected(this, force = true)
+                        result.success(null)
+                    }
+                    "openAutoStartSettings" -> openSystemSettings(
+                        result,
+                        Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                    )
+                    "openBackgroundSettings" -> openSystemSettings(
+                        result,
+                        *listOfNotNull(
+                            Intent().setClassName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
+                                .putExtra("package_name", packageName)
+                                .putExtra("package_label", getString(com.algive.jizhang_app.R.string.app_name))
+                                .takeIf { AutoBookkeepingOverlayPermission.isMiuiFamilyDevice() },
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                                .takeIf { AutoBookkeepingOverlayPermission.isMiuiFamilyDevice() },
+                            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                        ).toTypedArray(),
+                    )
                     "isEnabled" -> result.success(AutoBookkeepingSettings.enabled(this))
                     "runtimeStatus" -> result.success(
                         mapOf(
@@ -251,6 +272,11 @@ open class MainActivity : FlutterFragmentActivity() {
                             "notificationGranted" to isAutoBookkeepingNotificationGranted(),
                             "foregroundRunning" to
                                 AutoBookkeepingDiagnostics.foregroundRunning,
+                            "miuiFamily" to AutoBookkeepingOverlayPermission.isMiuiFamilyDevice(),
+                            "batteryOptimizationIgnored" to getSystemService(PowerManager::class.java)
+                                .isIgnoringBatteryOptimizations(packageName),
+                            "backgroundRestricted" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                                getSystemService(ActivityManager::class.java).isBackgroundRestricted),
                             "notificationListenerGranted" to
                                 isNotificationAccessGranted(),
                             "notificationListenerEnabled" to
@@ -375,7 +401,7 @@ open class MainActivity : FlutterFragmentActivity() {
                                 "notificationListener=${isNotificationAccessGranted()}",
                         )
                         if (!enabled) {
-                            AutoBookkeepingPendingStore.complete(this, remember = false)
+                            AutoBookkeepingPendingStore.deferCurrent(this)
                         }
                         reconcileAutoBookkeepingRuntime()
                         result.success(null)
@@ -383,73 +409,7 @@ open class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/bookkeeping_feedback")
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "notifySuccess" -> {
-                        val count = (call.argument<Number>("count")?.toInt() ?: 0)
-                        AutoBookkeepingNotificationController.notifyBookkeepingSuccess(this, count)
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/autobookkeeping_pending")
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getPending" -> result.success(AutoBookkeepingPendingStore.read(this))
-                    "enqueue" -> {
-                        val arguments = call.arguments as? Map<*, *>
-                        val candidate = arguments?.let {
-                            AutoBookkeepingPendingStore.candidateFromMap(it)
-                        }
-                        if (candidate == null) {
-                            result.error("INVALID_CANDIDATE", "自动记账候选数据无效", null)
-                            return@setMethodCallHandler
-                        }
-                        val decision = AutoBookkeepingPendingStore.enqueueDecision(this, candidate)
-                        if (decision == PendingEnqueueDecision.ACCEPTED) {
-                            val shown = AutoBillOverlayService.instance?.offer(candidate) == true
-                            if (!shown) {
-                                AutoBookkeepingNotificationController.notifyConfirmationAvailable(this)
-                            }
-                            AutoBookkeepingLogStore.record(
-                                this,
-                                "notification_candidate_queued",
-                                "payment notification queued for confirmation",
-                            )
-                        } else {
-                            AutoBookkeepingLogStore.record(
-                                this,
-                                "notification_candidate_${decision.name.lowercase()}",
-                                "payment notification was not queued",
-                            )
-                        }
-                        result.success(mapOf("status" to decision.name.lowercase()))
-                    }
-                    "promoteScreenshot" -> {
-                        val path = call.argument<String>("path")
-                        result.success(
-                            path?.let {
-                                AutoBookkeepingPendingStore.promoteScreenshot(
-                                    this,
-                                    it,
-                                )
-                            },
-                        )
-                    }
-                    "complete" -> {
-                        val keepScreenshot =
-                            (call.arguments as? Map<*, *>)?.get("keepScreenshot") == true
-                        AutoBookkeepingPendingStore.complete(
-                            this,
-                            keepScreenshot = keepScreenshot,
-                        )
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        AutoBookkeepingChannels.bind(this, flutterEngine.dartExecutor.binaryMessenger, includeLogs = false)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jizhang/autobookkeeping_logs")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -716,20 +676,18 @@ open class MainActivity : FlutterFragmentActivity() {
 
     private fun reconcileAutoBookkeepingRuntime() {
         val enabled = AutoBookkeepingSettings.enabled(this)
+        val accessibility = isAccessibilityGranted()
+        val overlay = AutoBookkeepingOverlayPermission.isGranted(this)
+        val notifications = AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
         AutoBookkeepingLogStore.recordDetailed(
             this,
             "runtime_reconcile",
-            "enabled=$enabled accessibility=${isAccessibilityGranted()} " +
-                "overlay=${AutoBookkeepingOverlayPermission.isGranted(this)} " +
-                "notifications=${AutoBookkeepingNotificationController.statusNotificationsAvailable(this)} " +
+            "enabled=$enabled accessibility=$accessibility overlay=$overlay notifications=$notifications " +
                 "notificationListener=${isNotificationAccessGranted()} " +
                 "foreground=${AutoBookkeepingDiagnostics.foregroundRunning}",
         )
         val ready =
-            enabled &&
-                isAccessibilityGranted() &&
-                AutoBookkeepingOverlayPermission.isGranted(this) &&
-                AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
+            enabled && accessibility && overlay && notifications
 
         if (ready) {
             if (AutoBillOverlayService.instance == null) {
@@ -753,7 +711,7 @@ open class MainActivity : FlutterFragmentActivity() {
                 AutoBookkeepingLogStore.record(
                     this,
                     "runtime_paused",
-                    "required permission or notification state unavailable",
+                    "enabled=$enabled accessibility=$accessibility overlay=$overlay notifications=$notifications",
                 )
             }
         }
@@ -762,15 +720,7 @@ open class MainActivity : FlutterFragmentActivity() {
             notificationPreferences().getBoolean(KEY_ENABLED, false) &&
             isNotificationAccessGranted()
         ) {
-            runCatching {
-                android.service.notification.NotificationListenerService
-                    .requestRebind(
-                        ComponentName(
-                            this,
-                            PaymentNotificationListenerService::class.java,
-                        ),
-                    )
-            }
+            PaymentNotificationListenerService.ensureConnected(this)
         }
 
         if (ready) {
@@ -953,10 +903,17 @@ open class MainActivity : FlutterFragmentActivity() {
         val route = intent?.getStringExtra(OPEN_ROUTE_EXTRA)
             ?: intent?.getStringExtra("route")
             ?: return
+        if (!navigationReady) return
         intent?.removeExtra(OPEN_ROUTE_EXTRA)
-        window.decorView.postDelayed({
-            navigationChannel?.invokeMethod("openRoute", route)
-        }, 700)
+        intent?.removeExtra("route")
+        navigationChannel?.invokeMethod("openRoute", route)
+    }
+
+    override fun onDestroy() {
+        if (this !is AutoBookkeepingConfirmActivity) {
+            flutterEngine?.let { BookkeepingChangeBus.unbind(it.dartExecutor.binaryMessenger) }
+        }
+        super.onDestroy()
     }
 
     private fun notificationPreferences() = getSharedPreferences(PaymentNotificationStore.PREFS_NAME, MODE_PRIVATE)

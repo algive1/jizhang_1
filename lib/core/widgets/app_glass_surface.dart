@@ -4,12 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
 
-/// Shared visual material for the liquid-glass theme.
-///
-/// Solid themes keep the existing opaque surface behavior. Liquid glass uses
-/// backdrop blur, a translucent tint, a bright inner highlight and a very
-/// subtle chromatic edge so cards, popovers and navigation feel like the same
-/// material rather than independent transparency effects.
+/// Shared local glass panel. Night uses white 10% with a white 24% rim in
+/// every theme. Explicit opacity preserves denser popovers; high contrast
+/// uses an opaque surface. Day retains each theme's material.
 class AppGlassSurface extends StatelessWidget {
   const AppGlassSurface({
     required this.child,
@@ -24,6 +21,7 @@ class AppGlassSurface extends StatelessWidget {
     this.shadow = true,
     this.chromaticEdge = true,
     this.clipBehavior = Clip.antiAlias,
+    this.grouped = false,
   });
 
   final Widget child;
@@ -34,22 +32,24 @@ class AppGlassSurface extends StatelessWidget {
   final Border? border;
   final double? blurSigma;
 
-  /// Overrides the opacity of every glass gradient stop. Null preserves the
-  /// surface's standard liquid-glass translucency.
+  /// Explicit opacity requests frosted material in every theme. Null preserves
+  /// the theme's standard surface material.
   final double? glassOpacity;
   final bool shadow;
   final bool chromaticEdge;
   final Clip clipBehavior;
+  final bool grouped;
 
   @override
   Widget build(BuildContext context) {
     final glass = context.appUsesLiquidGlass;
+    final dark = context.appIsDark;
     final material = context.appMaterial;
     final highContrast = MediaQuery.highContrastOf(context);
     final radius = BorderRadius.circular(borderRadius);
     final effectiveTint = tint ?? context.appSurface;
 
-    if (!glass) {
+    if (!glass && !dark && glassOpacity == null) {
       return Container(
         margin: margin,
         padding: padding,
@@ -91,7 +91,7 @@ class AppGlassSurface extends StatelessWidget {
         boxShadow: shadow
             ? [
                 BoxShadow(
-                  color: context.appPrimary.withValues(
+                  color: (dark ? Colors.black : context.appPrimary).withValues(
                     alpha: highContrast ? .12 : .10,
                   ),
                   blurRadius: highContrast ? 12 : 22,
@@ -105,13 +105,16 @@ class AppGlassSurface extends StatelessWidget {
         borderRadius: radius,
         clipBehavior: clipBehavior,
         child: BackdropFilter(
+          backdropGroupKey: grouped
+              ? BackdropGroup.of(context)?.backdropKey
+              : null,
           filter: ImageFilter.blur(
             sigmaX: sigma,
             sigmaY: sigma,
             tileMode: TileMode.decal,
           ),
           child: CustomPaint(
-            foregroundPainter: chromaticEdge
+            foregroundPainter: chromaticEdge && !dark
                 ? _ChromaticGlassBorderPainter(
                     radius: borderRadius,
                     highContrast: highContrast,
@@ -121,31 +124,41 @@ class AppGlassSurface extends StatelessWidget {
             child: Container(
               padding: padding,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    withGlassOpacity(
-                      material.glassHighlight.withValues(
-                        alpha: highContrast ? .94 : .62,
+                color: dark
+                    ? (highContrast
+                          ? context.appSurface
+                          : (glassFillOpacity == null
+                                    ? Colors.white
+                                    : effectiveTint)
+                                .withValues(alpha: glassFillOpacity ?? .10))
+                    : null,
+                gradient: dark
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          withGlassOpacity(
+                            material.glassHighlight.withValues(
+                              alpha: highContrast ? .94 : .62,
+                            ),
+                          ),
+                          withGlassOpacity(baseTint),
+                          withGlassOpacity(
+                            effectiveTint.withValues(
+                              alpha: highContrast ? .76 : .48,
+                            ),
+                          ),
+                        ],
+                        stops: const [0, .48, 1],
                       ),
-                    ),
-                    withGlassOpacity(baseTint),
-                    withGlassOpacity(
-                      effectiveTint.withValues(
-                        alpha: highContrast ? .76 : .48,
-                      ),
-                    ),
-                  ],
-                  stops: const [0, .48, 1],
-                ),
                 borderRadius: radius,
                 border:
                     border ??
                     Border.all(
                       color: highContrast
                           ? context.appPrimary.withValues(alpha: .34)
-                          : material.glassBorder.withValues(alpha: .74),
+                          : material.glassBorder,
                       width: highContrast ? 1.4 : 1,
                     ),
               ),
@@ -184,11 +197,7 @@ class _ChromaticGlassBorderPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          Color(0x665BE8FF),
-          Color(0x005BE8FF),
-          Color(0x335BE8FF),
-        ],
+        colors: [Color(0x665BE8FF), Color(0x005BE8FF), Color(0x335BE8FF)],
       ).createShader(rect);
 
     final magenta = Paint()
@@ -197,11 +206,7 @@ class _ChromaticGlassBorderPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.bottomRight,
         end: Alignment.topLeft,
-        colors: [
-          Color(0x55FF74D4),
-          Color(0x00FF74D4),
-          Color(0x2EFF74D4),
-        ],
+        colors: [Color(0x55FF74D4), Color(0x00FF74D4), Color(0x2EFF74D4)],
       ).createShader(rect);
 
     final primaryGlow = Paint()

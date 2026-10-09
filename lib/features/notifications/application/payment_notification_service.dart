@@ -588,6 +588,7 @@ class PaymentNotificationAutoBookkeepingService {
         );
         switch (enqueueResult) {
           case AutoBookkeepingEnqueueResult.accepted:
+          case AutoBookkeepingEnqueueResult.queued:
             queued++;
             acknowledged.add(notification.id);
             _recordAutoBookkeepingDebug('notification_candidate_queued', {

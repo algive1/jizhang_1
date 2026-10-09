@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/transaction_record.dart';
+import '../../../core/models/analysis.dart';
+import '../../../core/database/database_provider.dart';
+import '../../books/data/book_repository.dart';
+import '../../categories/data/category_repository.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../accounts/data/account_repository.dart';
@@ -14,14 +18,33 @@ import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 
+final _rangeTransactionsProvider =
+    StreamProvider.family<
+      List<TransactionRecord>,
+      ({String bookId, DateTime start, DateTime end})
+    >((ref, key) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      yield* DriftTransactionRepository(
+        ref.watch(databaseProvider),
+        bookId: key.bookId,
+      ).watchRange(start: key.start, endExclusive: key.end);
+    });
+
 class TransactionSearchPage extends ConsumerStatefulWidget {
   const TransactionSearchPage({
     super.key,
     this.month,
     this.transactionIds = const {},
+    this.range,
+    this.bookId,
+    this.currency,
+    this.categoryId,
+    this.kind,
   });
   final DateTime? month;
   final Set<String> transactionIds;
+  final AnalysisDateRange? range;
+  final String? bookId, currency, categoryId, kind;
 
   @override
   ConsumerState<TransactionSearchPage> createState() =>
@@ -68,7 +91,24 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
   @override
   Widget build(BuildContext context) {
     final trimmedQuery = _effectiveQuery.trim();
-    final transactionState = widget.transactionIds.isNotEmpty
+    final bookId = widget.bookId ?? ref.watch<String>(activeBookIdProvider);
+    final categories = widget.categoryId == null
+        ? const []
+        : ref.watch(categoriesByBookProvider(bookId)).value ?? const [];
+    final categoryIds = {
+      widget.categoryId,
+      for (final c in categories)
+        if (c.parentId == widget.categoryId) c.id,
+    };
+    final transactionState = widget.range != null
+        ? ref.watch(
+            _rangeTransactionsProvider((
+              bookId: bookId,
+              start: widget.range!.start,
+              end: widget.range!.endExclusive,
+            )),
+          )
+        : widget.transactionIds.isNotEmpty
         ? ref.watch(
             transactionsByIdsProvider(
               transactionIdsProviderKey(widget.transactionIds),
@@ -94,13 +134,32 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
     final all = transactionState.value ?? const <TransactionRecord>[];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final recurringBills =
-        widget.transactionIds.isEmpty && trimmedQuery.isNotEmpty
+        widget.range == null &&
+            widget.transactionIds.isEmpty &&
+            trimmedQuery.isNotEmpty
         ? ref.watch(recurringBillsAllProvider).value ?? const <RecurringBill>[]
         : const <RecurringBill>[];
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
     final results = all.where((transaction) {
+      if (transaction.occurredAt.isAfter(DateTime.now()) &&
+          widget.range != null)
+        return false;
+      if (widget.currency != null &&
+          transaction.currency.toUpperCase() != widget.currency)
+        return false;
+      if (widget.categoryId != null &&
+          !categoryIds.contains(transaction.categoryId) &&
+          !categoryIds.contains(transaction.subcategoryId))
+        return false;
+      if (widget.kind == 'expense' && !transaction.isConsumptionExpense)
+        return false;
+      if (widget.kind == 'income' && !transaction.isIncome) return false;
+      if (widget.kind == 'cashflow' &&
+          !transaction.isIncome &&
+          !transaction.isConsumptionExpense)
+        return false;
       if (widget.transactionIds.isNotEmpty &&
           !widget.transactionIds.contains(transaction.id)) {
         return false;
@@ -116,6 +175,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
         .where((bill) => _matchesRecurring(bill, accountNames))
         .toList();
     final canLoadMore =
+        widget.range == null &&
         widget.transactionIds.isEmpty &&
         all.length >= _visibleLimit &&
         (trimmedQuery.isNotEmpty || widget.month == null);
@@ -138,7 +198,9 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
-                        autofocus: widget.transactionIds.isEmpty,
+                        autofocus:
+                            widget.transactionIds.isEmpty &&
+                            widget.range == null,
                         onChanged: _onQueryChanged,
                         decoration: InputDecoration(
                           hintText: '搜索商户、分类或备注',
@@ -156,7 +218,13 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  widget.transactionIds.isNotEmpty
+                  widget.range != null
+                      ? transactionState.isLoading
+                            ? '正在读取查询明细…'
+                            : transactionState.hasError
+                            ? '查询明细读取失败'
+                            : '查询明细 · ${results.length} 笔'
+                      : widget.transactionIds.isNotEmpty
                       ? '相关流水 · ${results.length} 笔'
                       : trimmedQuery.isEmpty
                       ? widget.month == null
@@ -171,7 +239,20 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                if (results.isEmpty)
+                if (widget.range != null && transactionState.isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (widget.range != null && transactionState.hasError)
+                  TextButton(
+                    onPressed: () => ref.invalidate(
+                      _rangeTransactionsProvider((
+                        bookId: bookId,
+                        start: widget.range!.start,
+                        end: widget.range!.endExclusive,
+                      )),
+                    ),
+                    child: const Text('重新读取明细'),
+                  )
+                else if (results.isEmpty)
                   Padding(
                     padding: EdgeInsets.symmetric(vertical: 72),
                     child: Column(
@@ -225,11 +306,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
                       onPressed: () =>
                           setState(() => _visibleLimit += _pageSize),
                       icon: const Icon(Icons.expand_more_rounded),
-                      label: Text(
-                        trimmedQuery.isEmpty
-                            ? '加载更多流水'
-                            : '加载更多匹配记录',
-                      ),
+                      label: Text(trimmedQuery.isEmpty ? '加载更多流水' : '加载更多匹配记录'),
                     ),
                   ),
                 ],
@@ -354,7 +431,7 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
 
   String _recurringCycleLabel(RecurringBill bill) => switch (bill.cycle) {
     RecurringBillCycle.daily => '每天',
-      RecurringBillCycle.weekly => '每周',
+    RecurringBillCycle.weekly => '每周',
     RecurringBillCycle.monthly => '每月',
     RecurringBillCycle.quarterly => '每季度',
     RecurringBillCycle.halfYear => '每半年',
@@ -371,13 +448,6 @@ class _TransactionSearchPageState extends ConsumerState<TransactionSearchPage> {
       };
 
   Future<void> _showTransactionActions(TransactionRecord transaction) {
-    return showTransactionActions(
-      context,
-      ref,
-      transaction,
-      onCorrectCategory: transaction.type == TransactionType.transfer
-          ? null
-          : () => showTransactionCategoryCorrection(context, ref, transaction),
-    );
+    return showTransactionActions(context, ref, transaction);
   }
 }

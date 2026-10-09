@@ -137,6 +137,8 @@ export interface AIModel {
   enabled: boolean;
   priority: number;
   fallbackId: string | null;
+  scenes: string[];
+  dailyBudgetUsd: number | null;
 }
 export type AIModelInput = Omit<
   AIModel,

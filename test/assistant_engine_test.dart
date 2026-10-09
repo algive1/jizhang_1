@@ -20,9 +20,8 @@ void main() {
         (await policy.authorize(text: List.filled(301, 'a').join())).allowed,
         false,
       );
-      // The rejected code prompt still consumes one attempt, which prevents
-      // probing the boundary indefinitely.
-      for (var i = 0; i < LocalAssistantPolicyService.freeDailyLimit - 1; i++) {
+      // Rejected input uses the rate limit but does not consume business quota.
+      for (var i = 0; i < LocalAssistantPolicyService.freeDailyLimit; i++) {
         expect((await policy.authorize(text: '本月收支')).allowed, true);
         settings.values.removeWhere(
           (key, _) => key.startsWith('assistant.local.rate.'),

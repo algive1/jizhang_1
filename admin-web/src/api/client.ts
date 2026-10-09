@@ -40,7 +40,11 @@ export async function request<T>(
         options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal
         ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)])
-        : AbortSignal.timeout(15000),
+        : AbortSignal.timeout(
+            path.endsWith("/test") || path === "/system/backups"
+              ? 130000
+              : 30000,
+          ),
     },
   );
   const result = (await response.json()) as { data: T; message?: string };

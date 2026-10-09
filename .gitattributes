@@ -1,0 +1,3 @@
+build_apk_release.sh text eol=lf
+scripts/build_install_android.sh text eol=lf
+server/scripts/deploy.sh text eol=lf

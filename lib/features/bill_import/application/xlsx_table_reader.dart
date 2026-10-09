@@ -8,7 +8,11 @@ import 'package:xml/xml.dart';
 /// It intentionally reads tabular cell text only, but supports shared strings,
 /// inline strings, multiple worksheets and Excel numeric date/time cells.
 class XlsxTableReader {
-  const XlsxTableReader();
+  const XlsxTableReader({
+    this.maxRows = 10100,
+    this.maxExpandedBytes = 100 * 1024 * 1024,
+  });
+  final int maxRows, maxExpandedBytes;
 
   static const _mainNs =
       'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -22,21 +26,29 @@ class XlsxTableReader {
   }
 
   List<List<List<String>>> readSheets(List<int> bytes) {
-    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
-    final sheetFiles = archive.files
-        .where(
-          (file) =>
-              file.isFile &&
-              file.name.startsWith('xl/worksheets/sheet') &&
-              file.name.endsWith('.xml'),
-        )
-        .toList(growable: false)
-      ..sort(
-        (a, b) => _worksheetNumber(a.name).compareTo(_worksheetNumber(b.name)),
-      );
+    final archive = ZipDecoder().decodeBytes(bytes);
+    if (archive.files.fold(0, (size, file) => size + file.size) >
+            maxExpandedBytes ||
+        archive.files.length > 1000)
+      throw const FormatException('Excel 解压后内容过大，请拆分文件');
+    final sheetFiles =
+        archive.files
+            .where(
+              (file) =>
+                  file.isFile &&
+                  file.name.startsWith('xl/worksheets/sheet') &&
+                  file.name.endsWith('.xml'),
+            )
+            .toList(growable: false)
+          ..sort(
+            (a, b) =>
+                _worksheetNumber(a.name).compareTo(_worksheetNumber(b.name)),
+          );
     if (sheetFiles.isEmpty) {
       throw const FormatException('Excel 文件中没有可读取的工作表');
     }
+    if (sheetFiles.length > 30)
+      throw const FormatException('Excel 工作表过多，最多支持 30 个');
 
     final sharedStrings = _readSharedStrings(archive);
     final dateStyleIndexes = _readDateStyleIndexes(archive);
@@ -63,12 +75,15 @@ class XlsxTableReader {
     final rows = <List<String>>[];
 
     for (final row in document.findAllElements('row', namespaceUri: _mainNs)) {
+      if (rows.length >= maxRows)
+        throw FormatException('Excel 工作表超过 $maxRows 行，请拆分文件');
       final values = <int, String>{};
       var maxColumn = -1;
       for (final cell in row.findElements('c', namespaceUri: _mainNs)) {
         final reference = cell.getAttribute('r') ?? '';
         final column = _columnIndex(reference);
         if (column < 0) continue;
+        if (column >= 256) throw const FormatException('账单工作表最多支持 256 列');
         maxColumn = column > maxColumn ? column : maxColumn;
         values[column] = _cellValue(
           cell,
@@ -106,8 +121,10 @@ class XlsxTableReader {
 
     final document = XmlDocument.parse(utf8.decode(file.content));
     final customFormats = <int, String>{};
-    for (final format
-        in document.findAllElements('numFmt', namespaceUri: _mainNs)) {
+    for (final format in document.findAllElements(
+      'numFmt',
+      namespaceUri: _mainNs,
+    )) {
       final id = int.tryParse(format.getAttribute('numFmtId') ?? '');
       final code = format.getAttribute('formatCode');
       if (id != null && code != null) customFormats[id] = code;
@@ -225,11 +242,8 @@ class XlsxTableReader {
   }
 
   String _formatExcelDate(double serial, bool uses1904Dates) {
-    final epoch = uses1904Dates
-        ? DateTime(1904, 1, 1)
-        : DateTime(1899, 12, 30);
-    final microseconds =
-        (serial * Duration.microsecondsPerDay).round();
+    final epoch = uses1904Dates ? DateTime(1904, 1, 1) : DateTime(1899, 12, 30);
+    final microseconds = (serial * Duration.microsecondsPerDay).round();
     final value = epoch.add(Duration(microseconds: microseconds));
     String two(int number) => number.toString().padLeft(2, '0');
     if (value.hour == 0 && value.minute == 0 && value.second == 0) {
@@ -249,7 +263,9 @@ class XlsxTableReader {
     var result = 0;
     var foundLetter = false;
     for (final codeUnit in reference.codeUnits) {
-      final upper = codeUnit >= 97 && codeUnit <= 122 ? codeUnit - 32 : codeUnit;
+      final upper = codeUnit >= 97 && codeUnit <= 122
+          ? codeUnit - 32
+          : codeUnit;
       if (upper < 65 || upper > 90) break;
       foundLetter = true;
       result = result * 26 + upper - 64;

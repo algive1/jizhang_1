@@ -9,6 +9,36 @@ export const router = createRouter({
       component: () => import("./components/AdminLayout.vue"),
       children: [
         {
+          path: "assistant-policy",
+          component: () => import("./pages/AssistantPolicy.vue"),
+          meta: { permission: "ai:policy:view" },
+        },
+        {
+          path: "system-maintenance",
+          component: () => import("./pages/SystemMaintenance.vue"),
+          meta: { permission: "system:maintenance:view" },
+        },
+        {
+          path: "asr",
+          component: () => import("./pages/Asr.vue"),
+          meta: { permission: "ai:model:view" },
+        },
+        {
+          path: "membership",
+          component: () => import("./pages/Membership.vue"),
+          meta: { permission: "membership:view" },
+        },
+        {
+          path: "payments",
+          component: () => import("./pages/Payments.vue"),
+          meta: { permission: "payment:view" },
+        },
+        {
+          path: "payment-channels",
+          component: () => import("./pages/PaymentChannels.vue"),
+          meta: { permission: "payment:view" },
+        },
+        {
           path: "",
           component: () => import("./pages/Dashboard.vue"),
           meta: { permission: "dashboard:view" },

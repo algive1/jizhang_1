@@ -250,7 +250,7 @@ export function registerReleases(app: FastifyInstance, store: Store) {
     if (status === "published" && previous && previous.id !== id) {
       check(
         row.version_code > previous.version_code &&
-          compareVersions(row.version_name, previous.version_name) > 0,
+          compareVersions(row.version_name, previous.version_name) >= 0,
         "发布版本必须高于当前全量版本；回滚请先下线新版本",
         409,
       );

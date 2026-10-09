@@ -11,6 +11,7 @@ import '../data/account_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
 import '../../transactions/presentation/transaction_actions.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import 'account_actions.dart';
 
 class AccountDetailPage extends ConsumerStatefulWidget {
   const AccountDetailPage({required this.accountId, super.key});
@@ -76,6 +77,7 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
               ),
+              AccountActionsMenu(account: account),
             ],
           ),
           AppCard(
@@ -84,12 +86,16 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  account.type.label,
+                  '${account.type.label}${account.type.isDebt ? (account.balance < 0
+                            ? ' · 当前欠款'
+                            : account.balance > 0
+                            ? ' · 溢缴余额'
+                            : ' · 已还清') : ''}',
                   style: TextStyle(color: context.appSecondaryText),
                 ),
                 const SizedBox(height: 5),
                 MoneyText(
-                  account.balance,
+                  account.type.isDebt ? account.balance.abs() : account.balance,
                   currency: account.currency,
                   style: TextStyle(
                     fontSize: 30,
@@ -120,6 +126,8 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
             ),
           ),
           const SizedBox(height: 16),
+          if (!account.type.isDebt && account.balance < 0)
+            const AppCard(child: Text('余额为负，请核对初始余额或使用「校准余额」更新实际资金。')),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SegmentedButton<int>(
@@ -147,7 +155,9 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                   if (canLoadMore) ...[
                     const SizedBox(height: 10),
                     TextButton.icon(
-                      key: const ValueKey('account-transactions-load-more-empty'),
+                      key: const ValueKey(
+                        'account-transactions-load-more-empty',
+                      ),
                       onPressed: () =>
                           setState(() => _visibleLimit += _pageSize),
                       icon: const Icon(Icons.expand_more_rounded),
@@ -176,11 +186,8 @@ class _AccountDetailPageState extends ConsumerState<AccountDetailPage> {
                     showDate: true,
                     showDivider: entry.key != transactions.length - 1,
                     onTap: () => openTransactionDetail(context, entry.value),
-                    onLongPress: () => showTransactionActions(
-                      context,
-                      ref,
-                      entry.value,
-                    ),
+                    onLongPress: () =>
+                        showTransactionActions(context, ref, entry.value),
                   );
                 }).toList(),
               ),

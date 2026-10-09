@@ -183,3 +183,39 @@ jobs:
 
       - name: Test
         run: npm test
+
+  admin-web:
+    name: Admin console checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: server
+      - run: npm ci
+        working-directory: admin-web
+      - run: npm run lint && npm run build
+        working-directory: admin-web
+      - run: npx playwright install --with-deps chromium
+        working-directory: admin-web
+      - run: npm test
+        working-directory: admin-web
+
+  backend-image:
+    name: Backend image startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t backend-check -f server/Dockerfile .
+      - run: |
+          docker run -d --name backend-check -p 8787:8787 -e NODE_ENV=production -e ALL_FEATURES_FREE_FOR_TESTING=false backend-check
+          for i in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:8787/ready; then exit 0; fi
+            sleep 2
+          done
+          docker logs backend-check
+          exit 1

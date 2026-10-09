@@ -8,9 +8,10 @@ import { pageQuery, paginate } from "./query.js";
 const userSelect = `SELECT u.id,u.username,u.display_name AS displayName,u.created_at AS createdAt,
   COALESCE(st.disabled,0) AS accountDisabled,(SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id=u.id) AS lastSeenAt,
   d.app_version AS appVersion,d.android_version AS androidVersion,d.brand,d.model,d.auto_enabled AS autoEnabled,d.backup_enabled AS backupEnabled,
-  CASE WHEN COALESCE((SELECT expires_at FROM membership_adjustments WHERE user_id=u.id),0)>:now
-    OR COALESCE((SELECT expires_at FROM membership_subscriptions WHERE user_id=u.id),0)>:now
-    OR EXISTS(SELECT 1 FROM apple_transactions WHERE user_id=u.id AND revoked_at IS NULL AND expires_at>:now) THEN 1 ELSE 0 END AS member`;
+  CASE WHEN EXISTS(SELECT 1 FROM membership_adjustments WHERE user_id=u.id)
+    THEN CASE WHEN EXISTS(SELECT 1 FROM membership_adjustments WHERE user_id=u.id AND version_id IS NOT NULL AND expires_at>:now) THEN 1 ELSE 0 END
+    ELSE CASE WHEN COALESCE((SELECT expires_at FROM membership_subscriptions WHERE user_id=u.id),0)>:now
+      OR EXISTS(SELECT 1 FROM apple_transactions WHERE user_id=u.id AND revoked_at IS NULL AND expires_at>:now) THEN 1 ELSE 0 END END AS member`;
 const userFrom = `FROM users u LEFT JOIN console_user_state st ON st.user_id=u.id LEFT JOIN console_devices d ON d.rowid=(SELECT rowid FROM console_devices WHERE user_id=u.id ORDER BY last_seen_at DESC LIMIT 1)`;
 export function registerUsers(app: FastifyInstance, store: Store) {
   const setStatus = (

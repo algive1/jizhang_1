@@ -31,7 +31,14 @@ class RuleBasedTransactionParser implements TransactionParser {
 
     for (final clause in clauses) {
       contextTime = _resolveDateTime(clause, contextTime, clock);
-      final withoutTime = clause.replaceAll(_timePattern, '');
+      final withoutTime = clause
+          .replaceAll(_timePattern, '')
+          .replaceAll(
+            RegExp(
+              r'(?:尾号|后四位|卡号后四位|手机号后四位)[^0-9]{0,6}[0-9]{4}|(?:银行卡|信用卡|微信|支付宝)[\s_-]?[0-9]{4}',
+            ),
+            '',
+          );
       final amountMatches = RegExp(r'\d+(?:\.\d{1,2})?')
           .allMatches(withoutTime)
           .toList();
@@ -307,7 +314,10 @@ class CachedRetryingAiTransactionParser implements TransactionParser {
 
   @override
   Future<TransactionParseResult> parse(String text, {DateTime? now}) async {
-    final cached = _cache[text];
+    final clock = now ?? DateTime.now();
+    final key =
+        '$text|${clock.millisecondsSinceEpoch ~/ const Duration(minutes: 5).inMilliseconds}';
+    final cached = _cache[key];
     if (cached != null) return cached;
     Object? lastError;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
@@ -320,7 +330,7 @@ class CachedRetryingAiTransactionParser implements TransactionParser {
           unresolvedFragments: const [],
           usedAi: true,
         );
-        _cache[text] = result;
+        _cache[key] = result;
         return result;
       } on TimeoutException catch (error) {
         lastError = error;

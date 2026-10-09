@@ -41,7 +41,10 @@ class RemotePaymentService implements PaymentService {
 
   @override
   Future<PaymentOrder> refreshOrder(String orderId) async {
-    final response = await api.request('/membership/orders/$orderId');
+    final response = await api.request(
+      '/membership/orders/$orderId/refresh',
+      method: 'POST',
+    );
     return PaymentOrder.fromJson(response);
   }
 

@@ -61,6 +61,7 @@ void main() {
       expect(container.read(activeBookIdProvider), otherBook.id);
       expect(find.text('编辑流水'), findsOneWidget);
       expect(find.text('删除流水'), findsOneWidget);
+      expect(find.text('编辑分类'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -104,6 +105,7 @@ void main() {
 
     expect(find.text('编辑流水'), findsOneWidget);
     expect(find.text('删除流水'), findsOneWidget);
+    expect(find.text('编辑分类'), findsOneWidget);
     expect(find.text('切换到该账本并操作'), findsNothing);
     expect(tester.takeException(), isNull);
   });

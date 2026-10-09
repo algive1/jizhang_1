@@ -135,6 +135,16 @@ export const api = {
     }),
   aiUsage: (period: string) =>
     request<AIUsage>("/ai/usage", { query: { period, days: 30 } }),
+  saveModelKey: (id: string, key: string) =>
+    request(`/ai/models/${encodeURIComponent(id)}/key`, {
+      method: "PUT",
+      body: { key },
+    }),
+  testModel: (id: string) =>
+    request<{ success: boolean; durationMs: number }>(
+      `/ai/models/${encodeURIComponent(id)}/test`,
+      { method: "POST" },
+    ),
   aiCalls: (query: Query) => request<Page<AICall>>("/ai/calls", { query }),
   aiCall: (id: string) =>
     request<AICall>(`/ai/calls/${encodeURIComponent(id)}`),
@@ -190,6 +200,8 @@ export const api = {
     request<FeedbackDetail>(`/feedback/${id}`, { query }),
   feedbackStatus: (id: string, status: string) =>
     request(`/feedback/${id}/status`, { method: "PATCH", body: { status } }),
+  replyFeedback: (id: string, body: string) =>
+    request(`/feedback/${id}/messages`, { method: "POST", body: { body } }),
   trace: (userId: string, traceId: string) =>
     request<{
       events: AccountingEvent[];

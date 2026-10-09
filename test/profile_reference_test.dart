@@ -122,12 +122,19 @@ void main() {
         expect(tester.takeException(), isNull);
         await _capture(tester, boundary, 'profile-$width-$scale');
         await tester.drag(find.byType(ListView).first, const Offset(0, -550));
+        await tester.scrollUntilVisible(
+          find.text('帮助与反馈'), 200,
+          scrollable: find.byType(Scrollable).first,
+        );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('帮助与反馈'), findsOneWidget);
         await _capture(tester, boundary, 'profile-lower-$width-$scale');
         if (scale == 1.0) {
-          await tester.ensureVisible(find.text('记账照片 ›'));
+          await tester.scrollUntilVisible(
+            find.text('记账照片 ›'), -300,
+            scrollable: find.byType(Scrollable).first,
+          );
           await tester.tap(find.text('记账照片 ›'));
           await tester.pumpAndSettle();
           expect(find.text('记账照片 · 全部账本'), findsOneWidget);
@@ -147,10 +154,17 @@ void main() {
           expect(tester.takeException(), isNull);
           await tester.tapAt(const Offset(2, 100));
           await tester.pumpAndSettle();
-          await tester.ensureVisible(find.text('帮助与反馈'));
+          await tester.scrollUntilVisible(
+            find.text('帮助与反馈'), 300,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await Scrollable.ensureVisible(
+            tester.element(find.text('帮助与反馈')), alignment: .5,
+          );
+          await tester.pumpAndSettle();
           await tester.tap(find.text('帮助与反馈'));
           await tester.pumpAndSettle();
-          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(find.text('使用手册'), findsOneWidget);
         }
         await tester.pumpWidget(const SizedBox.shrink());
       });

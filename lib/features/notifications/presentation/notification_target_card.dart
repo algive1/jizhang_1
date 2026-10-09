@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/database/database_seeder.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../books/data/book_repository.dart';
@@ -32,6 +33,12 @@ const _channels = {
   SeedIds.bankAccount: '云闪付',
   'meituan': '美团',
 };
+
+final _targetAccountsProvider =
+    StreamProvider.family<List<AccountEntity>, String>(
+      (ref, bookId) =>
+          ref.watch(databaseProvider).accountDao.watchActive(bookId: bookId),
+    );
 
 class NotificationTargetCard extends ConsumerWidget {
   const NotificationTargetCard({super.key});
@@ -73,16 +80,13 @@ class NotificationTargetCard extends ConsumerWidget {
                 },
               ),
               if (available)
-                FutureBuilder(
-                  future: ref
-                      .read(databaseProvider)
-                      .accountDao
-                      .getActive(bookId: target),
-                  builder: (context, snapshot) {
+                Consumer(
+                  builder: (context, ref, _) {
+                    final snapshot = ref.watch(_targetAccountsProvider(target));
                     if (snapshot.hasError) return const Text('账户读取失败，请重新进入');
-                    if (!snapshot.hasData)
+                    if (!snapshot.hasValue)
                       return const LinearProgressIndicator();
-                    final accounts = snapshot.data!;
+                    final accounts = snapshot.value!;
                     return Column(
                       children: [
                         for (final channel in _channels.entries)

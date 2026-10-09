@@ -5,7 +5,7 @@ import 'package:jizhang_app/app/router/app_router.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
 import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
-import 'package:jizhang_app/core/config/testing_access.dart';
+import 'package:jizhang_app/features/settings/application/theme_controller.dart';
 import 'package:jizhang_app/features/accounts/data/receivable_repository.dart';
 import 'package:jizhang_app/features/accounts/domain/account_management.dart';
 import 'package:jizhang_app/features/profile/presentation/profile_cards.dart';
@@ -74,9 +74,9 @@ void main() {
   });
 
   testWidgets(
-    'theme membership prompt fits a compact large-text screen',
+    'default theme selection fits a compact large-text screen',
     (tester) async {
-      await _pumpRoute(
+      final container = await _pumpRoute(
         tester,
         route: '/profile/appearance',
         size: const Size(320, 520),
@@ -88,10 +88,10 @@ void main() {
       await tester.tap(premiumTheme);
       await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.text('会员主题'), findsOneWidget);
+      expect(find.text('会员主题'), findsNothing);
+      expect(container.read(preferredThemeProvider).requireValue, 'liquid_glass');
       expect(tester.takeException(), isNull);
     },
-    skip: kAllFeaturesFreeForTesting,
   );
 
   testWidgets('receivable reminder sheet fits a compact large-text screen', (

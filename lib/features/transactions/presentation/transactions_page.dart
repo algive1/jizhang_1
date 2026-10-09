@@ -14,6 +14,7 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../categories/data/category_repository.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../intelligence/data/bill_inbox_repository.dart';
+import '../../autobookkeeping/auto_bookkeeping_inbox.dart';
 import '../data/transactions_repository.dart';
 import 'transaction_actions.dart';
 
@@ -41,16 +42,22 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
               month: widget.month!.month,
             )),
           );
-    final all =
-        (transactionState.value ?? const <TransactionRecord>[])
-            .where((t) => !t.occurredAt.isAfter(DateTime.now()))
-            .toList();
+    final all = (transactionState.value ?? const <TransactionRecord>[])
+        .where((t) => !t.occurredAt.isAfter(DateTime.now()))
+        .toList();
     final categories = ref.watch(categoriesProvider).value ?? const [];
     final accounts = ref.watch(allAccountsProvider).value ?? const [];
     final accountNames = {
       for (final account in accounts) account.id: account.displayName,
     };
-    final inboxCount = ref.watch(pendingInboxProvider).value?.length ?? 0;
+    final inboxCount =
+        (ref.watch(pendingInboxProvider).value?.length ?? 0) +
+        (ref
+                .watch(pendingPaymentInboxProvider)
+                .value
+                ?.where((item) => !item.ignored)
+                .length ??
+            0);
     final typedTransactions = switch (_typeFilter) {
       1 => all.where((item) => item.isExpense),
       2 => all.where((item) => item.isIncome),
@@ -78,8 +85,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
             )
             .value ??
         _monthlySummary(all);
-    final canLoadMore =
-        widget.month == null && all.length >= _visibleLimit;
+    final canLoadMore = widget.month == null && all.length >= _visibleLimit;
 
     return SafeArea(
       child: CustomScrollView(
@@ -177,12 +183,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                       if (canLoadMore) ...[
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
-                          key: const ValueKey(
-                            'transactions-load-more-empty',
-                          ),
-                          onPressed: () => setState(
-                            () => _visibleLimit += _pageSize,
-                          ),
+                          key: const ValueKey('transactions-load-more-empty'),
+                          onPressed: () =>
+                              setState(() => _visibleLimit += _pageSize),
                           icon: const Icon(Icons.expand_more_rounded),
                           label: const Text('继续加载更早流水'),
                         ),
@@ -209,9 +212,8 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                       child: Center(
                         child: OutlinedButton.icon(
                           key: const ValueKey('transactions-load-more'),
-                          onPressed: () => setState(
-                            () => _visibleLimit += _pageSize,
-                          ),
+                          onPressed: () =>
+                              setState(() => _visibleLimit += _pageSize),
                           icon: const Icon(Icons.expand_more_rounded),
                           label: const Text('加载更多流水'),
                         ),
@@ -222,7 +224,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: TransactionDateGroup(
-                      dateLabel: TransactionDateFormatter.groupLabel(entry.date),
+                      dateLabel: TransactionDateFormatter.groupLabel(
+                        entry.date,
+                      ),
                       transactions: entry.transactions,
                       accountNames: accountNames,
                       onTransactionTap: (transaction) =>
@@ -239,7 +243,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
   }
 
   List<({DateTime date, List<TransactionRecord> transactions})>
-      _groupTransactions(List<TransactionRecord> transactions) {
+  _groupTransactions(List<TransactionRecord> transactions) {
     final groups = <DateTime, List<TransactionRecord>>{};
     for (final transaction in transactions) {
       final date = DateUtils.dateOnly(transaction.occurredAt);
@@ -276,14 +280,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
   }
 
   Future<void> _showTransactionActions(TransactionRecord transaction) {
-    return showTransactionActions(
-      context,
-      ref,
-      transaction,
-      onCorrectCategory: transaction.type == TransactionType.transfer
-          ? null
-          : () => showTransactionCategoryCorrection(context, ref, transaction),
-    );
+    return showTransactionActions(context, ref, transaction);
   }
 
   Future<void> _openFilter(List<Category> categories) async {
@@ -330,10 +327,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                               ),
                               title: Text(item),
                               trailing: item == (_categoryFilter ?? '全部')
-                                  ? Icon(
-                                      Icons.check,
-                                      color: context.appPrimary,
-                                    )
+                                  ? Icon(Icons.check, color: context.appPrimary)
                                   : null,
                               onTap: () => Navigator.pop(context, item),
                             ),
@@ -351,8 +345,6 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     if (!mounted || selected == null) return;
     setState(() => _categoryFilter = selected == '全部' ? null : selected);
   }
-
-
 }
 
 class _TransactionsHeader extends StatelessWidget {

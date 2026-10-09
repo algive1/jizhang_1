@@ -10,6 +10,7 @@ import '../../../core/models/goal.dart';
 import '../../../core/models/family.dart';
 import '../../../core/widgets/privacy_amount.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/goal_icon.dart';
 import '../../goals/domain/goal_milestone_service.dart';
 import '../../../core/constants/app_assets.dart';
 
@@ -217,30 +218,38 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
         // Keep the illustration for normal amounts. Once the amount becomes
         // long enough to compete with it, remove the decoration and give the
         // number the full line so it stays readable and cannot overlap.
-        final showDecoration = !largeText && realAmountText.runes.length <= 8;
+        final showDecoration =
+            !context.appIsDark &&
+            !largeText &&
+            realAmountText.runes.length <= 8;
         return Container(
           key: ValueKey('home-spending-card'),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                context.appSurface,
-                context.appPrimarySoft.withValues(alpha: .58),
-              ],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: context.appDivider.withValues(alpha: .72),
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0C65713F),
-                blurRadius: 12,
-                offset: Offset(0, 3),
-              ),
-            ],
+            color: context.appIsDark ? context.appSurface : null,
+            gradient: context.appIsDark
+                ? null
+                : LinearGradient(
+                    colors: [
+                      context.appSurface,
+                      context.appPrimarySoft.withValues(alpha: .58),
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+            borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 20),
+            border: context.appIsDark
+                ? null
+                : Border.all(color: context.appDivider.withValues(alpha: .72)),
+            boxShadow: context.appIsDark
+                ? null
+                : const [
+                    BoxShadow(
+                      color: Color(0x0C65713F),
+                      blurRadius: 12,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -271,8 +280,7 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                             fit: BoxFit.contain,
                             alignment: Alignment.bottomRight,
                             cacheWidth:
-                                (142 *
-                                        MediaQuery.devicePixelRatioOf(context))
+                                (142 * MediaQuery.devicePixelRatioOf(context))
                                     .ceil(),
                           ),
                         ),
@@ -499,20 +507,29 @@ class _HomeSpendingGoalCardState extends State<HomeSpendingGoalCard> {
                 key: const ValueKey('home-goal-panel'),
                 margin: const EdgeInsets.fromLTRB(1, 0, 1, 0),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      context.appPrimarySoft,
-                      context.appSurfaceSoft,
-                      context.appSurface,
-                    ],
-                    stops: [0, .55, 1],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                  color: context.appIsDark
+                      ? Colors.white.withValues(alpha: .12)
+                      : null,
+                  gradient: context.appIsDark
+                      ? null
+                      : LinearGradient(
+                          colors: [
+                            context.appPrimarySoft,
+                            context.appSurfaceSoft,
+                            context.appSurface,
+                          ],
+                          stops: [0, .55, 1],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  borderRadius: BorderRadius.circular(
+                    context.appIsDark ? 16 : 18,
                   ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: context.appSurface.withValues(alpha: .8),
-                  ),
+                  border: context.appIsDark
+                      ? null
+                      : Border.all(
+                          color: context.appSurface.withValues(alpha: .8),
+                        ),
                 ),
                 child: Semantics(
                   button: true,
@@ -570,7 +587,9 @@ class _BudgetChoice extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: selected ? Colors.white : context.appSecondaryText,
+          color: selected
+              ? context.appColors.onPrimary
+              : context.appSecondaryText,
           fontSize: 11,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
         ),
@@ -765,7 +784,9 @@ class _HomeGoalTimeline extends StatelessWidget {
                                               ? Icon(
                                                   Icons.check,
                                                   size: 14,
-                                                  color: Colors.white,
+                                                  color: context
+                                                      .appColors
+                                                      .onPrimary,
                                                 )
                                               : current
                                               ? Center(
@@ -833,10 +854,5 @@ IconData _goalIconForHome(Goal goal) {
   if (goal.icon == 'car') return Icons.directions_car_filled;
   if (goal.icon == 'travel') return Icons.flight_takeoff;
   if (goal.icon == 'home') return Icons.home_outlined;
-  return switch (goal.goalType) {
-    GoalType.car => Icons.directions_car_filled,
-    GoalType.travel => Icons.flight_takeoff,
-    GoalType.homeDownPayment => Icons.home_outlined,
-    _ => Icons.flag_outlined,
-  };
+  return goalTypeIcon(goal.goalType);
 }

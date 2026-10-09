@@ -11,7 +11,10 @@ import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_theme_definition.dart';
 import '../core/database/database_provider.dart';
+import '../core/platform/bookkeeping_refresh.dart';
+import '../features/autobookkeeping/auto_bookkeeping_inbox.dart';
 import '../core/widgets/startup_poster.dart';
+import '../core/widgets/app_page_background.dart';
 import '../features/sharing/application/shared_book_sync_service.dart';
 import '../features/notifications/application/payment_notification_service.dart';
 import '../features/recurring/application/recurring_bill_notification_service.dart';
@@ -28,7 +31,11 @@ import '../features/push/application/push_registration_service.dart';
 import '../features/security/presentation/app_lock_gate.dart';
 import '../features/budgets/application/budget_alert_notification_service.dart';
 import '../features/budgets/data/budget_repository.dart';
+import '../features/budgets/application/budget_weekly_review_service.dart';
+import '../features/transactions/data/transactions_repository.dart';
+import '../features/books/data/book_repository.dart';
 import '../features/settings/application/theme_controller.dart';
+import '../core/platform/app_notice_theme.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -44,6 +51,8 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   late final bool Function(Object, StackTrace)? _previousPlatformErrorHandler;
   late final OperationLogService _diagnostics;
   late final SessionRepository _sessionRepository;
+  late final BookkeepingRefreshBridge _bookkeepingRefresh;
+  bool _pendingReviewDialogVisible = false;
   bool _updateDialogVisible = false;
   bool _initialUpdateCheckScheduled = false;
   bool _liquidGlassWarmupScheduled = false;
@@ -64,7 +73,19 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     _installDiagnosticHandlers();
     WidgetsBinding.instance.addObserver(this);
     _navigationChannel.setMethodCallHandler(_handleNavigationCall);
+    _bookkeepingRefresh = BookkeepingRefreshBridge(() async {
+      ref.invalidate(pendingPaymentInboxProvider);
+      await ref.read(databaseBootstrapProvider.future);
+      refreshExternalBookkeepingData(ref.read(databaseProvider));
+    })..start();
+    unawaited(_bookkeepingRefresh.check());
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(() async {
+        await ref.read(databaseBootstrapProvider.future);
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+        try { await _navigationChannel.invokeMethod<void>('ready'); } on MissingPluginException { /* Single-engine platforms. */ }
+      }());
       unawaited(() async {
         try {
           await ref.read(installationAgeRepositoryProvider).createdAt();
@@ -134,6 +155,32 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     if (call.method != 'openRoute') return;
     final route = call.arguments;
     if (route is String && route.isNotEmpty && mounted) {
+      if (route == '/transactions/inbox?prompt=1') {
+        if (_pendingReviewDialogVisible) return;
+        _pendingReviewDialogVisible = true;
+        try {
+          ref.invalidate(pendingPaymentInboxProvider);
+          final items = await ref.read(pendingPaymentInboxProvider.future);
+          final count = items.where((item) => !item.ignored).length;
+          final dialogContext = rootNavigatorKey.currentContext;
+          if (!mounted || dialogContext == null || !dialogContext.mounted || count == 0) return;
+          final review = await showDialog<bool>(
+            context: dialogContext,
+            builder: (context) => AlertDialog(
+              title: Text('有 $count 笔记账待确认'),
+              content: const Text('付款记录已保留在账单收件箱，你可以逐笔确认或忽略。'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('忽略')),
+                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('去确认')),
+              ],
+            ),
+          );
+          if (review == true && mounted) ref.read(appRouterProvider).push('/transactions/inbox');
+        } finally {
+          _pendingReviewDialogVisible = false;
+        }
+        return;
+      }
       ref.read(appRouterProvider).go(route);
     }
   }
@@ -144,6 +191,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
       _diagnostics.record(kind: 'app_lifecycle', data: {'state': state.name}),
     );
     if (state == AppLifecycleState.resumed) {
+      unawaited(_bookkeepingRefresh.check());
       unawaited(ref.read(productAnalyticsProvider).track('app_foreground'));
       _runForegroundMaintenance();
       _checkForAppUpdate();
@@ -354,6 +402,10 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
             await ref
                 .read(budgetAlertNotificationServiceProvider)
                 .sync(ref.read(budgetOverviewProvider));
+            await ref.read(budgetWeeklyReviewServiceProvider).sync(
+              bookId: ref.read(activeBookIdProvider),
+              transactions: ref.read(transactionRepositoryProvider),
+            );
           })
           .catchError((Object _) {
             // Budget warnings are best effort and must never block startup.
@@ -400,6 +452,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
 
   @override
   void dispose() {
+    _bookkeepingRefresh.dispose();
     _navigationChannel.setMethodCallHandler(null);
     FlutterError.onError = _previousFlutterErrorHandler;
     PlatformDispatcher.instance.onError = _previousPlatformErrorHandler;
@@ -559,21 +612,26 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     final brightnessPreference =
         ref.watch(brightnessModeProvider).value ??
         AppBrightnessPreference.light;
+    final lightTheme = AppTheme.light(appearance);
+    final darkTheme = AppTheme.dark(appearance);
+    AppNoticeTheme.sync(
+      brightnessPreference == AppBrightnessPreference.dark ? darkTheme : lightTheme,
+    );
     return MaterialApp.router(
       title: '好好记账',
       color: overlayHost ? Colors.transparent : null,
       theme: overlayHost
-          ? AppTheme.light(appearance).copyWith(
+          ? lightTheme.copyWith(
               scaffoldBackgroundColor: Colors.transparent,
               canvasColor: Colors.transparent,
             )
-          : AppTheme.light(appearance),
+          : lightTheme,
       darkTheme: overlayHost
-          ? AppTheme.dark(appearance).copyWith(
+          ? darkTheme.copyWith(
               scaffoldBackgroundColor: Colors.transparent,
               canvasColor: Colors.transparent,
             )
-          : AppTheme.dark(appearance),
+          : darkTheme,
       themeMode: brightnessPreference == AppBrightnessPreference.dark
           ? ThemeMode.dark
           : ThemeMode.light,
@@ -595,26 +653,7 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
         // do not draw their own background still sit on something with a
         // little variation. `AppScaffold` layers its mesh gradient on top of
         // this for the shell routes.
-        final scheme = Theme.of(context).colorScheme;
-        final background = Theme.of(context).scaffoldBackgroundColor;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                background,
-                Color.alphaBlend(
-                  scheme.primary.withValues(alpha: .08),
-                  scheme.surface,
-                ),
-                scheme.surface,
-              ],
-              stops: const [0, .52, 1],
-            ),
-          ),
-          child: content,
-        );
+        return AppAppearanceBackground(child: content);
       },
     );
   }

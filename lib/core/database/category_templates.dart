@@ -7,10 +7,17 @@ class SeedCategoryTemplate {
 
 const _personal = [
   SeedCategoryTemplate('expense-food', '餐饮', 'restaurant_outlined', 'expense'),
+  SeedCategoryTemplate('expense-snacks', '零食', 'fastfood_outlined', 'expense'),
   SeedCategoryTemplate(
-    'expense-transport',
-    '交通',
-    'directions_car_outlined',
+    'expense-tobacco-tea',
+    '烟酒茶',
+    'local_bar_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate(
+    'expense-cooking',
+    '烹饪食材',
+    'shopping_cart_outlined',
     'expense',
   ),
   SeedCategoryTemplate(
@@ -20,15 +27,9 @@ const _personal = [
     'expense',
   ),
   SeedCategoryTemplate(
-    'expense-household',
-    '家居日用',
-    'home_work_outlined',
-    'expense',
-  ),
-  SeedCategoryTemplate(
-    'expense-tobacco-tea',
-    '烟酒茶',
-    'local_bar_outlined',
+    'expense-transport',
+    '交通',
+    'directions_car_outlined',
     'expense',
   ),
   SeedCategoryTemplate(
@@ -37,23 +38,25 @@ const _personal = [
     'movie_outlined',
     'expense',
   ),
-  SeedCategoryTemplate('expense-housing', '住房', 'home_outlined', 'expense'),
+  SeedCategoryTemplate('expense-beauty', '美妆', 'face_outlined', 'expense'),
   SeedCategoryTemplate(
     'expense-utilities',
     '生活缴费',
     'receipt_long_outlined',
     'expense',
   ),
-  SeedCategoryTemplate(
-    'expense-medical',
-    '医疗',
-    'medical_services_outlined',
-    'expense',
-  ),
+  SeedCategoryTemplate('expense-housing', '住房', 'home_outlined', 'expense'),
   SeedCategoryTemplate(
     'expense-education',
     '教育培训',
     'school_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate('expense-pet', '宠物', 'pets_outlined', 'expense'),
+  SeedCategoryTemplate(
+    'expense-car',
+    '汽车',
+    'directions_car_filled_outlined',
     'expense',
   ),
   SeedCategoryTemplate(
@@ -62,15 +65,20 @@ const _personal = [
     'flight_takeoff_outlined',
     'expense',
   ),
-  SeedCategoryTemplate('expense-gift', '人情', 'redeem_outlined', 'expense'),
-  SeedCategoryTemplate('expense-pet', '宠物', 'pets_outlined', 'expense'),
   SeedCategoryTemplate('expense-digital', '数码', 'devices_outlined', 'expense'),
   SeedCategoryTemplate(
-    'expense-car',
-    '汽车',
-    'directions_car_filled_outlined',
+    'expense-medical',
+    '医疗',
+    'medical_services_outlined',
     'expense',
   ),
+  SeedCategoryTemplate(
+    'expense-household',
+    '家居日用',
+    'home_work_outlined',
+    'expense',
+  ),
+  SeedCategoryTemplate('expense-gift', '人情', 'redeem_outlined', 'expense'),
   SeedCategoryTemplate('expense-other', '其他', 'more_horiz', 'expense'),
   SeedCategoryTemplate('income-salary', '工资', 'work_outline', 'income'),
   SeedCategoryTemplate('income-bonus', '奖金', 'stars_outlined', 'income'),
@@ -348,6 +356,69 @@ const foodSubcategoryTemplates = [
     'expense',
   ),
 ];
+
+const _personalChildren = <String, List<(String, String)>>{
+  'expense-food': [
+    ('breakfast', '早餐'),
+    ('lunch', '午餐'),
+    ('dinner', '晚餐'),
+    ('delivery', '外卖'),
+    ('late-night', '夜宵'),
+    ('hotpot', '火锅'),
+    ('banquet', '宴席'),
+    ('small-snack', '小吃'),
+    ('coffee', '奶茶咖啡'),
+    ('snacks', '零食'),
+    ('fruit', '水果'),
+    ('dessert', '甜品'),
+  ],
+  'expense-snacks': [],
+  'expense-tobacco-tea': [],
+  'expense-cooking': [
+    ('vegetables', '买菜'),
+    ('meat', '买肉'),
+    ('seasoning', '粮油调料'),
+    ('staples', '米面'),
+  ],
+  'expense-shopping': [
+    ('clothes', '服饰鞋包'),
+    ('general', '百货'),
+    ('taobao', '淘宝'),
+    ('douyin', '抖音'),
+    ('pinduoduo', '拼多多'),
+    ('jd', '京东'),
+  ],
+  'expense-entertainment': [
+    ('movie', '看电影'),
+    ('game', '游戏充值'),
+    ('music', '音乐会员'),
+    ('sports', '运动健身'),
+    ('party', '聚会唱歌'),
+    ('show', '演出'),
+    ('subscription', '视频会员'),
+  ],
+  'expense-beauty': [
+    ('mask', '面膜'),
+    ('lipstick', '口红'),
+    ('cream', '面霜'),
+    ('cleanser', '洗面奶'),
+    ('foundation', '粉底'),
+    ('headwear', '头饰'),
+    ('eyeshadow', '眼影'),
+    ('skincare', '护肤品'),
+    ('perfume', '香水'),
+    ('spa', 'SPA'),
+    ('hair', '洗剪吹'),
+  ],
+  'expense-digital': [
+    ('phone', '手机'),
+    ('computer', '电脑'),
+    ('headphones', '耳机'),
+    ('camera', '拍摄设备'),
+    ('software', '软件订阅'),
+    ('repair', '数码维修'),
+  ],
+};
 
 /// Stable semantic keys survive reorder/rename; labels are editable after seeding.
 const _commonChildren = <String, List<(String, String)>>{
@@ -647,18 +718,8 @@ List<SeedCategoryTemplate> subcategoryTemplates(
   BookType type,
   SeedCategoryTemplate parent,
 ) {
-  if (type == BookType.personal && parent.key == 'expense-food')
-    return [
-      for (final child in foodSubcategoryTemplates)
-        SeedCategoryTemplate(
-          child.key,
-          child.name,
-          'detail:${child.name}',
-          child.type,
-        ),
-    ];
   final overrides = switch (type) {
-    BookType.personal => const <String, List<(String, String)>>{},
+    BookType.personal => _personalChildren,
     BookType.family => _familyChildren,
     BookType.enterprise => _businessChildren,
   };
@@ -673,5 +734,46 @@ List<SeedCategoryTemplate> subcategoryTemplates(
         'detail:${child.$2}',
         parent.type,
       ),
+  ];
+}
+
+/// Previous personal defaults identify untouched rows during the one-time upgrade.
+List<SeedCategoryTemplate> legacyPersonalSubcategoryTemplates(
+  SeedCategoryTemplate parent,
+) {
+  final children = parent.key == 'expense-food'
+      ? foodSubcategoryTemplates
+      : [
+          for (final child
+              in _commonChildren[parent.key] ?? const <(String, String)>[])
+            SeedCategoryTemplate(
+              '${parent.key}-${child.$1}',
+              child.$2,
+              parent.icon,
+              parent.type,
+            ),
+        ];
+  return [
+    ...children,
+    if (parent.key == 'expense-food')
+      const SeedCategoryTemplate(
+        'expense-food-coffee',
+        '奶茶咖啡',
+        'local_cafe_outlined',
+        'expense',
+      ),
+    if (parent.key == 'expense-shopping')
+      for (final child in const [
+        ('taobao', '淘宝'),
+        ('jd', '京东'),
+        ('pinduoduo', '拼多多'),
+        ('douyin', '抖音电商'),
+      ])
+        SeedCategoryTemplate(
+          '${parent.key}-${child.$1}',
+          child.$2,
+          parent.icon,
+          parent.type,
+        ),
   ];
 }

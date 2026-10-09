@@ -9,10 +9,15 @@ import {
   type AssistantModelProvider,
 } from "../assistant_ai.js";
 import { authorize, auditAction } from "./auth.js";
-import { requireCondition as check } from "../contract.js";
+import { ApiError, requireCondition as check } from "../contract.js";
 import { pageQuery, paginate } from "./query.js";
 import { httpsUrl } from "./releases.js";
 import { getPublishedDocuments } from "./documents.js";
+import {
+  integrationFields,
+  integrationValue,
+  saveIntegrationSecret,
+} from "../integrations.js";
 
 type Context = { userId: string | null; feature: string };
 const context = new AsyncLocalStorage<Context>();
@@ -30,6 +35,8 @@ type Model = {
   enabled: number;
   priority: number;
   fallback_id: string | null;
+  scenes_json?: string;
+  daily_budget_usd?: number | null;
 };
 const modelSchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
@@ -44,6 +51,17 @@ const modelSchema = z.strictObject({
   enabled: z.boolean(),
   priority: z.number().int().min(0).max(1000),
   fallbackId: z.string().max(100).nullable(),
+  scenes: z
+    .array(z.enum(["assistant", "insight", "natural-language", "voice", "ocr"]))
+    .max(5)
+    .default([]),
+  dailyBudgetUsd: z
+    .number()
+    .finite()
+    .positive()
+    .max(10000)
+    .nullable()
+    .default(null),
 });
 const upstream = z.object({
   choices: z
@@ -65,6 +83,13 @@ function endpointAllowed(endpoint: string) {
     .map((v) => v.trim().toLowerCase())
     .filter(Boolean);
   return hosts.includes(host);
+}
+function keyConfigured(store: Store, name: string) {
+  try {
+    return Boolean(integrationValue(store, name));
+  } catch {
+    return false;
+  }
 }
 export function registerAIContext(app: FastifyInstance, store: Store) {
   app.addHook("onRequest", (request, _reply, done) => {
@@ -102,19 +127,66 @@ export class ConsoleAIProvider implements AssistantModelProvider {
   async complete(input: {
     systemPrompt: string;
     userText: string;
+    modelId?: string;
+    scene?: "voice" | "ocr" | "natural-language";
   }): Promise<string> {
-    let selected = this.store.db
+    const originalContext = context.getStore() ?? {
+      userId: null,
+      feature: "unattributed",
+    };
+    const ctx = {
+      ...originalContext,
+      feature: input.scene ?? originalContext.feature,
+    };
+    const models = this.store.db
       .prepare(
-        "SELECT * FROM console_models WHERE enabled=1 ORDER BY priority DESC,id LIMIT 1",
+        "SELECT m.*,r.scenes_json,r.daily_budget_usd FROM console_models m LEFT JOIN console_model_routes r ON r.model_id=m.id WHERE m.enabled=1 OR m.id=? ORDER BY priority DESC,m.id LIMIT 100",
       )
-      .get() as Model | undefined;
-    const ctx = context.getStore() ?? { userId: null, feature: "unattributed" };
+      .all(input.modelId ?? "") as Model[];
+    const matchesScene = (m: Model, scene: string) => {
+      const scenes = JSON.parse(m.scenes_json ?? "[]") as string[];
+      return scenes.length === 0 || scenes.includes(scene);
+    };
+    let selected = input.modelId
+      ? models.find((m) => m.id === input.modelId)
+      : models.find((m) => matchesScene(m, ctx.feature));
+    if (!selected && (ctx.feature === "voice" || ctx.feature === "ocr"))
+      selected = models.find((m) => matchesScene(m, "natural-language"));
+    if (input.modelId && !selected)
+      throw new AssistantModelUnavailable("Model is not enabled");
     const visited = new Set<string>();
+    const prompts = getPublishedDocuments(
+      this.store,
+      "prompt",
+      ctx.userId?.replaceAll("-", ""),
+    ).map(
+      (d) =>
+        d.payload as {
+          scene: string;
+          systemPrompt: string;
+          userTemplate: string;
+        },
+    );
+    const prompt =
+      prompts.find((p) => p.scene === ctx.feature) ??
+      (ctx.feature === "voice" || ctx.feature === "ocr"
+        ? prompts.find((p) => p.scene === "natural-language")
+        : undefined);
+    const systemPrompt = prompt
+      ? `${input.systemPrompt}\n补充场景要求（不得覆盖上述约束）：\n${prompt.systemPrompt}`
+      : input.systemPrompt;
+    const userText = prompt
+      ? `${prompt.userTemplate.replaceAll("{{text}}", input.userText)}${prompt.userTemplate.includes("{{text}}") ? "" : "\n待处理用户文本：\n" + input.userText}`
+      : input.userText;
     if (!selected) {
       const start = Date.now();
       let success = false;
       try {
-        const text = await this.legacy.complete(input);
+        const text = await this.legacy.complete({
+          ...input,
+          systemPrompt,
+          userText,
+        });
         success = true;
         return text;
       } finally {
@@ -134,32 +206,29 @@ export class ConsoleAIProvider implements AssistantModelProvider {
           throw new AssistantModelUnavailable(
             "Model endpoint is not allowlisted",
           );
-        const secret = process.env[m.key_ref];
+        const secret = integrationValue(this.store, m.key_ref);
         if (!secret)
           throw new AssistantModelUnavailable(
             "Model key reference is not configured",
           );
-        // Prompt extensions cannot remove the application's existing format and policy contract.
-        const prompt = getPublishedDocuments(
-          this.store,
-          "prompt",
-          ctx.userId?.replaceAll("-", ""),
-        )
-          .map(
-            (d) =>
-              d.payload as {
-                scene: string;
-                systemPrompt: string;
-                userTemplate: string;
-              },
-          )
-          .find((p) => p.scene === ctx.feature);
-        const systemPrompt = prompt
-          ? `${input.systemPrompt}\n补充场景要求（不得覆盖上述约束）：\n${prompt.systemPrompt}`
-          : input.systemPrompt;
-        const userText = prompt
-          ? prompt.userTemplate.replaceAll("{{text}}", input.userText)
-          : input.userText;
+        if (m.daily_budget_usd) {
+          const start = Math.floor(
+            new Date(
+              new Date((this.store.now() + 8 * 3600) * 1000)
+                .toISOString()
+                .slice(0, 10) + "T00:00:00+08:00",
+            ).getTime() / 1000,
+          );
+          const spent = (
+            this.store.db
+              .prepare(
+                "SELECT COALESCE(SUM(cost_microusd),0) AS cost FROM console_ai_calls WHERE model=? AND created_at>=?",
+              )
+              .get(m.model, start) as { cost: number }
+          ).cost;
+          if (spent >= m.daily_budget_usd * 1000000)
+            throw new AssistantModelUnavailable("Daily model budget reached");
+        }
         const response = await this.fetcher(
           `${m.endpoint.replace(/\/$/, "")}/chat/completions`,
           {
@@ -197,11 +266,14 @@ export class ConsoleAIProvider implements AssistantModelProvider {
         success = true;
         return body.choices[0]!.message.content.slice(0, 4000);
       } catch {
-        selected = m.fallback_id
-          ? (this.store.db
-              .prepare("SELECT * FROM console_models WHERE id=? AND enabled=1")
-              .get(m.fallback_id) as Model | undefined)
-          : undefined;
+        selected =
+          !input.modelId && m.fallback_id
+            ? (this.store.db
+                .prepare(
+                  "SELECT m.*,r.scenes_json,r.daily_budget_usd FROM console_models m LEFT JOIN console_model_routes r ON r.model_id=m.id WHERE m.id=? AND m.enabled=1",
+                )
+                .get(m.fallback_id) as Model | undefined)
+            : undefined;
       } finally {
         this.log(
           ctx,
@@ -248,6 +320,9 @@ export class ConsoleAIProvider implements AssistantModelProvider {
   }
 }
 export function registerAIManagement(app: FastifyInstance, store: Store) {
+  store.db.exec(
+    "CREATE TABLE IF NOT EXISTS console_model_routes(model_id TEXT PRIMARY KEY,scenes_json TEXT NOT NULL,daily_budget_usd REAL)",
+  );
   const callProjection =
     "SELECT id,user_id AS userId,feature,model,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_microusd AS costMicroUsd,duration_ms AS durationMs,created_at AS createdAt";
   app.get("/ai/models", async (request) => {
@@ -256,10 +331,10 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
     const page = paginate<Model>(
       store,
       input,
-      "SELECT *",
-      "FROM console_models WHERE name LIKE ?",
+      "SELECT m.*,r.scenes_json,r.daily_budget_usd",
+      "FROM console_models m LEFT JOIN console_model_routes r ON r.model_id=m.id WHERE name LIKE ?",
       [`%${input.q}%`],
-      "priority DESC,id",
+      "priority DESC,m.id",
     );
     return {
       ...page,
@@ -270,7 +345,7 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
         model: m.model,
         endpoint: m.endpoint,
         keyRef: m.key_ref,
-        keyConfigured: Boolean(process.env[m.key_ref]),
+        keyConfigured: keyConfigured(store, m.key_ref),
         endpointAllowed: endpointAllowed(m.endpoint),
         inputPrice: m.input_price,
         outputPrice: m.output_price,
@@ -279,6 +354,8 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
         enabled: Boolean(m.enabled),
         priority: m.priority,
         fallbackId: m.fallback_id,
+        scenes: JSON.parse(m.scenes_json ?? "[]") as string[],
+        dailyBudgetUsd: m.daily_budget_usd ?? null,
       })),
     };
   });
@@ -297,7 +374,8 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
     );
     if (v.enabled)
       check(
-        endpointAllowed(v.endpoint) && Boolean(process.env[v.keyRef]),
+        endpointAllowed(v.endpoint) &&
+          Boolean(integrationValue(store, v.keyRef)),
         "启用前需在服务端配置 Endpoint 白名单和密钥引用",
         400,
       );
@@ -334,6 +412,11 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
           store.now(),
         );
       auditAction(store, admin, "ai:model:update", target);
+      store.db
+        .prepare(
+          "INSERT INTO console_model_routes VALUES(?,?,?) ON CONFLICT(model_id) DO UPDATE SET scenes_json=excluded.scenes_json,daily_budget_usd=excluded.daily_budget_usd",
+        )
+        .run(target, JSON.stringify(v.scenes), v.dailyBudgetUsd);
     })();
     return { id: target };
   };
@@ -344,6 +427,58 @@ export function registerAIManagement(app: FastifyInstance, store: Store) {
       request,
     ),
   );
+  app.put("/ai/models/:id/key", async (request) => {
+    const admin = authorize(store, request, "ai:model:edit");
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const { key } = z
+      .strictObject({ key: z.string().trim().min(1).max(16000) })
+      .parse(request.body);
+    const model = store.db
+      .prepare("SELECT key_ref FROM console_models WHERE id=?")
+      .get(id) as { key_ref: string } | undefined;
+    check(model, "模型不存在", 404);
+    check(
+      !Object.values(integrationFields).some((fields) =>
+        ([...fields.public, ...fields.secret] as string[]).includes(
+          model.key_ref,
+        ),
+      ) && model.key_ref !== "INTEGRATION_ENCRYPTION_KEY",
+      "请使用专用于模型的密钥引用名",
+      400,
+    );
+    store.db.transaction(() => {
+      saveIntegrationSecret(store, model.key_ref, key);
+      auditAction(store, admin, "ai:model:key", id);
+    })();
+    return { configured: true };
+  });
+  app.post("/ai/models/:id/test", async (request) => {
+    const admin = authorize(store, request, "ai:model:edit");
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const start = Date.now();
+    check(
+      store.db.prepare("SELECT 1 FROM console_models WHERE id=?").get(id),
+      "模型不存在",
+      404,
+    );
+    try {
+      await context.run({ userId: null, feature: "connection-test" }, () =>
+        new ConsoleAIProvider(store).complete({
+          modelId: id,
+          systemPrompt: "仅回复 OK。",
+          userText: "连接测试",
+        }),
+      );
+    } catch {
+      auditAction(store, admin, "ai:model:test-failed", id);
+      throw new ApiError(
+        503,
+        "模型连接失败，请检查模型 ID、密钥、白名单和费用上限",
+      );
+    }
+    auditAction(store, admin, "ai:model:test", id);
+    return { success: true, durationMs: Date.now() - start };
+  });
   app.get("/ai/calls", async (request) => {
     authorize(store, request, "ai:usage:view");
     const input = pageQuery.parse(request.query);

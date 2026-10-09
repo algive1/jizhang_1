@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_page_background.dart';
 import 'app_colors.dart';
 import 'app_theme_definition.dart';
 
@@ -32,12 +33,9 @@ abstract final class AppTheme {
     AppThemeDefinition theme = BuiltInThemes.freshGreen,
   ]) => _build(theme, Brightness.dark);
 
-  static ThemeData _build(
-    AppThemeDefinition theme,
-    Brightness brightness,
-  ) {
-    final palette =
-        brightness == Brightness.dark ? _darkDefinition(theme) : theme;
+  static ThemeData _build(AppThemeDefinition theme, Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    final palette = dark ? _darkDefinition(theme) : theme;
     final colorScheme = ColorScheme.fromSeed(
       seedColor: palette.primary,
       brightness: brightness,
@@ -46,23 +44,42 @@ abstract final class AppTheme {
     final liquidGlass = palette.style == AppThemeStyle.liquidGlass;
     final material = AppThemeMaterial(
       style: palette.style,
-      glassTint: Color.alphaBlend(
-        palette.primary.withValues(alpha: .07),
-        palette.surface.withValues(alpha: .76),
-      ),
-      glassBorder: Colors.white.withValues(alpha: .74),
-      glassHighlight: Colors.white.withValues(alpha: .90),
-      blurSigma: liquidGlass ? 18 : 0,
+      pageTint: theme.primary,
+      glassTint: dark
+          ? Colors.white.withValues(alpha: .10)
+          : Color.alphaBlend(
+              palette.primary.withValues(alpha: .07),
+              palette.surface.withValues(alpha: .76),
+            ),
+      glassBorder: Colors.white.withValues(alpha: dark ? .24 : .74),
+      glassHighlight: Colors.white.withValues(alpha: dark ? .10 : .90),
+      blurSigma: dark ? 5 : (liquidGlass ? 18 : 0),
     );
+    final onPrimary = dark
+        ? (palette.primary.computeLuminance() > .179
+              ? Colors.black
+              : Colors.white)
+        : Colors.white;
+    final buttonStyle = dark
+        ? FilledButton.styleFrom(
+            backgroundColor: palette.primary,
+            foregroundColor: onPrimary,
+            disabledBackgroundColor: palette.surfaceSoft,
+            disabledForegroundColor: palette.textPrimary.withValues(alpha: .38),
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+          )
+        : null;
 
     return ThemeData(
       useMaterial3: true,
       extensions: [material],
       colorScheme: colorScheme.copyWith(
         primary: palette.primary,
-        onPrimary: brightness == Brightness.dark
-            ? const Color(0xFF2B1C10)
-            : Colors.white,
+        onPrimary: onPrimary,
         secondary: palette.primaryDark,
         surface: palette.surface,
         surfaceContainerLowest: palette.surface,
@@ -80,7 +97,51 @@ abstract final class AppTheme {
       // transparency so its glass bar can still sample the mesh underneath.
       scaffoldBackgroundColor: palette.background,
       canvasColor: palette.background,
+      cardColor: dark ? palette.surface : null,
+      cardTheme: dark
+          ? CardThemeData(
+              color: palette.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            )
+          : const CardThemeData(),
+      filledButtonTheme: FilledButtonThemeData(style: buttonStyle),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: buttonStyle),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: dark
+            ? OutlinedButton.styleFrom(
+                foregroundColor: palette.primaryDark,
+                side: BorderSide(color: palette.divider),
+                minimumSize: const Size(0, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              )
+            : null,
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: dark
+            ? TextButton.styleFrom(foregroundColor: palette.primaryDark)
+            : null,
+      ),
       pageTransitionsTheme: _pageTransitions,
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: palette.surface,
+        contentTextStyle: TextStyle(
+          color: palette.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        actionTextColor: palette.primaryDark,
+        closeIconColor: palette.textPrimary,
+        behavior: SnackBarBehavior.floating,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 4,
+      ),
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: palette.textPrimary,
@@ -135,10 +196,10 @@ abstract final class AppTheme {
         space: 1,
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: liquidGlass
+        backgroundColor: liquidGlass && !dark
             ? palette.surface.withValues(alpha: .96)
             : palette.surface,
-        modalBackgroundColor: liquidGlass
+        modalBackgroundColor: liquidGlass && !dark
             ? palette.surface.withValues(alpha: .96)
             : palette.surface,
         surfaceTintColor: Colors.transparent,
@@ -148,13 +209,13 @@ abstract final class AppTheme {
         clipBehavior: Clip.antiAlias,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: liquidGlass
+        backgroundColor: liquidGlass && !dark
             ? palette.surface.withValues(alpha: .97)
             : palette.surface,
         surfaceTintColor: Colors.transparent,
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: liquidGlass
+        color: liquidGlass && !dark
             ? palette.surface.withValues(alpha: .97)
             : palette.surface,
         surfaceTintColor: Colors.transparent,
@@ -170,16 +231,13 @@ abstract final class AppTheme {
       dropdownMenuTheme: DropdownMenuThemeData(
         menuStyle: MenuStyle(
           backgroundColor: WidgetStatePropertyAll(
-            liquidGlass
+            liquidGlass && !dark
                 ? palette.surface.withValues(alpha: .97)
                 : palette.surface,
           ),
-          surfaceTintColor:
-              const WidgetStatePropertyAll(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
         ),
       ),
@@ -213,56 +271,28 @@ abstract final class AppTheme {
   }
 
   static AppThemeDefinition _darkDefinition(AppThemeDefinition theme) {
-    if (theme.style == AppThemeStyle.liquidGlass) {
-      return AppThemeDefinition(
-        id: theme.id,
-        name: theme.name,
-        description: theme.description,
-        premium: theme.premium,
-        style: theme.style,
-        background: const Color(0xFF15110F),
-        surface: const Color(0xFF211A16),
-        surfaceSoft: const Color(0xFF2D231C),
-        primary: const Color(0xFFF0B46A),
-        primaryDark: const Color(0xFFD58B40),
-        primarySoft: const Color(0xFF443022),
-        textPrimary: const Color(0xFFF8EFE6),
-        textSecondary: const Color(0xFFCDBBA8),
-        divider: const Color(0xFF5A493B),
-      );
+    var primary = Color.lerp(theme.primary, Colors.white, .22)!;
+    // Foreground accents must clear the white 10% glass/pill. The backdrop
+    // continues to use the original theme tint, independently of this lift.
+    for (var step = 0; step < 8 && primary.computeLuminance() < .35; step++) {
+      primary = Color.lerp(primary, Colors.white, .12)!;
     }
-
-    final primary = Color.lerp(theme.primary, Colors.white, .22)!;
-    final background = Color.alphaBlend(
-      theme.primary.withValues(alpha: .045),
-      const Color(0xFF111411),
-    );
-    final surface = Color.alphaBlend(
-      theme.primary.withValues(alpha: .065),
-      const Color(0xFF191D19),
-    );
-    final surfaceSoft = Color.alphaBlend(
-      theme.primary.withValues(alpha: .09),
-      const Color(0xFF222722),
-    );
+    const surface = Color(0xFF111111);
     return AppThemeDefinition(
       id: theme.id,
       name: theme.name,
       description: theme.description,
       premium: theme.premium,
       style: theme.style,
-      background: background,
+      background: Colors.black,
       surface: surface,
-      surfaceSoft: surfaceSoft,
+      surfaceSoft: const Color(0xFF1F1F1F),
       primary: primary,
-      primaryDark: theme.primary,
-      primarySoft: Color.alphaBlend(
-        primary.withValues(alpha: .18),
-        surface,
-      ),
-      textPrimary: const Color(0xFFF2F4EF),
-      textSecondary: const Color(0xFFB7BDB4),
-      divider: const Color(0xFF3D443D),
+      primaryDark: primary,
+      primarySoft: Color.alphaBlend(primary.withValues(alpha: .18), surface),
+      textPrimary: Colors.white,
+      textSecondary: const Color(0xFFB3B3B3),
+      divider: Colors.white.withValues(alpha: .12),
     );
   }
 }
@@ -287,10 +317,7 @@ class _PageBackgroundTransitionsTheme extends PageTransitionsTheme {
       context,
       animation,
       secondaryAnimation,
-      ColoredBox(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        child: child,
-      ),
+      AppPageBackground(solidDay: true, child: child),
     );
   }
 }

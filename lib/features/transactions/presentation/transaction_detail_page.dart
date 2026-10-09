@@ -113,14 +113,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   }
 
   Future<void> _showActions(TransactionRecord transaction) async {
-    await showTransactionActions(
-      context,
-      ref,
-      transaction,
-      onCorrectCategory: transaction.type == TransactionType.transfer
-          ? null
-          : () => showTransactionCategoryCorrection(context, ref, transaction),
-    );
+    await showTransactionActions(context, ref, transaction);
     if (!mounted) return;
     await _reloadAfterEdit();
     if (mounted && _transaction == null) Navigator.of(context).pop();
@@ -166,12 +159,12 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               Center(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final devicePixelRatio =
-                        MediaQuery.devicePixelRatioOf(context);
+                    final devicePixelRatio = MediaQuery.devicePixelRatioOf(
+                      context,
+                    );
                     final physicalWidth =
                         constraints.maxWidth * devicePixelRatio * 2;
-                    final decodeWidth =
-                        physicalWidth.clamp(1.0, 2048.0).ceil();
+                    final decodeWidth = physicalWidth.clamp(1.0, 2048.0).ceil();
                     return InteractiveViewer(
                       minScale: .5,
                       maxScale: 5,
@@ -404,7 +397,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
 
   String _dateTimeLabel(DateTime value) {
     final local = value.toLocal();
-    return '${local.year}年${local.month}月${local.day}日 ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '${local.year}年${local.month}月${local.day}日 ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}';
   }
 
   String _actorLabel(String value) => value == 'user-local' ? '我' : value;

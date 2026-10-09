@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
@@ -26,13 +28,13 @@ const memberCardShadows = <BoxShadow>[
 
 Color memberGreenFor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFFA8CF7B)
-        : memberGreen;
+    ? const Color(0xFFA8CF7B)
+    : memberGreen;
 
 Color memberAccentFor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFFC3DEA0)
-        : memberAccent;
+    ? const Color(0xFFC3DEA0)
+    : memberAccent;
 
 Color memberInkFor(BuildContext context) => context.appPrimaryText;
 Color memberMutedFor(BuildContext context) => context.appSecondaryText;
@@ -42,15 +44,14 @@ Color memberCardBorderFor(BuildContext context) => context.appDivider;
 
 List<BoxShadow> memberCardShadowsFor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-        ? const [
-            BoxShadow(
-              color: Color(0x52000000),
-              blurRadius: 18,
-              offset: Offset(0, 8),
-            ),
-          ]
-        : memberCardShadows;
-
+    ? const [
+        BoxShadow(
+          color: Color(0x52000000),
+          blurRadius: 18,
+          offset: Offset(0, 8),
+        ),
+      ]
+    : memberCardShadows;
 
 /// Brand assets are kept in the membership asset folder so the same payment
 /// marks can be reused by order history and other checkout surfaces.
@@ -209,7 +210,11 @@ class _HeroSellingPoint extends StatelessWidget {
       Flexible(
         child: Text(
           text,
-          style: TextStyle(color: memberGreenFor(context), fontSize: 8, height: 1.25),
+          style: TextStyle(
+            color: memberGreenFor(context),
+            fontSize: 8,
+            height: 1.25,
+          ),
         ),
       ),
     ],
@@ -222,50 +227,46 @@ class MemberPlanSection extends StatelessWidget {
     required this.plans,
     required this.selectedPlanId,
     required this.onSelect,
+    required this.onPurchase,
     required this.renewal,
   });
-
   final List<MembershipProduct> plans;
   final String selectedPlanId;
-  final ValueChanged<MembershipProduct> onSelect;
+  final ValueChanged<MembershipProduct> onSelect, onPurchase;
   final bool renewal;
 
   @override
   Widget build(BuildContext context) {
     final monthly = plans.firstWhere(
-      (plan) => plan.months == 1,
+      (p) => p.months == 1,
       orElse: () => plans.first,
     );
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
-      decoration: BoxDecoration(
-        color: memberSurfaceFor(context),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: memberCardBorderFor(context)),
-        boxShadow: memberCardShadowsFor(context),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < plans.length; index++)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  right: index == plans.length - 1 ? 0 : 6,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = math.min(3, plans.length);
+        final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+        return Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 4),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 20,
+            children: [
+              for (final product in plans)
+                SizedBox(
+                  width: width,
+                  child: MembershipPlanCard(
+                    product: product,
+                    monthlyPrice: monthly.priceInCents,
+                    selected: product.id == selectedPlanId,
+                    renewal: renewal,
+                    onSelect: () => onSelect(product),
+                    onPurchase: () => onPurchase(product),
+                  ),
                 ),
-                child: MembershipPlanCard(
-                  product: plans[index],
-                  monthlyPrice: monthly.priceInCents,
-                  selected: plans[index].id == selectedPlanId,
-                  renewal: renewal,
-                  onSelect: () => onSelect(plans[index]),
-                  onPurchase: () => onSelect(plans[index]),
-                ),
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -280,193 +281,243 @@ class MembershipPlanCard extends StatelessWidget {
     required this.onSelect,
     required this.onPurchase,
   });
-
   final MembershipProduct product;
   final int monthlyPrice;
-  final bool selected;
-  final bool renewal;
-  final VoidCallback onSelect;
-  final VoidCallback onPurchase;
+  final bool selected, renewal;
+  final VoidCallback onSelect, onPurchase;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final gold = dark ? const Color(0xFFF0BE65) : const Color(0xFFE6AB42);
+    final daily = product.priceInCents / product.months / 30 / 100;
     final saving = monthlyPrice * product.months - product.priceInCents;
-    final dailyPrice = product.priceInCents / product.months / 30 / 100;
+    final tag = product.tag.isNotEmpty
+        ? product.tag
+        : product.recommended
+        ? '推荐'
+        : '';
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    Widget fitted(String value, TextStyle style) => FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(value, maxLines: 1, style: style),
+    );
     return Semantics(
       selected: selected,
       button: true,
       label:
-          '${product.title}，${MembershipProduct.money(product.priceInCents)}元',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: ValueKey('membership-plan-${product.id}'),
-          borderRadius: BorderRadius.circular(18),
-          onTap: onSelect,
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 5),
-            decoration: BoxDecoration(
-              color: selected ? Color.alphaBlend(memberGreenFor(context).withValues(alpha: .14), memberSurfaceFor(context)) : memberSurfaceFor(context),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: selected ? memberAccentFor(context) : memberCardBorderFor(context),
-                width: selected ? 1.5 : 1,
+          '${product.title}，${product.currencySymbol}${MembershipProduct.money(product.priceInCents)}',
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: reducedMotion ? 0 : 220),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, selected ? -4 : 0, 0),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: ValueKey('membership-plan-${product.id}'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: onSelect,
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    selected
+                        ? (dark
+                              ? const Color(0xFF3B3020)
+                              : const Color(0xFFFFF6E5))
+                        : memberSurfaceFor(context),
+                    memberSurfaceFor(context),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? gold : memberCardBorderFor(context),
+                  width: selected ? 1.5 : 1,
+                ),
               ),
-              boxShadow: selected
-                  ? const [
-                      BoxShadow(
-                        color: Color(0x147CA33F),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Column(
-                  children: [
-                    const SizedBox(height: 0),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        product.title,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: memberInkFor(context),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    SizedBox(
-                      height: 23,
-                      child: Text(
-                        product.description,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: memberMutedFor(context),
-                          fontSize: 10,
-                          height: 1.25,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(
-                              text: '¥',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                            TextSpan(
-                              text: MembershipProduct.money(
-                                product.priceInCents,
-                              ),
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        style: TextStyle(color: memberInkFor(context)),
-                      ),
-                    ),
-                    const SizedBox(height: 0),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '¥${dailyPrice.toStringAsFixed(2)} / 天',
-                        style: TextStyle(
-                          color: memberMutedFor(context),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 17,
-                      child: saving > 0
-                          ? FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '立省 ¥${MembershipProduct.money(saving)}',
-                                style: TextStyle(
-                                  color: memberAccentFor(context),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(height: 2),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 28,
-                      child: OutlinedButton(
-                        onPressed: onPurchase,
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: selected
-                              ? memberGreenFor(context)
-                              : Colors.transparent,
-                          foregroundColor: selected
-                              ? Colors.white
-                              : memberGreenFor(context),
-                          side: BorderSide(
-                            color: selected
-                                ? memberGreenFor(context)
-                                : memberGreenFor(context).withValues(alpha: .45),
-                          ),
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            renewal ? '立即续费' : '立即开通',
-                            style: TextStyle(
-                              fontSize: 11,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(7, 22, 7, 10),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 22 * scale,
+                          child: fitted(
+                            product.title,
+                            TextStyle(
+                              color: memberInkFor(context),
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 34 * scale,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: product.currencySymbol,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  TextSpan(
+                                    text: MembershipProduct.money(
+                                      product.priceInCents,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 29,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              style: TextStyle(color: memberInkFor(context)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? const Color(0xFF44301B)
+                                : const Color(0xFFFFE6C1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: fitted(
+                            '${product.currencySymbol}${daily.toStringAsFixed(2)} / 天',
+                            TextStyle(
+                              color: dark
+                                  ? const Color(0xFFFFCC88)
+                                  : const Color(0xFF9C4D12),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: 18 * scale,
+                          child:
+                              product.originalPriceInCents >
+                                  product.priceInCents
+                              ? fitted(
+                                  '${product.currencySymbol}${MembershipProduct.money(product.originalPriceInCents)}',
+                                  TextStyle(
+                                    color: memberMutedFor(context),
+                                    fontSize: 11,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                )
+                              : saving > 0
+                              ? fitted(
+                                  '立省 ${product.currencySymbol}${MembershipProduct.money(saving)}',
+                                  TextStyle(
+                                    color: dark
+                                        ? gold
+                                        : const Color(0xFF966015),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 5),
+                        SizedBox(
+                          height: 32 * scale,
+                          child: Text(
+                            product.description,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: memberMutedFor(context),
+                              fontSize: 10,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: FilledButton(
+                            key: ValueKey('membership-purchase-${product.id}'),
+                            onPressed: onPurchase,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: selected
+                                  ? memberGreenFor(context)
+                                  : (dark
+                                        ? const Color(0xFF353C31)
+                                        : const Color(0xFF252D22)),
+                              foregroundColor: selected && dark
+                                  ? const Color(0xFF182212)
+                                  : Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 3,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                            ),
+                            child: fitted(
+                              renewal ? '立即续费' : '立即开通',
+                              const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                if (product.recommended)
-                  Positioned(
-                    top: -12,
-                    right: 5,
-                    child: Container(
-                      height: 22,
-                      padding: const EdgeInsets.symmetric(horizontal: 9),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: memberAccentFor(context),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Text(
-                        '推荐',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                  ),
+                  if (tag.isNotEmpty)
+                    Positioned(
+                      top: -8,
+                      right: 6,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 85),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: dark
+                              ? const Color(0xFFCF6884)
+                              : const Color(0xFFD94E77),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(8),
+                            topRight: Radius.circular(8),
+                            bottomLeft: Radius.circular(8),
+                            bottomRight: Radius.circular(3),
+                          ),
+                        ),
+                        child: Text(
+                          tag,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -521,73 +572,91 @@ class MemberBenefits extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       headerMinHeight: 24,
       childSpacing: 4,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: benefits.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          mainAxisSpacing: 3,
-          crossAxisSpacing: 4,
-          mainAxisExtent: largeText ? 132 : 76,
-        ),
-        itemBuilder: (context, index) {
-          final benefit = benefits[index];
-          final iconColor = _iconColors[benefit.id] ?? memberGreenFor(context);
-          return Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: .12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _icons[benefit.id] ?? Icons.check_rounded,
-                  color: iconColor,
-                  size: 22,
-                ),
+      child: benefits.isEmpty
+          ? Text('暂无权益配置', style: TextStyle(color: memberMutedFor(context)))
+          : GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: benefits.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 3,
+                crossAxisSpacing: 4,
+                mainAxisExtent: largeText ? 132 : 76,
               ),
-              const SizedBox(height: 5),
-              SizedBox(
-                height: largeText ? 38 : 15,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    benefit.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    style: TextStyle(
-                      color: memberInkFor(context),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
+              itemBuilder: (context, index) {
+                final benefit = benefits[index];
+                final iconColor =
+                    _iconColors[benefit.id] ?? memberGreenFor(context);
+                return Column(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: iconColor.withValues(alpha: .12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: benefit.iconUrl.isEmpty
+                          ? Icon(
+                              _icons[benefit.id] ?? Icons.check_rounded,
+                              color: iconColor,
+                              size: 22,
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.all(7),
+                              child: Image.network(
+                                benefit.iconUrl,
+                                width: 22,
+                                height: 22,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => Icon(
+                                  _icons[benefit.id] ?? Icons.check_rounded,
+                                  color: iconColor,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              SizedBox(
-                height: largeText ? 38 : 15,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    benefit.subtitle,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    style: TextStyle(
-                      color: memberMutedFor(context),
-                      fontSize: 9,
-                      height: 1.2,
+                    const SizedBox(height: 5),
+                    SizedBox(
+                      height: largeText ? 38 : 15,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          benefit.title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: memberInkFor(context),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      height: largeText ? 38 : 15,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          benefit.subtitle,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: memberMutedFor(context),
+                            fontSize: 9,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
@@ -602,11 +671,7 @@ class MemberTestimonials extends StatelessWidget {
     title: '他们都在用',
     action: '查看全部',
     onAction: onMore,
-    leading: Icon(
-      Icons.groups_rounded,
-      color: Color(0xFF6F954B),
-      size: 22,
-    ),
+    leading: Icon(Icons.groups_rounded, color: Color(0xFF6F954B), size: 22),
     padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
     headerMinHeight: 24,
     childSpacing: 2,
@@ -671,10 +736,10 @@ class _TestimonialCard extends StatelessWidget {
                 width: 26,
                 height: 26,
                 fit: BoxFit.cover,
-                cacheWidth:
-                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
-                cacheHeight:
-                    (26 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+                cacheWidth: (26 * MediaQuery.devicePixelRatioOf(context))
+                    .ceil(),
+                cacheHeight: (26 * MediaQuery.devicePixelRatioOf(context))
+                    .ceil(),
                 errorBuilder: (_, _, _) => const ColoredBox(
                   color: Color(0xFFDCEACB),
                   child: SizedBox(width: 26, height: 26),
@@ -702,7 +767,11 @@ class _TestimonialCard extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           quote,
-          style: TextStyle(color: memberInkFor(context), fontSize: 9, height: 1.34),
+          style: TextStyle(
+            color: memberInkFor(context),
+            fontSize: 9,
+            height: 1.34,
+          ),
         ),
         const SizedBox(height: 1),
         Text(
@@ -798,10 +867,17 @@ class _PaymentMethodCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? Color.alphaBlend(memberGreenFor(context).withValues(alpha: .14), memberSurfaceFor(context)) : memberSurfaceFor(context),
+            color: selected
+                ? Color.alphaBlend(
+                    memberGreenFor(context).withValues(alpha: .14),
+                    memberSurfaceFor(context),
+                  )
+                : memberSurfaceFor(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected ? memberGreenFor(context) : memberCardBorderFor(context),
+              color: selected
+                  ? memberGreenFor(context)
+                  : memberCardBorderFor(context),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -840,7 +916,9 @@ class _PaymentMethodCard extends StatelessWidget {
               ),
               Icon(
                 selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                color: selected ? memberGreenFor(context) : memberMutedFor(context),
+                color: selected
+                    ? memberGreenFor(context)
+                    : memberMutedFor(context),
                 size: 18,
               ),
             ],
@@ -871,7 +949,7 @@ class MemberBottomPayBar extends StatelessWidget {
         ? '--'
         : MembershipProduct.money(product!.priceInCents);
     return Material(
-      color: Colors.white,
+      color: memberSurfaceFor(context),
       elevation: 10,
       shadowColor: const Color(0x1A20221F),
       child: SafeArea(
@@ -898,9 +976,9 @@ class MemberBottomPayBar extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const TextSpan(
-                          text: '¥',
-                          style: TextStyle(fontSize: 15),
+                        TextSpan(
+                          text: product?.currencySymbol ?? '¥',
+                          style: const TextStyle(fontSize: 15),
                         ),
                         TextSpan(
                           text: price,
@@ -918,7 +996,10 @@ class MemberBottomPayBar extends StatelessWidget {
                     children: [
                       Text(
                         '开通即表示同意',
-                        style: TextStyle(color: memberMutedFor(context), fontSize: 9),
+                        style: TextStyle(
+                          color: memberMutedFor(context),
+                          fontSize: 9,
+                        ),
                       ),
                       InkWell(
                         onTap: onAgreement,
@@ -946,7 +1027,10 @@ class MemberBottomPayBar extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: memberGreenFor(context),
                   disabledBackgroundColor: context.appDivider,
-                  foregroundColor: Colors.white,
+                  foregroundColor:
+                      Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF182212)
+                      : Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -1056,7 +1140,10 @@ class MemberSectionCard extends StatelessWidget {
                     ],
                     Text(
                       action,
-                      style: TextStyle(color: memberMutedFor(context), fontSize: 10),
+                      style: TextStyle(
+                        color: memberMutedFor(context),
+                        fontSize: 10,
+                      ),
                     ),
                   ],
                 ),

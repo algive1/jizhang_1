@@ -43,17 +43,13 @@ const ruleSchema = z
   );
 const promptSchema = z.strictObject({
   name: z.string().min(1).max(80),
-  scene: z.enum([
-    "classification",
-    "merchant",
-    "voice",
-    "ocr",
-    "natural-language",
-    "assistant",
-    "insight",
-  ]),
+  scene: z.enum(["voice", "ocr", "natural-language", "assistant", "insight"]),
   systemPrompt: z.string().min(1).max(12000),
-  userTemplate: z.string().min(1).max(12000),
+  userTemplate: z
+    .string()
+    .min(1)
+    .max(12000)
+    .refine((value) => value.includes("{{text}}"), "用户模板必须包含 {{text}}"),
   experiment: z.string().max(100).nullable(),
 });
 const schemas = {

@@ -224,19 +224,25 @@ class _ProfileQuickActionsPageState
   }
 
   Future<void> _toggle(ProfileQuickActionSpec spec) async {
-    final result = await ref
-        .read(profileQuickActionsProvider.notifier)
-        .toggle(spec.id);
-    if (!mounted) return;
-    final message = switch (result) {
-      ProfileQuickActionToggleResult.atLimit => '常用功能最多保留 6 个',
-      ProfileQuickActionToggleResult.minimumRequired => '至少保留 1 个常用功能',
-      _ => null,
-    };
-    if (message != null) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(message)));
+    try {
+      final result = await ref
+          .read(profileQuickActionsProvider.notifier)
+          .toggle(spec.id);
+      if (!mounted) return;
+      final message = switch (result) {
+        ProfileQuickActionToggleResult.atLimit => '常用功能最多保留 6 个',
+        ProfileQuickActionToggleResult.minimumRequired => '至少保留 1 个常用功能',
+        _ => null,
+      };
+      if (message != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(message)));
+      }
+    } on Object {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('常用功能保存失败，请重试')));
     }
   }
 
@@ -285,10 +291,7 @@ class _AllFunctionsView extends StatelessWidget {
             ),
             Text(
               '${ids.length}/$profileQuickActionLimit',
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: context.appSecondaryText, fontSize: 12),
             ),
           ],
         ),
@@ -358,35 +361,32 @@ class _FunctionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        onTap: onTap,
-        minTileHeight: 54,
-        contentPadding: const EdgeInsets.fromLTRB(12, 2, 6, 2),
-        leading: _ActionIcon(spec: spec, size: 36),
-        title: Text(
-          spec.label,
-          style: TextStyle(
-            color: context.appPrimaryText,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          spec.subtitle,
-          style: TextStyle(
-            color: context.appSecondaryText,
-            fontSize: 11,
-          ),
-        ),
-        trailing: IconButton(
-          key: ValueKey('profile-quick-toggle-${spec.id}'),
-          tooltip: selected ? '移出常用功能' : '加入常用功能',
-          onPressed: onToggle,
-          icon: Icon(
-            selected ? Icons.check_circle_rounded : Icons.add_circle_outline,
-            color: selected ? context.appPrimary : context.appSecondaryText,
-          ),
-        ),
-      );
+    onTap: onTap,
+    minTileHeight: 54,
+    contentPadding: const EdgeInsets.fromLTRB(12, 2, 6, 2),
+    leading: _ActionIcon(spec: spec, size: 36),
+    title: Text(
+      spec.label,
+      style: TextStyle(
+        color: context.appPrimaryText,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    subtitle: Text(
+      spec.subtitle,
+      style: TextStyle(color: context.appSecondaryText, fontSize: 11),
+    ),
+    trailing: IconButton(
+      key: ValueKey('profile-quick-toggle-${spec.id}'),
+      tooltip: selected ? '移出常用功能' : '加入常用功能',
+      onPressed: onToggle,
+      icon: Icon(
+        selected ? Icons.check_circle_rounded : Icons.add_circle_outline,
+        color: selected ? context.appPrimary : context.appSecondaryText,
+      ),
+    ),
+  );
 }
 
 class _SortView extends ConsumerWidget {
@@ -396,118 +396,117 @@ class _SortView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '按住右侧拖拽按钮调整首页常用功能顺序。',
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Expanded(
-              child: ReorderableListView.builder(
-                buildDefaultDragHandles: false,
-                itemCount: ids.length,
-                proxyDecorator: (child, index, animation) {
-                  if (MediaQuery.disableAnimationsOf(context)) {
-                    return Material(
-                      color: Colors.transparent,
-                      elevation: 0,
-                      child: child,
-                    );
-                  }
-                  return Material(
-                    color: Colors.transparent,
-                    elevation: 0,
-                    child: ScaleTransition(
-                      scale: Tween<double>(
-                        begin: 1,
-                        end: 1.025,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
-                      child: child,
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '按住右侧拖拽按钮调整首页常用功能顺序。',
+          style: TextStyle(color: context.appSecondaryText, fontSize: 13),
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            itemCount: ids.length,
+            proxyDecorator: (child, index, animation) {
+              if (MediaQuery.disableAnimationsOf(context)) {
+                return Material(
+                  color: Colors.transparent,
+                  elevation: 0,
+                  child: child,
+                );
+              }
+              return Material(
+                color: Colors.transparent,
+                elevation: 0,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 1, end: 1.025).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
                     ),
-                  );
-                },
-                onReorderItem: (oldIndex, newIndex) {
-                  unawaited(
-                    ref
-                        .read(profileQuickActionsProvider.notifier)
-                        .reorder(oldIndex, newIndex),
-                  );
-                },
-                itemBuilder: (context, index) {
-                  final spec = profileQuickActionSpec(ids[index]);
-                  return Padding(
-                    key: ValueKey('profile-quick-action-${spec.id}'),
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: AppLiquidGlassSurface(
-                      borderRadius: 22,
-                      themeColorAccents: false,
-                      glassOpacity: MediaQuery.highContrastOf(context)
-                          ? .78
-                          : Theme.of(context).brightness == Brightness.dark
-                          ? .62
-                          : .56,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          _ActionIcon(spec: spec),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  spec.label,
-                                  style: TextStyle(
-                                    color: context.appPrimaryText,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  spec.subtitle,
-                                  style: TextStyle(
-                                    color: context.appSecondaryText,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ReorderableDragStartListener(
-                            index: index,
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Icon(
-                                Icons.drag_indicator_rounded,
-                                color: context.appSecondaryText,
+                  ),
+                  child: child,
+                ),
+              );
+            },
+            onReorderItem: (oldIndex, newIndex) async {
+              try {
+                await ref
+                    .read(profileQuickActionsProvider.notifier)
+                    .reorder(oldIndex, newIndex);
+              } on Object {
+                if (context.mounted)
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('排序保存失败，请重试')));
+              }
+            },
+            itemBuilder: (context, index) {
+              final spec = profileQuickActionSpec(ids[index]);
+              return Padding(
+                key: ValueKey('profile-quick-action-${spec.id}'),
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AppLiquidGlassSurface(
+                  borderRadius: 22,
+                  themeColorAccents: false,
+                  glassOpacity: MediaQuery.highContrastOf(context)
+                      ? .78
+                      : Theme.of(context).brightness == Brightness.dark
+                      ? .62
+                      : .56,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      _ActionIcon(spec: spec),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              spec.label,
+                              style: TextStyle(
+                                color: context.appPrimaryText,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 3),
+                            Text(
+                              spec.subtitle,
+                              style: TextStyle(
+                                color: context.appSecondaryText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.drag_indicator_rounded,
+                            color: context.appSecondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _ActionIcon extends StatelessWidget {
@@ -518,26 +517,23 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(size * .32),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(spec.color, Colors.white, .16)!,
-              spec.color,
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: spec.color.withValues(alpha: .24),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(size * .32),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(spec.color, Colors.white, .16)!, spec.color],
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: spec.color.withValues(alpha: .24),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
         ),
-        child: Icon(spec.icon, color: Colors.white, size: size * .55),
-      );
+      ],
+    ),
+    child: Icon(spec.icon, color: Colors.white, size: size * .55),
+  );
 }

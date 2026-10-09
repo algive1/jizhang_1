@@ -33,6 +33,7 @@ class PaymentOrder {
     required this.productId,
     required this.amountInCents,
     this.invokePayload = const {},
+    this.productTitle,
   });
 
   final String id;
@@ -41,6 +42,7 @@ class PaymentOrder {
   final String idempotencyKey;
   final DateTime createdAt;
   final String productId;
+  final String? productTitle;
   final int amountInCents;
   final Map<String, dynamic> invokePayload;
 
@@ -64,6 +66,7 @@ class PaymentOrder {
       idempotencyKey: json['idempotencyKey'] as String? ?? '',
       createdAt: createdAt,
       productId: json['productId'] as String? ?? '',
+      productTitle: json['productTitle'] as String?,
       amountInCents: (json['amountInCents'] as num?)?.toInt() ?? 0,
       invokePayload: json['invoke'] is Map
           ? Map<String, dynamic>.from(json['invoke'] as Map)

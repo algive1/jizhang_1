@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/budget.dart';
 import '../../settings/data/app_settings_repository.dart';
+import '../data/budget_preferences_repository.dart';
 
 abstract interface class BudgetNotificationBridge {
   Future<bool> isGranted();
@@ -72,10 +73,19 @@ class BudgetAlertNotificationService {
   Future<void> requestPermission() => _bridge.requestPermission();
 
   Future<void> sync(BudgetOverview overview) async {
-    final progresses = <BudgetProgress>[
+    final candidates = <BudgetProgress>[
       if (overview.total != null) overview.total!,
       ...overview.categories,
     ];
+    final progresses = <BudgetProgress>[];
+    for (final item in candidates) {
+      if (await _settings.get(
+            budgetPreferenceKey(item.budget.bookId, BudgetPreference.overspend),
+          ) !=
+          '0') {
+        progresses.add(item);
+      }
+    }
     if (!progresses.any((item) => item.status != BudgetAlertStatus.normal)) {
       for (final item in progresses) {
         final previous = _parseStatus(await _settings.get(_stateKey(item)));
@@ -104,6 +114,7 @@ class BudgetAlertNotificationService {
 
     final shouldNotify = previous == null || _rank(current) > _rank(previous);
     if (shouldNotify) {
+      if (await _settings.get(budgetPreferenceKey(progress.budget.bookId, BudgetPreference.overspend)) == '0') return;
       final categoryName = progress.category?.name;
       final scope = categoryName == null ? '本月总预算' : '$categoryName预算';
       final percent = (progress.percentage * 100).round();
@@ -129,10 +140,7 @@ class BudgetAlertNotificationService {
     }
   }
 
-  Future<void> _recordState(
-    BudgetProgress progress,
-    BudgetAlertStatus status,
-  ) {
+  Future<void> _recordState(BudgetProgress progress, BudgetAlertStatus status) {
     return _settings.set(_stateKey(progress), status.name);
   }
 
@@ -142,10 +150,7 @@ class BudgetAlertNotificationService {
         '${progress.budget.monthKey}:$category';
   }
 
-  String _notificationId(
-    BudgetProgress progress,
-    BudgetAlertStatus status,
-  ) {
+  String _notificationId(BudgetProgress progress, BudgetAlertStatus status) {
     final category = progress.budget.categoryId ?? 'total';
     return 'budget-alert-${progress.budget.bookId}-'
         '${progress.budget.monthKey}-$category-${status.name}';

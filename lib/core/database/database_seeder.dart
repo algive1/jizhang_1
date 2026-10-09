@@ -17,7 +17,7 @@ class DatabaseSeeder {
   DatabaseSeeder(this._database);
 
   static const currentSeedVersion = 5;
-  static const currentBookDefaultsVersion = 1;
+  static const currentBookDefaultsVersion = 2;
   static const _seedVersionKey = 'seed_version';
   static const _bookDefaultsVersionKey = 'book_defaults_version';
 
@@ -154,6 +154,7 @@ class DatabaseSeeder {
   }
 
   Future<void> _upgradeCategoryTemplate(String bookId, BookType type) async {
+    if (type == BookType.personal) await _upgradePersonalCategories(bookId);
     if (type != BookType.personal) {
       const legacy = {
         'expense-food': ('餐饮', 'restaurant_outlined'),
@@ -215,16 +216,61 @@ class DatabaseSeeder {
     await _archiveSupersededCategoryChildren(bookId, type);
   }
 
+  Future<void> _upgradePersonalCategories(String bookId) async {
+    final versionKey = 'personal_categories_v2:$bookId';
+    if (await _database.appSettingsDao.getValue(versionKey) == '2') return;
+    await _database.transaction(() async {
+      final roots = categoryTemplates(BookType.personal);
+      for (var index = 0; index < roots.length; index++) {
+        final root = roots[index];
+        final parentId = _categorySeedId(bookId, root.key, BookType.personal);
+        final parent = await _database.categoryDao.findById(parentId);
+        if (parent != null && parent.isDefault && parent.name == root.name) {
+          await (_database.update(_database.categoryEntries)
+                ..where((row) => row.id.equals(parentId)))
+              .write(CategoryEntriesCompanion(sortOrder: Value(index)));
+        }
+        final children = subcategoryTemplates(BookType.personal, root);
+        for (final old in legacyPersonalSubcategoryTemplates(root)) {
+          final id = _categorySeedId(bookId, old.key, BookType.personal);
+          final row = await _database.categoryDao.findById(id);
+          if (row == null ||
+              !row.isDefault ||
+              row.parentId != parentId ||
+              row.name != old.name ||
+              ![old.icon, root.icon, 'detail:${old.name}'].contains(row.icon)) {
+            continue;
+          }
+          final position = children.indexWhere((child) => child.key == old.key);
+          final replacement = position < 0 ? null : children[position];
+          await (_database.update(
+            _database.categoryEntries,
+          )..where((category) => category.id.equals(id))).write(
+            CategoryEntriesCompanion(
+              name: replacement == null
+                  ? const Value.absent()
+                  : Value(replacement.name),
+              icon: replacement == null
+                  ? const Value.absent()
+                  : Value(replacement.icon),
+              sortOrder: replacement == null
+                  ? const Value.absent()
+                  : Value(position),
+              isArchived: Value(replacement == null),
+            ),
+          );
+        }
+      }
+      await _database.appSettingsDao.setValue(versionKey, '2', DateTime.now());
+    });
+  }
+
   Future<void> _archiveSupersededCategoryChildren(
     String bookId,
     BookType type,
   ) async {
     final deprecated = switch (type) {
       BookType.personal => const <String, String>{
-        'expense-shopping-taobao': '淘宝',
-        'expense-shopping-jd': '京东',
-        'expense-shopping-pinduoduo': '拼多多',
-        'expense-shopping-douyin': '抖音电商',
         'expense-shopping-xiaohongshu': '小红书',
         'expense-transport-fuel': '加油',
         'expense-transport-parking': '停车',
@@ -232,7 +278,6 @@ class DatabaseSeeder {
         'expense-digital-appliance': '家用电器',
         'expense-gift-family': '家人',
         'expense-gift-social': '朋友同事',
-        'expense-food-coffee': '奶茶咖啡',
         'expense-shopping-gift': '礼品',
         'expense-shopping-daily': '日用百货',
         'expense-shopping-furniture': '家居用品',

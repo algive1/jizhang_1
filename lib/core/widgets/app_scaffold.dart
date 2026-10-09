@@ -15,6 +15,23 @@ const _primaryAppRoutes = {'/', '/transactions', '/insights', '/profile'};
 
 bool isPrimaryAppRoute(String location) => _primaryAppRoutes.contains(location);
 
+/// Keep each route's viewport stable while the shell changes navigation bars.
+class AppRouteViewport extends StatelessWidget {
+  const AppRouteViewport({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(
+      bottom: AppBottomNavigation.geometry.barBottomInset(
+        MediaQuery.paddingOf(context).bottom,
+      ),
+    ),
+    child: child,
+  );
+}
+
 /// The application shell: themed backdrop, page, and the floating glass
 /// navigation bar over both.
 ///
@@ -73,10 +90,9 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
-        ref.read(productAnalyticsProvider).track(
-          'screen_view',
-          screen: widget.location,
-        ),
+        ref
+            .read(productAnalyticsProvider)
+            .track('screen_view', screen: widget.location),
       );
     });
   }
@@ -89,38 +105,29 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
 
     return Stack(
       children: [
-        Positioned.fill(child: AppPageBackground(child: const SizedBox.expand())),
+        const Positioned.fill(
+          child: RepaintBoundary(
+            child: AppPageBackground(child: SizedBox.expand()),
+          ),
+        ),
         Scaffold(
           // The page paints edge to edge and `AppPageBackground` supplies the
           // colour, so the scaffold itself must stay clear — otherwise the
           // glass would sample the scaffold rather than the backdrop.
           backgroundColor: Colors.transparent,
           extendBody: true,
-          // The page's viewport stops at the **capsule's bottom edge**, not at
-          // the screen's. Everything above that line can scroll under the
-          // glass and is blurred by it; the strip between the capsule's bottom
-          // edge and the screen's (the bottom safe area plus the bar's own
-          // bottom margin) has **no glass over it at all**, so page content
-          // parked there renders razor sharp right under the bar and reads as
-          // "the plate is not blurring anything". Ending the viewport at the
-          // capsule leaves that strip to the themed backdrop, which has no
-          // detail to give away.
-          body: Padding(
-            padding: EdgeInsets.only(
-              bottom: AppBottomNavigation.geometry.barBottomInset(
-                bottomPadding,
-              ),
-            ),
-            child: widget.child,
-          ),
+          // Insets belong to individual routes, never the shared Navigator.
+          body: widget.child,
         ),
         if (showGlobalEntryActions) ...<Widget>[
           AppBottomNavigation(location: widget.location),
           Positioned(
             left: 0,
             right: 0,
-            bottom: AppBottomNavigation.geometry
-                    .actionCenterFromBottom(bottomPadding) -
+            bottom:
+                AppBottomNavigation.geometry.actionCenterFromBottom(
+                  bottomPadding,
+                ) -
                 actionDiameter / 2,
             child: Center(
               child: SizedBox(

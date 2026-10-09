@@ -79,6 +79,7 @@ class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
     required this.glassBorder,
     required this.glassHighlight,
     required this.blurSigma,
+    this.pageTint,
   });
 
   final AppThemeStyle style;
@@ -86,6 +87,7 @@ class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
   final Color glassBorder;
   final Color glassHighlight;
   final double blurSigma;
+  final Color? pageTint;
 
   bool get usesLiquidGlass => style == AppThemeStyle.liquidGlass;
 
@@ -96,6 +98,7 @@ class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
     Color? glassBorder,
     Color? glassHighlight,
     double? blurSigma,
+    Color? pageTint,
   }) {
     return AppThemeMaterial(
       style: style ?? this.style,
@@ -103,14 +106,12 @@ class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
       glassBorder: glassBorder ?? this.glassBorder,
       glassHighlight: glassHighlight ?? this.glassHighlight,
       blurSigma: blurSigma ?? this.blurSigma,
+      pageTint: pageTint ?? this.pageTint,
     );
   }
 
   @override
-  AppThemeMaterial lerp(
-    covariant AppThemeMaterial? other,
-    double t,
-  ) {
+  AppThemeMaterial lerp(covariant AppThemeMaterial? other, double t) {
     if (other == null) return this;
     return AppThemeMaterial(
       style: t < .5 ? style : other.style,
@@ -119,6 +120,7 @@ class AppThemeMaterial extends ThemeExtension<AppThemeMaterial> {
       glassHighlight:
           Color.lerp(glassHighlight, other.glassHighlight, t) ?? glassHighlight,
       blurSigma: blurSigma + (other.blurSigma - blurSigma) * t,
+      pageTint: Color.lerp(pageTint, other.pageTint, t),
     );
   }
 }
@@ -140,11 +142,12 @@ abstract final class BuiltInThemes {
     divider: Color(0xFFE8EBE2),
   );
 
-  static const mistBlue = AppThemeDefinition(
-    id: 'mist_blue',
+  static const liquidGlass = AppThemeDefinition(
+    id: 'liquid_glass',
     name: '云雾蓝',
-    description: '冷白与灰蓝，更安静',
-    premium: true,
+    description: '冷白与灰蓝的液态玻璃，清透而有层次',
+    premium: false,
+    style: AppThemeStyle.liquidGlass,
     background: Color(0xFFF7FAFC),
     surface: Color(0xFFFFFFFF),
     surfaceSoft: Color(0xFFF0F5F8),
@@ -156,38 +159,5 @@ abstract final class BuiltInThemes {
     divider: Color(0xFFE4EAEE),
   );
 
-  static const almond = AppThemeDefinition(
-    id: 'almond_warm',
-    name: '杏仁暖',
-    description: '奶白与杏色，柔和温暖',
-    premium: true,
-    background: Color(0xFFFCFAF5),
-    surface: Color(0xFFFFFFFF),
-    surfaceSoft: Color(0xFFF8F1E7),
-    primary: Color(0xFF9B7549),
-    primaryDark: Color(0xFF74532F),
-    primarySoft: Color(0xFFF3E6D3),
-    textPrimary: Color(0xFF29231D),
-    textSecondary: Color(0xFF7D756C),
-    divider: Color(0xFFEDE5DA),
-  );
-
-  static const liquidGlass = AppThemeDefinition(
-    id: 'liquid_glass',
-    name: '液态玻璃',
-    description: '夕阳奶油与暖金玻璃，沉浸、通透而有层次',
-    premium: true,
-    style: AppThemeStyle.liquidGlass,
-    background: Color(0xFFF6EBDD),
-    surface: Color(0xFFFFFAF3),
-    surfaceSoft: Color(0xFFF4E7D8),
-    primary: Color(0xFFD88A3D),
-    primaryDark: Color(0xFF5E371D),
-    primarySoft: Color(0xFFF5DDBF),
-    textPrimary: Color(0xFF2C2118),
-    textSecondary: Color(0xFF7E6D5E),
-    divider: Color(0xFFE7D5C2),
-  );
-
-  static const all = [freshGreen, mistBlue, almond, liquidGlass];
+  static const all = [freshGreen, liquidGlass];
 }

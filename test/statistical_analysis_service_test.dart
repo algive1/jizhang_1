@@ -68,12 +68,13 @@ void main() {
       month: DateTime(2024, 1),
     );
 
-    expect(ranges, hasLength(2));
-    expect(ranges.first.start, DateTime(2023, 12));
-    expect(ranges.first.endExclusive, DateTime(2024, 2));
-    expect(ranges.last.endExclusive, DateTime(2026, 8, 31));
-    expect(ranges.last.dayCount, 180);
-  });
+      expect(ranges, hasLength(2));
+      expect(ranges.first.start, DateTime(2023, 12));
+      expect(ranges.first.endExclusive, DateTime(2024, 2));
+      expect(ranges.last.endExclusive, DateTime(2026, 8, 31));
+      expect(ranges.last.dayCount, 180);
+    },
+  );
 
   test('normal spending is compared with the same length prior period', () {
     final snapshot = service.analyze([
@@ -113,7 +114,7 @@ void main() {
     },
   );
 
-  test('car asset purchase is excluded from daily trend and heatmap', () {
+  test('asset conversion is excluded from consumption totals and trends', () {
     final snapshot = service.analyze([
       _expense(
         'car',
@@ -125,9 +126,9 @@ void main() {
       _expense('lunch', 35, DateTime(2026, 8, 8, 12)),
     ], now: now);
 
-    expect(snapshot.totalExpense, 160035);
+    expect(snapshot.totalExpense, 35);
     expect(snapshot.regularExpense, 35);
-    expect(snapshot.excludedLargeExpense, 160000);
+    expect(snapshot.excludedLargeExpense, 0);
     expect(snapshot.categoryTrends.single.name, '餐饮');
     expect(snapshot.heatmap.expand((row) => row).reduce((a, b) => a + b), 35);
   });
@@ -166,17 +167,14 @@ void main() {
           }),
         ),
     ];
-    final previous = _expense(
-      'mumu-old-food',
-      60,
-      DateTime(2026, 7, 12, 19),
-    ).copyWith(
-      metadataJson: jsonEncode({
-        'importProvider': 'mumu',
-        'sourceCategory': '餐饮',
-        'sourceSubcategory': '三餐',
-      }),
-    );
+    final previous = _expense('mumu-old-food', 60, DateTime(2026, 7, 12, 19))
+        .copyWith(
+          metadataJson: jsonEncode({
+            'importProvider': 'mumu',
+            'sourceCategory': '餐饮',
+            'sourceSubcategory': '三餐',
+          }),
+        );
 
     final snapshot = service.analyze([...current, previous], now: now);
 

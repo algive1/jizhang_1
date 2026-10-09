@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { navigateMenu } from "./navigation";
 test("P0 login, dashboard, user detail, versions and responsive layout", async ({
   page,
 }) => {
@@ -20,13 +21,13 @@ test("P0 login, dashboard, user detail, versions and responsive layout", async (
     path: "test-results/p0-dashboard-desktop.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "用户管理", exact: true }).click();
+  await navigateMenu(page, "用户中心", "用户管理");
   await expect(
     page.getByRole("link", { name: "浏览器测试用户", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "浏览器测试用户", exact: true }).click();
   await expect(page.getByRole("heading", { name: "用户详情" })).toBeVisible();
-  await page.getByRole("link", { name: "版本与灰度发布", exact: true }).click();
+  await navigateMenu(page, "APP 管理", "版本与灰度发布");
   await page.getByRole("button", { name: "新建版本", exact: true }).click();
   await page.getByLabel("versionName", { exact: true }).fill("3.0.0");
   await page.getByLabel("versionCode", { exact: true }).fill("300");
@@ -110,7 +111,7 @@ test("P1 failure trace and versioned rule editing use real APIs", async ({
     .getByLabel("密码", { exact: true })
     .fill("browser-test-password-2026");
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  await page.getByRole("link", { name: "失败案例", exact: true }).click();
+  await navigateMenu(page, "记账管理", "失败案例");
   await expect(
     page.getByRole("cell", { name: "database_write_failed", exact: true }),
   ).toBeVisible();
@@ -164,7 +165,7 @@ test("P2 model configuration persists and AI metrics show unknown usage honestly
     .getByLabel("密码", { exact: true })
     .fill("browser-test-password-2026");
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  await page.getByRole("link", { name: "模型管理", exact: true }).click();
+  await navigateMenu(page, "AI 中心", "模型管理");
   await page.getByRole("button", { name: "新增模型", exact: true }).click();
   await page.getByLabel("name", { exact: true }).fill("浏览器测试模型");
   await page.getByLabel("model", { exact: true }).fill("test-model");
@@ -228,7 +229,7 @@ test("system sessions and Push drafts provide real management workflows", async 
     ).data.items as Array<{ id: string; current: boolean }>;
     return { token, id: sessions.find((s) => s.current)!.id };
   });
-  await page.getByRole("link", { name: "在线会话", exact: true }).click();
+  await navigateMenu(page, "系统管理", "在线会话");
   await expect(page.getByText("当前会话", { exact: true })).toBeVisible();
   const lastRow = page
     .getByRole("row")
@@ -259,7 +260,7 @@ test("system sessions and Push drafts provide real management workflows", async 
       ).json()
     ).data.items[0].id as string;
   });
-  await page.getByRole("link", { name: "Push 推送", exact: true }).click();
+  await navigateMenu(page, "运营中心", "Push 推送");
   await page.getByRole("button", { name: "新建推送草稿" }).click();
   await page.getByLabel("目标用户 ID").fill(userId);
   await page.getByLabel("推送标题").fill("浏览器推送草稿");
@@ -284,7 +285,7 @@ test("P3 FAQ persistence, feedback processing and backup privacy states", async 
     .getByLabel("密码", { exact: true })
     .fill("browser-test-password-2026");
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  await page.getByRole("link", { name: "公告与 FAQ", exact: true }).click();
+  await navigateMenu(page, "运营中心", "公告与 FAQ");
   await page.getByRole("button", { name: "新增内容" }).click();
   await page.getByLabel("运营标题").fill("浏览器 FAQ");
   await page.getByLabel("运营正文").fill("离线仍可以手动记账");
@@ -302,7 +303,7 @@ test("P3 FAQ persistence, feedback processing and backup privacy states", async 
     page.getByText("自动记账遇到问题，联系方式 [号码已脱敏]", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("13800138000", { exact: true })).toHaveCount(0);
-  await page.getByRole("link", { name: "云备份", exact: true }).click();
+  await navigateMenu(page, "数据安全", "云备份");
   await expect(
     page.getByRole("heading", { name: "云备份", exact: true }),
   ).toBeVisible();
@@ -324,7 +325,7 @@ test("batch user management and password workflows invalidate sessions correctly
   await expect(
     page.getByRole("heading", { name: "工作台", exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "用户管理", exact: true }).click();
+  await navigateMenu(page, "用户中心", "用户管理");
   const row = page.getByRole("row").filter({
     has: page.getByRole("link", { name: "浏览器测试用户", exact: true }),
   });
@@ -336,7 +337,7 @@ test("batch user management and password workflows invalidate sessions correctly
   await page.getByRole("button", { name: "批量解禁", exact: true }).click();
   await page.getByRole("button", { name: "确定", exact: true }).click();
   await expect(row.getByText("正常", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "管理员", exact: true }).click();
+  await navigateMenu(page, "系统管理", "管理员");
   await page.getByRole("button", { name: "新增管理员", exact: true }).click();
   await page.getByLabel("管理员账号名称").fill("browser_managed");
   await page.getByLabel("管理员初始密码").fill("browser-managed-password");

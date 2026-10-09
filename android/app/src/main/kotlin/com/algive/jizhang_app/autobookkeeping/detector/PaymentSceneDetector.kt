@@ -7,6 +7,7 @@ import com.algive.jizhang_app.autobookkeeping.parser.PaymentAppParser
 import com.algive.jizhang_app.autobookkeeping.parser.TransactionStatusParser
 import com.algive.jizhang_app.autobookkeeping.parser.WeChatPaymentParser
 import com.algive.jizhang_app.autobookkeeping.parser.QianjiProfilePageParserRegistry
+import com.algive.jizhang_app.autobookkeeping.parser.QianjiPageSupport
 import com.algive.jizhang_app.autobookkeeping.parser.QianjiWechatPageParser
 import com.algive.jizhang_app.autobookkeeping.parser.QianjiAlipayPageParser
 import com.algive.jizhang_app.autobookkeeping.parser.QianjiPddPageParser
@@ -107,7 +108,10 @@ class PaymentSceneDetector(
         }
         if (qianjiResult?.blocksLegacyFallback == true) {
             return PaymentDetectionResult(
-                candidate = qianjiResult.candidate,
+                candidate = qianjiResult.candidate?.let { candidate ->
+                    candidate.copy(transactionTimeKnown = candidate.transactionTimeKnown &&
+                        nodes.any { QianjiPageSupport.preciseTimestampFromText(it.label) == candidate.timestamp })
+                },
                 rejectionReason = qianjiResult.rejectionReason
                     ?: if (qianjiResult.candidate == null) "QIANJI_PAGE_REJECTED" else null,
                 matchedPage = qianjiResult.matchedPage,

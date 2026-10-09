@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createApp } from "../../server/src/app.js";
 import { encodePassword } from "../../server/src/console/auth.js";
 process.env.PUSH_WORKER_ENABLED = "false";
@@ -19,6 +19,21 @@ for (const [username, role] of [
       store.now(),
     );
 }
+const commerceAdmin = store.db
+  .prepare("SELECT id FROM console_admins WHERE username='browser_admin'")
+  .get() as { id: string };
+store.db
+  .prepare(
+    "INSERT INTO console_sessions(token_hash,admin_id,expires_at,session_id,created_at,last_seen_at) VALUES(?,?,?,?,?,?)",
+  )
+  .run(
+    createHash("sha256").update("browser-commerce-test-session").digest("hex"),
+    commerceAdmin.id,
+    store.now() + 3600,
+    randomUUID(),
+    store.now(),
+    store.now(),
+  );
 const user = (
   await app.inject({
     method: "POST",

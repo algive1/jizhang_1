@@ -43,20 +43,21 @@ class _CategoryManagementPageState
         ? ref.watch(categoriesProvider)
         : ref.watch(categoriesByBookProvider(widget.bookId!));
     final all = categoriesAsync.value ?? const <Category>[];
-    final categories = all.where((item) => item.type == _type).toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final categories = all.where((item) => item.type == _type).toList();
     final allRoots = categories.where((item) => item.parentId == null).toList();
     final query = _query.trim().toLowerCase();
     final roots = query.isEmpty
         ? allRoots
-        : allRoots.where((root) {
-            if (_matchesQuery(root.name, query)) return true;
-            return categories.any(
-              (item) =>
-                  item.parentId == root.id &&
-                  _matchesQuery(item.name, query),
-            );
-          }).toList(growable: false);
+        : allRoots
+              .where((root) {
+                if (_matchesQuery(root.name, query)) return true;
+                return categories.any(
+                  (item) =>
+                      item.parentId == root.id &&
+                      _matchesQuery(item.name, query),
+                );
+              })
+              .toList(growable: false);
 
     return SafeArea(
       child: ListView(
@@ -111,17 +112,19 @@ class _CategoryManagementPageState
             )
           else
             ...roots.map((root) {
-              final rootIndex = allRoots.indexWhere((item) => item.id == root.id);
+              final rootIndex = allRoots.indexWhere(
+                (item) => item.id == root.id,
+              );
               final children = categories
                   .where((item) => item.parentId == root.id)
                   .toList();
-              final rootMatches = query.isNotEmpty &&
-                  _matchesQuery(root.name, query);
+              final rootMatches =
+                  query.isNotEmpty && _matchesQuery(root.name, query);
               final visibleChildren = query.isEmpty || rootMatches
                   ? children
                   : children
-                      .where((item) => _matchesQuery(item.name, query))
-                      .toList(growable: false);
+                        .where((item) => _matchesQuery(item.name, query))
+                        .toList(growable: false);
               final expanded =
                   query.isNotEmpty || _expandedRootIds.contains(root.id);
               return Padding(
@@ -147,9 +150,16 @@ class _CategoryManagementPageState
                                 }
                               })
                             : null,
-                        canMoveUp: query.isEmpty && rootIndex > 0,
+                        canMoveUp:
+                            query.isEmpty &&
+                            rootIndex > 0 &&
+                            root.displayPriority == 0 &&
+                            allRoots[rootIndex - 1].displayPriority == 0,
                         canMoveDown:
-                            query.isEmpty && rootIndex < allRoots.length - 1,
+                            query.isEmpty &&
+                            rootIndex < allRoots.length - 1 &&
+                            root.displayPriority == 0 &&
+                            allRoots[rootIndex + 1].displayPriority == 0,
                         onMoveUp: query.isEmpty
                             ? () => _moveRoot(allRoots, rootIndex, -1)
                             : null,

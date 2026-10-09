@@ -11,6 +11,7 @@ import '../../../core/models/goal.dart';
 import '../application/goal_cover_storage_service.dart';
 import '../data/goal_repository.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import 'goal_type_picker.dart';
 
 class GoalCreationDraft {
   const GoalCreationDraft({
@@ -123,20 +124,9 @@ class _GoalCreationSheetState extends ConsumerState<_GoalCreationSheet> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    AppSelect<GoalType>(
-                      initialValue: _type,
-                      decoration: appFieldDecoration('目标类型'),
-                      items: GoalType.values
-                          .map(
-                            (type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(type.label),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) setState(() => _type = value);
-                      },
+                    GoalTypeSelect(
+                      value: _type,
+                      onChanged: (value) => setState(() => _type = value),
                     ),
                     const SizedBox(height: 12),
                     Row(

@@ -1,3 +1,5 @@
+import 'goal_icon.dart';
+
 import 'package:flutter/material.dart';
 
 import '../formatters/money_formatter.dart';
@@ -47,7 +49,7 @@ class GoalProgressCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  _goalIcon(goal.goalType),
+                  goalTypeIcon(goal.goalType),
                   size: 20,
                   color: context.appPrimary,
                 ),
@@ -67,10 +69,7 @@ class GoalProgressCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '${goal.progressPercent}%',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.appPrimary,
-                  ),
+                  style: TextStyle(fontSize: 13, color: context.appPrimary),
                 ),
               ],
             ),
@@ -150,7 +149,7 @@ class GoalProgressCard extends StatelessWidget {
                                         )
                                       : amount == goal.targetAmount
                                       ? Icon(
-                                          _goalIcon(goal.goalType),
+                                          goalTypeIcon(goal.goalType),
                                           size: 13,
                                           color: context.appSecondaryText,
                                         )
@@ -196,17 +195,10 @@ class GoalProgressCard extends StatelessWidget {
                     next == null
                         ? '目标已达成'
                         : '下一站 ¥${MoneyFormatter.whole(next.amount)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.appPrimary,
-                    ),
+                    style: TextStyle(fontSize: 11, color: context.appPrimary),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: context.appPrimary,
-                ),
+                Icon(Icons.chevron_right, size: 18, color: context.appPrimary),
               ],
             ),
           ],
@@ -215,23 +207,3 @@ class GoalProgressCard extends StatelessWidget {
     );
   }
 }
-
-IconData _goalIcon(GoalType type) => switch (type) {
-  GoalType.car => Icons.directions_car_filled,
-  GoalType.travel => Icons.flight_takeoff,
-  GoalType.homeDownPayment => Icons.home_outlined,
-  GoalType.emergencyFund => Icons.health_and_safety_outlined,
-  GoalType.wedding => Icons.favorite_outline,
-  GoalType.renovation => Icons.handyman_outlined,
-  GoalType.digitalProduct => Icons.devices_outlined,
-  GoalType.education => Icons.school_outlined,
-  GoalType.childrenFamily => Icons.child_care_outlined,
-  GoalType.healthcare => Icons.medical_services_outlined,
-  GoalType.retirement => Icons.beach_access_outlined,
-  GoalType.debtRepayment => Icons.receipt_long_outlined,
-  GoalType.business => Icons.storefront_outlined,
-  GoalType.caregiving => Icons.volunteer_activism_outlined,
-  GoalType.giftCharity => Icons.redeem_outlined,
-  GoalType.majorPurchase => Icons.shopping_bag_outlined,
-  GoalType.custom => Icons.flag_outlined,
-};

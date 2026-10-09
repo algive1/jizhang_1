@@ -1,0 +1,41 @@
+{
+  "title": "新的“我的”页面",
+  "question": "三个布局共用功能与设置目录，都适用于好好绿和液态玻璃云雾蓝。效果图中的账号、数字与状态是设计示例。",
+  "options": [
+    {
+      "id": "profile-status",
+      "label": "状态工作台",
+      "kicker": "THE ROLL",
+      "thesis": "先看到自动记账和备份状态，再进入常用工具。",
+      "palette": ["#FBFCF7", "#76A33A", "#1E241C", "#527C98"],
+      "materials": ["好好绿实色界面", "云雾蓝玻璃界面"],
+      "viewport": "账号头部 → 运行状态 → 六项常用功能 → 会员入口 → 数据与支持。",
+      "risk": "状态信息占用首屏，适合经常使用自动记账和备份的用户。",
+      "comp": "E:/jizhang_1/repo/.impeccable/mocks/decision/profile-status.png"
+    },
+    {
+      "id": "profile-favorites",
+      "label": "轻量常用页",
+      "thesis": "把最常用的工具放到最容易找到的位置。",
+      "palette": ["#FBFCF7", "#76A33A", "#1E241C", "#527C98"],
+      "materials": ["好好绿实色界面", "云雾蓝玻璃界面"],
+      "viewport": "紧凑账号与当前账本 → 六项常用功能 → 小型会员入口 → 分类管理入口。",
+      "risk": "页面最轻量，会员和运行状态需要进入对应页面查看。",
+      "comp": "E:/jizhang_1/repo/.impeccable/mocks/decision/profile-favorites.png"
+    },
+    {
+      "id": "profile-account",
+      "label": "账号整合页",
+      "kicker": "IMPECCABLE’S PICK",
+      "thesis": "整合账号与会员，下面集中管理工具、数据和安全。",
+      "palette": ["#FBFCF7", "#76A33A", "#1E241C", "#527C98"],
+      "materials": ["好好绿实色界面", "云雾蓝玻璃界面"],
+      "viewport": "账号会员一区 → 记账概览 → 六项常用功能 → 数据、安全、帮助。",
+      "risk": "管理入口更完整，需要控制每行说明的长度。",
+      "comp": "E:/jizhang_1/repo/.impeccable/mocks/decision/profile-account.png"
+    }
+  ],
+  "buildPath": { "value": "comp", "toggle": true },
+  "reroll": true,
+  "steer": true
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 import '../../app/theme/app_theme_tokens.dart';
+import 'app_glass_surface.dart';
 
 /// Shared refracting surface for the liquid-glass theme.
 ///
@@ -33,11 +34,11 @@ class AppLiquidGlassSurface extends StatelessWidget {
     this.distortionWidth = 22,
     this.chromaticAberration = .0025,
     this.magnification = 1.008,
-  })  : assert(glassOpacity == null || (glassOpacity >= 0 && glassOpacity <= 1)),
-        assert(distortion >= 0),
-        assert(distortionWidth >= 0),
-        assert(chromaticAberration >= 0),
-        assert(magnification > 0);
+  }) : assert(glassOpacity == null || (glassOpacity >= 0 && glassOpacity <= 1)),
+       assert(distortion >= 0),
+       assert(distortionWidth >= 0),
+       assert(chromaticAberration >= 0),
+       assert(magnification > 0);
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -74,36 +75,29 @@ class AppLiquidGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highContrast = MediaQuery.highContrastOf(context);
-    final effectiveTint = tint ?? context.appSurface;
-    final radius = BorderRadius.circular(borderRadius);
+    final dark = context.appIsDark;
+    final effectiveTint =
+        tint ??
+        (dark && glassOpacity == null ? Colors.white : context.appSurface);
 
-    if (!context.appUsesLiquidGlass) {
-      return Container(
+    if (!context.appUsesLiquidGlass && !dark) {
+      return AppGlassSurface(
         margin: margin,
         padding: padding,
+        borderRadius: borderRadius,
+        tint: effectiveTint,
+        shadow: shadow,
+        chromaticEdge: false,
         clipBehavior: clipBehavior,
-        decoration: BoxDecoration(
-          color: effectiveTint,
-          borderRadius: radius,
-          border: Border.all(color: context.appDivider),
-          boxShadow: shadow
-              ? const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 16,
-                    offset: Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
         child: child,
       );
     }
 
     final sigma = highContrast ? (blurSigma ?? 5) * 1.6 : (blurSigma ?? 5);
-    final tintAlpha = (glassOpacity ?? (highContrast ? .74 : .26))
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final tintAlpha =
+        (glassOpacity ?? (highContrast ? .74 : (dark ? .10 : .26)))
+            .clamp(0.0, 1.0)
+            .toDouble();
 
     final style = LiquidGlassStyle(
       shape: LiquidGlassShape.roundedRectangle(
@@ -111,9 +105,9 @@ class AppLiquidGlassSurface extends StatelessWidget {
         borderWidth: highContrast ? 1.4 : .9,
         borderColor: highContrast
             ? context.appPrimary.withValues(alpha: .38)
-            : Colors.white.withValues(alpha: .46),
-        lightIntensity: highContrast ? 1 : 1.08,
-        lightColor: const Color(0xE6FFFFFF),
+            : Colors.white.withValues(alpha: dark ? .24 : .46),
+        lightIntensity: highContrast ? 1 : (dark ? .5 : 1.08),
+        lightColor: Colors.white.withValues(alpha: dark ? .24 : .90),
         lightDirection: 62,
         borderType: const OpticalBorder(
           borderSaturation: 1.16,
@@ -123,14 +117,18 @@ class AppLiquidGlassSurface extends StatelessWidget {
         ),
       ),
       appearance: LiquidGlassAppearance(
-        color: effectiveTint.withValues(alpha: tintAlpha),
+        color: dark && highContrast
+            ? context.appSurface
+            : effectiveTint.withValues(alpha: tintAlpha),
         blur: LiquidGlassBlur(sigmaX: sigma, sigmaY: sigma),
         saturation: highContrast ? 1 : 1.03,
         shadow: shadow
             ? LiquidGlassShadow(
                 blur: highContrast ? 3 : 4.5,
                 opacity: highContrast ? .16 : .12,
-                color: themeColorAccents ? context.appPrimary : Colors.black,
+                color: themeColorAccents && !dark
+                    ? context.appPrimary
+                    : Colors.black,
                 offset: const Offset(0, 5),
                 inset: 1,
               )
@@ -155,10 +153,7 @@ class AppLiquidGlassSurface extends StatelessWidget {
       touch: interactive && !MediaQuery.disableAnimationsOf(context)
           ? const LiquidGlassTouch.flexing(LiquidGlassFlex.subtle())
           : null,
-      child: Padding(
-        padding: padding ?? EdgeInsets.zero,
-        child: child,
-      ),
+      child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
     );
 
     if (margin == null) return lens;

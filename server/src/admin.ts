@@ -1,6 +1,8 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { requireAdmin, audit } from './admin_auth.js';
+import { membershipAdminHtml, membershipAdminScript, registerMembershipAdmin } from './membership_admin.js';
+import { replySupportTicket } from './support.js';
 
 import { requireCondition as check } from './contract.js';
 import {
@@ -22,17 +24,6 @@ import {
   writeInsightPolicy,
 } from './insights.js';
 
-function digest(value: string) {
-  return createHash('sha256').update(value).digest();
-}
-
-function requireAdmin(header: string | string[] | undefined) {
-  const configured = (process.env.ADMIN_TOKEN ?? '').trim();
-  check(configured.length >= 24, '管理后台未启用', 404);
-  const provided = (Array.isArray(header) ? header[0] : header) ?? '';
-  check(timingSafeEqual(digest(configured), digest(provided)), '管理令牌无效', 401);
-}
-
 function ensureAdminSchema(store: Store) {
   ensureMessageCenterSchema(store);
   ensureSupportSchema(store);
@@ -48,12 +39,6 @@ function ensureAdminSchema(store: Store) {
     CREATE INDEX IF NOT EXISTS idx_admin_audit_time
       ON admin_audit_log(created_at DESC);
   `);
-}
-
-function audit(store: Store, action: string, details: Record<string, unknown> = {}) {
-  store.db.prepare(
-    'INSERT INTO admin_audit_log(action,details_json,created_at) VALUES(?,?,?)',
-  ).run(action, JSON.stringify(details), store.now());
 }
 
 const adminHtml = `<!doctype html>
@@ -74,6 +59,7 @@ pre{white-space:pre-wrap;background:#f7f8f4;padding:12px;border-radius:10px;over
 <h1>好好记账管理后台</h1>
 <div class="card"><div class="row"><input id="token" type="password" placeholder="ADMIN_TOKEN"><button onclick="saveToken()">保存令牌</button><button onclick="loadSummary()">刷新概览</button></div><p class="muted">令牌仅保存在当前浏览器 sessionStorage。</p></div>
 <div class="card"><h2>运行概览</h2><pre id="summary">尚未加载</pre></div>
+${membershipAdminHtml}
 <div class="card"><h2>洞察策略</h2>
 <div class="row"><input id="insightScore" type="number" min="0" max="100" placeholder="首页最低分"><input id="insightConfidence" type="number" min="0" max="1" step="0.01" placeholder="最低置信度"><input id="insightCooldown" type="number" min="1" max="90" placeholder="冷却天数"><input id="insightFreeHistory" type="number" min="30" max="3650" placeholder="免费历史天数"><input id="insightProHistory" type="number" min="90" max="3650" placeholder="会员历史天数"></div>
 <div class="row"><input id="insightPrompt" placeholder="Prompt 版本"><label><input id="insightAi" type="checkbox">启用 AI 增强</label><button onclick="loadInsightPolicy()">加载策略</button><button onclick="saveInsightPolicy()">保存策略</button></div>
@@ -98,11 +84,13 @@ async function setTicketStatus(){try{const id=document.getElementById('ticketId'
 async function replyTicket(){try{const id=document.getElementById('ticketId').value.trim();document.getElementById('tickets').textContent=JSON.stringify(await api('/api/v1/admin/support-tickets/'+id+'/messages',{method:'POST',body:JSON.stringify({body:document.getElementById('ticketReply').value})}),null,2);document.getElementById('ticketReply').value='';tickets()}catch(e){document.getElementById('tickets').textContent=String(e)}}
 async function maintenance(){try{document.getElementById('ops').textContent=JSON.stringify(await api('/api/v1/admin/maintenance/run',{method:'POST',body:'{}'}),null,2)}catch(e){document.getElementById('ops').textContent=String(e)}}
 async function pushNow(){try{document.getElementById('ops').textContent=JSON.stringify(await api('/api/v1/admin/push/dispatch',{method:'POST',body:'{}'}),null,2)}catch(e){document.getElementById('ops').textContent=String(e)}}
+${membershipAdminScript}
 </script>
 </body></html>`;
 
 export function registerAdminRoutes(app: FastifyInstance, store: Store) {
   ensureAdminSchema(store);
+  registerMembershipAdmin(app, store);
 
   app.get('/admin', async (request, reply) => {
     if (!(process.env.ADMIN_TOKEN ?? '').trim()) {
@@ -200,37 +188,9 @@ export function registerAdminRoutes(app: FastifyInstance, store: Store) {
     const { body } = z.strictObject({
       body: z.string().trim().min(1).max(4000),
     }).parse(request.body);
-    const ticket = store.db.prepare(
-      'SELECT user_id AS userId,subject FROM support_tickets WHERE id=?',
-    ).get(id) as {userId:string|null;subject:string}|undefined;
-    check(ticket, '工单不存在', 404);
-    const now = store.now();
-    const messageId = randomUUID();
-    store.db.transaction(() => {
-      store.db.prepare(
-        'INSERT INTO support_ticket_messages(id,ticket_id,author_type,body,created_at) '
-          + 'VALUES(?,?,\'admin\',?,?)',
-      ).run(messageId, id, body, now);
-      store.db.prepare(
-        "UPDATE support_tickets SET status=CASE WHEN status='open' THEN 'in_progress' ELSE status END,updated_at=? WHERE id=?",
-      ).run(now, id);
-    })();
-    let queued = 0;
-    if (ticket.userId) {
-      queued = queuePushForUser(store, ticket.userId, {
-        title: '好好记账客服回复',
-        body: body.length > 80 ? body.slice(0, 77) + '...' : body,
-        route: `/profile/support-tickets/${id}`,
-      });
-    }
-    audit(store, 'support_ticket_reply', { id, queued });
-    return reply.code(201).send({
-      id: messageId,
-      authorType: 'admin',
-      body,
-      createdAt: now,
-      queued,
-    });
+    const result=replySupportTicket(store,id,body);
+    audit(store, 'support_ticket_reply', { id, queued:result.queued });
+    return reply.code(201).send(result);
   });
 
   app.post('/api/v1/admin/announcements', async (request) => {

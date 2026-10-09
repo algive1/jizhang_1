@@ -18,24 +18,31 @@ class NotificationSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationSettingsPageState
-    extends ConsumerState<NotificationSettingsPage> {
-  static const _iosNotificationChannel =
-      MethodChannel('jizhang/recurring_notifications');
+    extends ConsumerState<NotificationSettingsPage>
+    with WidgetsBindingObserver {
+  static const _iosNotificationChannel = MethodChannel(
+    'jizhang/recurring_notifications',
+  );
 
   bool _loading = true;
   bool _registered = false;
   bool _guest = false;
+  bool _changing = false;
+  int _refreshRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future<void>.microtask(_refresh);
   }
 
   Future<void> _refresh() async {
+    final revision = ++_refreshRevision;
     try {
       final session = ref.read(sessionRepositoryProvider);
       await session.initialize();
+      if (!mounted || revision != _refreshRevision) return;
       if (session.userId == null) {
         if (mounted) {
           setState(() {
@@ -48,9 +55,12 @@ class _NotificationSettingsPageState
       }
       final data = await ref.read(sharedApiProvider).request('/push/devices');
       final devices = data['devices'];
-      final registered = devices is List &&
-          devices.whereType<Map>().any((item) => item['currentSession'] == true);
-      if (mounted) {
+      final registered =
+          devices is List &&
+          devices.whereType<Map>().any(
+            (item) => item['currentSession'] == true,
+          );
+      if (mounted && revision == _refreshRevision) {
         setState(() {
           _guest = false;
           _registered = registered;
@@ -58,11 +68,14 @@ class _NotificationSettingsPageState
         });
       }
     } on Object {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && revision == _refreshRevision)
+        setState(() => _loading = false);
     }
   }
 
   Future<void> _enablePush() async {
+    if (_changing) return;
+    _changing = true;
     setState(() => _loading = true);
     try {
       if (Platform.isAndroid) {
@@ -77,7 +90,7 @@ class _NotificationSettingsPageState
           .registerIfAvailable(force: true);
       if (!mounted) return;
       if (result == PushRegistrationResult.guest) {
-        context.push('/account/login');
+        await context.push('/account/login');
         return;
       }
       if (result != PushRegistrationResult.registered) {
@@ -87,78 +100,109 @@ class _NotificationSettingsPageState
       }
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('启用失败：$error')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('启用失败：$error')));
       }
     } finally {
-      await _refresh();
+      _changing = false;
+      if (mounted) await _refresh();
     }
   }
 
   Future<void> _disablePush() async {
+    if (_changing) return;
+    _changing = true;
     setState(() => _loading = true);
-    final ok = await ref
-        .read(pushRegistrationServiceProvider)
-        .unregisterCurrentDevice();
-    if (mounted && !ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('关闭失败，请检查网络后重试')),
-      );
+    try {
+      final ok = await ref
+          .read(pushRegistrationServiceProvider)
+          .unregisterCurrentDevice();
+      if (mounted && !ok) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('关闭失败，请检查网络后重试')));
+      }
+    } on Object {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('关闭失败，请检查网络后重试')));
+    } finally {
+      _changing = false;
+      if (mounted) await _refresh();
     }
-    await _refresh();
+  }
+
+  Future<void> _login() async {
+    if (_changing) return;
+    _changing = true;
+    try {
+      await context.push('/account/login');
+    } finally {
+      _changing = false;
+      if (mounted) await _refresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_changing) _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('通知设置')),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          children: [
-            Card(
-              child: SwitchListTile(
-                title: const Text('系统消息推送'),
-                subtitle: Text(
-                  _guest
-                      ? '登录后可接收公告、账号安全和服务通知'
-                      : _registered
-                      ? '当前设备已注册'
-                      : '当前设备未注册',
-                ),
-                value: _registered,
-                onChanged: _loading
-                    ? null
-                    : (value) => value ? _enablePush() : _disablePush(),
-              ),
+    appBar: AppBar(title: const Text('通知设置')),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        Card(
+          child: SwitchListTile(
+            title: const Text('系统消息推送'),
+            subtitle: Text(
+              _guest
+                  ? '登录后可接收公告、账号安全和服务通知'
+                  : _registered
+                  ? '当前设备已注册'
+                  : '当前设备未注册',
             ),
-            if (_guest)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: FilledButton(
-                  onPressed: () => context.push('/account/login'),
-                  child: const Text('登录账号'),
-                ),
-              ),
-            if (Platform.isAndroid) ...[
-              const SizedBox(height: 12),
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.receipt_long_outlined),
-                  title: const Text('支付通知自动记账'),
-                  subtitle: const Text('读取微信、支付宝等支付通知生成待确认账单'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/profile/payment-notifications'),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '关闭系统消息推送会从服务端注销当前设备令牌，不影响周期账单的本地提醒，也不会关闭 Android 支付通知监听。',
-              ),
-            ),
-          ],
+            value: _registered,
+            onChanged: _loading || _changing
+                ? null
+                : (value) => value ? _enablePush() : _disablePush(),
+          ),
         ),
-      );
+        if (_guest)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: FilledButton(
+              onPressed: _loading || _changing ? null : _login,
+              child: const Text('登录账号'),
+            ),
+          ),
+        if (Platform.isAndroid) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('支付通知自动记账'),
+              subtitle: const Text('读取微信、支付宝等支付通知生成待确认账单'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/profile/payment-notifications'),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            '关闭系统消息推送会从服务端注销当前设备令牌，不影响周期账单的本地提醒，也不会关闭 Android 支付通知监听。',
+          ),
+        ),
+      ],
+    ),
+  );
 }

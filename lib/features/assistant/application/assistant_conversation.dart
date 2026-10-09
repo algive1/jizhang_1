@@ -23,11 +23,14 @@ class AssistantMessage {
     this.route,
     this.requiresMembership = false,
     this.read = false,
+    this.draftText,
+    this.requestId,
   });
   final String id, text;
   final DateTime time;
   final bool isUser, read;
   final String? transactionId, route;
+  final String? draftText, requestId;
   final bool requiresMembership;
   String get type => isUser
       ? 'user_text'
@@ -46,6 +49,8 @@ class AssistantMessage {
     'route': route,
     'read': read ?? this.read,
     'requiresMembership': requiresMembership,
+    'draftText': draftText,
+    'requestId': requestId,
   };
   factory AssistantMessage.fromJson(Map<String, dynamic> json) =>
       AssistantMessage(
@@ -57,6 +62,8 @@ class AssistantMessage {
         route: json['route'] as String?,
         requiresMembership: json['requiresMembership'] as bool? ?? false,
         read: json['read'] as bool? ?? false,
+        draftText: json['draftText'] as String?,
+        requestId: json['requestId'] as String?,
       );
 }
 
@@ -113,6 +120,25 @@ class AssistantConversation extends AsyncNotifier<List<AssistantMessage>> {
     if (!sending) await _save([]);
   }
 
+  Future<void> completeReview(String id) async {
+    final messages = await future;
+    final updated = messages
+        .map(
+          (message) => message.id == id
+              ? AssistantMessage.fromJson({
+                  ...message.toJson(),
+                  'draftText': null,
+                  'requestId': null,
+                  'text': '本次确认的账单已入账，可在流水中查看。',
+                  'route': '/transactions',
+                })
+              : message,
+        )
+        .toList();
+    state = AsyncData(updated);
+    await _save(updated);
+  }
+
   Future<void> send(String text) async {
     if (sending || text.trim().isEmpty) return;
     sending = true;
@@ -150,6 +176,8 @@ class AssistantConversation extends AsyncNotifier<List<AssistantMessage>> {
         time: DateTime.now(),
         transactionId: reply.transactionId,
         route: reply.route,
+        draftText: reply.draftText,
+        requestId: authorization.requestId,
         requiresMembership: authorization.requiresMembership,
         read: viewers > 0 && key == _key,
       );

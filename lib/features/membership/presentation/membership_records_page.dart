@@ -43,6 +43,7 @@ class MembershipRecordsPage extends ConsumerWidget {
                   itemBuilder: (context, index) => _OrderTile(
                     items[index],
                     productTitle:
+                        items[index].productTitle ??
                         productTitles[items[index].productId] ??
                         items[index].productId,
                   ),

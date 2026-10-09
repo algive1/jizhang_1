@@ -10,11 +10,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.algive.jizhang_app.MainActivity
+import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 
 object AutoBookkeepingNotificationController {
@@ -108,8 +108,8 @@ object AutoBookkeepingNotificationController {
 
     fun notifyBookkeepingSuccess(context: Context, count: Int) {
         if (count <= 0) return
-        val text = "已记录 $count 笔自动记账流水"
-        Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
+        val text = "已保存 $count 笔记账流水"
+        AppNotice.show(context, text, 3500)
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -146,10 +146,12 @@ object AutoBookkeepingNotificationController {
     }
 
     /** Fallback when a confirmation overlay cannot be attached. */
-    fun notifyConfirmationAvailable(context: Context) {
-        val text = "识别到待确认交易，请打开好好记账确认"
-        Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
+    fun notifyConfirmationAvailable(context: Context, showToast: Boolean = true) {
+        val count = AutoBookkeepingPendingStore.pendingCount(context)
         val manager = NotificationManagerCompat.from(context)
+        if (count == 0) { manager.cancel(CONFIRM_NOTIFICATION_ID); return }
+        val text = "有 $count 笔记账待确认"
+        if (showToast) AppNotice.show(context, text, 3500)
         if (!manager.areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
@@ -161,12 +163,9 @@ object AutoBookkeepingNotificationController {
         val openIntent = PendingIntent.getActivity(
             context,
             3,
-            Intent(context, AutoBookkeepingConfirmActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(
-                    AutoBookkeepingConfirmActivity.EXTRA_BACKGROUND_MODE,
-                    AutoBookkeepingConfirmActivity.BACKGROUND_MODE_TRANSPARENT,
-                )
+            Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra(MainActivity.OPEN_ROUTE_EXTRA, "/transactions/inbox?prompt=1")
             },
             pendingFlags(),
         )
@@ -177,6 +176,8 @@ object AutoBookkeepingNotificationController {
                     .setSmallIcon(android.R.drawable.ic_popup_sync)
                     .setContentTitle("好好记账 · 待确认交易")
                     .setContentText(text)
+                    .setNumber(count)
+                    .setOnlyAlertOnce(true)
                     .setContentIntent(openIntent)
                     .setAutoCancel(true)
                     .setCategory(NotificationCompat.CATEGORY_REMINDER)

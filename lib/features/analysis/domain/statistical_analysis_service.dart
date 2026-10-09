@@ -94,6 +94,7 @@ class StatisticalAnalysisService {
     String currency = 'CNY',
     DateTime? now,
     DateTime? month,
+    AnalysisDateRange? dateRange,
     double? largeExpenseThreshold,
   }) {
     final clock = now ?? DateTime.now();
@@ -109,11 +110,12 @@ class StatisticalAnalysisService {
       period: period,
       now: clock,
       month: month,
+      dateRange: dateRange,
     );
     final range = comparison.range;
     final previousRange = comparison.previousRange;
     final expenses = allTransactions
-        .where((item) => item.deletedAt == null && item.isExpense)
+        .where((item) => item.deletedAt == null && item.isConsumptionExpense)
         .toList(growable: false);
     final current = expenses
         .where(
@@ -176,24 +178,27 @@ class StatisticalAnalysisService {
       ),
       baselines: [
         for (final days in const [7, 30, 90, 180])
-          _baseline(
-            expenses,
-            clock,
-            days,
-            threshold: distributionThreshold,
-          ),
+          _baseline(expenses, clock, days, threshold: distributionThreshold),
       ],
     );
   }
 
-  ({
-    AnalysisDateRange range,
-    AnalysisDateRange previousRange,
-  }) comparisonRangesFor({
+  ({AnalysisDateRange range, AnalysisDateRange previousRange})
+  comparisonRangesFor({
     required AnalysisPeriod period,
     required DateTime now,
     DateTime? month,
+    AnalysisDateRange? dateRange,
   }) {
+    if (dateRange != null) {
+      return (
+        range: dateRange,
+        previousRange: AnalysisDateRange(
+          start: dateRange.start.subtract(Duration(days: dateRange.dayCount)),
+          endExclusive: dateRange.start,
+        ),
+      );
+    }
     final selectedCurrent =
         month != null && month.year == now.year && month.month == now.month;
     final range = month == null
@@ -218,10 +223,7 @@ class StatisticalAnalysisService {
               endExclusive: DateTime(
                 now.year - 1,
                 now.month,
-                now.day.clamp(
-                      1,
-                      DateTime(now.year - 1, now.month + 1, 0).day,
-                    ) +
+                now.day.clamp(1, DateTime(now.year - 1, now.month + 1, 0).day) +
                     1,
               ),
             ),

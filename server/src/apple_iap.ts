@@ -119,6 +119,11 @@ function bindTransaction(store:Store,userId:string,payload:Json,raw:string){
     expiresAt?Math.floor(expiresAt/1000):null,
     revokedAt?Math.floor(revokedAt/1000):null,raw,store.now());
 
+  if(!revokedAt && expiresAt>store.now()*1000 && purchasedAt>0){
+    store.db.prepare('DELETE FROM membership_adjustments WHERE user_id=? AND updated_at<?')
+      .run(userId,Math.floor(purchasedAt/1000));
+  }
+
 }
 
 export function applePlanForProductId(productId:string){return products[productId]?.plan??null;}

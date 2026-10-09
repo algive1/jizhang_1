@@ -26,7 +26,7 @@ class ProfileHero extends StatelessWidget {
         child: ClipRect(
           child: Stack(
             children: [
-              Positioned(
+              if (!context.appIsDark) Positioned(
                 right: -28,
                 bottom: -29,
                 width: c.maxWidth * .73,
@@ -151,19 +151,18 @@ class ProfileMembershipCard extends StatelessWidget {
     final progress = duration <= 0
         ? 0.0
         : (sub!.expiresAt.difference(now).inSeconds / duration).clamp(0.0, 1.0);
-    final plan = snapshot?.membership.plan;
+    final plan = snapshot?.membership.effectivePlan;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final memberText = dark ? context.appPrimaryText : const Color(0xFF67512A);
     final memberMuted = dark ? context.appSecondaryText : const Color(0xFF77633D);
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: dark
-              ? [context.appSurfaceSoft, context.appSurface]
-              : const [Color(0xFFEFD9A5), Color(0xFFFCF4DE)],
+        borderRadius: BorderRadius.circular(dark ? 16 : 18),
+        color: dark ? context.appSurface : null,
+        gradient: dark ? null : const LinearGradient(
+          colors: [Color(0xFFEFD9A5), Color(0xFFFCF4DE)],
         ),
-        boxShadow: const [
+        boxShadow: dark ? null : const [
           BoxShadow(
             color: Color(0x086F743A),
             blurRadius: 14,
@@ -173,7 +172,7 @@ class ProfileMembershipCard extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(dark ? 16 : 18),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -296,10 +295,10 @@ class ProfileQuickStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.appSurface,
-    borderRadius: BorderRadius.circular(15),
+    borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 15),
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 15),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
         child: Column(
@@ -347,14 +346,14 @@ class ProfileMonthlyCard extends StatelessWidget {
   final bool loading;
   @override
   Widget build(BuildContext context) => Material(
-    color: context.appSurfaceSoft,
-    borderRadius: BorderRadius.circular(18),
+    color: context.appIsDark ? context.appSurface : context.appSurfaceSoft,
+    borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 18),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onTap,
       child: Stack(
         children: [
-          Positioned.fill(
+          if (!context.appIsDark) Positioned.fill(
             child: IgnorePointer(
               child: Image.asset(
                 AppAssets.monthlyProgressScene,
@@ -455,7 +454,7 @@ class ProfileMenuCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.appSurface,
-    borderRadius: BorderRadius.circular(19),
+    borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 19),
     clipBehavior: Clip.antiAlias,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),

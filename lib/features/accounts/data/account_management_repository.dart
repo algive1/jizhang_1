@@ -50,6 +50,15 @@ class DriftAccountManagementRepository implements AccountManagementRepository {
     yield* _accounts.watchActive().asyncMap(_decorate);
   }
 
+  Stream<List<ManagedAccount>> watchAcrossBooks(Set<String> bookIds) async* {
+    await ensureAccountManagementSchema(_database);
+    yield* DriftAccountRepository(_database).watchAcrossBooks().asyncMap(
+      (accounts) => _decorate(
+        accounts.where((account) => bookIds.contains(account.bookId)).toList(),
+      ),
+    );
+  }
+
   @override
   Future<List<ManagedAccount>> getActive() async {
     await ensureAccountManagementSchema(_database);
@@ -224,13 +233,29 @@ final accountManagementRepositoryProvider =
       );
     });
 
-final managedAccountsProvider = StreamProvider<List<ManagedAccount>>((ref) async* {
+final managedAccountsProvider = StreamProvider<List<ManagedAccount>>((
+  ref,
+) async* {
   await ref.watch(databaseBootstrapProvider.future);
   yield* ref.watch(accountManagementRepositoryProvider).watchActive();
 });
 
+final managedAccountsIncludingArchivedProvider =
+    StreamProvider<List<ManagedAccount>>((ref) async* {
+      await ref.watch(databaseBootstrapProvider.future);
+      final books = await ref.watch(booksProvider.future);
+      final database = ref.watch(databaseProvider);
+      yield* DriftAccountManagementRepository(
+        database,
+        ref.watch(accountRepositoryProvider),
+        bookId: ref.watch(activeBookIdProvider),
+      ).watchAcrossBooks(books.map((book) => book.assetBookId).toSet());
+    });
+
 /// Account IDs that remain visible but must be excluded from asset totals.
-final excludedAssetAccountIdsProvider = StreamProvider<Set<String>>((ref) async* {
+final excludedAssetAccountIdsProvider = StreamProvider<Set<String>>((
+  ref,
+) async* {
   await ref.watch(databaseBootstrapProvider.future);
   final database = ref.watch(databaseProvider);
   await ensureAccountManagementSchema(database);

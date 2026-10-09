@@ -43,15 +43,24 @@ data class TransactionCandidate(
     val targetIdentifierSuffix: String? = null,
     val targetAccountHint: String? = null,
     val screenshotPath: String? = null,
+    val transactionTimeKnown: Boolean = false,
+    val paymentSessionId: String? = null,
+    val paymentOriginApp: String? = null,
 ) {
     fun toMap(): Map<String, Any> = buildMap {
         put("amountInCents", amountInCents)
         put("merchant", merchantNormalized)
         put("paymentMethod", paymentMethod)
         put("timestamp", timestamp)
+        put("transactionTimeKnown", transactionTimeKnown)
+        paymentSessionId?.let { put("paymentSessionId", it) }
+        paymentOriginApp?.let { put("paymentOriginApp", it) }
         put("sourceApp", sourceApp)
         put("scene", scene.scene)
         put("transactionType", transactionType)
+        put("amountConfidence", amountConfidence)
+        put("merchantConfidence", merchantConfidence)
+        put("sceneConfidence", scene.confidence)
         orderId?.let { put("orderId", it) }
         note?.let { put("note", it) }
         originalAmountInCents?.let { put("originalAmountInCents", it) }

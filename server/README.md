@@ -37,7 +37,10 @@ npm run dev
 | POST | `/api/v1/books/:id/mutations` | 提交幂等操作，版本冲突返回 `409` |
 | GET | `/api/v1/books/:id/logs` | 查看共享操作日志 |
 | GET | `/api/v1/membership/catalog` | 获取可编辑的套餐、权益和 FAQ 配置 |
-| PUT | `/api/v1/admin/membership/catalog` | 使用 `MEMBERSHIP_ADMIN_TOKEN` 更新会员配置 |
+| GET/PUT | `/api/v1/admin/membership/catalog` | 后台读取或更新会员版本、套餐、权益模板、套餐覆盖和图标 |
+| GET | `/api/v1/admin/membership/users` | 按用户名、昵称或 ID 搜索用户，使用 `page` 分页 |
+| PUT | `/api/v1/admin/membership/users/:id` | 调整用户套餐、从当前时间起的有效天数，或取消会员；必须填写原因 |
+| GET | `/api/v1/admin/membership/users/:id/history` | 查看支付、App Store 和后台调整记录 |
 | POST/GET | `/api/v1/membership/orders` | 按服务端 catalog 创建或查询会员支付订单 |
 | GET | `/api/v1/membership/orders/:id` | 查询单笔会员订单状态 |
 | GET | `/api/v1/membership/current` | 查询服务端确认后的会员有效期与权益 |
@@ -47,6 +50,16 @@ npm run dev
 服务端在同一 SQLite 事务内执行权限检查、`operationId` 幂等判断、账务变更、余额/目标重算、版本递增和变更日志。支付订单金额只从 `assets/config/membership_catalog.json` 或后台 catalog 读取；必须配置真实商户证书和公网 HTTPS 回调后才会向支付平台下单。公网 TLS、生产数据库备份、监控、短信、附件存储和企业报税仍需按部署环境配置。
 
 当前账号边界：客户端登录/注册入口仍位于共享账本页，个人本地账本不强制登录；服务端尚未实现手机号/邮箱验证码、找回密码、修改密码、账号注销、第三方登录或多设备会话管理。诊断上传接口只接受有限 primitive 字段，并拒绝包含 token、密码、通知、账户、卡号、手机号、路径和堆栈等敏感键；本地诊断日志不等同于公网 Crashlytics/Sentry 监控。
+
+## 会员管理
+
+配置至少 24 位的 `ADMIN_TOKEN` 后访问 `/admin`，输入令牌并点击“加载会员配置”。管理接口统一使用 `x-admin-token`；会员配置接口也兼容原有至少 32 位的 `MEMBERSHIP_ADMIN_TOKEN` Bearer 认证。
+
+会员版本沿用 App 的 Pro / Family 等级。先设置版本权益模板，再设置月、季、年套餐及其权益覆盖；停用套餐或版本后禁止新下单。权益可关联实际功能键，并选择内置图标或图标库中的 HTTPS 链接。配置保存后，App 重新进入会员页或从后台返回时刷新远程配置和会员状态。
+
+安卓价格由后台配置，iOS 展示和付款以 App Store 商品价格为准。已有 App Store 套餐 ID 的周期与等级保持固定。支付订单保存下单时的套餐和金额，验签回调后按订单快照发放有效期；重复回调不会重复续期。停用套餐不会撤销已支付会员。
+
+用户调整按“从现在起有效天数”覆盖当前会员身份，并记录原因；选择普通用户可取消会员。真实有效会员重新支付后，使用验证后的购买记录。`ALL_FEATURES_FREE_FOR_TESTING=true` 时应用仍按免费测试策略开放功能，同时保留真实会员身份与到期状态；正式验收权益限制时设为 `false`。当前 App 的免费测试常量也需要在正式发布配置中同步关闭。
 
 
 ## App update policy

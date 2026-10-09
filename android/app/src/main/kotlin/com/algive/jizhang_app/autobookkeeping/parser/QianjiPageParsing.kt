@@ -314,6 +314,9 @@ internal object QianjiPageSupport {
         return runCatching { calendar.timeInMillis }.getOrNull()
     }
 
+    fun preciseTimestampFromText(text: String): Long? =
+        dateTimePattern.find(text)?.takeIf { it.groupValues[6].isNotEmpty() }?.let { timestampFromText(text) }
+
     fun timestampAfter(
         nodes: List<ScreenNode>,
         keys: Set<String>,
@@ -352,6 +355,7 @@ internal object QianjiPageSupport {
             merchantNormalized = MerchantNormalizer.normalize(cleanMerchant).take(80),
             paymentMethod = paymentMethod.trim().take(80).ifBlank { "UNKNOWN" },
             timestamp = transactionAt?.takeIf { it > 0L } ?: observedAt,
+            transactionTimeKnown = transactionAt != null && transactionAt > 0L && transactionAt != observedAt,
             scene = PaymentScene(
                 sourceApp = sourceApp,
                 scene = "QIANJI_$pageType",

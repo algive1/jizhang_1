@@ -59,7 +59,6 @@ class _InvestmentAddPageState extends ConsumerState<InvestmentAddPage> {
     return Scaffold(
       backgroundColor: context.appBackground,
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
             _Header(

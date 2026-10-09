@@ -185,6 +185,6 @@ class _AutoBookkeepingLogsPageState
 
   String _formatTime(DateTime time) {
     String two(int value) => value.toString().padLeft(2, '0');
-    return '${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
+    return '${two(time.hour)}:${two(time.minute)}:${two(time.second)}.${time.millisecond.toString().padLeft(3, '0')}';
   }
 }

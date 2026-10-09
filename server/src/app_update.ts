@@ -45,6 +45,7 @@ export function registerAppUpdateRoutes(app: FastifyInstance, store?: Store) {
     const input = z.strictObject({
       platform: platformSchema,
       version: versionSchema,
+      build: z.coerce.number().int().min(0).max(2147483647).optional(),
       installationId: z.string().regex(/^[a-f0-9]{32}$/).optional(),
     }).parse(request.query);
     const release = store ? publishedRelease(store,input.platform,input.installationId) : undefined;
@@ -62,7 +63,8 @@ export function registerAppUpdateRoutes(app: FastifyInstance, store?: Store) {
 
     const belowMinimum =
       compareVersions(input.version, value.minimumVersion) < 0;
-    const belowLatest = compareVersions(input.version, value.latestVersion) < 0;
+    const versionComparison = compareVersions(input.version, value.latestVersion);
+    const belowLatest = versionComparison < 0 || (versionComparison === 0 && release !== undefined && input.build !== undefined && input.build < release.version_code);
     return {
       status: belowMinimum
         ? ('required' as const)

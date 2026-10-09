@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum AutoBookkeepingEnqueueResult { accepted, duplicate, busy }
+enum AutoBookkeepingEnqueueResult { accepted, duplicate, busy, queued }
 
 class PendingAutoBookkeepingCandidate {
   const PendingAutoBookkeepingCandidate({
@@ -21,6 +21,9 @@ class PendingAutoBookkeepingCandidate {
     this.targetIdentifierSuffix,
     this.targetAccountHint,
     this.screenshotPath,
+    this.amountConfidence = 0,
+    this.merchantConfidence = 0,
+    this.sceneConfidence = 0,
   });
 
   factory PendingAutoBookkeepingCandidate.fromMap(Map<Object?, Object?> map) {
@@ -46,6 +49,9 @@ class PendingAutoBookkeepingCandidate {
       targetIdentifierSuffix: _nullableText(map['targetIdentifierSuffix']),
       targetAccountHint: _nullableText(map['targetAccountHint']),
       screenshotPath: _nullableText(map['screenshotPath']),
+      amountConfidence: _confidence(map['amountConfidence']),
+      merchantConfidence: _confidence(map['merchantConfidence']),
+      sceneConfidence: _confidence(map['sceneConfidence']),
     );
   }
 
@@ -65,6 +71,12 @@ class PendingAutoBookkeepingCandidate {
   final String? targetIdentifierSuffix;
   final String? targetAccountHint;
   final String? screenshotPath;
+  final double amountConfidence;
+  final double merchantConfidence;
+  final double sceneConfidence;
+
+  static double _confidence(Object? value) =>
+      value is num && value.isFinite ? value.toDouble().clamp(0, 1) : 0;
 
   static String? _nullableText(Object? value) {
     final text = value?.toString().trim();
@@ -81,7 +93,7 @@ abstract interface class AutoBookkeepingPendingBridge {
     PendingAutoBookkeepingCandidate candidate,
   );
   Future<String?> promoteScreenshot(String path);
-  Future<void> complete({bool keepScreenshot = false});
+  Future<void> complete({bool keepScreenshot = false, String? fingerprint});
 }
 
 class MethodChannelAutoBookkeepingPendingBridge
@@ -116,6 +128,9 @@ class MethodChannelAutoBookkeepingPendingBridge
         'sourceApp': candidate.sourceApp,
         'scene': candidate.scene,
         'transactionType': candidate.transactionType,
+        'amountConfidence': candidate.amountConfidence,
+        'merchantConfidence': candidate.merchantConfidence,
+        'sceneConfidence': candidate.sceneConfidence,
         if (candidate.orderId != null) 'orderId': candidate.orderId,
         if (candidate.note != null) 'note': candidate.note,
         if (candidate.originalAmountInCents != null)
@@ -133,6 +148,7 @@ class MethodChannelAutoBookkeepingPendingBridge
         return switch (raw['status']?.toString()) {
           'accepted' => AutoBookkeepingEnqueueResult.accepted,
           'duplicate' => AutoBookkeepingEnqueueResult.duplicate,
+          'queued' => AutoBookkeepingEnqueueResult.queued,
           _ => AutoBookkeepingEnqueueResult.busy,
         };
       }
@@ -145,22 +161,24 @@ class MethodChannelAutoBookkeepingPendingBridge
   @override
   Future<String?> promoteScreenshot(String path) async {
     try {
-      return await _channel.invokeMethod<String>(
-        'promoteScreenshot',
-        {'path': path},
-      );
+      return await _channel.invokeMethod<String>('promoteScreenshot', {
+        'path': path,
+      });
     } on MissingPluginException {
       return null;
     }
   }
 
   @override
-  Future<void> complete({bool keepScreenshot = false}) async {
+  Future<void> complete({
+    bool keepScreenshot = false,
+    String? fingerprint,
+  }) async {
     try {
-      await _channel.invokeMethod<void>(
-        'complete',
-        {'keepScreenshot': keepScreenshot},
-      );
+      await _channel.invokeMethod<void>('complete', {
+        'keepScreenshot': keepScreenshot,
+        'fingerprint': ?fingerprint,
+      });
     } on MissingPluginException {
       throw StateError('自动记账确认页仅支持 Android');
     }

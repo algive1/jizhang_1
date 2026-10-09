@@ -4,9 +4,21 @@ import { z } from 'zod';
 
 import { requireCondition as check } from './contract.js';
 import type { Store } from './store.js';
+import { queuePushForUser } from './push_delivery.js';
 
 type User = { id: string; username: string };
 type Authenticate = (header: string | undefined) => User;
+
+export function replySupportTicket(store:Store,id:string,body:string){
+  const ticket=store.db.prepare('SELECT user_id AS userId FROM support_tickets WHERE id=?').get(id) as {userId:string|null}|undefined;
+  check(ticket,'工单不存在',404);const now=store.now(),messageId=randomUUID();
+  return store.db.transaction(()=>{
+    store.db.prepare("INSERT INTO support_ticket_messages VALUES(?,?,'admin',?,?)").run(messageId,id,body,now);
+    store.db.prepare("UPDATE support_tickets SET status=CASE WHEN status='open' THEN 'in_progress' ELSE status END,updated_at=? WHERE id=?").run(now,id);
+    const queued=ticket.userId?queuePushForUser(store,ticket.userId,{title:'好好记账客服回复',body:body.length>80?body.slice(0,77)+'...':body,route:`/profile/support-tickets/${id}`}):0;
+    return {id:messageId,authorType:'admin',body,createdAt:now,queued};
+  })();
+}
 
 export function ensureSupportSchema(store: Store) {
   store.db.exec(`

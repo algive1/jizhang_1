@@ -1,9 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
+import 'package:jizhang_app/app/theme/app_theme_definition.dart';
 import 'package:jizhang_app/core/widgets/app_snack_bar.dart';
 
 void main() {
+  testWidgets('default notices follow every theme and keep action buttons', (
+    tester,
+  ) async {
+    var actions = 0;
+    for (final appearance in BuiltInThemes.all) {
+      for (final theme in [
+        AppTheme.light(appearance),
+        AppTheme.dark(appearance),
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('主题提示'),
+                      action: SnackBarAction(
+                        label: '撤销',
+                        onPressed: () => actions++,
+                      ),
+                    ),
+                  ),
+                  child: const Text('显示'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('显示'));
+        await tester.pumpAndSettle();
+        final material = tester
+            .widgetList<Material>(
+              find.descendant(
+                of: find.byType(SnackBar),
+                matching: find.byType(Material),
+              ),
+            )
+            .first;
+        expect(material.color, theme.colorScheme.surface);
+        expect(
+          DefaultTextStyle.of(tester.element(find.text('主题提示'))).style.color,
+          theme.colorScheme.onSurface,
+        );
+        expect(
+          tester.getBottomLeft(find.byWidget(material)).dy,
+          lessThan(
+            tester.view.physicalSize.height / tester.view.devicePixelRatio -
+                100,
+          ),
+        );
+        await tester.tap(find.text('撤销'));
+        await tester.pumpAndSettle();
+      }
+    }
+    expect(actions, BuiltInThemes.all.length * 2);
+  });
+
   testWidgets('app snackbar floats above the global navigation and fab', (
     tester,
   ) async {

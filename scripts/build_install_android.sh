@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ADB_BIN="${ADB_BIN:-adb}"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
+DART_BIN="${DART_BIN:-dart}"
 BUILD_MODE="${ANDROID_BUILD_MODE:-release}"
 DEVICE_ID="${ANDROID_DEVICE_ID:-}"
 EMULATOR_ID="${ANDROID_EMULATOR_ID:-}"
@@ -120,6 +121,7 @@ fi
 
 cd "$PROJECT_DIR"
 require_command "$FLUTTER_BIN"
+require_command "$DART_BIN"
 if [ "$PACKAGE_ONLY" -eq 0 ]; then
   require_command "$ADB_BIN"
 fi
@@ -160,7 +162,9 @@ if [ "$RUN_PUB_GET" -eq 1 ]; then
   "$FLUTTER_BIN" pub get
 fi
 
-BUILD_ARGS=(apk "--$BUILD_MODE")
+VERSION="$("$DART_BIN" "$SCRIPT_DIR/bump_build_version.dart")"
+echo "==> 本次版本：$VERSION"
+BUILD_ARGS=(apk "--$BUILD_MODE" "--build-name=${VERSION%+*}" "--build-number=${VERSION#*+}")
 if [ "$SPLIT_PER_ABI" -eq 1 ]; then
   BUILD_ARGS+=(--split-per-abi)
 fi
@@ -171,12 +175,6 @@ APK_DIR="$PROJECT_DIR/build/app/outputs/flutter-apk"
 APK_PATH="$APK_DIR/app-${BUILD_MODE}.apk"
 if [ "$SPLIT_PER_ABI" -eq 0 ] && [ ! -f "$APK_PATH" ]; then
   echo "❌ 未找到构建产物：$APK_PATH" >&2
-  exit 1
-fi
-
-VERSION="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1)"
-if [ -z "$VERSION" ]; then
-  echo "❌ 无法从 pubspec.yaml 读取版本号。" >&2
   exit 1
 fi
 

@@ -139,6 +139,9 @@ class Membership {
   bool get canUseGrantedEntitlements =>
       status == MembershipStatus.active ||
       status == MembershipStatus.gracePeriod;
+
+  MembershipPlan get effectivePlan =>
+      canUseGrantedEntitlements ? plan : MembershipPlan.free;
 }
 
 enum SubscriptionProvider { apple, wechat, alipay, manualGrant }
@@ -230,10 +233,13 @@ class MembershipSnapshot {
 
   bool has(EntitlementKey key, {DateTime? now}) {
     final clock = now ?? DateTime.now();
-    return membership.canUseGrantedEntitlements &&
-        entitlements.any(
-          (grant) => grant.key == key && grant.isActiveAt(clock),
-        );
+    return entitlements.any(
+      (grant) =>
+          grant.key == key &&
+          grant.isActiveAt(clock) &&
+          (grant.source == 'testing_free_access' ||
+              membership.canUseGrantedEntitlements),
+    );
   }
 
   UsageQuota? quotaFor(EntitlementKey key) {

@@ -15,7 +15,8 @@ class StartupPoster extends StatelessWidget {
           cacheWidth:
               (MediaQuery.sizeOf(context).width *
                       MediaQuery.devicePixelRatioOf(context))
-                  .ceil(),
+                  .ceil()
+                  .clamp(1, 8192),
           // The source poster is 9:16 while modern phones are usually taller.
           // Cover keeps the artwork edge-to-edge without stretching the logo
           // or typography; the crop is limited to the poster's side margins.

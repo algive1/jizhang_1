@@ -13,6 +13,8 @@ import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/membership.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_liquid_glass_surface.dart';
+import '../../../core/widgets/app_page_background.dart';
+import '../../../core/widgets/app_profile_glass_card.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../account/application/account_session_controller.dart';
@@ -66,7 +68,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
 
     return _ProfileGlassDebugHost(
       child: LiquidGlassView(
-      key: ValueKey('profile-glass-view-$dark'),
+      key: ValueKey('profile-glass-view-$dark-${context.appMaterial.pageTint}'),
       // The profile background is static within a brightness mode. Capturing
       // it once gives every scrolling lens one stable coordinate space and
       // avoids the device-dependent Impeller batch artefact that can paint a
@@ -82,6 +84,7 @@ class LiquidGlassProfilePage extends ConsumerWidget {
         child: ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
           child: ListView(
+            key: const PageStorageKey('profile-scroll'),
             padding: EdgeInsets.fromLTRB(
               16,
               8,
@@ -95,14 +98,20 @@ class LiquidGlassProfilePage extends ConsumerWidget {
                 dark: dark,
                 unread: unread,
                 onProfile: () => _openProfile(context, accountSession),
-                onBrightnessChanged: (nextDark) {
-                  unawaited(
-                    ref.read(brightnessModeProvider.notifier).select(
+                onBrightnessChanged: (nextDark) async {
+                  try {
+                    await ref.read(brightnessModeProvider.notifier).select(
                       nextDark
                           ? AppBrightnessPreference.dark
                           : AppBrightnessPreference.light,
-                    ),
-                  );
+                    );
+                  } on Object {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('明暗设置保存失败，请重试')),
+                      );
+                    }
+                  }
                 },
                 onMessages: () async {
                   await context.push<void>('/profile/messages');
@@ -408,7 +417,10 @@ class _ProfileGlassDebugHostState extends State<_ProfileGlassDebugHost> {
   _ProfileGlassTuning _tuning = _ProfileGlassTuning.defaults;
   bool _expanded = false;
 
-  bool get _showDebugControls => kDebugMode || kProfileMode;
+  bool get _showDebugControls =>
+      kDebugMode ||
+      kProfileMode ||
+      const bool.fromEnvironment('PROFILE_GLASS_TUNER');
 
   void _update(_ProfileGlassTuning next) {
     if (_tuning == next) return;
@@ -419,7 +431,7 @@ class _ProfileGlassDebugHostState extends State<_ProfileGlassDebugHost> {
   Widget build(BuildContext context) {
     final content = _ProfileGlassDebugScope(
       tuning: _tuning,
-      child: widget.child,
+      child: BackdropGroup(child: widget.child),
     );
     if (!_showDebugControls) return content;
 
@@ -657,20 +669,14 @@ class _ImmersiveProfileBackground extends StatelessWidget {
                   MediaQuery.devicePixelRatioOf(context))
               .ceil(),
     );
-    return dark
-        ? ColorFiltered(
-            colorFilter: const ColorFilter.mode(
-              Color(0xFFB49C88),
-              BlendMode.modulate,
-            ),
-            child: image,
-          )
-        : image;
+    return image;
   }
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
-        child: Stack(
+        child: dark
+            ? const AppPageBackground(child: SizedBox.expand())
+            : Stack(
           fit: StackFit.expand,
           children: [
             _image(context),
@@ -995,7 +1001,8 @@ class _BrightnessToggleState extends State<_BrightnessToggle> {
       child: AppLiquidGlassSurface(
         borderRadius: 18,
         themeColorAccents: false,
-        glassOpacity: MediaQuery.highContrastOf(context) ? .78 : .24,
+        glassOpacity: MediaQuery.highContrastOf(context)
+            ? .78 : context.appIsDark ? .10 : .24,
         shadow: false,
         padding: const EdgeInsets.all(2),
         child: LayoutBuilder(
@@ -1016,12 +1023,14 @@ class _BrightnessToggleState extends State<_BrightnessToggle> {
                   child: DecoratedBox(
                     key: const ValueKey('profile-brightness-thumb'),
                     decoration: BoxDecoration(
-                      color: _visualDark
+                      color: context.appIsDark
+                          ? Colors.white.withValues(alpha: .10)
+                          : _visualDark
                           ? const Color(0xB54B4154)
                           : const Color(0xE8FFF2DD),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: .58),
+                        color: Colors.white.withValues(alpha: context.appIsDark ? .24 : .58),
                       ),
                     ),
                   ),
@@ -1394,7 +1403,8 @@ class _MembershipPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plan = snapshot?.membership.plan;
+    final plan = snapshot?.membership.effectivePlan;
+    final dark = context.appIsDark;
     final tag = switch (plan) {
       MembershipPlan.pro => 'Pro',
       MembershipPlan.family => 'Family',
@@ -1405,11 +1415,12 @@ class _MembershipPanel extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(dark ? 16 : 23),
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(23),
-            gradient: const LinearGradient(
+            borderRadius: BorderRadius.circular(dark ? 16 : 23),
+            color: dark ? context.appSurface : null,
+            gradient: dark ? null : const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
@@ -1419,7 +1430,7 @@ class _MembershipPanel extends StatelessWidget {
               ],
             ),
             border: Border.all(
-              color: const Color(0x55FFE0A8),
+              color: dark ? Colors.white.withValues(alpha: .24) : const Color(0x55FFE0A8),
             ),
             boxShadow: const [
               BoxShadow(
@@ -1470,13 +1481,13 @@ class _MembershipPanel extends StatelessWidget {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFFE0A4),
+                                  color: dark ? Colors.white.withValues(alpha: .12) : const Color(0xFFFFE0A4),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
                                   tag,
-                                  style: const TextStyle(
-                                    color: Color(0xFF6E4920),
+                                  style: TextStyle(
+                                    color: dark ? context.appPrimaryText : const Color(0xFF6E4920),
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -1501,13 +1512,13 @@ class _MembershipPanel extends StatelessWidget {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFDB99),
+                        color: dark ? context.appPrimary : const Color(0xFFFFDB99),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         plan == MembershipPlan.free ? '立即开通  →' : '会员中心  →',
-                        style: const TextStyle(
-                          color: Color(0xFF503317),
+                        style: TextStyle(
+                          color: dark ? context.appColors.onPrimary : const Color(0xFF503317),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -1518,9 +1529,9 @@ class _MembershipPanel extends StatelessWidget {
               ),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFE3B0),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(23),
+                  color: dark ? Colors.white.withValues(alpha: .12) : const Color(0xFFFFE3B0),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(dark ? 16 : 23),
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -1574,15 +1585,15 @@ class _Benefit extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: const Color(0xFFB57930), size: 14),
+          Icon(icon, color: context.appIsDark ? context.appPrimaryText : const Color(0xFFB57930), size: 14),
           const SizedBox(width: 4),
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: Color(0xFF8A6337),
+                style: TextStyle(
+                  color: context.appIsDark ? context.appPrimaryText : const Color(0xFF8A6337),
                   fontSize: 8.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1898,13 +1909,13 @@ class _RecommendedApp extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE2F0FF),
+                        color: context.appIsDark ? Colors.white.withValues(alpha: .12) : const Color(0xFFE2F0FF),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         action,
-                        style: const TextStyle(
-                          color: Color(0xFF2586F6),
+                        style: TextStyle(
+                          color: context.appIsDark ? context.appPrimaryText : const Color(0xFF2586F6),
                           fontSize: 8.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -2092,7 +2103,8 @@ class _ProfileStaticGlassTile extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
-        gradient: LinearGradient(
+        color: dark ? Colors.white.withValues(alpha: .12) : null,
+        gradient: dark ? null : LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -2104,7 +2116,7 @@ class _ProfileStaticGlassTile extends StatelessWidget {
         ),
         border: Border.all(
           color: Colors.white.withValues(
-            alpha: (.20 + tuning.borderHighlight * .30)
+            alpha: dark ? .24 : (.20 + tuning.borderHighlight * .30)
                 .clamp(0.0, .62)
                 .toDouble(),
           ),
@@ -2120,10 +2132,7 @@ class _ProfileStaticGlassTile extends StatelessWidget {
 }
 
 class _GlassPanel extends StatelessWidget {
-  const _GlassPanel({
-    required this.child,
-    required this.padding,
-  });
+  const _GlassPanel({required this.child, required this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -2131,135 +2140,13 @@ class _GlassPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tuning = _ProfileGlassDebugScope.of(context);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final highContrast = MediaQuery.highContrastOf(context);
-    final radius = BorderRadius.circular(22);
-    final opacity = highContrast
-        ? .88
-        : (tuning.opacity + (dark ? .04 : 0)).clamp(.34, .90).toDouble();
-    final highlight =
-        (tuning.borderHighlight * (highContrast ? 1.15 : 1))
-            .clamp(0.0, 1.0)
-            .toDouble();
-
-    Widget surface = CustomPaint(
-      foregroundPainter: _ProfileGlassBorderPainter(
-        radius: 22,
-        highlight: highlight,
-        dark: dark,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(
-                alpha: (opacity + (dark ? .02 : .16))
-                    .clamp(0.0, .96)
-                    .toDouble(),
-              ),
-              context.appSurface.withValues(alpha: opacity),
-              context.appSurface.withValues(
-                alpha: (opacity - .07).clamp(.28, .90).toDouble(),
-              ),
-            ],
-            stops: const [0, .44, 1],
-          ),
-        ),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
-      ),
-    );
-
-    if (tuning.blurSigma > .01 && !highContrast) {
-      surface = BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: tuning.blurSigma,
-          sigmaY: tuning.blurSigma,
-          tileMode: TileMode.decal,
-        ),
-        child: surface,
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: tuning.shadowStrength <= .001
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: tuning.shadowStrength * (dark ? 1.25 : 1),
-                  ),
-                  blurRadius: 22,
-                  spreadRadius: -5,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: surface,
-      ),
+    return AppProfileGlassCard(
+      padding: padding,
+      opacity: tuning.opacity,
+      blurSigma: tuning.blurSigma,
+      borderHighlight: tuning.borderHighlight,
+      shadowStrength: tuning.shadowStrength,
+      child: child,
     );
   }
-}
-
-class _ProfileGlassBorderPainter extends CustomPainter {
-  const _ProfileGlassBorderPainter({
-    required this.radius,
-    required this.highlight,
-    required this.dark,
-  });
-
-  final double radius;
-  final double highlight;
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty || highlight <= .001) return;
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(
-      rect.deflate(.65),
-      Radius.circular(
-        (radius - .65).clamp(0.0, radius).toDouble(),
-      ),
-    );
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.05
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withValues(
-            alpha: highlight * (dark ? .50 : .82),
-          ),
-          const Color(0xFFFFF1DF).withValues(alpha: highlight * .48),
-          Colors.white.withValues(alpha: highlight * .15),
-          Colors.black.withValues(alpha: highlight * (dark ? .22 : .08)),
-        ],
-        stops: const [0, .28, .72, 1],
-      ).createShader(rect);
-    canvas.drawRRect(rrect, paint);
-
-    final topGlow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = .55
-      ..color = Colors.white.withValues(alpha: highlight * .34);
-    canvas.drawRRect(rrect.deflate(1.05), topGlow);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ProfileGlassBorderPainter oldDelegate) =>
-      oldDelegate.radius != radius ||
-      oldDelegate.highlight != highlight ||
-      oldDelegate.dark != dark;
 }

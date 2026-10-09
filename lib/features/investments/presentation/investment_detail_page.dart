@@ -45,7 +45,6 @@ class _InvestmentDetailPageState extends ConsumerState<InvestmentDetailPage> {
     return Scaffold(
       backgroundColor: context.appBackground,
       body: SafeArea(
-        bottom: false,
         child: holdingState.isLoading && position == null
             ? const Center(child: CircularProgressIndicator())
             : position == null

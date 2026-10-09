@@ -528,7 +528,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
                                 ? null
                                 : (ownedCount >=
                                           BookLimitPolicy.forPlan(
-                                            membership?.membership.plan ??
+                                            membership?.membership.effectivePlan ??
                                                 MembershipPlan.free,
                                           )
                                       ? () => _showLimitMessage(
@@ -646,7 +646,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
     final booksState = ref.watch(booksProvider);
     final membership = ref.watch(membershipProvider).value;
     final limit = BookLimitPolicy.forPlan(
-      membership?.membership.plan ?? MembershipPlan.free,
+      membership?.membership.effectivePlan ?? MembershipPlan.free,
     );
     final books = booksState.value ?? const <LedgerBook>[];
     final ownedCount = books
@@ -910,7 +910,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
       ownerUserId: ref.read(databaseProvider).currentActor,
     );
     final limit = BookLimitPolicy.forPlan(
-      membership?.membership.plan ?? MembershipPlan.free,
+      membership?.membership.effectivePlan ?? MembershipPlan.free,
     );
     await showModalBottomSheet<void>(
       context: context,
@@ -1177,7 +1177,7 @@ class _BookSelectorSheetState extends ConsumerState<_BookSelectorSheet> {
   }
 
   void _showLimitMessage(BuildContext context, MembershipSnapshot? membership) {
-    final plan = membership?.membership.plan.label ?? 'Free';
+    final plan = membership?.membership.effectivePlan.label ?? 'Free';
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text('$plan 方案已达到账本数量上限，会员可创建更多账本。')));
   }

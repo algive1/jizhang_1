@@ -1,648 +1,514 @@
-import 'dart:async';
-
-import '../../../core/widgets/app_bottom_sheet.dart';
-import '../../../core/widgets/app_action_sheet.dart';
-import '../../../core/widgets/app_form.dart';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_theme_tokens.dart';
-import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/budget.dart';
-import '../../../core/models/category.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../books/data/book_repository.dart';
 import '../../categories/data/category_repository.dart';
-import '../../transactions/data/transactions_repository.dart';
-import '../../insights/data/insight_preferences_repository.dart';
-import '../../insights/domain/budget_recommendation_service.dart';
-import '../../insights/domain/insight_models.dart';
+import '../../goals/data/goal_repository.dart';
+import '../../goals/presentation/goals_page.dart' show createGoalFromSheet;
 import '../application/budget_alert_notification_service.dart';
+import '../application/budget_weekly_review_service.dart';
+import '../data/budget_period_provider.dart';
+import '../data/budget_preferences_repository.dart';
 import '../data/budget_repository.dart';
+import '../domain/budget_period.dart';
+import 'budget_editor.dart';
+import 'budget_sections.dart';
+import 'budget_sheets.dart';
+import 'budget_visuals.dart';
 
 class BudgetPage extends ConsumerStatefulWidget {
   const BudgetPage({super.key});
-
   @override
   ConsumerState<BudgetPage> createState() => _BudgetPageState();
 }
 
 class _BudgetPageState extends ConsumerState<BudgetPage> {
-  bool _routeRecommendationScheduled = false;
+  BudgetPeriod _period = BudgetPeriod.month(DateTime.now());
+  bool _routeHandled = false, _savingPreference = false, _editing = false;
 
   @override
   Widget build(BuildContext context) {
-    final ref = this.ref;
-    final overview = ref.watch(budgetOverviewProvider);
-    final total = overview.total;
-    final categories =
-        (ref.watch(categoriesProvider).value ?? const <Category>[])
-            .where(
-              (item) =>
-                  item.type == CategoryType.expense && item.parentId == null,
-            )
-            .toList();
-    final uri = GoRouterState.of(context).uri;
-    final routeCategoryId = uri.queryParameters['categoryId'];
-    if (!_routeRecommendationScheduled &&
-        uri.queryParameters['recommend'] == '1' &&
-        routeCategoryId != null &&
-        categories.any((item) => item.id == routeCategoryId)) {
-      _routeRecommendationScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await _setBudget(
-          context,
-          ref,
-          selectableCategories: categories,
-          initialCategoryId: routeCategoryId,
-        );
-        if (context.mounted) context.replace('/profile/budgets');
-      });
-    }
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => context.go('/profile'),
-                icon: Icon(Icons.arrow_back),
-              ),
-              Expanded(
-                child: Text(
-                  '预算管理',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: () =>
-                    _setBudget(context, ref, existing: total?.budget),
-                icon: Icon(Icons.edit_outlined),
-                label: Text(total == null ? '设置' : '调整'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (total == null)
-            AppCard(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.savings_outlined,
-                    color: context.appPrimary,
-                    size: 44,
-                  ),
-                  const SizedBox(height: 10),
-                  Text('设置本月预算后，即可计算今日安心可花'),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => _setBudget(context, ref),
-                    child: const Text('设置月度预算'),
-                  ),
-                ],
-              ),
-            )
-          else
-            _TotalBudgetCard(progress: total),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Text('分类预算', style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              if (categories.isNotEmpty)
-                TextButton.icon(
-                  onPressed: () => _setBudget(
-                    context,
-                    ref,
-                    selectableCategories: categories,
-                  ),
-                  icon: Icon(Icons.add),
-                  label: Text('添加'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (overview.categories.isEmpty)
-            AppCard(
-              child: Text(
-                '还没有分类预算，可以先从餐饮、交通等高频分类开始。',
-                style: TextStyle(color: context.appSecondaryText),
-              ),
-            )
-          else
-            ...overview.categories.map(
-              (progress) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _CategoryBudgetCard(
-                  progress: progress,
-                  onEdit: () => _setBudget(
-                    context,
-                    ref,
-                    existing: progress.budget,
-                    selectableCategories: categories,
-                    categoryName: progress.category?.name,
-                  ),
-                  onRemove: () async {
-                    if (await AppConfirmDialog.show(
-                          context,
-                          title: '移除预算？',
-                          message: '仅移除预算设置，已有流水保留。',
-                        ) &&
-                        context.mounted) {
-                      await ref
-                          .read(budgetRepositoryProvider)
-                          .removeBudget(progress.budget.id);
-                    }
-                  },
-                ),
-              ),
-            ),
-        ],
+    final data = ref.watch(budgetPeriodOverviewProvider(_period));
+    final preferences = ref.watch(budgetPreferencesProvider);
+    final goals = ref.watch(goalsProvider);
+    final base = Theme.of(context);
+    final theme = base.copyWith(
+      brightness: Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: budgetGold,
+        brightness: Brightness.light,
+        surface: const Color(0xFFFFFAF1),
       ),
-    );
-  }
-
-  Future<void> _setBudget(
-    BuildContext context,
-    WidgetRef ref, {
-    Budget? existing,
-    List<Category> selectableCategories = const [],
-    String? categoryName,
-    String? initialCategoryId,
-  }) async {
-    final isCategoryBudget =
-        existing?.categoryId != null || selectableCategories.isNotEmpty;
-    final now = DateTime.now();
-    final monthKey = budgetMonthKey(now);
-    final repository = ref.read(budgetRepositoryProvider);
-    final transactions = await ref
-        .read(transactionRepositoryProvider)
-        .getRange(
-          start: DateTime(now.year, now.month - 3),
-          endExclusive: DateTime(now.year, now.month),
-        );
-    final preferences =
-        ref.read(insightPreferencesProvider).value ??
-        const InsightPreferences();
-    final allCategories = await ref.read(allCategoriesProvider.future);
-    if (!context.mounted) return;
-    const recommendationService = BudgetRecommendationService();
-    final totalRecommendation = isCategoryBudget
-        ? null
-        : recommendationService.recommendTotal(
-            transactions: transactions,
-            preferences: preferences,
-          );
-    final categoryRecommendations = <String, BudgetRecommendation>{};
-    if (isCategoryBudget) {
-      for (final category in selectableCategories) {
-        final recommendation = recommendationService.recommendCategory(
-          transactions: transactions,
-          categories: allCategories,
-          categoryId: category.id,
-          preferences: preferences,
-        );
-        if (recommendation != null) {
-          categoryRecommendations[category.id] = recommendation;
-        }
-      }
-    }
-    final result = await showDialog<(double, String?)>(
-      context: context,
-      builder: (_) => _BudgetDialog(
-        existing: existing,
-        selectableCategories: selectableCategories,
-        categoryName: categoryName,
-        initialCategoryId: initialCategoryId,
-        totalRecommendation: totalRecommendation,
-        categoryRecommendations: categoryRecommendations,
+      scaffoldBackgroundColor: Colors.transparent,
+      textTheme: base.textTheme.apply(
+        bodyColor: budgetInk,
+        displayColor: budgetInk,
       ),
-    );
-    if (result == null) return;
-    if (!mounted) return;
-    try {
-      await repository.setBudget(
-        monthKey: monthKey,
-        amount: result.$1,
-        categoryId: isCategoryBudget ? result.$2 : null,
-      );
-      unawaited(
-        ref.read(budgetAlertNotificationServiceProvider).requestPermission(),
-      );
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('预算保存失败：$error')));
-      }
-    }
-  }
-}
-
-class _BudgetDialog extends StatefulWidget {
-  const _BudgetDialog({
-    this.existing,
-    required this.selectableCategories,
-    this.categoryName,
-    this.initialCategoryId,
-    this.totalRecommendation,
-    this.categoryRecommendations = const {},
-  });
-
-  final Budget? existing;
-  final List<Category> selectableCategories;
-  final String? categoryName;
-  final String? initialCategoryId;
-  final BudgetRecommendation? totalRecommendation;
-  final Map<String, BudgetRecommendation> categoryRecommendations;
-
-  @override
-  State<_BudgetDialog> createState() => _BudgetDialogState();
-}
-
-class _BudgetDialogState extends State<_BudgetDialog> {
-  late final TextEditingController _amountController = TextEditingController(
-    text: widget.existing?.amount.toStringAsFixed(2),
-  );
-  String? _categoryId;
-
-  @override
-  void initState() {
-    super.initState();
-    final categoryId =
-        widget.existing?.categoryId ?? widget.initialCategoryId;
-    _categoryId = categoryId;
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.existing?.categoryId != null ||
-              widget.selectableCategories.isNotEmpty
-          ? '分类预算'
-          : '月度总预算',
-    ),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.selectableCategories.isNotEmpty ||
-            widget.existing?.categoryId != null) ...[
-          if (widget.existing == null ||
-              widget.selectableCategories.any(
-                (category) => category.id == _categoryId,
-              ))
-            AppSelect<String>(
-              initialValue: _categoryId,
-              decoration: appFieldDecoration('分类'),
-              items: widget.selectableCategories
-                  .map(
-                    (category) => DropdownMenuItem(
-                      value: category.id,
-                      child: Text(category.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: widget.existing == null
-                  ? (value) => setState(() => _categoryId = value)
-                  : null,
-            )
-          else
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(widget.categoryName ?? '已归档分类'),
-            ),
-          const SizedBox(height: 12),
-        ],
-        if ((widget.totalRecommendation ??
-                widget.categoryRecommendations[_categoryId]) !=
-            null) ...[
-          _BudgetRecommendationHint(
-            recommendation:
-                widget.totalRecommendation ??
-                widget.categoryRecommendations[_categoryId]!,
-            onUse: (value) {
-              _amountController.text = value.toStringAsFixed(0);
-              _amountController.selection = TextSelection.collapsed(
-                offset: _amountController.text.length,
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-        ],
-        TextField(
-          controller: _amountController,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: '预算金额',
-            prefixText: '¥ ',
-          ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: budgetGold,
+          foregroundColor: Colors.white,
         ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('取消'),
       ),
-      FilledButton(
-        onPressed: () {
-          final amount = double.tryParse(_amountController.text);
-          if (amount == null || !amount.isFinite || amount <= 0) return;
-          if (widget.selectableCategories.isNotEmpty && _categoryId == null) {
-            return;
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: budgetGold),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: Color(0xFFFFFAF1),
+        surfaceTintColor: Colors.transparent,
+      ),
+    );
+    return Theme(
+      data: theme,
+      child: Builder(
+        builder: (page) {
+          if (!_routeHandled &&
+              data.hasValue &&
+              GoRouter.maybeOf(page) != null) {
+            _routeHandled = true;
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _handleRoute(page),
+            );
           }
-          Navigator.pop(context, (amount, _categoryId));
-        },
-        child: const Text('保存'),
-      ),
-    ],
-  );
-}
-
-class _BudgetRecommendationHint extends StatelessWidget {
-  const _BudgetRecommendationHint({
-    required this.recommendation,
-    required this.onUse,
-  });
-
-  final BudgetRecommendation recommendation;
-  final ValueChanged<double> onUse;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget choice(String label, double value) => ActionChip(
-      label: Text('$label ¥${value.toStringAsFixed(0)}'),
-      onPressed: () => onUse(value),
-    );
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.appPrimarySoft,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '建议预算 ¥${recommendation.recommended.toStringAsFixed(0)}',
-            style: TextStyle(
-              color: context.appPrimary,
-              fontWeight: FontWeight.w700,
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle.light.copyWith(
+              statusBarColor: Colors.transparent,
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarIconBrightness: Brightness.dark,
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            recommendation.reason,
-            style: TextStyle(
-              color: context.appSecondaryText,
-              fontSize: 11,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              choice('保持', recommendation.maintain),
-              choice('适度控制', recommendation.moderateControl),
-              choice('积极节省', recommendation.activeSaving),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TotalBudgetCard extends StatelessWidget {
-  const _TotalBudgetCard({required this.progress});
-
-  final BudgetProgress progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final remaining = progress.remaining;
-    return AppCard(
-      color: context.appSurfaceSoft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                '本月还剩',
-                style: TextStyle(color: context.appSecondaryText),
-              ),
-              const Spacer(),
-              _StatusBadge(status: progress.status),
-            ],
-          ),
-          const SizedBox(height: 7),
-          FittedBox(
-            child: Text(
-              '${remaining < 0 ? '-' : ''}¥${MoneyFormatter.whole(remaining.abs())}',
-              style: TextStyle(
-                color: remaining < 0
-                    ? AppColors.warning
-                    : context.appPrimary,
-                fontSize: 38,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          LinearProgressIndicator(
-            value: progress.percentage.clamp(0, 1),
-            minHeight: 9,
-            borderRadius: BorderRadius.circular(8),
-            color: progress.status == BudgetAlertStatus.exceeded
-                ? AppColors.warning
-                : context.appPrimary,
-            backgroundColor: context.appPrimarySoft,
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _BudgetStat(
-                  label: '已支出',
-                  value: '¥${MoneyFormatter.whole(progress.used)}',
-                ),
-              ),
-              Expanded(
-                child: _BudgetStat(
-                  label: '本月预算',
-                  value: '¥${MoneyFormatter.whole(progress.budget.amount)}',
-                ),
-              ),
-              Expanded(
-                child: _BudgetStat(
-                  label: '日均可用',
-                  value: '¥${MoneyFormatter.whole(progress.dailyAvailable)}',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '本月还剩 ${progress.remainingDays} 天 · 目标预留 ¥${MoneyFormatter.decimal(progress.goalReservation)}',
-            style: TextStyle(
-              color: context.appSecondaryText,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryBudgetCard extends StatelessWidget {
-  const _CategoryBudgetCard({
-    required this.progress,
-    required this.onEdit,
-    required this.onRemove,
-  });
-
-  final BudgetProgress progress;
-  final VoidCallback onEdit;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppContextMenu(
-      onOpen: () async {
-        final value = await AppActionSheet.show<String>(
-          context,
-          title: progress.category?.name ?? '预算',
-          items: const [
-            PopupMenuItem(value: 'edit', child: Text('调整')),
-            PopupMenuItem(value: 'remove', child: Text('移除')),
-          ],
-        );
-        if (value != null && context.mounted) {
-          value == 'edit' ? onEdit() : onRemove();
-        }
-      },
-      child: AppCard(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        borderRadius: 18,
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: context.appPrimarySoft,
-              child: Icon(
-                Icons.category_outlined,
-                color: context.appPrimary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          progress.category?.name ?? '已隐藏分类',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+            child: Stack(
+              children: [
+                const Positioned.fill(child: BudgetBackground()),
+                Scaffold(
+                  backgroundColor: Colors.transparent,
+                  body: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 46,
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 44,
+                                child: IconButton(
+                                  tooltip: '返回',
+                                  icon: const Icon(
+                                    Icons.chevron_left_rounded,
+                                    size: 28,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () {
+                                    final router = GoRouter.maybeOf(page);
+                                    if (router?.canPop() ?? false) {
+                                      router!.pop();
+                                    } else if (router != null) {
+                                      router.go('/profile');
+                                    } else {
+                                      Navigator.maybePop(page);
+                                    }
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  '预算与目标',
+                                  textAlign: TextAlign.center,
+                                  style: budgetText(
+                                    18,
+                                    weight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 44),
+                            ],
+                          ),
                         ),
-                      ),
-                      _StatusBadge(status: progress.status),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: progress.percentage.clamp(0, 1),
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(6),
-                    backgroundColor: context.appPrimarySoft,
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '已用 ¥${MoneyFormatter.whole(progress.used)}  ·  '
-                    '剩余 ¥${MoneyFormatter.whole(progress.remaining)}',
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      fontSize: 12,
+                        Expanded(
+                          child: BackdropGroup(
+                            child: data.when(
+                              data: (overview) => ListView(
+                                key: const ValueKey('budget-scroll'),
+                                padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
+                                children: [
+                                  BudgetOverviewCard(
+                                    data: overview,
+                                    onDate: () => _selectDate(page),
+                                    onPeriod: (kind) =>
+                                        _selectPeriod(page, kind),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  CategoryBudgetSection(
+                                    rows: overview.overview.categories,
+                                    onMore: () => _showCategories(page),
+                                    onEdit: (row) => _edit(
+                                      page,
+                                      categoryId: row.budget.categoryId,
+                                    ),
+                                    onRemove: (row) => _remove(page, row),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  SavingsGoalsSection(
+                                    goals: goals.value ?? [],
+                                    onMore: () => page.push('/goals'),
+                                    onGoal: (goal) =>
+                                        page.push('/goals/${goal.id}'),
+                                    onCreate: () =>
+                                        createGoalFromSheet(page, ref),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  if (preferences.hasValue &&
+                                      !preferences.isLoading)
+                                    ReminderStrategySection(
+                                      preferences: preferences.value!,
+                                      busy: _savingPreference,
+                                      onChanged: (preference, enabled) =>
+                                          _setPreference(
+                                            page,
+                                            preference,
+                                            enabled,
+                                          ),
+                                      onSettings: () => _showSettings(page),
+                                      onReview: () =>
+                                          showBudgetWeeklyReviews(page),
+                                    )
+                                  else
+                                    BudgetSurface(
+                                      padding: const EdgeInsets.all(16),
+                                      child: preferences.hasError
+                                          ? TextButton(
+                                              onPressed: () => ref.invalidate(
+                                                budgetPreferencesProvider,
+                                              ),
+                                              child: const Text(
+                                                '提醒设置读取失败，点击重试',
+                                              ),
+                                            )
+                                          : const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            ),
+                                    ),
+                                  BudgetAdviceBanner(
+                                    data: overview,
+                                    enabled:
+                                        preferences.value?.smartAdvice ?? false,
+                                    onDetails: () =>
+                                        preferences.value?.smartAdvice == true
+                                        ? showBudgetAdviceDetails(
+                                            page,
+                                            overview,
+                                          )
+                                        : _showSettings(page),
+                                  ),
+                                ],
+                              ),
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              error: (_, _) => Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: BudgetSurface(
+                                    padding: const EdgeInsets.all(20),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '预算暂时无法读取',
+                                          style: budgetText(
+                                            16,
+                                            weight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        FilledButton(
+                                          onPressed: _retry,
+                                          child: const Text('重新加载'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SafeArea(
+                          top: false,
+                          minimum: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 49,
+                                child: BudgetActionButton(
+                                  label: '新增目标',
+                                  onTap: () => createGoalFromSheet(page, ref),
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                flex: 51,
+                                child: BudgetActionButton(
+                                  label: '编辑预算',
+                                  primary: true,
+                                  onTap: () => _edit(page),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            AppActionMenuButton<String>(
-              onSelected: (value) => value == 'edit' ? onEdit() : onRemove(),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: Text('调整')),
-                PopupMenuItem(value: 'remove', child: Text('移除')),
+                ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
-}
 
-class _BudgetStat extends StatelessWidget {
-  const _BudgetStat({required this.label, required this.value});
+  void _retry() {
+    ref.invalidate(budgetPeriodBudgetsProvider(_period));
+    ref.invalidate(budgetPeriodTransactionsProvider(_period));
+    ref.invalidate(allCategoriesProvider);
+    ref.invalidate(goalsProvider);
+    ref.invalidate(budgetPeriodOverviewProvider(_period));
+  }
 
-  final String label;
-  final String value;
+  Future<void> _handleRoute(BuildContext page) async {
+    if (!mounted) return;
+    final uri = GoRouterState.of(page).uri;
+    if (uri.queryParameters['review'] == '1') {
+      try {
+        final bookId = uri.queryParameters['bookId'];
+        if (bookId != null && bookId != ref.read(activeBookIdProvider)) {
+          await ref.read(activeBookIdProvider.notifier).select(bookId);
+        }
+        if (page.mounted) await showBudgetWeeklyReviews(page);
+      } on Object {
+        if (page.mounted)
+          ScaffoldMessenger.of(page)
+              .showSnackBar(const SnackBar(content: Text('该账本暂不可用，请选择可访问的账本')));
+      }
+    } else if (uri.queryParameters['recommend'] == '1' &&
+        uri.queryParameters['categoryId'] != null) {
+      await _edit(page, categoryId: uri.queryParameters['categoryId']);
+      if (page.mounted) page.replace('/profile/budgets');
+    }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(color: context.appSecondaryText, fontSize: 11),
-        ),
-        const SizedBox(height: 2),
-        FittedBox(
-          child: Text(
-            value,
-            style: TextStyle(fontWeight: FontWeight.w600),
+  Future<void> _selectDate(BuildContext page) async {
+    if (_period.kind == BudgetPeriodKind.custom) {
+      await _selectPeriod(page, BudgetPeriodKind.custom);
+      return;
+    }
+    final date = await showBudgetMonthPicker(
+      page,
+      _period.start,
+      yearOnly: _period.kind == BudgetPeriodKind.year,
+    );
+    if (date != null && mounted)
+      setState(
+        () => _period = _period.kind == BudgetPeriodKind.year
+            ? BudgetPeriod.year(date)
+            : BudgetPeriod.month(date),
+      );
+  }
+
+  Future<void> _selectPeriod(BuildContext page, BudgetPeriodKind kind) async {
+    if (kind == BudgetPeriodKind.custom) {
+      final range = await showDateRangePicker(
+        context: page,
+        firstDate: DateTime(1900),
+        lastDate: DateTime(DateTime.now().year + 10, 12, 31),
+        helpText: '选择预算日期范围',
+        saveText: '确认',
+        initialDateRange: DateTimeRange(
+          start: _period.start,
+          end: DateTime(
+            _period.end.year,
+            _period.end.month,
+            _period.end.day - 1,
           ),
         ),
-      ],
-    );
+      );
+      if (range != null && mounted)
+        setState(
+          () => _period = BudgetPeriod(
+            range.start,
+            DateTime(range.end.year, range.end.month, range.end.day + 1),
+            kind,
+          ),
+        );
+    } else if (mounted) {
+      setState(
+        () => _period = kind == BudgetPeriodKind.year
+            ? BudgetPeriod.year(_period.start)
+            : BudgetPeriod.month(_period.start),
+      );
+    }
   }
-}
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
+  Future<void> _edit(
+    BuildContext page, {
+    String? categoryId,
+    bool addCategory = false,
+  }) async {
+    if (_editing) return;
+    _editing = true;
+    try {
+      final month = _period.kind == BudgetPeriodKind.month
+          ? _period.start
+          : await showBudgetMonthPicker(page, _period.start);
+      if (month != null && page.mounted)
+        await showBudgetEditor(
+          page,
+          ref,
+          month: month,
+          categoryId: categoryId,
+          categoryBudget: addCategory,
+        );
+    } finally {
+      _editing = false;
+    }
+  }
 
-  final BudgetAlertStatus status;
+  Future<void> _remove(BuildContext page, BudgetProgress row) async {
+    final month = _period.kind == BudgetPeriodKind.month
+        ? _period.start
+        : await showBudgetMonthPicker(page, _period.start);
+    if (month == null || !page.mounted) return;
+    final repository = ref.read(budgetRepositoryProvider);
+    final bookId = ref.read(activeBookIdProvider);
+    try {
+      final actual = (await repository.getMonth(budgetMonthKey(month)))
+          .where((b) => b.categoryId == row.budget.categoryId)
+          .firstOrNull;
+      if (actual == null || !page.mounted) return;
+      if (await AppConfirmDialog.show(
+            page,
+            title: '移除预算？',
+            message: '移除 ${month.year}年${month.month}月的分类预算，已有流水保留。',
+          ) &&
+          page.mounted &&
+          ref.read(activeBookIdProvider) == bookId)
+        await repository.removeBudget(actual.id);
+    } on Object {
+      if (page.mounted)
+        ScaffoldMessenger.of(page)
+            .showSnackBar(const SnackBar(content: Text('预算移除失败，请重试')));
+    }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      BudgetAlertStatus.normal => ('正常', context.appPrimary),
-      BudgetAlertStatus.nearLimit => ('接近预算', const Color(0xFFD58A2C)),
-      BudgetAlertStatus.exceeded => ('已超预算', AppColors.warning),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(12),
+  Future<void> _showCategories(BuildContext page) => showModalBottomSheet<void>(
+    context: page,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (sheet) => SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * .78,
+        child: Consumer(
+          builder: (context, ref, _) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '分类预算 · ${_period.label}',
+                        style: budgetText(16, weight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(sheet);
+                        _edit(page, addCategory: true);
+                      },
+                      child: const Text('添加'),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ref
+                    .watch(budgetPeriodOverviewProvider(_period))
+                    .when(
+                      data: (value) => ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: value.overview.categories.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 6),
+                        itemBuilder: (_, i) {
+                          final row = value.overview.categories[i];
+                          return CategoryBudgetRow(
+                            progress: row,
+                            onTap: () {
+                              Navigator.pop(sheet);
+                              _edit(page, categoryId: row.budget.categoryId);
+                            },
+                            onLongPress: () {
+                              Navigator.pop(sheet);
+                              _remove(page, row);
+                            },
+                          );
+                        },
+                      ),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (_, _) => const Center(child: Text('分类预算读取失败')),
+                    ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11)),
-    );
+    ),
+  );
+
+  Future<void> _setPreference(
+    BuildContext page,
+    BudgetPreference preference,
+    bool enabled,
+  ) async {
+    if (_savingPreference) return;
+    setState(() => _savingPreference = true);
+    try {
+      await ref
+          .read(budgetPreferencesProvider.notifier)
+          .setEnabled(preference, enabled);
+      if (enabled && preference != BudgetPreference.smartAdvice)
+        await ref
+            .read(budgetAlertNotificationServiceProvider)
+            .requestPermission();
+      if (!mounted) return;
+      if (preference == BudgetPreference.weeklyReview)
+        ref.invalidate(budgetWeeklyReviewsProvider);
+      if (enabled && preference == BudgetPreference.overspend)
+        await ref
+            .read(budgetAlertNotificationServiceProvider)
+            .sync(ref.read(budgetOverviewProvider));
+    } catch (_) {
+      if (page.mounted)
+        ScaffoldMessenger.of(page)
+            .showSnackBar(const SnackBar(content: Text('设置保存失败，请重试')));
+    } finally {
+      if (mounted) setState(() => _savingPreference = false);
+    }
   }
+
+  Future<void> _showSettings(BuildContext page) => showBudgetSettings(
+    page,
+    onChanged: (preference, enabled) =>
+        _setPreference(page, preference, enabled),
+  );
 }

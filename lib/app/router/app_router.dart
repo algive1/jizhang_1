@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import '../../features/assistant/presentation/assistant_page.dart';
+import '../../core/models/analysis.dart';
 
 import 'package:flutter/material.dart';
 
@@ -48,6 +49,7 @@ import '../../features/support/presentation/about_page.dart';
 import '../../features/support/presentation/support_tickets_page.dart';
 import '../../features/support/presentation/support_ticket_detail_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_page.dart';
+import '../../features/autobookkeeping/presentation/auto_bookkeeping_permissions_page.dart';
 import '../../features/autobookkeeping/presentation/ios_shortcut_bookkeeping_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_confirm_page.dart';
 import '../../features/autobookkeeping/presentation/auto_bookkeeping_logs_page.dart';
@@ -119,20 +121,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(key: state.pageKey, child: const HomePage()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const AppRouteViewport(child: HomePage()),
+            ),
           ),
           GoRoute(
             path: '/transactions',
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: TransactionsPage(month: _queryMonth(state.uri)),
+              child: AppRouteViewport(
+                child: TransactionsPage(month: _queryMonth(state.uri)),
+              ),
             ),
             routes: [
               GoRoute(
                 path: 'search',
                 builder: (context, state) => TransactionSearchPage(
                   month: _queryMonth(state.uri),
+                  range: _queryRange(state.uri),
+                  bookId: state.uri.queryParameters['bookId'],
+                  currency: state.uri.queryParameters['currency'],
+                  categoryId: state.uri.queryParameters['categoryId'],
+                  kind: state.uri.queryParameters['kind'],
                   transactionIds: state.extra is List<String>
                       ? (state.extra! as List<String>).toSet()
                       : const {},
@@ -174,8 +185,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/insights',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(key: state.pageKey, child: const InsightsPage()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const AppRouteViewport(child: InsightsPage()),
+            ),
             routes: [
               GoRoute(
                 path: ':insightId',
@@ -203,8 +216,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/profile',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(key: state.pageKey, child: const ProfilePage()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const AppRouteViewport(child: ProfilePage()),
+            ),
             routes: [
               GoRoute(
                 path: 'account',
@@ -226,12 +241,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: 'accounts',
-                builder: (context, state) => const AccountManagementPage(),
+                builder: (context, state) => AccountManagementPage(
+                  initialFilter: state.uri.queryParameters['filter'],
+                  initialCurrency: state.uri.queryParameters['currency'],
+                ),
                 routes: [
                   GoRoute(
                     path: 'add',
-                    builder: (context, state) =>
-                        const AccountTypeSelectionPage(),
+                    builder: (context, state) => AccountTypeSelectionPage(
+                      debtOnly: state.uri.queryParameters['debt'] == 'true',
+                      currency: state.uri.queryParameters['currency'] ?? 'CNY',
+                    ),
                     routes: [
                       GoRoute(
                         path: 'basic/:category',
@@ -250,19 +270,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'receivables',
-                    builder: (context, state) =>
-                        const ReceivableOverviewPage(),
+                    builder: (context, state) => const ReceivableOverviewPage(),
                     routes: [
                       GoRoute(
                         path: 'add',
-                        builder: (context, state) =>
-                            const ReceivableFormPage(),
+                        builder: (context, state) => const ReceivableFormPage(),
                       ),
                       GoRoute(
                         path: ':receivableId',
                         builder: (context, state) => ReceivableDetailPage(
-                          receivableId:
-                              state.pathParameters['receivableId']!,
+                          receivableId: state.pathParameters['receivableId']!,
                         ),
                       ),
                     ],
@@ -291,16 +308,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: 'membership',
-                builder: (context, state) => const MembershipPage(),
+                builder: (context, state) =>
+                    const AppRouteViewport(child: MembershipPage()),
                 routes: [
                   GoRoute(
                     path: 'records',
-                    builder: (context, state) => const MembershipRecordsPage(),
+                    builder: (context, state) =>
+                        const AppRouteViewport(child: MembershipRecordsPage()),
                   ),
                   GoRoute(
                     path: 'agreement',
-                    builder: (context, state) => const LegalDocumentPage(
-                      kind: LegalDocumentKind.membership,
+                    builder: (context, state) => const AppRouteViewport(
+                      child: LegalDocumentPage(
+                        kind: LegalDocumentKind.membership,
+                      ),
                     ),
                   ),
                 ],
@@ -311,13 +332,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: 'quick-actions',
-                builder: (context, state) =>
-                    const ProfileQuickActionsPage(),
+                builder: (context, state) => const ProfileQuickActionsPage(),
               ),
               GoRoute(
                 path: 'services',
-                builder: (context, state) =>
-                    const ProfileServicesPage(),
+                builder: (context, state) => const ProfileServicesPage(),
               ),
               GoRoute(
                 path: 'privacy',
@@ -372,6 +391,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'autobookkeeping',
                 builder: (context, state) => const AutoBookkeepingPage(),
                 routes: [
+                  GoRoute(
+                    path: 'check',
+                    builder: (context, state) =>
+                        const AutoBookkeepingPermissionsPage(),
+                  ),
                   GoRoute(
                     path: 'shortcut',
                     builder: (context, state) =>
@@ -485,4 +509,22 @@ DateTime? _queryMonth(Uri uri) {
   final month = DateTime.parse('$value-01');
   final now = DateTime.now();
   return month.isAfter(DateTime(now.year, now.month)) ? null : month;
+}
+
+AnalysisDateRange? _queryRange(Uri uri) {
+  DateTime? date(String? value) {
+    if (value == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value))
+      return null;
+    final parsed = DateTime.tryParse(value);
+    return parsed?.toIso8601String().substring(0, 10) == value ? parsed : null;
+  }
+
+  final start = date(uri.queryParameters['start']),
+      end = date(uri.queryParameters['end']);
+  if (start == null ||
+      end == null ||
+      !end.isAfter(start) ||
+      end.difference(start).inDays > 366)
+    return null;
+  return AnalysisDateRange(start: start, endExclusive: end);
 }

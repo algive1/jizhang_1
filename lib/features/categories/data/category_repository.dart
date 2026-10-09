@@ -47,7 +47,8 @@ class DriftCategoryRepository implements CategoryRepository {
     }
     await _validateParent(category);
     await _database.categoryDao.insertOne(_toCompanion(category));
-    return _map([(await _database.categoryDao.findById(category.id))!]).single;
+    return (_map([(await _database.categoryDao.findById(category.id))!]))
+        .single;
   }
 
   @override
@@ -57,7 +58,8 @@ class DriftCategoryRepository implements CategoryRepository {
       throw StateError('Category ${category.id} not found');
     await _validateParent(category);
     await _database.categoryDao.upsert(_toCompanion(category));
-    return _map([(await _database.categoryDao.findById(category.id))!]).single;
+    return (_map([(await _database.categoryDao.findById(category.id))!]))
+        .single;
   }
 
   @override
@@ -111,21 +113,21 @@ class DriftCategoryRepository implements CategoryRepository {
   }
 
   List<Category> _map(List<CategoryEntity> rows) {
-    return rows
-        .map(
-          (row) => Category(
-            id: row.id,
-            bookId: row.bookId,
-            parentId: row.parentId,
-            name: row.name,
-            icon: row.icon,
-            type: CategoryType.values.byName(row.type),
-            sortOrder: row.sortOrder,
-            isDefault: row.isDefault,
-            isArchived: row.isArchived,
-          ),
-        )
-        .toList(growable: false);
+    return orderCategories(
+      rows.map(
+        (row) => Category(
+          id: row.id,
+          bookId: row.bookId,
+          parentId: row.parentId,
+          name: row.name,
+          icon: row.icon,
+          type: CategoryType.values.byName(row.type),
+          sortOrder: row.sortOrder,
+          isDefault: row.isDefault,
+          isArchived: row.isArchived,
+        ),
+      ),
+    );
   }
 
   CategoryEntriesCompanion _toCompanion(Category category) {

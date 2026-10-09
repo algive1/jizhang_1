@@ -12,6 +12,9 @@ import { registerEventManagement, registerEventIngestion } from "./events.js";
 import { registerAIManagement } from "./ai.js";
 import { registerOperations, registerPublicOperations } from "./operations.js";
 import { registerPushManagement } from "./push.js";
+import { registerCommerce } from "./commerce.js";
+import { registerSystem } from "./system.js";
+import { registerAssistantManagement } from "./assistant.js";
 
 export type Authenticate = (header: string | undefined) => {
   id: string;
@@ -24,12 +27,13 @@ export async function registerConsole(
 ) {
   ensureConsoleSchema(store);
   await bootstrapAdmin(store);
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (request.url.startsWith("/api/v1/console/"))
+      reply.header("Cache-Control", "no-store");
+    return payload;
+  });
   await app.register(
     async (consoleApp) => {
-      consoleApp.addHook("onSend", async (_request, reply, payload) => {
-        reply.header("Cache-Control", "no-store");
-        return payload;
-      });
       consoleApp.addHook(
         "preSerialization",
         async (_request, reply, payload) =>
@@ -42,8 +46,11 @@ export async function registerConsole(
       registerDocuments(consoleApp, store);
       registerEventManagement(consoleApp, store);
       registerAIManagement(consoleApp, store);
+      registerAssistantManagement(consoleApp, store);
       registerOperations(consoleApp, store);
       registerPushManagement(consoleApp, store);
+      registerCommerce(consoleApp, store);
+      registerSystem(consoleApp, store);
       consoleApp.get("/audit", async (request) => {
         authorize(store, request, "system:audit");
         const input = pageQuery.parse(request.query);

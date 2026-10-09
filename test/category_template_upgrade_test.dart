@@ -27,7 +27,7 @@ void main() {
         active
             .where((item) => item.parentId == shopping.id)
             .map((item) => item.name),
-        containsAll(['服饰鞋包', '美妆护肤', '饰品', '个人护理', '母婴用品', '其他']),
+        orderedEquals(['服饰鞋包', '百货', '淘宝', '抖音', '拼多多', '京东']),
       );
       expect(
         active
@@ -39,7 +39,7 @@ void main() {
         active
             .where((item) => item.parentId == tobaccoTea.id)
             .map((item) => item.name),
-        containsAll(['香烟', '酒类', '茶叶', '茶具']),
+        isEmpty,
       );
     },
   );
@@ -56,12 +56,13 @@ void main() {
       final food = active
           .where((c) => c.parentId == 'expense-food')
           .map((c) => c.name);
-      expect(food, containsAll(['奶茶', '咖啡']));
-      expect(food, isNot(contains('奶茶咖啡')));
+      expect(food, contains('奶茶咖啡'));
+      expect(food, isNot(contains('奶茶')));
+      expect(food, isNot(contains('咖啡')));
       final shopping = active
           .where((c) => c.parentId == 'expense-shopping')
           .map((c) => c.name);
-      expect(shopping, isNot(contains('淘宝')));
+      expect(shopping, contains('淘宝'));
       final transport = active
           .where((c) => c.parentId == 'expense-transport')
           .map((c) => c.name);
@@ -149,7 +150,7 @@ void main() {
         ('expense-shopping-jd', '我的京东', 'shopping_bag_outlined'),
         ('expense-shopping-pinduoduo', '拼多多', 'stars_outlined'),
       ]) {
-        await db.categoryDao.insertOne(
+        await db.categoryDao.upsert(
           CategoryEntriesCompanion.insert(
             id: item.$1,
             bookId: const Value(SeedIds.personalBook),
@@ -180,7 +181,7 @@ void main() {
       await seeder.ensureExistingBookDefaults();
       expect(
         (await db.categoryDao.findById('expense-shopping-taobao'))!.isArchived,
-        isTrue,
+        isFalse,
       );
       expect(
         (await db.categoryDao.findById('expense-shopping-jd'))!.isArchived,
@@ -210,7 +211,7 @@ void main() {
       "UPDATE categories SET icon='stars_outlined' WHERE id='expense-transport-metro'",
     );
     await db.customStatement(
-      "UPDATE categories SET is_archived=1 WHERE id='expense-food-milk-tea'",
+      "UPDATE categories SET is_archived=1 WHERE id='expense-food-coffee'",
     );
     await seeder.ensureExistingBookDefaults();
     expect(
@@ -222,7 +223,7 @@ void main() {
       'stars_outlined',
     );
     expect(
-      (await db.categoryDao.findById('expense-food-milk-tea'))!.isArchived,
+      (await db.categoryDao.findById('expense-food-coffee'))!.isArchived,
       isTrue,
     );
   });

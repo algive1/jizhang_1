@@ -28,6 +28,10 @@ import { registerSupportRoutes } from './support.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerOperationalRoutes } from './ops.js';
 import { startPushWorker } from './push_delivery.js';
+import { ensureIntegrations } from './integrations.js';
+import { registerPaymentOperations } from './payment_operations.js';
+import { registerAsr } from './asr.js';
+import { registerDeploymentCallback } from './console/system.js';
 const scrypt = promisify(scryptCallback);
 const usernameField = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/);
 const deviceNameField = z.string().trim().min(1).max(80).optional();
@@ -59,6 +63,7 @@ export async function createApp(
 ) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
+  ensureIntegrations(store);
   const consoleModelProvider=new ConsoleAIProvider(store,modelProvider);
   registerAIContext(app,store);
   let stopPushWorker = () => {};
@@ -111,6 +116,9 @@ export async function createApp(
   registerAssistantPolicy(app,store,authenticate,consoleModelProvider);
   registerInsightRoutes(app,store,authenticate,consoleModelProvider);
   await registerConsole(app,store,authenticate);
+  registerPaymentOperations(app,store,authenticate);
+  registerAsr(app,store,authenticate);
+  registerDeploymentCallback(app,store);
   stopPushWorker = startPushWorker(store);
   app.post('/api/v1/auth/register',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{
     const {username,password,displayName,deviceName}=registration.parse(req.body);
@@ -232,6 +240,8 @@ export async function createApp(
       store.db.prepare('DELETE FROM console_devices WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM console_user_state WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM console_ai_calls WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM console_membership_history WHERE user_id=?').run(user.id);
+      store.db.prepare('DELETE FROM asr_requests WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_outbox WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM push_devices WHERE user_id=?').run(user.id);
       store.db.prepare('DELETE FROM announcement_reads WHERE user_id=?').run(user.id);

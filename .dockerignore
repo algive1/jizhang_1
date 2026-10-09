@@ -1,0 +1,14 @@
+**/node_modules
+**/.env*
+**/.local
+.git
+.agent
+build
+.dart_tool
+tools
+docs/qa
+**/*.sqlite*
+**/dist
+**/test-results
+**/playwright-report
+**/backups

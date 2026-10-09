@@ -72,6 +72,8 @@ class HomeAssetCard extends StatelessWidget {
     final overview = groups.first;
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.15;
     final compact = !largeText && compactHeight != null;
+    final dark = context.appIsDark;
+    final radius = BorderRadius.circular(dark ? 16 : 20);
     final decodeWidth =
         (MediaQuery.sizeOf(context).width *
                 MediaQuery.devicePixelRatioOf(context))
@@ -81,16 +83,16 @@ class HomeAssetCard extends StatelessWidget {
       label: '查看资产总览，净资产 ${overview.currency}',
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: radius,
         child: InkWell(
           key: const ValueKey('home-asset-card'),
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: radius,
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: context.appSurfaceSoft,
-              image: DecorationImage(
+              color: dark ? context.appSurface : context.appSurfaceSoft,
+              image: dark ? null : DecorationImage(
                 image: ResizeImage(
                   const AssetImage(AppAssets.homeAssetScene),
                   width: decodeWidth,
@@ -98,9 +100,9 @@ class HomeAssetCard extends StatelessWidget {
                 fit: BoxFit.cover,
                 alignment: Alignment.topCenter,
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.appDivider.withValues(alpha: .72)),
-              boxShadow: const [
+              borderRadius: radius,
+              border: dark ? null : Border.all(color: context.appDivider.withValues(alpha: .72)),
+              boxShadow: dark ? null : const [
                 BoxShadow(
                   color: Color(0x0C65713F),
                   blurRadius: 10,
@@ -113,7 +115,7 @@ class HomeAssetCard extends StatelessWidget {
               child: Stack(
                 fit: largeText ? StackFit.loose : StackFit.expand,
                 children: [
-                  Positioned.fill(
+                  if (!dark) Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: RadialGradient(
@@ -322,9 +324,11 @@ class _HomeAssetMetricsPanel extends StatelessWidget {
       vertical: compact ? 3 : 6,
     ),
     decoration: BoxDecoration(
-      color: context.appSurface.withValues(alpha: .60),
+      color: context.appIsDark
+          ? Colors.white.withValues(alpha: .12)
+          : context.appSurface.withValues(alpha: .60),
       borderRadius: BorderRadius.circular(17),
-      border: Border.all(color: context.appSurface.withValues(alpha: .70)),
+      border: context.appIsDark ? null : Border.all(color: context.appSurface.withValues(alpha: .70)),
     ),
     child: Row(
       children: [

@@ -2,451 +2,178 @@ package com.algive.jizhang_app.autobookkeeping.overlay
 
 import android.app.Service
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import androidx.core.view.doOnPreDraw
-import android.view.WindowManager
-import android.widget.TextView
-import android.widget.Toast
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import com.algive.jizhang_app.PaymentNotificationListenerService
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingConfirmActivity
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingNotificationController
-import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingSettings
+import com.algive.jizhang_app.autobookkeeping.*
+import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
+import com.algive.jizhang_app.autobookkeeping.accessibility.AutoBookkeepingAccessibilityService
 import com.algive.jizhang_app.autobookkeeping.diagnostics.AutoBookkeepingDiagnostics
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
-import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore
+import com.algive.jizhang_app.autobookkeeping.repository.AutoBookkeepingPendingStore as Store
 
+/** Owns one visible, warmed Flutter review; additional bills stay in the durable inbox. */
 class AutoBillOverlayService : Service() {
-    private var root: View? = null
-    private var wm: WindowManager? = null
-    private var reviewUi: NativeAutoBookkeepingReviewOverlay? = null
-    private var feedbackView: View? = null
-    private var feedbackWm: WindowManager? = null
-    private var flutterConfirmationOpen = false
-    private var flutterReviewReady = false
-    private var pendingNativeSubmit = false
-    private var revealFlutterWhenReady = false
-    private var currentCandidate: PaymentCandidate? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var offeredAt = 0L
-    val isShowing: Boolean get() = root != null || flutterConfirmationOpen
+    private val handler = Handler(Looper.getMainLooper())
+    private var fingerprint: String? = null
+    private var prepared = false
+    private var visible = false
+    private var completedAt = 0L
+    var offeredAt = 0L
+        private set
+    val isShowing get() = fingerprint != null
 
+    fun trace(stage: String, detail: String) = AutoBookkeepingLogStore.record(this, stage,
+        "request=$offeredAt elapsedMs=${(SystemClock.elapsedRealtime() - offeredAt).coerceAtLeast(0)} " +
+            (if (completedAt > 0) "sinceCompleteMs=${SystemClock.elapsedRealtime() - completedAt} " else "") + detail)
+
+    fun confirmationVisible() {
+        if (!isShowing || !prepared || visible) return
+        visible = true
+        trace("confirmation_visible", "shown=true contentFrame=true windowFocus=true")
+    }
     override fun onBind(intent: Intent?): IBinder? = null
 
-
     fun showDetectionFeedback(message: String) {
-        mainHandler.post {
-            feedbackView?.let { view ->
-                runCatching { feedbackWm?.removeView(view) }
-            }
-            feedbackView = null
-
-            val view = TextView(this).apply {
-                text = message
-                setTextColor(Color.WHITE)
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(dp(16), dp(10), dp(16), dp(10))
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    setColor(Color.argb(220, 42, 46, 39))
-                    cornerRadius = dp(18).toFloat()
-                }
-                elevation = dp(8).toFloat()
-            }
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT,
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                y = dp(92)
-            }
-            val manager = getSystemService(WINDOW_SERVICE) as WindowManager
-            val shown = runCatching {
-                manager.addView(view, params)
-                feedbackView = view
-                feedbackWm = manager
-            }.isSuccess
-            if (!shown) {
-                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-                return@post
-            }
-            mainHandler.postDelayed({
-                if (feedbackView === view) {
-                    runCatching { manager.removeView(view) }
-                    feedbackView = null
-                }
-            }, DETECTION_FEEDBACK_DURATION_MS)
-        }
+        AppNotice.show(this, message)
     }
 
     fun enrichNote(fingerprint: String, note: String) {
-        val current = currentCandidate ?: return
-        if (com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint.of(current) != fingerprint) return
-        reviewUi?.enrichNote(note)
+        // The current Flutter draft owns user edits. Late evidence stays in the pending store.
     }
 
     fun offer(candidate: PaymentCandidate): Boolean {
-        val requestedAt = SystemClock.elapsedRealtime()
-        offeredAt = requestedAt
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "overlay_offer_requested",
-            "candidate=${candidate.toMap()} showing=$isShowing",
-        )
-        if (flutterConfirmationOpen && root != null) return true
-
-        removeNativeView()
-        currentCandidate = candidate
-        flutterReviewReady = false
-        pendingNativeSubmit = false
-        revealFlutterWhenReady = false
-
-        val nativeShown = showNativeReview(candidate)
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "native_review_attached",
-            "shown=$nativeShown elapsedMs=${SystemClock.elapsedRealtime() - requestedAt} candidate=${candidate.toMap()}",
-        )
-        if (!nativeShown) return openConfirmation(candidate)
-
-        // Warm the existing Flutter confirmation flow behind the native overlay.
-        // The native card is already interactive, so Flutter startup latency is
-        // no longer user-visible. Once ready, Flutter only supplies real
-        // books/accounts/categories and executes the existing save logic.
-        openConfirmation(candidate)
+        if (AutoBookkeepingAccessibilityService.instance?.waitForPaymentCompletion(candidate) == true) return true
+        if (isShowing) {
+            trace("confirmation_offer_skipped", "reason=review_active shown=$visible")
+            return true
+        }
+        val current = Store.read(this) ?: return false
+        fingerprint = current["fingerprint"] as? String ?: BillFingerprint.of(candidate)
+        offeredAt = SystemClock.elapsedRealtime()
+        completedAt = if (candidate.sourceApp == "WECHAT") AutoBookkeepingAccessibilityService.instance?.completionClickedAt ?: 0L else 0L
+        prepared = false
+        visible = false
+        trace("confirmation_requested", "shown=false preparing review")
+        runCatching {
+            AutoBookkeepingEngine.prepare(this)
+            // The warmed engine needs an attached view to render its prepared frame.
+            openConfirmation()
+        }.onFailure {
+            AutoBookkeepingLogStore.record(this, "confirmation_prepare_failed", it.javaClass.simpleName)
+            closeConfirmation("prepare_failed")
+            return false
+        }
+        val requested = fingerprint
+        handler.postDelayed({
+            if (fingerprint == requested && !visible) {
+                trace("confirmation_not_visible", "shown=false contentFrame=$prepared reason=timeout")
+                if (!prepared) closeConfirmation("content_timeout")
+                AutoBookkeepingNotificationController.notifyConfirmationAvailable(this, showToast = false)
+            }
+        }, 20000)
         return true
     }
 
-    private fun showNativeReview(candidate: PaymentCandidate): Boolean {
-        val ui = NativeAutoBookkeepingReviewOverlay(
-            context = this,
-            candidate = candidate,
-            onCancel = { cancelNativeReview(candidate) },
-            onSubmit = { submitNativeDraft(it) },
-            onAdvanced = { revealFlutterEditor() },
-        )
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.FILL
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+    fun confirmationPrepared(prepared: String) {
+        if (fingerprint != prepared || Store.read(this)?.get("fingerprint") != prepared) {
+            trace("confirmation_frame_rejected", "reason=pending_changed")
+            return
         }
-        return runCatching {
-            val manager = getSystemService(WINDOW_SERVICE) as WindowManager
-            ViewCompat.setOnApplyWindowInsetsListener(ui.root) { _, insets ->
-                val navigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-                ui.setBottomInset(navigation.bottom)
-                insets
-            }
-            manager.addView(ui.root, params)
-            ViewCompat.requestApplyInsets(ui.root)
-            ui.root.requestFocus()
-            reviewUi = ui
-            root = ui.root
-            wm = manager
-            AutoBookkeepingLogStore.record(this, "overlay_shown", "native review overlay added")
-        }.onFailure { error ->
-            Log.e(TAG, "overlay addView failed", error)
-            AutoBookkeepingLogStore.record(this, "overlay_add_failed", error.javaClass.simpleName)
-            AutoBookkeepingLogStore.recordDetailed(this, "overlay_add_failed", Log.getStackTraceString(error))
-        }.isSuccess
+        if (this.prepared) return
+        this.prepared = true
+        trace("confirmation_content_frame", "shown=$visible")
+        showDetectionFeedback("已识别到付款 · 请确认记账")
+        AutoBookkeepingConfirmActivity.instance?.reportVisibility()
     }
 
-    private fun submitNativeDraft(draft: Map<String, Any?>) {
-        val amount = (draft["amountInCents"] as? Number)?.toLong() ?: 0L
-        if (amount <= 0L) {
-            reviewUi?.showMessage("请输入有效金额")
+    private fun openConfirmation() {
+        if (AutoBookkeepingConfirmActivity.instance != null) {
+            trace("confirmation_launch_skipped", "reason=host_exists")
             return
         }
-        val activity = AutoBookkeepingConfirmActivity.instance
-        if (!flutterReviewReady || activity == null) {
-            pendingNativeSubmit = true
-            reviewUi?.showMessage("正在准备保存引擎…")
-            reviewUi?.setSaving(true)
-            return
-        }
-        pendingNativeSubmit = false
-        reviewUi?.setSaving(true)
-        reviewUi?.showMessage(null)
-        activity.submitNativeReview(draft) { success, message ->
-            mainHandler.post {
-                if (success) {
-                    reviewUi?.showMessage("已保存")
-                    removeNativeView()
-                } else {
-                    reviewUi?.setSaving(false)
-                    reviewUi?.showMessage(message ?: "保存失败，请检查分类和账户")
-                }
-            }
+        runCatching {
+            startActivity(Intent(this, AutoBookkeepingConfirmActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                putExtra(AutoBookkeepingConfirmActivity.EXTRA_BACKGROUND_MODE, AutoBookkeepingConfirmActivity.BACKGROUND_MODE_TRANSPARENT)
+            })
+            trace("confirmation_launch_returned", "awaiting window; shown=false")
+        }.onFailure {
+            AutoBookkeepingLogStore.record(this, "confirmation_open_failed", it.javaClass.simpleName)
+            closeConfirmation("launch_failed")
         }
     }
 
-    fun flutterReviewReady(payload: Map<*, *>) {
-        flutterReviewReady = true
-        reviewUi?.syncFromFlutter(payload)
-        reviewUi?.setFlutterReady(true)
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "native_review_flutter_ready",
-            "books=${(payload["books"] as? List<*>)?.size ?: 0} " +
-                "accounts=${(payload["accounts"] as? List<*>)?.size ?: 0} " +
-                "categories=${(payload["categories"] as? List<*>)?.size ?: 0}",
-        )
-
-        if (revealFlutterWhenReady) {
-            revealFlutterWhenReady = false
-            AutoBookkeepingConfirmActivity.instance?.revealFlutterEditor()
-            removeNativeView()
-            return
-        }
-        if (pendingNativeSubmit) {
-            reviewUi?.setSaving(false)
-            submitNativeDraft(reviewUi?.currentDraft().orEmpty())
-        }
-    }
-
-    private fun revealFlutterEditor() {
-        val activity = AutoBookkeepingConfirmActivity.instance
-        if (flutterReviewReady && activity != null) {
-            activity.revealFlutterEditor()
-            removeNativeView()
-            return
-        }
-        revealFlutterWhenReady = true
-        reviewUi?.showMessage("正在打开完整设置…")
-    }
-
-    private fun cancelNativeReview(candidate: PaymentCandidate) {
-        AutoBookkeepingLogStore.record(this, "overlay_ignored", "user cancelled native review")
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "overlay_ignored",
-            "candidate=${candidate.toMap()}",
-        )
-        AutoBookkeepingPendingStore.complete(this)
-        pendingNativeSubmit = false
-        revealFlutterWhenReady = false
-        removeNativeView()
+    fun closeConfirmation(reason: String = "user_close", drainAutomatic: Boolean = false) {
+        val closingFingerprint = fingerprint
+        if (fingerprint != null) trace("confirmation_closed", "shown=$visible contentFrame=$prepared reason=$reason")
+        fingerprint = null
+        prepared = false
+        visible = false
+        handler.removeCallbacksAndMessages(null)
+        if (Store.read(this)?.get("fingerprint") == closingFingerprint) Store.deferCurrent(this)
+        AutoBookkeepingNotificationController.notifyConfirmationAvailable(this, showToast = false)
+        BookkeepingChangeBus.publish(this)
         AutoBookkeepingConfirmActivity.instance?.finish()
-        PaymentNotificationListenerService.instance?.retryStoredNotifications()
-    }
-
-    private fun removeNativeView() {
-        root?.let {
-            runCatching {
-                if (wm != null) wm?.removeViewImmediate(it)
-                else (it.parent as? ViewGroup)?.removeView(it)
-            }
-        }
-        root = null
-        reviewUi = null
-        wm = null
-    }
-
-    /** A normal Activity window remains usable when the payer hides overlays. */
-    fun attachReviewToActivity(activity: AutoBookkeepingConfirmActivity) {
-        val view = root ?: return
-        wm?.removeViewImmediate(view)
-        wm = null
-        (view.parent as? ViewGroup)?.removeView(view)
-        activity.addContentView(view, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
-        ))
-        ViewCompat.requestApplyInsets(view)
-        view.doOnPreDraw {
-            AutoBookkeepingLogStore.recordDetailed(this, "native_review_first_predraw",
-                "host=activity elapsedMs=${SystemClock.elapsedRealtime() - offeredAt}")
+        AutoBookkeepingEngine.clearReview()
+        if (drainAutomatic && AutoBookkeepingSettings.enabled(this)) handler.post {
+            Store.selectNextAutomatic(this)?.let { offer(it) }
         }
     }
 
-    fun detachActivityReview() {
-        if (wm == null) removeNativeView()
-    }
-
-    private fun removeFeedbackView() {
-        feedbackView?.let {
-            runCatching { feedbackWm?.removeView(it) }
-        }
-        feedbackView = null
-        feedbackWm = null
-    }
-
-    private fun openConfirmation(candidate: PaymentCandidate): Boolean {
-        if (flutterConfirmationOpen && AutoBookkeepingConfirmActivity.instance != null) return true
-        AutoBookkeepingLogStore.record(this, "confirm_open_requested", "warming Flutter confirmation engine")
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "confirm_open_requested",
-            "candidate=${candidate.toMap()} confirmationOpen=$flutterConfirmationOpen",
-        )
-        return runCatching {
-            startActivity(
-                Intent(this, AutoBookkeepingConfirmActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra(
-                        AutoBookkeepingConfirmActivity.EXTRA_BACKGROUND_MODE,
-                        AutoBookkeepingConfirmActivity.BACKGROUND_MODE_TRANSPARENT,
-                    )
-                },
-            )
-            true
-        }.onFailure { error ->
-            AutoBookkeepingLogStore.record(this, "confirm_open_failed", error.javaClass.simpleName)
-            AutoBookkeepingLogStore.recordDetailed(this, "confirm_open_failed", Log.getStackTraceString(error))
-            reviewUi?.showMessage("保存引擎启动失败，可稍后从通知重新确认")
-        }.getOrDefault(false)
-    }
-
-    fun confirmationOpened() {
-        flutterConfirmationOpen = true
-        // Keep the native overlay visible. It is the actual confirmation UI;
-        // the transparent Flutter Activity is only warming data/business logic.
-        AutoBookkeepingLogStore.recordDetailed(
-            this,
-            "confirmation_host_opened",
-            "nativeVisible=${root != null}",
-        )
-    }
+    fun confirmationOpened() = Unit
 
     fun confirmationClosed() {
-        flutterConfirmationOpen = false
-        flutterReviewReady = false
-        val pending = AutoBookkeepingPendingStore.readCandidate(this)
-        if (pending == null) {
-            removeNativeView()
-            currentCandidate = null
-            pendingNativeSubmit = false
-            revealFlutterWhenReady = false
-            return
-        }
-        if (root == null) {
-            // If the transparent host was killed before save/cancel completed,
-            // restore the immediate native review rather than losing the bill.
-            mainHandler.post { offer(pending) }
-        } else {
-            reviewUi?.setFlutterReady(false)
-            reviewUi?.setSaving(false)
-            // The native card can outlive the transparent Flutter host (process
-            // pressure, configuration changes, plugin/activity recreation). Keep
-            // the card usable by warming a replacement host instead of leaving
-            // the next Complete tap queued forever.
-            mainHandler.postDelayed({
-                if (root != null &&
-                    AutoBookkeepingConfirmActivity.instance == null &&
-                    AutoBookkeepingPendingStore.readCandidate(this) != null
-                ) {
-                    openConfirmation(pending)
-                }
-            }, FLUTTER_HOST_RESTART_DELAY_MS)
-        }
-    }
-
-    companion object {
-        var instance: AutoBillOverlayService? = null
-        private const val TAG = "AutoBookkeeping"
-        private const val FLUTTER_HOST_RESTART_DELAY_MS = 300L
-        private const val DETECTION_FEEDBACK_DURATION_MS = 1800L
+        // Back, process/window recreation and outside dismissal all preserve an unsaved bill.
+        if (fingerprint != null) closeConfirmation("host_destroyed")
     }
 
     override fun onCreate() {
         super.onCreate()
-        val foregroundStarted = runCatching {
-            if (!AutoBookkeepingSettings.enabled(this)) {
-                error("auto bookkeeping is disabled")
-            }
-            if (!AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
-                error("status notification is not available")
-            }
-            startForeground(
-                AutoBookkeepingNotificationController.NOTIFICATION_ID,
-                AutoBookkeepingNotificationController.buildNotification(this),
-            )
+        if (!AutoBookkeepingSettings.enabled(this) || !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)) {
+            stopSelf()
+            return
         }
-        if (foregroundStarted.isFailure) {
-            val error = foregroundStarted.exceptionOrNull()
-            Log.e(TAG, "overlay foreground initialization failed", error)
-            AutoBookkeepingDiagnostics.foregroundRunning = false
-            AutoBookkeepingDiagnostics.error = "自动记账常驻通知不可用，请检查通知权限"
-            AutoBookkeepingLogStore.record(
-                this,
-                "overlay_foreground_failed",
-                error?.javaClass?.simpleName ?: "notification unavailable",
-            )
+        runCatching {
+            startForeground(AutoBookkeepingNotificationController.NOTIFICATION_ID,
+                AutoBookkeepingNotificationController.buildNotification(this))
+        }.onFailure {
+            AutoBookkeepingLogStore.record(this, "foreground_start_failed", it.javaClass.simpleName)
             stopSelf()
             return
         }
         instance = this
         AutoBookkeepingDiagnostics.foregroundRunning = true
-        Log.i(TAG, "overlay service created")
-        AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service created")
+        com.algive.jizhang_app.PaymentNotificationListenerService.ensureConnected(this)
+        // onStartCommand distinguishes a newly detected payment from an old stored review.
+        AutoBookkeepingNotificationController.notifyConfirmationAvailable(this, showToast = false)
+        handler.post {
+            runCatching { AutoBookkeepingEngine.warmUp(this) }.onFailure {
+                AutoBookkeepingLogStore.record(this, "confirmation_warm_failed", it.javaClass.simpleName)
+                stopSelf()
+            }
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!AutoBookkeepingSettings.enabled(this)) { stopSelf(); return START_NOT_STICKY }
+        if (!isShowing) {
+            val candidate = Store.readCandidate(this)
+            if (candidate != null && System.currentTimeMillis() - Store.pendingCreatedAt(this) < 10000) offer(candidate)
+            else Store.deferCurrent(this)
+        }
+        return START_STICKY
     }
 
     override fun onDestroy() {
-        removeNativeView()
-        removeFeedbackView()
-        mainHandler.removeCallbacksAndMessages(null)
+        closeConfirmation("service_destroyed")
+        if (AutoBookkeepingConfirmActivity.instance == null) AutoBookkeepingEngine.dispose()
         instance = null
         AutoBookkeepingDiagnostics.foregroundRunning = false
-        AutoBookkeepingLogStore.record(this, "overlay_service", "foreground service destroyed")
-        AutoBookkeepingLogStore.recordDetailed(this, "overlay_service_destroyed", "foreground service destroyed")
         AutoBookkeepingNotificationController.cancelStatus(this)
         super.onDestroy()
     }
 
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
-
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int,
-    ): Int {
-        if (
-            !AutoBookkeepingSettings.enabled(this) ||
-            !AutoBookkeepingNotificationController.statusNotificationsAvailable(this)
-        ) {
-            AutoBookkeepingLogStore.record(
-                this,
-                "overlay_service_stop",
-                "service restarted without valid runtime conditions",
-            )
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (!isShowing) {
-            mainHandler.post {
-                AutoBookkeepingPendingStore.readCandidate(this)?.let { pending ->
-                    AutoBookkeepingLogStore.record(
-                        this,
-                        "pending_recovered",
-                        "showing stored confirmation candidate",
-                    )
-                    offer(pending)
-                }
-            }
-        }
-        return START_STICKY
-    }
+    companion object { var instance: AutoBillOverlayService? = null; private set }
 }

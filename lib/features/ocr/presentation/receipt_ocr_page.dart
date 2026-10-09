@@ -18,6 +18,7 @@ import '../application/local_ocr_service.dart';
 import '../application/bill_screenshot_parser.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_form.dart';
+import '../../assistant/application/assistant_input_policy.dart';
 
 class ReceiptOcrPage extends ConsumerStatefulWidget {
   const ReceiptOcrPage({super.key});
@@ -39,7 +40,8 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
   @override
   Widget build(BuildContext context) {
     final accounts = ref.watch(allAccountsProvider).value ?? const <Account>[];
-    final categories = ref.watch(categoriesProvider).value ?? const <Category>[];
+    final categories =
+        ref.watch(categoriesProvider).value ?? const <Category>[];
     _initializeDefaults(accounts, categories);
 
     return SafeArea(
@@ -80,7 +82,9 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                   children: [
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: _busy ? null : () => _pick(ImageSource.camera),
+                        onPressed: _busy
+                            ? null
+                            : () => _pick(ImageSource.camera),
                         icon: const Icon(Icons.camera_alt_outlined),
                         label: const Text('拍摄小票'),
                       ),
@@ -88,7 +92,9 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _busy ? null : () => _pick(ImageSource.gallery),
+                        onPressed: _busy
+                            ? null
+                            : () => _pick(ImageSource.gallery),
                         icon: const Icon(Icons.photo_library_outlined),
                         label: const Text('从相册选择'),
                       ),
@@ -119,7 +125,9 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        _parsed?.usedAi == true ? '已使用 AI 补充解析' : '本地 OCR / 规则解析',
+                        _parsed?.usedAi == true
+                            ? '已使用 AI 补充解析'
+                            : '本地 OCR / 规则解析',
                       ),
                       children: [
                         Align(
@@ -174,7 +182,10 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('无法匹配时的默认值', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+            '无法匹配时的默认值',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: accounts.any((a) => a.id == _fallbackAccountId)
@@ -241,8 +252,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
       children: [
         for (var index = 0; index < parsed.transactions.length; index++) ...[
           _candidate(parsed.transactions[index]),
-          if (index != parsed.transactions.length - 1)
-            const Divider(height: 1),
+          if (index != parsed.transactions.length - 1) const Divider(height: 1),
         ],
         if (parsed.unresolvedFragments.isNotEmpty)
           Padding(
@@ -259,9 +269,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
   Widget _candidate(ParsedVoiceTransaction item) => ListTile(
     leading: CircleAvatar(
       child: Icon(
-        item.type == TransactionType.expense
-            ? Icons.remove
-            : Icons.add,
+        item.type == TransactionType.expense ? Icons.remove : Icons.add,
       ),
     ),
     title: Row(
@@ -287,24 +295,20 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
     ),
   );
 
-  void _initializeDefaults(
-    List<Account> accounts,
-    List<Category> categories,
-  ) {
-    _fallbackAccountId ??=
-        accounts.where((a) => !a.isArchived).firstOrNull?.id;
-    _expenseCategoryId ??=
-        _preferred(_rootCategories(categories, CategoryType.expense))?.id;
-    _incomeCategoryId ??=
-        _preferred(_rootCategories(categories, CategoryType.income))?.id;
+  void _initializeDefaults(List<Account> accounts, List<Category> categories) {
+    _fallbackAccountId ??= accounts.where((a) => !a.isArchived).firstOrNull?.id;
+    _expenseCategoryId ??= _preferred(
+      _rootCategories(categories, CategoryType.expense),
+    )?.id;
+    _incomeCategoryId ??= _preferred(
+      _rootCategories(categories, CategoryType.income),
+    )?.id;
   }
 
-  List<Category> _rootCategories(
-    List<Category> values,
-    CategoryType type,
-  ) => values
-      .where((c) => c.type == type && c.parentId == null && !c.isArchived)
-      .toList(growable: false);
+  List<Category> _rootCategories(List<Category> values, CategoryType type) =>
+      values
+          .where((c) => c.type == type && c.parentId == null && !c.isArchived)
+          .toList(growable: false);
 
   Category? _preferred(List<Category> values) {
     for (final name in const ['其他', '其他支出', '其他收入']) {
@@ -327,10 +331,25 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
         imageQuality: 95,
       );
       if (image == null) return;
-      final ocr = await const LocalOcrService().recognize(image.path);
+      final policy = await ref.read(assistantInputPolicyServiceProvider).load();
+      final ocr = await const LocalOcrService().recognize(
+        image.path,
+        maxBytes: policy.maxImageMb * 1024 * 1024,
+      );
       final structured = const BillScreenshotParser().parse(ocr);
-      final parsed = structured ??
-          await ref.read(voiceTransactionParserProvider).parse(ocr.text);
+      final parsed =
+          structured ??
+          await ref
+              .read(
+                transactionParserProvider((
+                  source: 'ocr',
+                  requestId: null,
+                  referenceTime: null,
+                )),
+              )
+              .parse(ocr.text);
+      if (parsed.transactions.length > policy.maxTransactions)
+        throw FormatException('每次最多识别 ${policy.maxTransactions} 笔，请分批处理');
       if (!mounted) return;
       setState(() {
         _rawText = ocr.text;
@@ -347,10 +366,7 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
     }
   }
 
-  Future<void> _save(
-    List<Account> accounts,
-    List<Category> categories,
-  ) async {
+  Future<void> _save(List<Account> accounts, List<Category> categories) async {
     final parsed = _parsed;
     final fallbackAccount = accounts
         .where((a) => a.id == _fallbackAccountId)
@@ -386,7 +402,9 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
           categoryId: category.id,
           categoryName: category.name,
           merchant: item.merchant,
-          note: item.rawFragment.trim().isEmpty ? null : item.rawFragment.trim(),
+          note: item.rawFragment.trim().isEmpty
+              ? null
+              : item.rawFragment.trim(),
           source: TransactionSource.ocr,
           userCorrected: true,
           metadata: {
@@ -428,11 +446,13 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
     final name = item.accountName?.trim();
     if (name == null || name.isEmpty) return null;
     return accounts
-        .where((a) =>
-            !a.isArchived &&
-            (a.name == name || a.displayName == name) &&
-            (item.identifierSuffix == null ||
-                a.identifierSuffix == item.identifierSuffix))
+        .where(
+          (a) =>
+              !a.isArchived &&
+              (a.name == name || a.displayName == name) &&
+              (item.identifierSuffix == null ||
+                  a.identifierSuffix == item.identifierSuffix),
+        )
         .firstOrNull;
   }
 
@@ -448,8 +468,6 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
     }
     final name = item.categoryName?.trim();
     if (name == null || name.isEmpty) return null;
-    return categories
-        .where((c) => c.name == name && !c.isArchived)
-        .firstOrNull;
+    return categories.where((c) => c.name == name && !c.isArchived).firstOrNull;
   }
 }

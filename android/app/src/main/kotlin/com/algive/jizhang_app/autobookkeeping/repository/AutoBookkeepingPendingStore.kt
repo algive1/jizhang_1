@@ -3,26 +3,25 @@ package com.algive.jizhang_app.autobookkeeping.repository
 import android.content.Context
 import com.algive.jizhang_app.autobookkeeping.AutoBookkeepingLogStore
 import com.algive.jizhang_app.autobookkeeping.dedup.BillFingerprint
+import com.algive.jizhang_app.autobookkeeping.dedup.PaymentInboxDedup
 import com.algive.jizhang_app.autobookkeeping.merchant.MerchantNormalizer
 import com.algive.jizhang_app.autobookkeeping.model.PaymentCandidate
 import com.algive.jizhang_app.autobookkeeping.model.PaymentScene
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.File
-import kotlin.math.abs
 
 enum class PendingEnqueueDecision {
     ACCEPTED,
     DUPLICATE,
     BUSY,
+    QUEUED,
 }
 
 /**
- * Keeps one payment candidate between native capture sources and Flutter.
- *
- * There is still a single visible confirmation slot, but it is no longer
- * "first writer wins": a high-confidence accessibility payment-success result
- * can replace a lower-confidence notification candidate. Cross-source
- * observations of the same payment are deduplicated before reaching the UI.
+ * Keeps one active review and a durable inbox of deferred/ignored payments.
+ * Higher-confidence observations enrich the same payment; unrelated payments
+ * are queued without replacing the review the user is editing.
  */
 object AutoBookkeepingPendingStore {
     private const val PREFS = "autobookkeeping.pending"
@@ -33,12 +32,11 @@ object AutoBookkeepingPendingStore {
     private const val KEY_FINGERPRINT = "fingerprint"
     private const val KEY_CREATED_AT = "created_at"
     private const val KEY_PRIORITY = "priority"
+    private const val KEY_INBOX = "inbox"
+    private const val KEY_HANDLED_HISTORY = "handled_history"
+    private const val KEY_HANDLED_IDENTITIES = "handled_identities"
 
-    private const val PENDING_TTL_MILLIS = 30 * 60 * 1000L
     private const val HANDLED_TTL_MILLIS = 10 * 60 * 1000L
-    // A page result and its notification normally arrive together. A broad
-    // window incorrectly merges two same-amount payments made seconds apart.
-    private const val CROSS_SOURCE_MATCH_MILLIS = 10_000L
 
     private const val PRIORITY_NOTIFICATION = 1
     private const val PRIORITY_ACCESSIBILITY = 2
@@ -54,7 +52,21 @@ object AutoBookkeepingPendingStore {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val incoming = payload(candidate, now)
+        val inbox = normalizeInbox(context)
         val pending = parse(preferences.getString(KEY_PENDING, null))
+        if (handledMatch(context, rawMap(incoming))) {
+            AutoBookkeepingLogStore.record(context, "pending_deduplicated", "reason=already_handled")
+            return PendingEnqueueDecision.DUPLICATE
+        }
+        val values = listOfNotNull(pending) + inbox
+        val duplicate = PaymentInboxDedup.find(values.map(::rawMap), rawMap(incoming))
+        val existing = duplicate?.takeIf { pending == null || it > 0 }?.let { values[it] }
+        if (existing != null) {
+            val merged = mergePayload(existing, incoming)
+            writeInbox(context, inbox.map { if (it === existing) merged else it })
+            AutoBookkeepingLogStore.record(context, "pending_deduplicated", "reason=inbox_${PaymentInboxDedup.match(rawMap(existing), rawMap(incoming))}")
+            return PendingEnqueueDecision.DUPLICATE
+        }
         AutoBookkeepingLogStore.recordDetailed(
             context,
             "pending_enqueue_requested",
@@ -62,13 +74,7 @@ object AutoBookkeepingPendingStore {
         )
 
         if (pending != null) {
-            val createdAt = pending.optLong(KEY_CREATED_AT, 0L)
-            if (createdAt <= 0L || now - createdAt > PENDING_TTL_MILLIS) {
-                AutoBookkeepingLogStore.recordDetailed(context, "pending_expired", "candidate=$pending")
-                deleteScreenshot(context, pending.optString("screenshotPath"))
-                preferences.edit().remove(KEY_PENDING).apply()
-            } else {
-                val sameTransaction = isLikelySameTransaction(pending, incoming)
+                val sameTransaction = duplicate == 0
                 val existingPriority = pending.optInt(
                     KEY_PRIORITY,
                     priorityFor(pending.optString("scene")),
@@ -77,51 +83,21 @@ object AutoBookkeepingPendingStore {
 
                 if (sameTransaction) {
                     if (incomingPriority > existingPriority) {
-                        deleteScreenshot(context, pending.optString("screenshotPath"))
                         preferences.edit()
-                            .putString(KEY_PENDING, incoming.toString())
+                            .putString(KEY_PENDING, mergePayload(pending, incoming).toString())
                             .apply()
                         logEnqueueDecision(context, PendingEnqueueDecision.ACCEPTED, candidate, "same transaction upgraded")
                         return PendingEnqueueDecision.ACCEPTED
                     }
+                    preferences.edit().putString(KEY_PENDING, mergePayload(pending, incoming).toString()).apply()
+                    AutoBookkeepingLogStore.record(context, "pending_deduplicated", "reason=active_${PaymentInboxDedup.match(rawMap(pending), rawMap(incoming))}")
                     logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "same transaction")
                     return PendingEnqueueDecision.DUPLICATE
                 }
 
-                // A low-confidence notification must never block a real
-                // payment-success page for the whole pending TTL.
-                if (incomingPriority > existingPriority) {
-                    deleteScreenshot(context, pending.optString("screenshotPath"))
-                    preferences.edit()
-                        .putString(KEY_PENDING, incoming.toString())
-                        .apply()
-                    logEnqueueDecision(context, PendingEnqueueDecision.ACCEPTED, candidate, "higher priority replaced pending")
-                    return PendingEnqueueDecision.ACCEPTED
-                }
-                logEnqueueDecision(context, PendingEnqueueDecision.BUSY, candidate, "pending slot occupied")
-                return PendingEnqueueDecision.BUSY
-            }
-        }
-
-        val fingerprint = incoming.optString(KEY_FINGERPRINT)
-        val handledFingerprint = preferences.getString(KEY_HANDLED_FINGERPRINT, null)
-        val handledAt = preferences.getLong(KEY_HANDLED_AT, 0L)
-        if (
-            handledFingerprint == fingerprint &&
-            now - handledAt <= HANDLED_TTL_MILLIS
-        ) {
-            logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "handled fingerprint")
-            return PendingEnqueueDecision.DUPLICATE
-        }
-
-        val handledPayload = parse(preferences.getString(KEY_HANDLED_PAYLOAD, null))
-        if (
-            handledPayload != null &&
-            now - handledAt <= HANDLED_TTL_MILLIS &&
-            isLikelySameTransaction(handledPayload, incoming)
-        ) {
-            logEnqueueDecision(context, PendingEnqueueDecision.DUPLICATE, candidate, "handled transaction match")
-            return PendingEnqueueDecision.DUPLICATE
+                writeInbox(context, inbox + incoming.put("status", "pending").put("autoReviewRequested", true))
+                logEnqueueDecision(context, PendingEnqueueDecision.QUEUED, candidate, "another bill is being reviewed")
+                return PendingEnqueueDecision.QUEUED
         }
 
         preferences.edit().putString(KEY_PENDING, incoming.toString()).apply()
@@ -187,10 +163,10 @@ object AutoBookkeepingPendingStore {
             scene = PaymentScene(
                 sourceApp = sourceApp,
                 scene = scene,
-                confidence = .9,
+                confidence = (arguments["sceneConfidence"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
             ),
-            amountConfidence = 1.0,
-            merchantConfidence = .9,
+            amountConfidence = (arguments["amountConfidence"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
+            merchantConfidence = (arguments["merchantConfidence"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
             sourceApp = sourceApp,
             transactionType = transactionType,
             orderId = orderId?.take(64),
@@ -201,6 +177,9 @@ object AutoBookkeepingPendingStore {
             targetIdentifierSuffix = targetIdentifierSuffix,
             targetAccountHint = targetAccountHint?.take(120),
             screenshotPath = screenshotPath,
+            transactionTimeKnown = arguments["transactionTimeKnown"] == true,
+            paymentSessionId = (arguments["paymentSessionId"] as? String)?.take(80),
+            paymentOriginApp = (arguments["paymentOriginApp"] as? String)?.take(20),
         )
     }
 
@@ -212,9 +191,15 @@ object AutoBookkeepingPendingStore {
                 "merchant" to value.optString("merchant"),
                 "paymentMethod" to value.optString("paymentMethod"),
                 "timestamp" to value.optLong("timestamp"),
+                "transactionTimeKnown" to value.optBoolean("transactionTimeKnown"),
+                "paymentSessionId" to value.optString("paymentSessionId"),
+                "paymentOriginApp" to value.optString("paymentOriginApp"),
                 "sourceApp" to value.optString("sourceApp"),
                 "scene" to value.optString("scene"),
                 "transactionType" to value.optString("transactionType"),
+                "amountConfidence" to value.optDouble("amountConfidence", 0.0),
+                "merchantConfidence" to value.optDouble("merchantConfidence", 0.0),
+                "sceneConfidence" to value.optDouble("sceneConfidence", 0.0),
                 "orderId" to value.optString("orderId").takeIf { it.isNotBlank() },
                 "note" to value.optString("note").takeIf { it.isNotBlank() },
                 "originalAmountInCents" to
@@ -235,15 +220,22 @@ object AutoBookkeepingPendingStore {
 
     fun read(context: Context): Map<String, Any>? {
         val value = readValidPayload(context) ?: return null
-        return mapOf(
+        return payloadMap(value)
+    }
+
+    private fun payloadMap(value: JSONObject): Map<String, Any> = mapOf(
             KEY_FINGERPRINT to value.optString(KEY_FINGERPRINT),
             "amountInCents" to value.optLong("amountInCents"),
             "merchant" to value.optString("merchant"),
             "paymentMethod" to value.optString("paymentMethod"),
             "timestamp" to value.optLong("timestamp"),
+            "transactionTimeKnown" to value.optBoolean("transactionTimeKnown"),
             "sourceApp" to value.optString("sourceApp"),
             "scene" to value.optString("scene"),
             "transactionType" to value.optString("transactionType"),
+            "amountConfidence" to value.optDouble("amountConfidence", 0.0),
+            "merchantConfidence" to value.optDouble("merchantConfidence", 0.0),
+            "sceneConfidence" to value.optDouble("sceneConfidence", 0.0),
             "orderId" to value.optString("orderId"),
             "note" to value.optString("note"),
             "originalAmountInCents" to value.optLong("originalAmountInCents"),
@@ -252,7 +244,74 @@ object AutoBookkeepingPendingStore {
             "targetIdentifierSuffix" to value.optString("targetIdentifierSuffix"),
             "targetAccountHint" to value.optString("targetAccountHint"),
             "screenshotPath" to value.optString("screenshotPath"),
+            "status" to value.optString("status", "pending"),
         )
+
+    private fun jsonList(raw: String?): List<JSONObject> = runCatching {
+        val array = JSONArray(raw ?: "[]")
+        (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+    }.getOrDefault(emptyList())
+
+    private fun inboxPayloads(context: Context) = jsonList(
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_INBOX, null),
+    )
+
+    private fun writeInbox(context: Context, values: List<JSONObject>) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_INBOX, JSONArray(values).toString()).apply()
+    }
+
+    @Synchronized
+    fun inbox(context: Context): List<Map<String, Any>> =
+        (normalizeInbox(context) + listOfNotNull(readValidPayload(context)))
+            .sortedByDescending { it.optLong(KEY_CREATED_AT) }.map(::payloadMap)
+
+    fun pendingCount(context: Context): Int = inbox(context).count { it["status"] == "pending" }
+    fun pendingCreatedAt(context: Context): Long = readValidPayload(context)?.optLong(KEY_CREATED_AT) ?: 0L
+
+    @Synchronized
+    fun deferCurrent(context: Context) {
+        normalizeInbox(context)
+        val current = readValidPayload(context) ?: return
+        val values = inboxPayloads(context).filter { it.optString(KEY_FINGERPRINT) != current.optString(KEY_FINGERPRINT) }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_INBOX, JSONArray(values + current.put("status", "pending").put("autoReviewRequested", false)).toString())
+            .remove(KEY_PENDING).apply()
+    }
+
+    @Synchronized
+    fun select(context: Context, fingerprint: String): Boolean {
+        normalizeInbox(context)
+        if (readValidPayload(context)?.optString(KEY_FINGERPRINT) == fingerprint) return true
+        val selected = inboxPayloads(context).firstOrNull { it.optString(KEY_FINGERPRINT) == fingerprint } ?: return false
+        deferCurrent(context)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_PENDING, selected.put("status", "pending").toString())
+            .putString(KEY_INBOX, JSONArray(inboxPayloads(context).filter { it.optString(KEY_FINGERPRINT) != fingerprint }).toString())
+            .apply()
+        return true
+    }
+
+    @Synchronized
+    fun selectNextAutomatic(context: Context): PaymentCandidate? {
+        if (readValidPayload(context) == null) {
+            val next = normalizeInbox(context).filter {
+                it.optString("status") == "pending" && it.optBoolean("autoReviewRequested")
+            }.minByOrNull { it.optLong(KEY_CREATED_AT) } ?: return null
+            if (!select(context, next.optString(KEY_FINGERPRINT))) return null
+        }
+        return readCandidate(context)
+    }
+
+    @Synchronized
+    fun ignore(context: Context, fingerprint: String): Boolean {
+        normalizeInbox(context)
+        if (readValidPayload(context)?.optString(KEY_FINGERPRINT) == fingerprint) deferCurrent(context)
+        val values = inboxPayloads(context)
+        val selected = values.firstOrNull { it.optString(KEY_FINGERPRINT) == fingerprint } ?: return false
+        selected.put("status", "ignored")
+        writeInbox(context, values)
+        return true
     }
 
     @Synchronized
@@ -260,17 +319,26 @@ object AutoBookkeepingPendingStore {
         context: Context,
         remember: Boolean = true,
         keepScreenshot: Boolean = false,
+        fingerprint: String? = null,
     ) {
+        normalizeInbox(context)
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val value = parse(preferences.getString(KEY_PENDING, null))
-        val fingerprint = value?.optString(KEY_FINGERPRINT).orEmpty()
+        val pending = parse(preferences.getString(KEY_PENDING, null))
+        val target = fingerprint ?: pending?.optString(KEY_FINGERPRINT).orEmpty()
+        if (target.isBlank()) return
+        val value = pending?.takeIf { it.optString(KEY_FINGERPRINT) == target }
+            ?: inboxPayloads(context).firstOrNull { it.optString(KEY_FINGERPRINT) == target }
         val screenshotPath = value?.optString("screenshotPath").orEmpty()
         AutoBookkeepingLogStore.recordDetailed(
             context,
             "pending_completed",
-            "remember=$remember keepScreenshot=$keepScreenshot fingerprint=$fingerprint candidate=$value",
+            "remember=$remember keepScreenshot=$keepScreenshot fingerprint=$target candidate=$value",
         )
-        val editor = preferences.edit().remove(KEY_PENDING)
+        val editor = preferences.edit()
+            .putString(KEY_INBOX, JSONArray(inboxPayloads(context).filter {
+                it.optString(KEY_FINGERPRINT) != target
+            }).toString())
+        if (pending?.optString(KEY_FINGERPRINT) == target) editor.remove(KEY_PENDING)
 
         if (!keepScreenshot) {
             deleteScreenshot(context, screenshotPath)
@@ -279,18 +347,28 @@ object AutoBookkeepingPendingStore {
         if (
             remember &&
             value != null &&
-            fingerprint.isNotBlank()
+            target.isNotBlank()
         ) {
             val handled = JSONObject(value.toString()).apply {
                 remove("screenshotPath")
             }
             editor
-                .putString(KEY_HANDLED_FINGERPRINT, fingerprint)
+                .putString(KEY_HANDLED_FINGERPRINT, target)
                 .putString(KEY_HANDLED_PAYLOAD, handled.toString())
                 .putLong(KEY_HANDLED_AT, System.currentTimeMillis())
+                .putString(KEY_HANDLED_HISTORY, JSONArray(
+                    (jsonList(preferences.getString(KEY_HANDLED_HISTORY, null)) +
+                        JSONObject(handled.toString()).put(KEY_HANDLED_AT, System.currentTimeMillis())).takeLast(1000),
+                ).toString())
         }
 
+        if (remember) {
+            editor.putStringSet(KEY_HANDLED_IDENTITIES,
+                preferences.getStringSet(KEY_HANDLED_IDENTITIES, emptySet()).orEmpty() + target +
+                    (value?.let { PaymentInboxDedup.handledKeys(rawMap(it)) } ?: emptySet()))
+        }
         editor.apply()
+        AutoBookkeepingLogStore.record(context, "pending_recorded", "fingerprint=${target.take(16)} located=${value != null} active=${pending?.optString(KEY_FINGERPRINT) == target}")
     }
 
     @Synchronized
@@ -322,7 +400,9 @@ object AutoBookkeepingPendingStore {
         }
 
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val pending = parse(preferences.getString(KEY_PENDING, null))
+        val active = parse(preferences.getString(KEY_PENDING, null))
+        val pending = active?.takeIf { it.optString(KEY_FINGERPRINT) == fingerprint }
+            ?: inboxPayloads(context).firstOrNull { it.optString(KEY_FINGERPRINT) == fingerprint }
         if (
             pending == null ||
             pending.optString(KEY_FINGERPRINT) != fingerprint
@@ -341,7 +421,11 @@ object AutoBookkeepingPendingStore {
             deleteScreenshot(context, oldPath)
         }
         pending.put("screenshotPath", path)
-        preferences.edit().putString(KEY_PENDING, pending.toString()).apply()
+        if (active?.optString(KEY_FINGERPRINT) == fingerprint) {
+            preferences.edit().putString(KEY_PENDING, pending.toString()).apply()
+        } else {
+            writeInbox(context, inboxPayloads(context).map { if (it.optString(KEY_FINGERPRINT) == fingerprint) pending else it })
+        }
         AutoBookkeepingLogStore.recordDetailed(context, "pending_screenshot_attached", "fingerprint=$fingerprint path=$path")
         return true
     }
@@ -359,18 +443,7 @@ object AutoBookkeepingPendingStore {
 
     private fun readValidPayload(context: Context): JSONObject? {
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val value = parse(preferences.getString(KEY_PENDING, null)) ?: return null
-        val createdAt = value.optLong(KEY_CREATED_AT, 0L)
-
-        if (
-            createdAt <= 0L ||
-            System.currentTimeMillis() - createdAt > PENDING_TTL_MILLIS
-        ) {
-            complete(context, remember = false)
-            return null
-        }
-
-        return value
+        return parse(preferences.getString(KEY_PENDING, null))
     }
 
     private fun payload(candidate: PaymentCandidate, now: Long): JSONObject =
@@ -382,10 +455,16 @@ object AutoBookkeepingPendingStore {
             .put("merchant", candidate.merchantNormalized)
             .put("paymentMethod", candidate.paymentMethod)
             .put("timestamp", candidate.timestamp)
+            .put("transactionTimeKnown", candidate.transactionTimeKnown)
             .put("sourceApp", candidate.sourceApp)
             .put("scene", candidate.scene.scene)
             .put("transactionType", candidate.transactionType)
+            .put("amountConfidence", candidate.amountConfidence)
+            .put("merchantConfidence", candidate.merchantConfidence)
+            .put("sceneConfidence", candidate.scene.confidence)
             .apply {
+                candidate.paymentSessionId?.let { put("paymentSessionId", it) }
+                candidate.paymentOriginApp?.let { put("paymentOriginApp", it) }
                 candidate.orderId?.let { put("orderId", it) }
                 candidate.note?.let { put("note", it) }
                 candidate.originalAmountInCents?.let { put("originalAmountInCents", it) }
@@ -405,108 +484,60 @@ object AutoBookkeepingPendingStore {
             PRIORITY_ACCESSIBILITY
         }
 
-    /**
-     * Cross-source duplicate matching intentionally ignores paymentMethod and
-     * merchant when one observation is a notification and the other is an
-     * accessibility page. Marketplace notifications often say "美团外卖"
-     * while the payment page exposes the actual store name.
-     */
-    private fun isLikelySameTransaction(
-        first: JSONObject,
-        second: JSONObject,
-    ): Boolean {
-        val sameSource =
-            first.optString("sourceApp") == second.optString("sourceApp")
-        val firstNotification =
-            first.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        val secondNotification =
-            second.optString("scene").startsWith("PAYMENT_NOTIFICATION")
-        val crossCaptureSource = firstNotification != secondNotification
-        if (
-            !transactionTypesCompatible(
-                first.optString("transactionType", "EXPENSE"),
-                second.optString("transactionType", "EXPENSE"),
-                crossCaptureSource,
-            )
-        ) {
-            return false
-        }
-        if (first.optLong("amountInCents") != second.optLong("amountInCents")) {
-            return false
-        }
-
-        val firstOrderId = first.optString("orderId").trim()
-        val secondOrderId = second.optString("orderId").trim()
-        BillFingerprint.matchingOrder(firstOrderId, secondOrderId)?.let { return it }
-
-        val firstAt = first.optLong("timestamp", 0L)
-        val secondAt = second.optLong("timestamp", 0L)
-        if (
-            firstAt <= 0L ||
-            secondAt <= 0L ||
-            abs(firstAt - secondAt) > CROSS_SOURCE_MATCH_MILLIS
-        ) {
-            return false
-        }
-
-        val firstMerchant = MerchantNormalizer.normalize(first.optString("merchant"))
-        val secondMerchant = MerchantNormalizer.normalize(second.optString("merchant"))
-        val sameMerchant =
-            firstMerchant.isNotBlank() &&
-                secondMerchant.isNotBlank() &&
-                firstMerchant == secondMerchant
-
-        if (crossCaptureSource) {
-            // The same marketplace payment may be observed from the merchant
-            // app page and from the underlying Alipay/WeChat/UnionPay
-            // notification. Merchant labels often differ, so also correlate
-            // the page's explicit payment method with the other source app.
-            val samePaymentRail =
-                paymentMethodMatchesSource(
-                    first.optString("paymentMethod"),
-                    second.optString("sourceApp"),
-                ) ||
-                    paymentMethodMatchesSource(
-                        second.optString("paymentMethod"),
-                        first.optString("sourceApp"),
-                    )
-            return sameSource || sameMerchant || samePaymentRail
-        }
-
-        // Same-source page events are deduplicated by the visible page session;
-        // notifications with the same post time share an exact fingerprint.
-        // Merchant + amount + a nearby time is not enough to merge real buys.
-        return false
+    private fun rawMap(value: JSONObject): Map<String, Any> = buildMap {
+        value.keys().forEach { key -> value.opt(key)?.takeIf { it != JSONObject.NULL }?.let { put(key, it) } }
+        if (PaymentInboxDedup.legacyTransactionTimeKnown(this)) put("transactionTimeKnown", true)
     }
 
-    internal fun transactionTypesCompatible(
-        first: String,
-        second: String,
-        crossCaptureSource: Boolean,
-    ): Boolean {
-        if (first == second) return true
-        if (!crossCaptureSource) return false
-        return (first == "EXPENSE" && second == "TRANSFER") ||
-            (first == "TRANSFER" && second == "EXPENSE")
+    private fun mergePayload(existing: JSONObject, incoming: JSONObject) =
+        JSONObject(PaymentInboxDedup.merge(rawMap(existing), rawMap(incoming)))
+
+    private fun handledMatch(context: Context, candidate: Map<String, Any>): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val keys = prefs.getStringSet(KEY_HANDLED_IDENTITIES, emptySet()).orEmpty()
+        if (PaymentInboxDedup.handledKeys(candidate).any(keys::contains)) return true
+        if (candidate[KEY_FINGERPRINT] == prefs.getString(KEY_HANDLED_FINGERPRINT, null) &&
+            System.currentTimeMillis() - prefs.getLong(KEY_HANDLED_AT, 0L) <= HANDLED_TTL_MILLIS) return true
+        val history = jsonList(prefs.getString(KEY_HANDLED_HISTORY, null)) +
+            listOfNotNull(parse(prefs.getString(KEY_HANDLED_PAYLOAD, null))?.put(KEY_HANDLED_AT, prefs.getLong(KEY_HANDLED_AT, 0L)))
+        val observations = history.distinctBy { it.optString(KEY_FINGERPRINT) }.map(::rawMap)
+        val eligible = observations.filter {
+            val match = PaymentInboxDedup.match(it, candidate)
+            match != null && (match.strong || match == PaymentInboxDedup.Match.SUCCESS_DETAIL ||
+                System.currentTimeMillis() - ((it[KEY_HANDLED_AT] as? Number)?.toLong() ?: 0L) <= HANDLED_TTL_MILLIS)
+        }
+        return PaymentInboxDedup.find(eligible, candidate, observations + candidate) != null
     }
 
-    private fun paymentMethodMatchesSource(
-        paymentMethod: String,
-        sourceApp: String,
-    ): Boolean {
-        val normalized = paymentMethod.trim()
-        if (normalized.isEmpty()) return false
-        return when (sourceApp) {
-            "ALIPAY" -> normalized.contains("支付宝")
-            "WECHAT" -> normalized.contains("微信")
-            "UNIONPAY" ->
-                normalized.contains("云闪付") ||
-                    normalized.contains("银行卡") ||
-                    normalized.contains("信用卡") ||
-                    normalized.contains("储蓄卡")
-            else -> false
+    /** Migrate only identifiable duplicates; keep the active review fingerprint stable. */
+    private fun normalizeInbox(context: Context): List<JSONObject> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val original = inboxPayloads(context)
+        val active = readValidPayload(context)
+        val observations = original.map(::rawMap)
+        val values = PaymentInboxDedup.collapse(observations, observations + listOfNotNull(active?.let(::rawMap)))
+            .filterNot { handledMatch(context, it) }.toMutableList()
+        var mergedActive = false
+        if (active != null) {
+            PaymentInboxDedup.find(values, rawMap(active), observations + rawMap(active))?.let { index ->
+                val current = rawMap(active) + ("status" to "pending")
+                prefs.edit().putString(KEY_PENDING, JSONObject(PaymentInboxDedup.merge(current, values.removeAt(index))).toString()).apply()
+                mergedActive = true
+            }
         }
+        val normalized = values.map(::JSONObject)
+        val serialized = JSONArray(normalized).toString()
+        if (serialized != prefs.getString(KEY_INBOX, "[]")) {
+            prefs.edit().putString(KEY_INBOX, serialized).apply()
+        }
+        if (original.size != normalized.size || mergedActive) {
+            AutoBookkeepingLogStore.record(context, "inbox_deduplicated", "before=${original.size} after=${normalized.size} activeMerged=$mergedActive")
+        }
+        return normalized
     }
+
+    internal fun transactionTypesCompatible(first: String, second: String, crossCaptureSource: Boolean): Boolean =
+        PaymentInboxDedup.typesCompatible(first, second, crossCaptureSource)
 
     private fun isManagedScreenshot(context: Context, path: String): Boolean {
         if (path.isBlank()) return false
@@ -526,9 +557,8 @@ object AutoBookkeepingPendingStore {
     }
 
     fun cleanupOrphanedScreenshots(context: Context) {
-        val validPath = readValidPayload(context)
-            ?.optString("screenshotPath")
-            .orEmpty()
+        val validPaths = inbox(context).mapNotNull { (it["screenshotPath"] as? String)?.takeIf(String::isNotBlank) }
+            .mapNotNull { runCatching { File(it).canonicalPath }.getOrNull() }.toSet()
         val directory = File(
             context.filesDir,
             "autobookkeeping/pending_screenshots",
@@ -536,10 +566,7 @@ object AutoBookkeepingPendingStore {
         directory.listFiles()
             ?.filter { file ->
                 file.isFile &&
-                    (validPath.isBlank() ||
-                        runCatching {
-                            file.canonicalPath != File(validPath).canonicalPath
-                        }.getOrDefault(true))
+                    runCatching { file.canonicalPath !in validPaths }.getOrDefault(false)
             }
             ?.forEach { file -> runCatching { file.delete() } }
     }

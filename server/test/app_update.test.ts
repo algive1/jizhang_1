@@ -14,6 +14,17 @@ const keys = [
   'APP_UPDATE_IOS_MESSAGE',
 ] as const;
 
+test('同版本更高构建号可以更新，灰度依照固定安装标识选择',async t=>{
+  const {app,store}=await createApp(':memory:');t.after(()=>app.close());
+  const now=store.now();
+  store.db.prepare("INSERT INTO console_releases(id,platform,version_name,version_code,minimum_version,download_url,changelog,rollout,status,created_at,updated_at,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run('build-update','android','1.0.1',6022,'1.0.0','https://example.com/new.apk','修复',100,'published',now,now,'test');
+  assert.equal((await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.1&build=6021&installationId='+ 'a'.repeat(32)})).json().status,'optional');
+  assert.equal((await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.1&build=6022'})).json().status,'none');
+  assert.equal((await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.2&build=6021'})).json().status,'none');
+  store.db.prepare("UPDATE console_releases SET rollout=0").run();
+  assert.notEqual((await app.inject({url:'/api/v1/app/update?platform=android&version=1.0.1&build=6021&installationId='+ 'a'.repeat(32)})).json().status,'optional');
+});
+
 test('app update policy returns none, optional and required without login', async t => {
   const previous = new Map(keys.map(key => [key, process.env[key]]));
   t.after(() => {

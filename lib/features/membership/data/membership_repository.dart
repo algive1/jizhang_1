@@ -128,7 +128,10 @@ class RemoteMembershipRepository implements MembershipRepository {
         .toList();
     if (kAllFeaturesFreeForTesting) {
       for (final key in EntitlementKey.values) {
-        if (entitlements.any((grant) => grant.key == key)) continue;
+        if (entitlements.any(
+          (grant) => grant.key == key && grant.source == 'testing_free_access',
+        ))
+          continue;
         entitlements.add(
           EntitlementGrant(
             key: key,
@@ -149,9 +152,12 @@ class RemoteMembershipRepository implements MembershipRepository {
           ? Subscription(
               id: subscriptionJson['id'] as String,
               userId: subscriptionJson['userId'] as String,
-              provider: subscriptionJson['provider'] == 'alipay'
-                  ? SubscriptionProvider.alipay
-                  : SubscriptionProvider.wechat,
+              provider: switch (subscriptionJson['provider']) {
+                'alipay' => SubscriptionProvider.alipay,
+                'apple' => SubscriptionProvider.apple,
+                'admin' => SubscriptionProvider.manualGrant,
+                _ => SubscriptionProvider.wechat,
+              },
               productId: subscriptionJson['productId'] as String,
               startedAt: _date(subscriptionJson['startedAt']),
               expiresAt: _date(subscriptionJson['expiresAt']),
@@ -161,6 +167,22 @@ class RemoteMembershipRepository implements MembershipRepository {
             )
           : null,
       entitlements: entitlements,
+      featurePolicies: kAllFeaturesFreeForTesting
+          ? const {}
+          : {
+              for (final feature in MembershipFeature.values)
+                if ((json['featurePolicies'] as Map?)?[feature.apiKey]
+                    case final Map policy)
+                  feature: MembershipFeaturePolicy(
+                    enabled: policy['enabled'] as bool? ?? true,
+                    requiresMembership:
+                        policy['requiresMembership'] as bool? ?? false,
+                    entitlement: policy['entitlement'] == null
+                        ? null
+                        : _entitlement(policy['entitlement'] as String),
+                    source: policy['source'] as String? ?? 'server',
+                  ),
+            },
       quotas: (json['quotas'] as List? ?? const [])
           .whereType<Map>()
           .map(

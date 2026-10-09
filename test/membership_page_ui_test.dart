@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jizhang_app/app/theme/app_theme.dart';
@@ -91,68 +93,167 @@ void main() {
       });
     }
   }
-  testWidgets('payment uses selected plan and channel once', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final database = createMemoryDatabase();
-    addTearDown(database.close);
-    final session = SessionRepository(
-      SharedApi(),
-      database,
-      storage: const _EmptySessionStorage(),
-    )..user = const SessionUser('test-user', '测试用户');
-    addTearDown(session.dispose);
-    final payment = _RecordingPaymentService();
+  testWidgets('版本切换同步价格与套餐权益，全部下架时禁止支付', (tester) async {
+    final source = await tester.runAsync(
+      () => rootBundle.loadString(
+        'assets/config/membership_catalog.json',
+        cache: false,
+      ),
+    );
+    final json = jsonDecode(source!) as Map<String, dynamic>;
+    json['versions'] = [
+      {'id': 'pro', 'title': 'Pro 会员'},
+      {
+        'id': 'family',
+        'title': 'Family 会员',
+        'benefitIds': ['cloud', 'export'],
+      },
+    ];
+    (json['plans'] as List).add({
+      'id': 'family-monthly',
+      'versionId': 'family',
+      'title': '家庭月卡',
+      'months': 1,
+      'priceInCents': 1100,
+      'description': '共享权益',
+      'recommended': true,
+      'rightOverrides': [
+        {'benefitId': 'cloud', 'enabled': false},
+        {'benefitId': 'export', 'enabled': true, 'value': '专属导出'},
+      ],
+    });
+    final catalog = MembershipCatalog.fromJson(json);
     final membership = await LocalOnlyMembershipRepository().getCurrent();
-    final catalog = await ConfiguredMembershipCatalogRepository().load();
-
+    Widget page(MembershipCatalog value) => ProviderScope(
+      overrides: [
+        membershipProvider.overrideWithValue(AsyncData(membership)),
+        membershipCatalogProvider.overrideWithValue(AsyncData(value)),
+      ],
+      child: MaterialApp(theme: AppTheme.light(), home: const MembershipPage()),
+    );
+    await tester.pumpWidget(page(catalog));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Family 会员'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('membership-plan-family-monthly')),
+      findsOneWidget,
+    );
+    expect(find.text('数据云同步', skipOffstage: false), findsNothing);
+    expect(find.text('专属导出', skipOffstage: false), findsOneWidget);
+    expect(
+      tester
+          .widget<RichText>(find.byKey(const ValueKey('membership-pay-amount')))
+          .text
+          .toPlainText(),
+      contains('¥11'),
+    );
+    await tester.tap(find.text('Pro 会员'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<RichText>(find.byKey(const ValueKey('membership-pay-amount')))
+          .text
+          .toPlainText(),
+      contains('¥22'),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          databaseProvider.overrideWithValue(database),
-          membershipProvider.overrideWithValue(AsyncData(membership)),
-          membershipCatalogProvider.overrideWithValue(AsyncData(catalog)),
-          sessionRepositoryProvider.overrideWithValue(session),
-          paymentServiceProvider.overrideWithValue(payment),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: const MembershipPage(),
-        ),
+      page(
+        MembershipCatalog.fromJson({'plans': [], 'benefits': [], 'faqs': []}),
       ),
     );
     await tester.pumpAndSettle();
-
-    final alipay = find.byKey(
-      const ValueKey('membership-payment-alipay'),
-      skipOffstage: false,
+    expect(find.text('暂无可开通套餐'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('membership-pay-button')),
+          )
+          .onPressed,
+      isNull,
     );
-    await tester.ensureVisible(alipay);
-    await tester.tap(alipay);
-    final yearly = find.byKey(
-      const ValueKey('membership-plan-yearly'),
-      skipOffstage: false,
-    );
-    await tester.ensureVisible(yearly);
-    await tester.tap(yearly);
-    await tester.tap(find.byKey(const ValueKey('membership-pay-button')));
-    await tester.pump();
-    await tester.tap(
-      find.byKey(const ValueKey('membership-pay-button')),
-      warnIfMissed: false,
-    );
-    expect(payment.requests, hasLength(1));
-    expect(payment.requests.single.productId, 'yearly');
-    expect(payment.requests.single.channel, PaymentChannel.alipay);
-
-    payment.completePending();
-    await tester.pumpAndSettle();
-    expect(find.text('已调起支付'), findsOneWidget);
-    await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 2));
-    expect(payment.invokeCount, 1);
+    expect(tester.takeException(), isNull);
   });
+  for (final scenario in [(false, false), (true, false), (false, true)]) {
+    final fromCard = scenario.$1;
+    final priceChanged = scenario.$2;
+    testWidgets(
+      'payment uses selected plan and channel once (card: $fromCard, price changed: $priceChanged)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final database = createMemoryDatabase();
+        addTearDown(database.close);
+        final session = SessionRepository(
+          SharedApi(),
+          database,
+          storage: const _EmptySessionStorage(),
+        )..user = const SessionUser('test-user', '测试用户');
+        addTearDown(session.dispose);
+        final payment = _RecordingPaymentService();
+        final membership = await LocalOnlyMembershipRepository().getCurrent();
+        final catalog = await ConfiguredMembershipCatalogRepository().load();
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              databaseProvider.overrideWithValue(database),
+              membershipProvider.overrideWithValue(AsyncData(membership)),
+              membershipCatalogProvider.overrideWithValue(AsyncData(catalog)),
+              sessionRepositoryProvider.overrideWithValue(session),
+              paymentServiceProvider.overrideWithValue(payment),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const MembershipPage(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final alipay = find.byKey(
+          const ValueKey('membership-payment-alipay'),
+          skipOffstage: false,
+        );
+        await tester.ensureVisible(alipay);
+        await tester.pumpAndSettle();
+        await tester.tap(alipay);
+        final yearly = find.byKey(
+          const ValueKey('membership-plan-yearly'),
+          skipOffstage: false,
+        );
+        await tester.ensureVisible(yearly);
+        await tester.pumpAndSettle();
+        await tester.tap(yearly);
+        await tester.pumpAndSettle();
+        final payButton = find.byKey(
+          ValueKey(
+            fromCard ? 'membership-purchase-yearly' : 'membership-pay-button',
+          ),
+        );
+        await tester.ensureVisible(payButton);
+        await tester.pumpAndSettle();
+        await tester.tap(payButton);
+        await tester.pump();
+        await tester.tap(payButton, warnIfMissed: false);
+        expect(payment.requests, hasLength(1));
+        expect(payment.requests.single.productId, 'yearly');
+        expect(payment.requests.single.channel, PaymentChannel.alipay);
+
+        payment.completePending(amountInCents: priceChanged ? 7900 : 6800);
+        await tester.pumpAndSettle();
+        expect(
+          priceChanged ? find.textContaining('套餐价格已更新') : find.text('已调起支付'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text(priceChanged ? '知道了' : '完成'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 2));
+        expect(payment.invokeCount, priceChanged ? 0 : 1);
+      },
+    );
+  }
 }
 
 class _EmptySessionStorage implements SessionStorage {
@@ -176,7 +277,7 @@ class _RecordingPaymentService implements PaymentService {
     return _pending.future;
   }
 
-  void completePending() {
+  void completePending({int amountInCents = 6800}) {
     if (_pending.isCompleted) return;
     _pending.complete(
       PaymentOrder(
@@ -186,7 +287,7 @@ class _RecordingPaymentService implements PaymentService {
         idempotencyKey: requests.single.idempotencyKey,
         createdAt: DateTime.now(),
         productId: requests.single.productId,
-        amountInCents: 6800,
+        amountInCents: amountInCents,
       ),
     );
   }

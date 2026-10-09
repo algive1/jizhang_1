@@ -3,6 +3,7 @@ import { useRoute } from "vue-router";
 import PageHeader from "../components/PageHeader.vue";
 import { api } from "../api/console";
 import { useResource } from "../composables/useResource";
+import UserMembership from "../components/UserMembership.vue";
 const route = useRoute();
 const { data, loading, error, refresh } = useResource(() =>
   api.user(String(route.params.id)),
@@ -53,4 +54,5 @@ void refresh();
       ><a-alert>管理后台不读取此用户的私人账单与云备份正文。</a-alert>
     </section></a-spin
   >
+  <user-membership :user-id="String(route.params.id)" @changed="refresh" />
 </template>

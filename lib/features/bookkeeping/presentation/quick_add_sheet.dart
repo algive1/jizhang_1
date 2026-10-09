@@ -41,7 +41,6 @@ import '../../../core/widgets/book_color_dot.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/app_bottom_navigation.dart';
 import '../../../core/widgets/app_snack_bar.dart';
-import '../../../core/widgets/app_glass_surface.dart';
 import '../../../core/widgets/payment_brand_icon.dart';
 import '../../../core/widgets/app_liquid_glass_surface.dart';
 import '../../accounts/data/account_repository.dart';
@@ -50,7 +49,6 @@ import '../../books/presentation/book_selector.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transaction_attachment_repository.dart';
 import '../../transactions/data/transactions_repository.dart';
-import '../../voice/presentation/voice_bookkeeping_sheet.dart';
 import '../application/amount_input.dart';
 import '../application/attachment_storage_service.dart';
 import '../application/quick_bookkeeping_service.dart';
@@ -86,6 +84,7 @@ class QuickAddReviewDraft {
     required this.isPlanned,
     required this.isOneTime,
     required this.isRecurring,
+    this.ignoreAccountBalanceEffect = false,
   });
 
   final String bookId;
@@ -108,6 +107,7 @@ class QuickAddReviewDraft {
   final bool isPlanned;
   final bool isOneTime;
   final bool isRecurring;
+  final bool ignoreAccountBalanceEffect;
 }
 
 class QuickAddSheet extends ConsumerStatefulWidget {
@@ -183,6 +183,7 @@ Future<void> showQuickAddSheet(
   TransactionType initialType = TransactionType.expense,
   DateTime? initialOccurredAt,
   String? initialBookId,
+  String? initialDestinationAccountId,
 }) async {
   await Navigator.of(context, rootNavigator: true).push<void>(
     MaterialPageRoute<void>(
@@ -193,6 +194,7 @@ Future<void> showQuickAddSheet(
         initialType: initialType,
         initialOccurredAt: initialOccurredAt,
         initialBookId: initialBookId,
+        initialDestinationAccountId: initialDestinationAccountId,
       ),
     ),
   );
@@ -225,10 +227,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   bool _payerLabelLoading = false;
   DateTime _occurredAt = DateTime.now();
   bool _isPlanned = false;
+  bool _ignoreAccountBalanceEffect = false;
   bool _isOneTime = true;
   bool _isRecurring = false;
   RecurringBill? _recurringDraft;
   bool _isSaving = false;
+  bool _reviewSaved = false;
   bool _amountError = false;
   ReimbursementStatus _reimbursementStatus = ReimbursementStatus.none;
   bool _attachmentsChanged = false;
@@ -274,6 +278,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           );
         }
       }
+      _accountId = widget.initialAccountId;
+      _destinationAccountId = widget.initialDestinationAccountId;
       if (widget.reviewMode) {
         _categoryId = widget.initialCategoryId;
         _subcategoryId = widget.initialSubcategoryId;
@@ -316,6 +322,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     _reimbursementStatus = transaction.reimbursementStatus;
     _reimbursementNoteController.text = transaction.reimbursementNote ?? '';
     final metadata = _decodeMetadata(transaction.metadataJson);
+    _ignoreAccountBalanceEffect =
+        metadata['ignoreAccountBalanceEffect'] == true;
     final business = metadata['business'];
     if (business is Map) {
       _invoiceController.text = business['invoice']?.toString() ?? '';
@@ -496,16 +504,27 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final sourceAccount = _selectedAccount(accounts, _accountId);
     final destinationAccount = _destinationAccount(accounts, sourceAccount);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final compactCategoryRowHeight =
-        MediaQuery.textScalerOf(context).scale(14) > 19 ? 72.0 : 56.0;
+    final enlargedCategoryText =
+        MediaQuery.textScalerOf(context).scale(14) > 19;
+    final compactCategoryRowHeight = effectiveSubcategoryId != null
+        ? (enlargedCategoryText ? 92.0 : 68.0)
+        : (enlargedCategoryText ? 72.0 : 56.0);
+    final categoryColumns = enlargedCategoryText
+        ? (MediaQuery.sizeOf(context).width < 380 ? 3 : 4)
+        : 5;
+    final visibleCategoryRows =
+        ((activeCategories.length / categoryColumns).ceil()).clamp(1, 3);
     final input = _amount;
 
     return Scaffold(
-      backgroundColor: context.appBackground,
+      backgroundColor: widget.reviewMode
+          ? Colors.transparent
+          : context.appBackground,
       resizeToAvoidBottomInset: false,
       body: SafeArea(
+        top: !widget.reviewMode,
         bottom: false,
-        minimum: const EdgeInsets.only(top: 8),
+        minimum: EdgeInsets.only(top: widget.reviewMode ? 0 : 8),
         child: Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -514,7 +533,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             heightFactor: 1,
             child: Material(
               key: ValueKey('quick-sheet-surface'),
-              color: context.appBackground,
+              color: widget.reviewMode
+                  ? Colors.transparent
+                  : context.appBackground,
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -569,16 +590,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               size: 20,
                             ),
                           ),
-                        SizedBox(
-                          width: widget.reviewMode ? 106 : 52,
-                          child: Center(child: _headerNote()),
-                        ),
+                        if (widget.reviewMode)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: _headerNote(),
+                          )
+                        else
+                          SizedBox(
+                            width: 52,
+                            child: Center(child: _headerNote()),
+                          ),
                       ],
                     ),
                   ),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) => SingleChildScrollView(
+                        key: const ValueKey('quick-detail-scroll'),
                         padding: widget.reviewMode
                             ? const EdgeInsets.fromLTRB(16, 0, 16, 6)
                             : const EdgeInsets.fromLTRB(16, 2, 16, 10),
@@ -602,16 +630,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             if (!_usesAccountPair)
                               SizedBox(
                                 key: const ValueKey('quick-category-card'),
-                                // Three rows stay visible; extra rows scroll
-                                // inside the shared category card.
+                                // Use only the rows present, up to three visible rows.
                                 height: widget.reviewMode
-                                    ? compactCategoryRowHeight * 3 + 14
+                                    ? compactCategoryRowHeight *
+                                              visibleCategoryRows +
+                                          14.4
                                     : (constraints.maxHeight - 242).clamp(
                                         150.0,
                                         360.0,
                                       ),
                                 child: CategoryGrid(
                                   categories: activeCategories,
+                                  reviewMode: widget.reviewMode,
                                   selected: selectedCategory,
                                   subcategories: subcategories,
                                   selectedSubcategoryId: effectiveSubcategoryId,
@@ -619,9 +649,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                       ? compactCategoryRowHeight
                                       : null,
                                   iconSize: widget.reviewMode
-                                      ? (compactCategoryRowHeight > 56
-                                            ? 34
-                                            : 30)
+                                      ? (enlargedCategoryText ? 34 : 30)
                                       : 42,
                                   onSelected: (category, anchorRect) =>
                                       _chooseCategory(
@@ -635,6 +663,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               )
                             else
                               _AccountPairCard(
+                                reviewMode: widget.reviewMode,
                                 isRepayment: _type == TransactionType.repayment,
                                 source: sourceAccount,
                                 destination: destinationAccount,
@@ -675,55 +704,71 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     ),
                   ),
                   if (widget.reviewMode)
-                    SafeArea(
-                      top: false,
-                      bottom: widget.reviewBottomSafeArea,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                key: const ValueKey('quick-review-cancel'),
-                                onPressed: _isSaving || _reviewBookLoading
-                                    ? null
-                                    : () => unawaited(
-                                        widget.onReviewCancel?.call() ??
-                                            Future<void>.value(),
-                                      ),
-                                child: const Text('取消'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton.icon(
-                                key: const ValueKey('quick-review-complete'),
-                                onPressed: _isSaving || _reviewBookLoading
-                                    ? null
-                                    : () => unawaited(
-                                        _completeReview(
-                                          bookId: selectedBookId,
-                                          accounts: accounts,
-                                          categories: categories,
-                                          sourceAccount: sourceAccount,
-                                          destinationAccount:
-                                              destinationAccount,
-                                          selectedCategory: selectedCategory,
-                                          subcategoryId: effectiveSubcategoryId,
+                    ColoredBox(
+                      key: const ValueKey('quick-review-actions'),
+                      color: context.appSurface.withValues(
+                        alpha: MediaQuery.highContrastOf(context) ? 1 : .46,
+                      ),
+                      child: SafeArea(
+                        top: false,
+                        bottom: widget.reviewBottomSafeArea,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  key: const ValueKey('quick-review-cancel'),
+                                  onPressed: _isSaving || _reviewBookLoading
+                                      ? null
+                                      : () => unawaited(
+                                          widget.onReviewCancel?.call() ??
+                                              Future<void>.value(),
                                         ),
-                                      ),
-                                icon: _isSaving
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.check_rounded),
-                                label: Text(_isSaving ? '完成中…' : '完成'),
+                                  child: const Text('取消'),
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  key: const ValueKey('quick-review-complete'),
+                                  onPressed:
+                                      _isSaving ||
+                                          _reviewBookLoading ||
+                                          _reviewSaved
+                                      ? null
+                                      : () => unawaited(
+                                          _completeReview(
+                                            bookId: selectedBookId,
+                                            accounts: accounts,
+                                            categories: categories,
+                                            sourceAccount: sourceAccount,
+                                            destinationAccount:
+                                                destinationAccount,
+                                            selectedCategory: selectedCategory,
+                                            subcategoryId:
+                                                effectiveSubcategoryId,
+                                          ),
+                                        ),
+                                  icon: _isSaving
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.check_rounded),
+                                  label: Text(
+                                    _isSaving
+                                        ? '完成中…'
+                                        : _reviewSaved
+                                        ? '已保存'
+                                        : '完成',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     )
@@ -780,24 +825,40 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         message: widget.reviewScreenshotAvailable
             ? '是否将识别时截取的页面保存为本条账单附件'
             : '本笔没有可保存的支付截图',
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('自动截图', style: TextStyle(fontSize: 11)),
-            SizedBox(
-              width: 48,
-              child: Semantics(
-                label: '自动保存支付截图',
-                child: Switch(
-                  key: const ValueKey('quick-review-screenshot-toggle'),
-                  value: widget.reviewScreenshotEnabled,
-                  onChanged: widget.reviewScreenshotAvailable
-                      ? widget.onReviewScreenshotChanged
-                      : null,
+        child: SizedBox(
+          height: 40,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '自动截图',
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 10, height: 1.2),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Semantics(
+                  label: '自动保存支付截图',
+                  child: SizedBox(
+                    width: 40,
+                    height: 24,
+                    child: FittedBox(
+                      child: Switch(
+                        key: const ValueKey('quick-review-screenshot-toggle'),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: EdgeInsets.zero,
+                        value: widget.reviewScreenshotEnabled,
+                        onChanged: widget.reviewScreenshotAvailable
+                            ? widget.onReviewScreenshotChanged
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }
@@ -872,7 +933,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required Category? selectedCategory,
     required String? subcategoryId,
   }) async {
-    if (_isSaving || _reviewBookLoading) return;
+    if (_isSaving || _reviewBookLoading || _reviewSaved) return;
     if (_attachmentsBusy) {
       _showMessage('附件仍在保存，请稍候');
       return;
@@ -933,15 +994,17 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       isPlanned: _isPlanned,
       isOneTime: _isOneTime,
       isRecurring: _isRecurring,
+      ignoreAccountBalanceEffect: _ignoreAccountBalanceEffect,
     );
     setState(() => _isSaving = true);
     try {
       final saved = await onComplete(draft);
-      if (!saved && mounted) setState(() => _isSaving = false);
+      if (mounted) setState(() => _reviewSaved = saved);
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() => _isSaving = false);
       _showMessage('保存失败：$error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -959,18 +1022,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           ? const EdgeInsets.fromLTRB(8, 6, 8, 8)
           : const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: context.appSurface,
+        color: context.appSurface.withValues(
+          alpha: widget.reviewMode && !MediaQuery.highContrastOf(context)
+              ? .28
+              : 1,
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.appDivider),
+        border: Border.all(
+          color: widget.reviewMode
+              ? context.appPrimary.withValues(alpha: .30)
+              : context.appDivider,
+          width: widget.reviewMode ? 1.2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _NoteRow(
-            controller: _noteController,
-            onAi: _openAi,
-            onVoice: _openVoice,
-          ),
+          _NoteRow(controller: _noteController),
           SizedBox(height: widget.reviewMode ? 4 : 10),
           AmountInputView(
             input: input,
@@ -1079,11 +1147,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 onTap: _onAttachmentChip,
               ),
               _QuickChip(
-                key: const ValueKey('quick-image-chip'),
-                label: '图片',
-                icon: Icons.image_outlined,
+                key: const ValueKey('quick-ledger-only-chip'),
+                label: '不改余额',
+                icon: Icons.receipt_long_outlined,
+                selected: _ignoreAccountBalanceEffect,
                 height: widget.reviewMode ? 34 : 40,
-                onTap: _pickImageAttachment,
+                onTap: () => setState(
+                  () => _ignoreAccountBalanceEffect =
+                      !_ignoreAccountBalanceEffect,
+                ),
               ),
               _QuickChip(
                 key: const ValueKey('quick-date-chip'),
@@ -1537,38 +1609,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     ReimbursementStatus.partial => '部分报销',
   };
 
-  Future<void> _openVoice() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => VoiceBookkeepingSheet(bookId: _bookId),
-    );
-    if (saved == true && mounted) Navigator.pop(context);
-  }
+  Future<void> _onAttachmentChip() => _openAttachmentManager();
 
-  Future<void> _openAi() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => VoiceBookkeepingSheet(textOnly: true, bookId: _bookId),
-    );
-    if (saved == true && mounted) Navigator.pop(context);
-  }
-
-  Future<void> _onAttachmentChip() => _openAttachmentManager(images: false);
-
-  Future<void> _openAttachmentManager({required bool images}) async {
+  Future<void> _openAttachmentManager() async {
     await AppBottomSheet.show<void>(
       context: context,
       builder: (sheet) => StatefulBuilder(
         builder: (context, refresh) {
-          final entries = _attachments
-              .where((a) => a.isImage == images)
-              .toList();
+          final entries = _attachments;
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
@@ -1576,7 +1624,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '${images ? '图片' : '附件'} ${entries.length} · 合计最多 4 项',
+                  '附件 ${entries.length} · 合计最多 4 项',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -1666,32 +1714,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       ],
                     ),
                   ),
-                FilledButton.icon(
-                  icon: Icon(
-                    images ? Icons.photo_library_outlined : Icons.attach_file,
-                  ),
-                  label: Text(images ? '从相册选择' : '选择文件'),
-                  onPressed: _attachmentsBusy || _attachments.length >= 4
-                      ? null
-                      : () async {
-                          await _pickAttachment(
-                            type: images ? FileType.image : FileType.any,
-                            imageSource: images ? ImageSource.gallery : null,
-                          );
-                          if (context.mounted) refresh(() {});
-                        },
-                ),
-                if (images)
+                for (final option in const [
+                  ('选择文件', Icons.attach_file, null),
+                  ('从相册选择', Icons.photo_library_outlined, ImageSource.gallery),
+                  ('拍照', Icons.camera_alt_outlined, ImageSource.camera),
+                ])
                   TextButton.icon(
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('拍照'),
+                    icon: Icon(option.$2),
+                    label: Text(option.$1),
                     onPressed: _attachmentsBusy || _attachments.length >= 4
                         ? null
                         : () async {
-                            await _pickAttachment(
-                              type: FileType.image,
-                              imageSource: ImageSource.camera,
-                            );
+                            await _pickAttachment(imageSource: option.$3);
                             if (context.mounted) refresh(() {});
                           },
                   ),
@@ -1711,8 +1745,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               category.parentId == parent.id && category.type == parent.type,
         )
         .toList();
-    children.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    return children;
+    return orderCategories(children);
   }
 
   /// Children of [parent], plus the persisted sub-category of the record being
@@ -1760,19 +1793,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               category.type == desiredType && category.parentId == null,
         )
         .toList();
-    // Keep the established bookkeeping order in the floating review too:
-    // “其他” first, then the remaining roots by descending sort order.
-    bool isOtherCategory(Category category) =>
-        category.id == 'expense-other' ||
-        category.id == 'income-other' ||
-        category.name.trim().startsWith('其他');
-    result.sort((a, b) {
-      final aIsOther = isOtherCategory(a);
-      final bIsOther = isOtherCategory(b);
-      if (aIsOther != bIsOther) return aIsOther ? -1 : 1;
-      return b.sortOrder.compareTo(a.sortOrder);
-    });
-    return result;
+    return orderCategories(result);
   }
 
   Category? _selectedCategory(List<Category> categories) {
@@ -1795,6 +1816,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }
 
   Account? _selectedAccount(List<Account> accounts, String? selectedId) {
+    if (_type == TransactionType.repayment) {
+      final debt = accounts
+          .where((item) => item.id == _destinationAccountId)
+          .firstOrNull;
+      accounts = accounts
+          .where(
+            (item) =>
+                !item.type.isDebt &&
+                (debt == null || item.currency == debt.currency),
+          )
+          .toList();
+    }
     for (final account in accounts) {
       if (account.id == selectedId) return account;
     }
@@ -1805,6 +1838,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }
 
   Account? _destinationAccount(List<Account> accounts, Account? sourceAccount) {
+    if (_type == TransactionType.repayment) {
+      accounts = accounts
+          .where(
+            (item) =>
+                item.type.isDebt &&
+                (sourceAccount == null ||
+                    item.currency == sourceAccount.currency),
+          )
+          .toList();
+    }
     for (final account in accounts) {
       if (account.id == _destinationAccountId &&
           account.id != sourceAccount?.id) {
@@ -1832,7 +1875,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       return;
     }
 
-    final selection = await _showSubcategoryPopover(
+    final selection = await showSubcategoryPopover(
       context,
       anchorRect: anchorRect,
       parent: category,
@@ -1912,9 +1955,24 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     required bool isDestination,
   }) async {
     final sourceId = _selectedAccount(accounts, _accountId)?.id;
-    final available = isDestination
-        ? accounts.where((account) => account.id != sourceId).toList()
-        : accounts;
+    final debt = accounts
+        .where((item) => item.id == _destinationAccountId)
+        .firstOrNull;
+    final source = _selectedAccount(accounts, _accountId);
+    final available = accounts
+        .where(
+          (account) =>
+              (!isDestination || account.id != sourceId) &&
+              (_type != TransactionType.repayment ||
+                  (isDestination
+                      ? account.type.isDebt &&
+                            (source == null ||
+                                account.currency == source.currency)
+                      : !account.type.isDebt &&
+                            (debt == null ||
+                                account.currency == debt.currency))),
+        )
+        .toList();
     final selected = await showModalBottomSheet<Account>(
       context: context,
       backgroundColor: context.appSurface,
@@ -2063,12 +2121,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     if (value != null && mounted) setState(() => _occurredAt = value);
   }
 
-  Future<void> _pickImageAttachment() => _openAttachmentManager(images: true);
-
-  Future<void> _pickAttachment({
-    FileType type = FileType.any,
-    ImageSource? imageSource,
-  }) async {
+  Future<void> _pickAttachment({ImageSource? imageSource}) async {
     if (_attachments.length >= 4 || _attachmentsBusy) {
       if (_attachments.length >= 4) _showMessage('一笔流水最多添加 4 个附件');
       return;
@@ -2257,6 +2310,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         type: _type,
         amount: _amount.amount!,
         metadata: {
+          'ignoreAccountBalanceEffect': _ignoreAccountBalanceEffect,
           'formula': _amount.value,
           'amount_formula': _amount.value,
           if (_recurringDraft != null) 'recurring_bill_id': _recurringDraft!.id,
@@ -2475,6 +2529,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       _recurringDraft = null;
       _isOneTime = true;
       _reimbursementStatus = ReimbursementStatus.none;
+      _ignoreAccountBalanceEffect = false;
       _categoryId = null;
       _subcategoryId = null;
       _amountError = false;
@@ -2543,20 +2598,20 @@ String _transactionTypeLabel(TransactionType type) => switch (type) {
 };
 
 /// The prototype's four-item type switch: the active tab is a solid capsule.
-class _CategorySelection {
-  const _CategorySelection(this.subcategoryId);
+class SubcategorySelection {
+  const SubcategorySelection(this.subcategoryId);
 
   final String? subcategoryId;
 }
 
-Future<_CategorySelection?> _showSubcategoryPopover(
+Future<SubcategorySelection?> showSubcategoryPopover(
   BuildContext context, {
   required Rect anchorRect,
   required Category parent,
   required List<Category> categories,
   required String? selectedId,
 }) {
-  return Navigator.of(context, rootNavigator: true).push<_CategorySelection>(
+  return Navigator.of(context, rootNavigator: true).push<SubcategorySelection>(
     _SubcategoryPopoverRoute(
       anchorRect: anchorRect,
       parent: parent,
@@ -2566,7 +2621,7 @@ Future<_CategorySelection?> _showSubcategoryPopover(
   );
 }
 
-class _SubcategoryPopoverRoute extends PopupRoute<_CategorySelection> {
+class _SubcategoryPopoverRoute extends PopupRoute<SubcategorySelection> {
   _SubcategoryPopoverRoute({
     required this.anchorRect,
     required this.parent,
@@ -2641,7 +2696,7 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
   final Category parent;
   final List<Category> categories;
   final String? selectedId;
-  final ValueChanged<_CategorySelection> onSelected;
+  final ValueChanged<SubcategorySelection> onSelected;
   final VoidCallback onDismiss;
 
   @override
@@ -2673,9 +2728,6 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
           ? above
           : (safeBottom - height).clamp(safeTop, safeBottom).toDouble();
 
-      final radius = context.appUsesLiquidGlass
-          ? AppNavGeometry.barHeight / 2
-          : 24.0;
       final picker = _SubcategoryPicker(
         categories: categories,
         selectedId: selectedId,
@@ -2683,25 +2735,16 @@ class _AnchoredSubcategoryPopover extends StatelessWidget {
         rowHeight: rowHeight,
         onSelected: onSelected,
       );
-      final popover = context.appUsesLiquidGlass
-          ? AppLiquidGlassSurface(
-              borderRadius: radius,
-              tint: Colors.white,
-              blurSigma: AppBottomNavigation.capsuleBlurSigma,
-              glassOpacity: .94,
-              themeColorAccents: false,
-              key: const ValueKey('quick-subcategory-bubble'),
-              padding: const EdgeInsets.all(outerPadding),
-              child: picker,
-            )
-          : AppGlassSurface(
-              borderRadius: radius,
-              tint: context.appPopoverSurface.withValues(alpha: 1),
-              chromaticEdge: false,
-              key: const ValueKey('quick-subcategory-bubble'),
-              padding: const EdgeInsets.all(outerPadding),
-              child: picker,
-            );
+      final popover = AppLiquidGlassSurface(
+        borderRadius: 24,
+        tint: context.appIsDark ? context.appPopoverSurface : Colors.white,
+        blurSigma: AppBottomNavigation.capsuleBlurSigma,
+        glassOpacity: .94,
+        themeColorAccents: false,
+        key: const ValueKey('quick-subcategory-bubble'),
+        padding: const EdgeInsets.all(outerPadding),
+        child: picker,
+      );
 
       return Material(
         type: MaterialType.transparency,
@@ -2740,7 +2783,7 @@ class _SubcategoryPicker extends StatefulWidget {
   final String? selectedId;
   final int columns;
   final double rowHeight;
-  final ValueChanged<_CategorySelection> onSelected;
+  final ValueChanged<SubcategorySelection> onSelected;
 
   @override
   State<_SubcategoryPicker> createState() => _SubcategoryPickerState();
@@ -2761,7 +2804,7 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
   }
 
   void _handleScroll() {
-    if (_focusedIndex != null && context.appUsesLiquidGlass) {
+    if (_focusedIndex != null) {
       setState(() {});
     }
   }
@@ -2825,10 +2868,9 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
 
   void _selectIndex(int index) {
     HapticFeedback.selectionClick();
-    final selection = _CategorySelection(widget.categories[index].id);
+    final selection = SubcategorySelection(widget.categories[index].id);
     setState(() => _focusedIndex = index);
-    if (!context.appUsesLiquidGlass ||
-        MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       widget.onSelected(selection);
       return;
     }
@@ -2893,7 +2935,7 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
             fit: StackFit.expand,
             clipBehavior: Clip.hardEdge,
             children: [
-              if (context.appUsesLiquidGlass && _focusedIndex != null)
+              if (_focusedIndex != null)
                 AnimatedPositioned(
                   key: const ValueKey('quick-subcategory-liquid-pill'),
                   duration: animationsDisabled
@@ -2915,7 +2957,9 @@ class _SubcategoryPickerState extends State<_SubcategoryPicker> {
                         'quick-subcategory-liquid-pill-surface',
                       ),
                       borderRadius: 12,
-                      tint: AppBottomNavigation.capsuleTint(),
+                      tint: context.appIsDark
+                          ? context.appSurface
+                          : Colors.white,
                       blurSigma: AppBottomNavigation.capsuleBlurSigma,
                       themeColorAccents: false,
                       shadow: false,
@@ -3089,7 +3133,7 @@ class _EntryTabs extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           color: item.$1 == selected
-                              ? Colors.white
+                              ? Theme.of(context).colorScheme.onPrimary
                               : context.appSecondaryText,
                           fontWeight: item.$1 == selected
                               ? FontWeight.w600
@@ -3178,6 +3222,7 @@ class _DebtTabs extends StatelessWidget {
 /// 转出 → 转入 (or 还款账户 → 债务账户) shown where the category grid would be.
 class _AccountPairCard extends StatelessWidget {
   const _AccountPairCard({
+    this.reviewMode = false,
     required this.isRepayment,
     required this.source,
     required this.destination,
@@ -3185,6 +3230,7 @@ class _AccountPairCard extends StatelessWidget {
     required this.onDestinationTap,
   });
 
+  final bool reviewMode;
   final bool isRepayment;
   final Account? source;
   final Account? destination;
@@ -3196,7 +3242,9 @@ class _AccountPairCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: context.appSurface,
+        color: context.appSurface.withValues(
+          alpha: reviewMode && !MediaQuery.highContrastOf(context) ? .28 : 1,
+        ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.appDivider),
       ),
@@ -3332,23 +3380,13 @@ class _ReviewAmountDialogState extends State<_ReviewAmountDialog> {
   );
 }
 
-/// 备注行：常规字号下是「备注 + AI + 麦克风」一行；
-/// 大字号/窄屏下 AI 与麦克风换到第二行，避免备注输入框被挤成一个字。
 class _NoteRow extends StatelessWidget {
-  const _NoteRow({
-    required this.controller,
-    required this.onAi,
-    required this.onVoice,
-  });
-
+  const _NoteRow({required this.controller});
   final TextEditingController controller;
-  final VoidCallback onAi;
-  final VoidCallback onVoice;
 
   @override
   Widget build(BuildContext context) {
-    final stacks = MediaQuery.textScalerOf(context).scale(14) > 19;
-    final field = SizedBox(
+    return SizedBox(
       height: 40,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -3390,84 +3428,6 @@ class _NoteRow extends StatelessWidget {
         ],
       ),
     );
-    final aiAction = _QuickChip(
-      key: ValueKey('quick-ai-entry'),
-      label: 'AI帮我记',
-      icon: Icons.auto_awesome_outlined,
-      iconColor: context.appPrimary,
-      selected: true,
-      height: 36,
-      horizontalPadding: 6,
-      iconGap: 4,
-      fontSize: 12,
-      onTap: onAi,
-    );
-    final voiceAction = _NoteIconAction(
-      key: const ValueKey('quick-voice-entry'),
-      icon: Icons.mic_none_rounded,
-      tooltip: '语音记账',
-      onTap: onVoice,
-    );
-    final actions = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [aiAction, const SizedBox(width: 4), voiceAction],
-    );
-
-    if (stacks) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          field,
-          const SizedBox(height: 8),
-          Align(alignment: Alignment.centerRight, child: actions),
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(child: field),
-        const SizedBox(width: 6),
-        actions,
-      ],
-    );
-  }
-}
-
-class _NoteIconAction extends StatelessWidget {
-  const _NoteIconAction({
-    super.key,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: context.appDivider),
-            ),
-            child: Icon(icon, size: 18, color: context.appSecondaryText),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -3507,27 +3467,19 @@ class _QuickChip extends StatelessWidget {
     super.key,
     required this.label,
     this.icon,
-    this.iconColor,
     this.leading,
     this.selected = false,
     this.showChevron = false,
     this.height = 40,
-    this.horizontalPadding = 8,
-    this.iconGap = 6,
-    this.fontSize = 12.5,
     this.onTap,
   });
 
   final String label;
   final IconData? icon;
-  final Color? iconColor;
   final Widget? leading;
   final bool selected;
   final bool showChevron;
   final double height;
-  final double horizontalPadding;
-  final double iconGap;
-  final double fontSize;
   final VoidCallback? onTap;
 
   @override
@@ -3540,7 +3492,7 @@ class _QuickChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: height,
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
@@ -3555,14 +3507,10 @@ class _QuickChip extends StatelessWidget {
               children: [
                 if (leading != null) ...[
                   leading!,
-                  SizedBox(width: iconGap),
+                  const SizedBox(width: 6),
                 ] else if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 16,
-                    color: iconColor ?? context.appSecondaryText,
-                  ),
-                  SizedBox(width: iconGap),
+                  Icon(icon, size: 16, color: context.appSecondaryText),
+                  const SizedBox(width: 6),
                 ],
                 ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: 120),
@@ -3571,7 +3519,7 @@ class _QuickChip extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: fontSize,
+                      fontSize: 12.5,
                       color: selected
                           ? context.appPrimary
                           : context.appPrimaryText,

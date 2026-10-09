@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/entity_id.dart';
+import '../../../core/models/membership.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
+import '../../membership/data/membership_repository.dart';
+import 'assistant_input_policy.dart';
+import 'assistant_scope.dart';
 
 class AssistantAuthorizationResult {
   const AssistantAuthorizationResult({
@@ -33,6 +37,28 @@ final assistantPolicyServiceProvider = Provider<AssistantPolicyService>((ref) {
   final session = ref.watch(sessionProvider).value;
   final local = LocalAssistantPolicyService(
     ref.watch(appSettingsRepositoryProvider),
+    inputPolicy: ref.watch(assistantInputPolicyServiceProvider),
+    isMember: () =>
+        (ref.read(membershipProvider).value?.membership.effectivePlan ??
+            MembershipPlan.free) !=
+        MembershipPlan.free,
+    hasFeature: (feature) =>
+        ref
+            .read(membershipProvider)
+            .value
+            ?.has(
+              feature == 'voice'
+                  ? EntitlementKey.voiceAi
+                  : feature == 'ocr'
+                  ? EntitlementKey.ocr
+                  : EntitlementKey.dataExport,
+            ) ??
+        false,
+    dailyLimit: () => ref
+        .read(membershipProvider)
+        .value
+        ?.quotaFor(EntitlementKey.voiceAi)
+        ?.limit,
   );
   if (baseUrl.isNotEmpty && session != null) {
     return RemoteAssistantPolicyService(ref.watch(sharedApiProvider), local);
@@ -84,37 +110,55 @@ class RemoteAssistantPolicyService implements AssistantPolicyService {
 }
 
 class LocalAssistantPolicyService implements AssistantPolicyService {
-  LocalAssistantPolicyService(this.settings);
+  LocalAssistantPolicyService(
+    this.settings, {
+    this.inputPolicy,
+    this.isMember,
+    this.hasFeature,
+    this.dailyLimit,
+  });
   final AppSettingsRepository settings;
+  final AssistantInputPolicyService? inputPolicy;
+  final bool Function()? isMember;
+  final bool Function(String)? hasFeature;
+  final int? Function()? dailyLimit;
 
   static const maxInputLength = 300;
   static const freeDailyLimit = 30;
   static const memberDailyLimit = 300;
   static const requestsPerMinute = 10;
 
-  static final _outOfScope = RegExp(
-    r'代码|编程|脚本|程序|python|javascript|typescript|java\b|flutter|sql\b|html|css\b|写作|作文|小说|翻译|忽略|提示词|system\s*prompt|ignore|开发网站|写.*函数|write.*code|```',
-    caseSensitive: false,
-  );
-
   @override
   Future<AssistantAuthorizationResult> authorize({
     String? text,
     String? feature,
   }) async {
-    if (feature == 'voice') {
+    final policy = await (inputPolicy ?? AssistantInputPolicyService(settings))
+        .load();
+    if (!policy.enabled)
       return const AssistantAuthorizationResult(
         allowed: false,
-        message: '语音记账是会员功能，开通会员后可使用。',
+        message: '记账助手暂时停用',
+      );
+    final requestedFeature =
+        feature ?? (text == null ? null : assistantQueryFeature(text));
+    if (requestedFeature != null &&
+        policy.memberFeatures.contains(requestedFeature) &&
+        !(requestedFeature == 'summary'
+            ? isMember?.call() ?? false
+            : hasFeature?.call(requestedFeature) ?? false)) {
+      return const AssistantAuthorizationResult(
+        allowed: false,
+        message: '该功能需要对应会员权益。',
         requiresMembership: true,
       );
     }
     if (text == null) return const AssistantAuthorizationResult(allowed: true);
     final value = text.trim();
-    if (value.runes.length > maxInputLength) {
-      return const AssistantAuthorizationResult(
+    if (value.runes.length > policy.maxInputLength) {
+      return AssistantAuthorizationResult(
         allowed: false,
-        message: '单条消息最多 300 字。',
+        message: '单条消息最多 ${policy.maxInputLength} 字。',
       );
     }
     final day = _day();
@@ -123,35 +167,37 @@ class LocalAssistantPolicyService implements AssistantPolicyService {
     final minute = DateTime.now().millisecondsSinceEpoch ~/ 60000;
     final minuteKey = 'assistant.local.rate.$minute';
     final minuteUsed = int.tryParse(await settings.get(minuteKey) ?? '0') ?? 0;
-    if (minuteUsed >= requestsPerMinute) {
+    if (minuteUsed >= policy.requestsPerMinute) {
       return const AssistantAuthorizationResult(
         allowed: false,
         message: '发送太快，请稍后再试。',
       );
     }
     await settings.set(minuteKey, '${minuteUsed + 1}');
-    if (used >= freeDailyLimit) {
-      return const AssistantAuthorizationResult(
+    if (assistantOutOfScope(value))
+      return AssistantAuthorizationResult(
         allowed: false,
-        message: '今日助手次数已用完（30 次）。开通会员可提升每日次数。',
-        requiresMembership: true,
+        message: policy.boundaryReply,
+      );
+    final limit = isMember?.call() == true
+        ? dailyLimit?.call() ?? policy.memberDailyLimit
+        : policy.freeDailyLimit;
+    if (used >= limit) {
+      return AssistantAuthorizationResult(
+        allowed: false,
+        message: '今日助手次数已用完（$limit 次）。',
+        requiresMembership: isMember?.call() != true,
       );
     }
     await settings.set(usedKey, '${used + 1}');
-    if (_outOfScope.hasMatch(value)) {
-      return const AssistantAuthorizationResult(
-        allowed: false,
-        message: '我只处理记账、预算、收支查询、导出和会员权益，不能编写代码或完成其他通用任务。你可以发送“午餐12元微信支付”。',
-      );
-    }
     return AssistantAuthorizationResult(
       allowed: true,
-      remaining: freeDailyLimit - used - 1,
+      remaining: limit - used - 1,
     );
   }
 
   String _day() {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 }

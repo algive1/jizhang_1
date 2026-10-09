@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../settings/data/app_settings_repository.dart';
+import '../../settings/application/optimistic_setting.dart';
 
 const _profileQuickActionOrderKey = 'profile.quickActions.order.v1';
 const profileQuickActionLimit = 6;
@@ -27,14 +29,10 @@ const profileQuickActionAvailableIds = <String>[
   'goals',
 ];
 
-enum ProfileQuickActionToggleResult {
-  added,
-  removed,
-  atLimit,
-  minimumRequired,
-}
+enum ProfileQuickActionToggleResult { added, removed, atLimit, minimumRequired }
 
 class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
+  final _writer = OptimisticSetting<List<String>>();
   @override
   Future<List<String>> build() async {
     final raw = await ref
@@ -88,17 +86,18 @@ class ProfileQuickActionsController extends AsyncNotifier<List<String>> {
     final previous =
         state.value ?? List<String>.from(profileQuickActionDefaults);
     final next = _normalize(order).take(profileQuickActionLimit).toList();
-    if (next.isEmpty) return;
+    if (next.isEmpty || listEquals(next, previous)) return;
     final immutable = List<String>.unmodifiable(next);
-    state = AsyncData(immutable);
-    try {
-      await ref
-          .read(appSettingsRepositoryProvider)
-          .set(_profileQuickActionOrderKey, immutable.join(','));
-    } on Object {
-      state = AsyncData(List.unmodifiable(previous));
-      rethrow;
-    }
+    final settings = ref.read(appSettingsRepositoryProvider);
+    await _writer.select(
+      immutable,
+      previous: previous,
+      publish: (value) {
+        if (ref.mounted) state = AsyncData(value);
+      },
+      save: (value) =>
+          settings.set(_profileQuickActionOrderKey, value.join(',')),
+    );
   }
 
   List<String> _normalize(Iterable<String> values) {

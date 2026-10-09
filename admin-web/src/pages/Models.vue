@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from "vue";
-import { Message } from "@arco-design/web-vue";
+import { Message, Modal } from "@arco-design/web-vue";
 import type { TableColumnData } from "@arco-design/web-vue";
 import PageHeader from "../components/PageHeader.vue";
 import GiTable from "../components/GiTable.vue";
@@ -25,7 +25,12 @@ const defaults: AIModelInput = {
   enabled: false,
   priority: 100,
   fallbackId: null,
+  scenes: [],
+  dailyBudgetUsd: null,
 };
+const secret = ref(""),
+  keyId = ref(""),
+  keySaving = ref(false);
 const form = reactive({ ...defaults });
 const columns: TableColumnData[] = [
   { title: "名称", dataIndex: "name" },
@@ -36,7 +41,7 @@ const columns: TableColumnData[] = [
   { title: "单价 / 百万 Token", slotName: "price" },
   { title: "优先级", dataIndex: "priority" },
   { title: "状态", dataIndex: "enabled", slotName: "status" },
-  { title: "操作", slotName: "actions", fixed: "right", width: 100 },
+  { title: "操作", slotName: "actions", fixed: "right", width: 220 },
 ];
 function exported(row: AIModel, column: TableColumnData) {
   if (column.slotName === "price")
@@ -48,6 +53,12 @@ const fallbackId = computed({
   get: () => form.fallbackId ?? "",
   set: (value: string) => {
     form.fallbackId = value || null;
+  },
+});
+const budget = computed({
+  get: () => form.dailyBudgetUsd ?? undefined,
+  set: (value: number | undefined) => {
+    form.dailyBudgetUsd = value ?? null;
   },
 });
 function edit(row?: AIModel) {
@@ -68,6 +79,8 @@ function edit(row?: AIModel) {
           enabled: row.enabled,
           priority: row.priority,
           fallbackId: row.fallbackId,
+          scenes: [...row.scenes],
+          dailyBudgetUsd: row.dailyBudgetUsd,
         }
       : defaults,
   );
@@ -88,14 +101,42 @@ async function save() {
     saving.value = false;
   }
 }
+async function saveKey() {
+  keySaving.value = true;
+  try {
+    await api.saveModelKey(keyId.value, secret.value);
+    secret.value = "";
+    keyId.value = "";
+    Message.success("密钥已加密保存");
+    await table.value?.refresh();
+  } catch (e) {
+    Message.error(String(e));
+  } finally {
+    keySaving.value = false;
+  }
+}
+function test(row: AIModel) {
+  Modal.confirm({
+    title: "测试模型连接",
+    content: "将真实调用一次模型并计入供应商用量。",
+    onOk: async () => {
+      try {
+        const result = await api.testModel(row.id);
+        Message.success(`连接成功，用时 ${result.durationMs} 毫秒`);
+      } catch (e) {
+        Message.error(String(e));
+      }
+    },
+  });
+}
 </script>
 <template>
   <page-header
     title="模型管理"
-    description="配置服务端模型路由、备用模型、超时与单价。密钥仅由服务端环境变量提供。"
+    description="配置 DeepSeek 或兼容 OpenAI 接口的模型，设置场景路由、备用模型、超时与单价。"
   /><a-alert class="notice"
     >启用模型需配置服务端 AI_ENDPOINT_ALLOWLIST
-    与对应密钥环境变量。未启用任何模型时，保留现有 provider。</a-alert
+    与对应密钥。密钥可由环境变量提供，也可在配置服务端加密主密钥后加密保存。</a-alert
   ><gi-table
     ref="table"
     :columns="columns"
@@ -126,6 +167,21 @@ async function save() {
         size="small"
         @click="edit(record)"
         >编辑</a-button
+      ><a-button
+        v-if="can('ai:model:edit')"
+        type="text"
+        size="small"
+        @click="
+          keyId = record.id;
+          secret = '';
+        "
+        >密钥</a-button
+      ><a-button
+        v-if="can('ai:model:edit')"
+        type="text"
+        size="small"
+        @click="test(record)"
+        >测试</a-button
       ></template
     ></gi-table
   >
@@ -186,6 +242,22 @@ async function save() {
             :input-attrs="{ 'aria-label': field }"
         /></a-form-item>
       </div>
+      <a-form-item label="适用场景（不选为全部）"
+        ><a-select v-model="form.scenes" multiple
+          ><a-option value="assistant">智能助手</a-option
+          ><a-option value="voice">语音交易解析</a-option
+          ><a-option value="ocr">图片文字解析</a-option
+          ><a-option value="insight">账务洞察</a-option
+          ><a-option value="natural-language">自然语言记账</a-option></a-select
+        ></a-form-item
+      >
+      <a-form-item label="每日估算费用上限 USD（留空不限制）"
+        ><a-input-number
+          v-model="budget"
+          :min="0.01"
+          :precision="2"
+          placeholder="仅对有 Token 用量的调用估算，超过上限后停止后续调用"
+      /></a-form-item>
       <a-form-item label="启用路由"
         ><a-switch v-model="form.enabled" /></a-form-item
       ><a-space
@@ -195,4 +267,17 @@ async function save() {
       ></a-form
     >
   </section>
+  <a-modal
+    :visible="Boolean(keyId)"
+    title="更新模型密钥"
+    :ok-loading="keySaving"
+    @ok="saveKey"
+    @cancel="
+      keyId = '';
+      secret = '';
+    "
+    ><a-input-password
+      v-model="secret"
+      placeholder="输入新 API Key，保存后不回显"
+  /></a-modal>
 </template>

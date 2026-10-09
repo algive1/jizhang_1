@@ -55,17 +55,21 @@ class AppBottomNavigation extends StatelessWidget {
   /// page has to leave free.
   static const AppNavGeometry geometry = AppNavGeometry();
 
-  /// The ordinary-contrast white tint shared by the navigation capsule and FAB.
-  static Color capsuleTint() => Colors.white.withValues(alpha: .24);
+  /// Day uses white 24%; night follows the reference's card-color 50% plate.
+  static Color capsuleTint([ColorScheme? scheme]) =>
+      scheme?.brightness == Brightness.dark
+      ? scheme!.surface.withValues(alpha: .50)
+      : Colors.white.withValues(alpha: .24);
 
   /// The ordinary-contrast selected ink shared by navigation and the FAB glyph.
   static Color selectedEmphasisFor(
     ColorScheme scheme, {
     required bool liquidGlass,
-  }) =>
-      liquidGlass
-          ? Color.lerp(scheme.secondary, scheme.primary, .4)!
-          : _darken(scheme.secondary, selectedInkFactor);
+  }) => scheme.brightness == Brightness.dark
+      ? scheme.primary
+      : liquidGlass
+      ? Color.lerp(scheme.secondary, scheme.primary, .4)!
+      : _darken(scheme.secondary, selectedInkFactor);
 
   /// Capsule backdrop blur, in logical pixels.
   ///
@@ -76,7 +80,7 @@ class AppBottomNavigation extends StatelessWidget {
   /// smeared into flat wash and the bar read as an opaque slab. At 5 the
   /// backdrop stays legible as shapes moving under the plate, which is what
   /// makes it read as glass at all — and it is much closer to the reference
-  /// implementation's own 2.5. Every theme uses the same faint white tint.
+  /// implementation's night blur of 5. The tint follows brightness separately.
   ///
   /// Contrast for the tab row comes from its theme-specific ink, not from
   /// destroying the backdrop. Content that *rests* near the bar is kept
@@ -166,27 +170,28 @@ class AppBottomNavigation extends StatelessWidget {
   /// only softening the blur — the project's accessibility contract.
   static LiquidGlassStyle _capsuleStyle(BuildContext context) {
     final highContrast = MediaQuery.highContrastOf(context);
+    final dark = context.appIsDark;
     return LiquidGlassTabBar.defaultStyle.copyWith(
       shape: LiquidGlassShape.roundedRectangle(
         cornerRadius: AppNavGeometry.barHeight / 2,
         borderWidth: highContrast ? 1.4 : .9,
         borderColor: highContrast
             ? context.appPrimary.withValues(alpha: .34)
-            : Colors.white.withValues(alpha: .42),
-        lightIntensity: 1.1,
-        lightColor: const Color(0xCCFFFFFF),
+            : Colors.white.withValues(alpha: dark ? .24 : .42),
+        lightIntensity: dark ? .45 : 1.1,
+        lightColor: Colors.white.withValues(alpha: dark ? .24 : .80),
         lightDirection: 62,
-        borderType: const OpticalBorder(
+        borderType: OpticalBorder(
           borderSaturation: 1.2,
-          ambientIntensity: 1.0,
-          borderSolidity: .55,
+          ambientIntensity: dark ? .3 : 1.0,
+          borderSolidity: dark ? .24 : .55,
           lightSpread: .5,
         ),
       ),
       appearance: LiquidGlassAppearance(
         color: highContrast
-            ? const Color(0xFFF7FAFF)
-            : capsuleTint(),
+            ? (dark ? context.appSurface : const Color(0xFFF7FAFF))
+            : capsuleTint(context.appColors),
         // Blur and tint work together; icons and labels render above both.
         blur: LiquidGlassBlur(
           sigmaX: highContrast ? 8 : capsuleBlurSigma,
@@ -217,14 +222,13 @@ class AppBottomNavigation extends StatelessWidget {
     final liquidGlass = context.appUsesLiquidGlass;
     final selectedColor = highContrast
         ? context.appPrimaryText
-        : selectedEmphasisFor(
-            context.appColors,
-            liquidGlass: liquidGlass,
-          );
+        : selectedEmphasisFor(context.appColors, liquidGlass: liquidGlass);
     return LiquidGlassTabItemStyle(
       selectedColor: selectedColor,
       unselectedColor: highContrast
           ? context.appPrimaryText
+          : context.appIsDark
+          ? context.appSecondaryText
           : _darken(context.appSecondaryText, unselectedInkFactor),
       iconSize: 23,
       labelFontSize: 11.5,
@@ -247,17 +251,17 @@ class AppBottomNavigation extends StatelessWidget {
   static const double unselectedInkFactor = .84;
 
   static Color _darken(Color color, double factor) => Color.from(
-        alpha: color.a,
-        red: color.r * factor,
-        green: color.g * factor,
-        blue: color.b * factor,
-      );
+    alpha: color.a,
+    red: color.r * factor,
+    green: color.g * factor,
+    blue: color.b * factor,
+  );
 
   /// The **selection pill** — layers 2 and 3.
   ///
   /// [LiquidGlassTabPillStyle.rest] is the settled highlight: a
   /// **zero-refraction** fill that the moving glass lerps into as it lands.
-  /// Every theme uses the same 3% dark-gray fill. Theme-specific icon and
+  /// Day uses dark gray 3%, night uses white 10%. Theme-specific icon and
   /// label colors are checked against it for accessible contrast.
   ///
   /// [glassStyle] is left at the tuned default so the moving pill stays pure
@@ -268,7 +272,9 @@ class AppBottomNavigation extends StatelessWidget {
     final highContrast = MediaQuery.highContrastOf(context);
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final restFill = highContrast
-        ? const Color(0xFFDCE8FF)
+        ? (context.appIsDark ? context.appSurfaceSoft : const Color(0xFFDCE8FF))
+        : context.appIsDark
+        ? Colors.white.withValues(alpha: .10)
         : const Color(0xFF333333).withValues(alpha: .03);
 
     return LiquidGlassTabPillStyle(
@@ -286,7 +292,9 @@ class AppBottomNavigation extends StatelessWidget {
         shape: LiquidGlassShape.roundedRectangle(
           cornerRadius: AppNavGeometry.barHeight / 2,
           borderWidth: .7,
-          borderColor: Colors.white.withValues(alpha: .55),
+          borderColor: Colors.white.withValues(
+            alpha: context.appIsDark ? .24 : .55,
+          ),
         ),
         appearance: LiquidGlassAppearance(color: restFill),
       ),
@@ -302,7 +310,6 @@ class AppBottomNavigation extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// Screen-space geometry shared by the bar overlay, the docked centre

@@ -51,7 +51,9 @@ class QuickAddButton extends StatelessWidget {
       );
     }
 
-    final tint = AppBottomNavigation.capsuleTint();
+    final tint = context.appIsDark
+        ? Colors.white.withValues(alpha: .26)
+        : AppBottomNavigation.capsuleTint(scheme);
     final foreground = AppBottomNavigation.selectedEmphasisFor(
       scheme,
       liquidGlass: liquidGlass,
@@ -74,19 +76,26 @@ class QuickAddButton extends StatelessWidget {
             shape: LiquidGlassShape.roundedRectangle(
               cornerRadius: diameter / 2,
               borderWidth: 1,
-              lightIntensity: 1.2,
-              lightColor: const Color(0xE6FFFFFF),
+              lightIntensity: scheme.brightness == Brightness.dark ? .5 : 1.2,
+              lightColor: Colors.white.withValues(
+                alpha: scheme.brightness == Brightness.dark ? .26 : .90,
+              ),
               lightDirection: 80,
-              borderType: const OpticalBorder(
+              borderType: OpticalBorder(
                 borderSaturation: 1.3,
-                ambientIntensity: 1.0,
-                borderSolidity: .45,
+                ambientIntensity: scheme.brightness == Brightness.dark ? .3 : 1,
+                borderSolidity: scheme.brightness == Brightness.dark
+                    ? .24
+                    : .45,
                 lightSpread: .5,
               ),
             ),
             appearance: LiquidGlassAppearance(
               color: tint,
-              blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+              blur: LiquidGlassBlur(
+                sigmaX: scheme.brightness == Brightness.dark ? 2.5 : 4,
+                sigmaY: scheme.brightness == Brightness.dark ? 2.5 : 4,
+              ),
               shadow: LiquidGlassShadow(
                 color: Colors.black.withValues(alpha: .22),
                 blur: 14,
@@ -153,7 +162,7 @@ class _SolidAction extends StatelessWidget {
                 child: Icon(
                   Icons.add,
                   size: diameter * .6,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ),

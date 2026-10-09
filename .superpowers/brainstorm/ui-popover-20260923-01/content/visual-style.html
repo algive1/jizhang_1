@@ -1,0 +1,127 @@
+<style>
+  .visual-intro { max-width: 960px; margin: 0 auto 16px; }
+  .visual-cards { display:grid; grid-template-columns:repeat(2,minmax(280px,1fr)); gap:18px; max-width:980px; margin:0 auto; }
+  .visual-choice { cursor:pointer; border:1px solid rgba(130,150,180,.22); border-radius:20px; padding:12px; background:rgba(255,255,255,.04); transition:.18s ease; }
+  .visual-choice:hover { transform:translateY(-2px); border-color:rgba(105,160,255,.7); }
+  .visual-choice.selected { border:2px solid #6ea8ff; background:rgba(82,139,235,.10); box-shadow:0 0 0 3px rgba(82,139,235,.12); }
+  .visual-choice h3 { margin:4px 4px 5px; font-size:17px; }
+  .visual-choice p { margin:0 4px 12px; opacity:.78; font-size:13px; line-height:1.45; }
+  .phone { position:relative; width:min(100%,360px); height:640px; margin:auto; overflow:hidden; border-radius:30px; color:#293448; background:linear-gradient(155deg,#f7f9fd 0%,#edf2fb 52%,#e5ecf7 100%); box-shadow:0 12px 30px rgba(8,19,40,.26); border:5px solid #1c2330; }
+  .status { height:24px; padding:7px 18px 0; display:flex; justify-content:space-between; font:600 10px system-ui; color:#4d5d75; }
+  .screen { position:relative; padding:10px 17px; height:calc(100% - 24px); box-sizing:border-box; }
+  .top { display:flex; align-items:center; justify-content:space-between; height:40px; color:#26364f; font-size:17px; font-weight:700; }
+  .close { width:27px;height:27px;border-radius:50%;display:grid;place-items:center;background:#e1e8f3;color:#64748b;font-size:16px; }
+  .tabs { display:flex; gap:5px; padding:3px; border-radius:18px; background:rgba(255,255,255,.6); color:#77859b; font-size:10px; }
+  .tabs span { flex:1; text-align:center; padding:7px 0; border-radius:15px; }
+  .tabs .active { color:#316ac7; background:rgba(72,120,198,.13); font-weight:700; }
+  .amount { margin:17px 2px 14px; height:62px; display:flex; flex-direction:column; justify-content:center; border-bottom:1px solid rgba(67,88,121,.13); }
+  .amount small { color:#8290a4; font-size:10px; }
+  .amount strong { color:#273750; font-size:29px; letter-spacing:.4px; }
+  .section-title { margin:10px 2px 8px; font-size:11px; font-weight:700; color:#64738a; }
+  .roots { display:grid; grid-template-columns:repeat(5,1fr); gap:8px 4px; }
+  .root { text-align:center; font-size:9px; color:#687991; }
+  .root i { display:grid; place-items:center; width:31px;height:31px;margin:0 auto 4px;border-radius:12px;background:rgba(255,255,255,.58);color:#6080ad;font-size:16px;font-style:normal; }
+  .root.current { color:#2f6fc8;font-weight:700; }
+  .root.current i { color:#3374d0; background:rgba(68,127,211,.13); box-shadow:inset 0 0 0 1px rgba(64,121,205,.18); }
+  .lower { position:absolute; left:17px; right:17px; bottom:22px; height:110px; border-radius:19px; background:rgba(255,255,255,.38); padding:12px; box-sizing:border-box; }
+  .lower .line { height:8px; width:40%; border-radius:8px; background:rgba(90,112,146,.14); margin-bottom:11px; }
+  .lower .keys { display:grid;grid-template-columns:repeat(4,1fr);gap:7px; }
+  .lower .keys span { height:25px;border-radius:9px;background:rgba(255,255,255,.55); }
+  .scrim { position:absolute; inset:0; background:rgba(12,20,34,.53); }
+  .bubble { position:absolute; left:50%; top:282px; transform:translateX(-50%); width:calc(100% - 44px); padding:8px; box-sizing:border-box; border-radius:25px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px 0; }
+  .glass-nav { background:linear-gradient(150deg,rgba(255,255,255,.42),rgba(238,245,255,.23) 55%,rgba(219,231,250,.18)); border:1px solid rgba(255,255,255,.8); box-shadow:0 12px 30px rgba(4,12,25,.25), inset 0 1px 0 rgba(255,255,255,.68); backdrop-filter:blur(7px) saturate(1.28); -webkit-backdrop-filter:blur(7px) saturate(1.28); }
+  .glass-frost { background:linear-gradient(150deg,rgba(250,252,255,.97),rgba(237,243,252,.96)); border:1px solid rgba(255,255,255,.95); box-shadow:0 12px 30px rgba(4,12,25,.25), inset 0 1px 0 rgba(255,255,255,.95); backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px); }
+  .child { min-width:0;height:58px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;border-radius:11px;color:#416fae;text-align:center; }
+  .child svg { width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+  .child small { color:#35465f;font-size:9px;line-height:11px;white-space:nowrap; }
+  .child.sel { background:rgba(74,129,208,.17); color:#286dce; }
+  .child.sel small { color:#286dce;font-weight:700; }
+  .nav { position:absolute; left:50%; bottom:9px; transform:translateX(-50%); width:84%;height:49px;border-radius:28px;display:flex;align-items:center;justify-content:space-around;color:#5f7089;font-size:9px;background:rgba(255,255,255,.24);border:1px solid rgba(255,255,255,.65);box-shadow:0 7px 19px rgba(22,41,70,.14);backdrop-filter:blur(5px); }
+  .nav .on { border-radius:20px; background:rgba(51,51,51,.06); padding:6px 11px; color:#356fca;font-weight:700; }
+  .nav .plus { width:29px;height:29px;border-radius:50%;display:grid;place-items:center;color:#356fca;background:rgba(255,255,255,.24);font-size:18px; }
+  .device-foot { position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:70px;height:3px;border-radius:5px;background:rgba(34,47,67,.28); }
+  .choice-label { display:flex;align-items:center;gap:8px;margin:0 4px 11px;color:#4779be;font-size:10px;font-weight:800;letter-spacing:.04em; }
+  .choice-label:before { content:'';width:7px;height:7px;border-radius:50%;background:#5f9df5; }
+  @media (max-width:760px) { .visual-cards { grid-template-columns:1fr; } .phone { height:590px; } .bubble { top:258px; } }
+</style>
+
+<div class="visual-intro">
+  <h2>二级分类浮层的玻璃感与紧凑度</h2>
+  <p class="subtitle">两种方案都将浮层收窄、每项压缩为 58px 高，并保留五列分类、主题色图标和当前选择。点击卡片选择视觉方向。</p>
+</div>
+<div class="visual-cards cards">
+  <div class="visual-choice card" data-choice="nav-glass" onclick="toggleSelect(this)">
+    <div class="choice-label">A · 导航同款通透玻璃</div>
+    <p>浅白透光、轻模糊与明亮边缘，保持能看见背景形状的液态玻璃感。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>◖◖　▰</span></div>
+      <div class="screen">
+        <div class="top"><span>记一笔</span><span class="close">×</span></div>
+        <div class="tabs"><span class="active">支出</span><span>收入</span><span>转账</span><span>债务</span></div>
+        <div class="amount"><small>金额</small><strong>¥ 128.00</strong></div>
+        <div class="section-title">选择分类</div>
+        <div class="roots">
+          <div class="root current"><i>♨</i>餐饮</div><div class="root"><i>⌁</i>交通</div><div class="root"><i>◇</i>购物</div><div class="root"><i>⌂</i>家居</div><div class="root"><i>♧</i>烟酒茶</div>
+          <div class="root"><i>♫</i>娱乐</div><div class="root"><i>⌑</i>住房</div><div class="root"><i>◉</i>缴费</div><div class="root"><i>✚</i>医疗</div><div class="root"><i>▤</i>教育</div>
+          <div class="root"><i>➤</i>旅行</div><div class="root"><i>♡</i>人情</div><div class="root"><i>♧</i>宠物</div><div class="root"><i>▣</i>数码</div><div class="root"><i>▱</i>汽车</div>
+        </div>
+        <div class="lower"><div class="line"></div><div class="keys"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+        <div class="scrim"></div>
+        <div class="bubble glass-nav">
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 4v7M8 4v7M5 8h3M6.5 11v9M15 4c-2 3-2 7 0 9v7M15 4v9h3V4"/></svg><small>早餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 4h14M7 4v6a5 5 0 0 0 10 0V4M12 15v5M8 20h8"/></svg><small>午餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1.5 11h-13L4 9ZM6 6l2-3M12 6l1-3M17 6l2-3"/></svg><small>晚餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M7 3h10l-1 4H8L7 3ZM8 7l1 13h6l1-13M9 11h6M12 7v3"/></svg><small>奶茶</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 8h13v12H5zM18 10h2v4h-2M8 4h10M9 4v4M12 4v4"/></svg><small>咖啡</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 8h16l-2 12H6L4 8ZM8 8l4-5 4 5M8 13h8"/></svg><small>火锅</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 7h14v13H5zM8 7V4h8v3M8 11h8M8 15h5"/></svg><small>零食</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 8h16v12H4zM7 8V5h10v3M7 12h10"/></svg><small>买菜</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4c3 3 4 6 0 8-4 2-3 5 0 8M6 8c2 2 4 2 6 0M7 17c2-2 4-2 7 0"/></svg><small>水果</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 20h8M12 17v3M7 9h10M7 13h6"/></svg><small>外卖</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h4"/></svg><small>正餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM12 12v8M8 20h8M16 6h3v3h-3"/></svg><small>饮料</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M3 12h18M5 12l2-7h10l2 7M6 12v7M18 12v7M9 15h6"/></svg><small>夜宵</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 14h16l-2 6H6l-2-6ZM7 14c0-4 2-7 5-7s5 3 5 7M9 4l1 2M15 4l-1 2"/></svg><small>甜品</small></div>
+          <div class="child sel"><svg viewBox="0 0 24 24"><path d="M4 8h16v11H4zM7 8l2-4h6l2 4M7 12h10M8 16h3"/></svg><small>聚餐</small></div>
+        </div>
+      </div><div class="nav"><span>⌂ 首页</span><span>▤ 流水</span><span class="plus">＋</span><span class="on">◫ 记账</span><span>◉ 我的</span></div><div class="device-foot"></div>
+    </div>
+  </div>
+  <div class="visual-choice card" data-choice="compact-frost" onclick="toggleSelect(this)">
+    <div class="choice-label">B · 同轮廓的轻磨砂玻璃</div>
+    <p>仍有较强雾化遮盖，分类更聚焦；透明度高于当前厚重面板，但低于导航栏。</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>◖◖　▰</span></div>
+      <div class="screen">
+        <div class="top"><span>记一笔</span><span class="close">×</span></div>
+        <div class="tabs"><span class="active">支出</span><span>收入</span><span>转账</span><span>债务</span></div>
+        <div class="amount"><small>金额</small><strong>¥ 128.00</strong></div>
+        <div class="section-title">选择分类</div>
+        <div class="roots">
+          <div class="root current"><i>♨</i>餐饮</div><div class="root"><i>⌁</i>交通</div><div class="root"><i>◇</i>购物</div><div class="root"><i>⌂</i>家居</div><div class="root"><i>♧</i>烟酒茶</div>
+          <div class="root"><i>♫</i>娱乐</div><div class="root"><i>⌑</i>住房</div><div class="root"><i>◉</i>缴费</div><div class="root"><i>✚</i>医疗</div><div class="root"><i>▤</i>教育</div>
+          <div class="root"><i>➤</i>旅行</div><div class="root"><i>♡</i>人情</div><div class="root"><i>♧</i>宠物</div><div class="root"><i>▣</i>数码</div><div class="root"><i>▱</i>汽车</div>
+        </div>
+        <div class="lower"><div class="line"></div><div class="keys"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+        <div class="scrim"></div>
+        <div class="bubble glass-frost">
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 4v7M8 4v7M5 8h3M6.5 11v9M15 4c-2 3-2 7 0 9v7M15 4v9h3V4"/></svg><small>早餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 4h14M7 4v6a5 5 0 0 0 10 0V4M12 15v5M8 20h8"/></svg><small>午餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1.5 11h-13L4 9ZM6 6l2-3M12 6l1-3M17 6l2-3"/></svg><small>晚餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M7 3h10l-1 4H8L7 3ZM8 7l1 13h6l1-13M9 11h6M12 7v3"/></svg><small>奶茶</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 8h13v12H5zM18 10h2v4h-2M8 4h10M9 4v4M12 4v4"/></svg><small>咖啡</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 8h16l-2 12H6L4 8ZM8 8l4-5 4 5M8 13h8"/></svg><small>火锅</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 7h14v13H5zM8 7V4h8v3M8 11h8M8 15h5"/></svg><small>零食</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 8h16v12H4zM7 8V5h10v3M7 12h10"/></svg><small>买菜</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4c3 3 4 6 0 8-4 2-3 5 0 8M6 8c2 2 4 2 6 0M7 17c2-2 4-2 7 0"/></svg><small>水果</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 20h8M12 17v3M7 9h10M7 13h6"/></svg><small>外卖</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM8 9h8M8 13h8M8 17h4"/></svg><small>正餐</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM12 12v8M8 20h8M16 6h3v3h-3"/></svg><small>饮料</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M3 12h18M5 12l2-7h10l2 7M6 12v7M18 12v7M9 15h6"/></svg><small>夜宵</small></div>
+          <div class="child"><svg viewBox="0 0 24 24"><path d="M4 14h16l-2 6H6l-2-6ZM7 14c0-4 2-7 5-7s5 3 5 7M9 4l1 2M15 4l-1 2"/></svg><small>甜品</small></div>
+          <div class="child sel"><svg viewBox="0 0 24 24"><path d="M4 8h16v11H4zM7 8l2-4h6l2 4M7 12h10M8 16h3"/></svg><small>聚餐</small></div>
+        </div>
+      </div><div class="nav"><span>⌂ 首页</span><span>▤ 流水</span><span class="plus">＋</span><span class="on">◫ 记账</span><span>◉ 我的</span></div><div class="device-foot"></div>
+    </div>
+  </div>
+</div>

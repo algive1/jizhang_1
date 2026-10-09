@@ -155,4 +155,7 @@ test("model configuration never returns secret values and routing records actual
     ).statusCode,
     400,
   );
+  attempt=0;
+  await assert.rejects(()=>fallback.complete({modelId:primary,systemPrompt:'policy',userText:'指定模型连接测试'}));
+  assert.equal(attempt,1,'指定模型测试不得通过备用模型掩盖故障');
 });

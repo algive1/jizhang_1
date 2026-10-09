@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
@@ -86,13 +87,22 @@ void main() {
       lessThan(.01),
     );
 
-    final glassViewFinder = find.byKey(
-      const ValueKey('profile-glass-view-false'),
-    );
+    final glassViewFinder = find.byType(LiquidGlassView);
     final glassView = tester.widget<LiquidGlassView>(glassViewFinder);
     expect(glassView.useImpellerBackdrop, isFalse);
     expect(glassView.realTimeCapture, isFalse);
     expect(glassView.batch, isFalse);
+
+    final blurGroup = tester.widget<BackdropGroup>(find.ancestor(
+      of: glassViewFinder,
+      matching: find.byType(BackdropGroup),
+    ));
+    final panelFilters = tester.renderObjectList<RenderBackdropFilter>(
+      find.descendant(of: glassViewFinder, matching: find.byType(BackdropFilter)),
+    );
+    expect(panelFilters, isNotEmpty);
+    expect(panelFilters.map((filter) => filter.backdropKey).toSet(),
+        {blurGroup.backdropKey});
 
     // Scrolling content keeps only the tiny brightness toggle as a real
     // refracting lens. Quick actions and recommendation tiles are static
@@ -137,6 +147,11 @@ void main() {
     await tester.drag(find.byType(Slider).first, const Offset(36, 0));
     await tester.pump();
     expect(tester.getRect(navBar), navRect);
+
+    tester.widgetList<Slider>(find.byType(Slider)).elementAt(1).onChanged!(0);
+    await tester.pump();
+    expect(find.descendant(of: glassViewFinder,
+        matching: find.byType(BackdropFilter)), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey('profile-glass-debug-close')),

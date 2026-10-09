@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/models/category.dart';
 import '../../../core/models/transaction_intelligence.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../categories/data/category_repository.dart';
 import '../data/bill_inbox_repository.dart';
-import '../data/merchant_rule_repository.dart';
 import '../application/transaction_intelligence_service.dart';
 import '../../transactions/data/transactions_repository.dart';
+import '../../transactions/presentation/transaction_actions.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../autobookkeeping/presentation/pending_payment_inbox_section.dart';
+import '../../autobookkeeping/auto_bookkeeping_inbox.dart';
 
 class BillInboxPage extends ConsumerWidget {
   const BillInboxPage({super.key});
@@ -44,7 +44,7 @@ class BillInboxPage extends ConsumerWidget {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
-                    '分类不确定、疑似重复和缺少账户的记录会留在这里，系统不会自动删除流水。',
+                    '关闭确认浮层的付款记录会保留在这里，确认记账后才会写入流水。',
                     style: TextStyle(
                       color: context.appSecondaryText,
                       height: 1.45,
@@ -52,9 +52,18 @@ class BillInboxPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+                const PendingPaymentInboxSection(),
                 items.when(
                   data: (values) => values.isEmpty
-                      ? const AppCard(child: Center(child: Text('暂无待确认账单')))
+                      ? ((ref
+                                    .watch(pendingPaymentInboxProvider)
+                                    .value
+                                    ?.isNotEmpty ??
+                                false)
+                            ? const SizedBox.shrink()
+                            : const AppCard(
+                                child: Center(child: Text('暂无待确认账单')),
+                              ))
                       : Column(
                           children: values
                               .map(
@@ -183,100 +192,9 @@ class _InboxItemCard extends ConsumerWidget {
         .read(transactionRepositoryProvider)
         .getById(transactionId);
     if (!context.mounted) return;
-    final categories = ref.read(categoriesProvider).value ?? const <Category>[];
     if (transaction == null) return;
-    final options = categories
-        .where(
-          (category) =>
-              category.type ==
-              (transaction.isIncome
-                  ? CategoryType.income
-                  : CategoryType.expense),
-        )
-        .toList(growable: false);
-    if (options.isEmpty) return;
-    var selectedId = options.any((value) => value.id == transaction.categoryId)
-        ? transaction.categoryId!
-        : options.first.id;
-    var remember = false;
-    final result = await showModalBottomSheet<(String, bool)>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.appSheetSurface,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setState) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              18,
-              16,
-              18 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '选择正确分类',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                RadioGroup<String>(
-                  groupValue: selectedId,
-                  onChanged: (value) {
-                    if (value != null) setState(() => selectedId = value);
-                  },
-                  child: Column(
-                    children: options
-                        .map(
-                          (category) => RadioListTile<String>(
-                            value: category.id,
-                            title: Text(category.name),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                CheckboxListTile(
-                  value: remember,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('记住这个商户的分类'),
-                  onChanged: (value) =>
-                      setState(() => remember = value ?? false),
-                ),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () =>
-                        Navigator.pop(sheetContext, (selectedId, remember)),
-                    child: const Text('保存分类'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (result == null || !context.mounted) return;
-    try {
-      await ref
-          .read(merchantRuleRepositoryProvider)
-          .correctTransaction(
-            transactionId: transaction.id,
-            categoryId: result.$1,
-            rememberForMerchant: result.$2,
-          );
+    if (await showTransactionCategoryCorrection(context, ref, transaction)) {
       await _resolve(ref, InboxStatus.accepted);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('分类已更新')));
-      }
-    } on Object {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('分类更新失败，请稍后重试')));
-      }
     }
   }
 

@@ -6,14 +6,22 @@ import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../../../core/widgets/payment_brand_icon.dart';
 import '../data/account_management_repository.dart';
 import '../data/receivable_repository.dart';
 import '../domain/account_management.dart';
 import 'account_management_visuals.dart';
+import 'account_actions.dart';
 
 class AccountManagementPage extends ConsumerStatefulWidget {
-  const AccountManagementPage({super.key});
+  const AccountManagementPage({
+    this.initialFilter,
+    this.initialCurrency,
+    super.key,
+  });
+  final String? initialFilter;
+  final String? initialCurrency;
 
   @override
   ConsumerState<AccountManagementPage> createState() =>
@@ -21,28 +29,60 @@ class AccountManagementPage extends ConsumerStatefulWidget {
 }
 
 class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
-  _OverviewFilter _filter = _OverviewFilter.all;
+  late _OverviewFilter _filter =
+      _OverviewFilter.values
+          .where((filter) => filter.name == widget.initialFilter)
+          .firstOrNull ??
+      _OverviewFilter.all;
+  late String _currency = widget.initialCurrency ?? 'CNY';
   bool _hidden = false;
 
   @override
+  void didUpdateWidget(covariant AccountManagementPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialFilter != widget.initialFilter) {
+      _filter =
+          _OverviewFilter.values
+              .where((filter) => filter.name == widget.initialFilter)
+              .firstOrNull ??
+          _OverviewFilter.all;
+    }
+    if (oldWidget.initialCurrency != widget.initialCurrency)
+      _currency = widget.initialCurrency ?? 'CNY';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final accountsState = ref.watch(managedAccountsProvider);
+    final accountsState = ref.watch(managedAccountsIncludingArchivedProvider);
     final receivablesState = ref.watch(receivablesProvider);
-    final accounts = (accountsState.value ?? const <ManagedAccount>[])
+    final allAccounts = (accountsState.value ?? const <ManagedAccount>[])
         .where(_isManagedHere)
         .toList();
+    final currencies = {
+      'CNY',
+      ...allAccounts.map((item) => item.account.currency),
+    }.toList()..sort();
+    final currency = currencies.contains(_currency) ? _currency : 'CNY';
+    final accounts = allAccounts
+        .where((item) => item.account.currency == currency)
+        .toList();
+    final debts = accounts
+        .where((item) => item.account.type.isDebt && !item.account.isArchived)
+        .toList();
+    final archived = accounts.where((item) => item.account.isArchived).toList();
     final receivables = receivablesState.value ?? const <Receivable>[];
 
     final available = _accountsFor(accounts, AccountFundCategory.available);
     final stored = _accountsFor(accounts, AccountFundCategory.storedValue);
     final restricted = _accountsFor(accounts, AccountFundCategory.restricted);
-    final activeReceivables = receivables
-        .where(
-          (item) =>
-              item.status != ReceivableStatus.completed &&
-              item.status != ReceivableStatus.writtenOff,
-        )
-        .toList();
+    final activeReceivables =
+        (currency == 'CNY' ? receivables : const <Receivable>[])
+            .where(
+              (item) =>
+                  item.status != ReceivableStatus.completed &&
+                  item.status != ReceivableStatus.writtenOff,
+            )
+            .toList();
 
     final availableTotal = _sumAccounts(available);
     final storedTotal = _sumAccounts(stored);
@@ -52,22 +92,16 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
       (sum, item) => sum + item.remainingAmount,
     );
     final fundTotal = accounts
-        .where((item) => item.includeInTotal)
+        .where(
+          (item) =>
+              item.includeInTotal &&
+              !item.account.type.isDebt &&
+              !item.account.isArchived,
+        )
         .fold<double>(0, (sum, item) => sum + item.account.balance);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            context.appPrimarySoft.withValues(alpha: .66),
-            context.appBackground,
-          ],
-        ),
-      ),
+    return AppPageBackground(
       child: SafeArea(
-        bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
@@ -78,7 +112,20 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
               onSearch: () => _openSearch(context, accounts, receivables),
             ),
             const SizedBox(height: 10),
+            if (currencies.length > 1)
+              Align(
+                alignment: Alignment.centerRight,
+                child: DropdownButton<String>(
+                  value: currency,
+                  items: [
+                    for (final value in currencies)
+                      DropdownMenuItem(value: value, child: Text(value)),
+                  ],
+                  onChanged: (value) => setState(() => _currency = value!),
+                ),
+              ),
             _SummaryCard(
+              currency: currency,
               total: fundTotal,
               hidden: _hidden,
               onHiddenChanged: () => setState(() => _hidden = !_hidden),
@@ -88,16 +135,26 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
               receivable: receivableTotal,
             ),
             const SizedBox(height: 12),
-            AccountPrototypeFilterBar<_OverviewFilter>(
-              items: const [
-                (_OverviewFilter.all, '全部'),
-                (_OverviewFilter.available, '可用'),
-                (_OverviewFilter.stored, '储值'),
-                (_OverviewFilter.restricted, '受限'),
-                (_OverviewFilter.receivable, '应收'),
-              ],
-              selected: _filter,
-              onSelected: (value) => setState(() => _filter = value),
+            LayoutBuilder(
+              builder: (context, box) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: box.maxWidth < 440 ? 440 : box.maxWidth,
+                  child: AccountPrototypeFilterBar<_OverviewFilter>(
+                    items: const [
+                      (_OverviewFilter.all, '全部'),
+                      (_OverviewFilter.available, '可用'),
+                      (_OverviewFilter.stored, '储值'),
+                      (_OverviewFilter.restricted, '受限'),
+                      (_OverviewFilter.receivable, '应收'),
+                      (_OverviewFilter.debt, '负债'),
+                      (_OverviewFilter.archived, '已归档'),
+                    ],
+                    selected: _filter,
+                    onSelected: (value) => setState(() => _filter = value),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             if (accountsState.isLoading && accounts.isEmpty)
@@ -117,6 +174,7 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                   _filter == _OverviewFilter.available)
                 _AccountGroup(
                   title: '可用资金',
+                  currency: currency,
                   total: availableTotal,
                   accounts: available,
                   hidden: _hidden,
@@ -126,6 +184,7 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                   _filter == _OverviewFilter.stored)
                 _AccountGroup(
                   title: '储值资金',
+                  currency: currency,
                   total: storedTotal,
                   accounts: stored,
                   hidden: _hidden,
@@ -135,11 +194,41 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                   _filter == _OverviewFilter.restricted)
                 _AccountGroup(
                   title: '受限资金',
+                  currency: currency,
                   total: restrictedTotal,
                   accounts: restricted,
                   hidden: _hidden,
                   onTap: _openAccount,
                 ),
+              if (_filter == _OverviewFilter.all ||
+                  _filter == _OverviewFilter.debt)
+                _AccountGroup(
+                  title: '负债账户',
+                  currency: currency,
+                  total: debts
+                      .where(
+                        (item) =>
+                            item.includeInTotal && item.account.balance < 0,
+                      )
+                      .fold(0, (sum, item) => sum - item.account.balance),
+                  accounts: debts,
+                  hidden: _hidden,
+                  onTap: _openAccount,
+                ),
+              if (_filter == _OverviewFilter.debt && debts.isEmpty)
+                const AppCard(child: Text('暂无负债账户，可通过下方「添加负债账户」创建信用卡或负债账户。')),
+              if (_filter == _OverviewFilter.archived)
+                if (archived.isEmpty)
+                  const AppCard(child: Text('暂无已归档账户'))
+                else
+                  _AccountGroup(
+                    title: '已归档账户',
+                    currency: currency,
+                    total: _sumAccounts(archived),
+                    accounts: archived,
+                    hidden: _hidden,
+                    onTap: _openAccount,
+                  ),
               if (_filter == _OverviewFilter.all ||
                   _filter == _OverviewFilter.receivable)
                 _ReceivableGroup(
@@ -156,20 +245,22 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
                       );
                       return;
                     }
-                    context.push(
-                      '/profile/accounts/receivables/${item.id}',
-                    );
+                    context.push('/profile/accounts/receivables/${item.id}');
                   },
                 ),
             ],
             const SizedBox(height: 6),
             FilledButton.icon(
               key: const ValueKey('account-management-add'),
-              onPressed: () => context.push('/profile/accounts/add'),
+              onPressed: () => context.push(
+                '/profile/accounts/add?debt=${_filter == _OverviewFilter.debt}&currency=$currency',
+              ),
               icon: const Icon(Icons.add_circle_outline),
-              label: const Padding(
+              label: Padding(
                 padding: EdgeInsets.symmetric(vertical: 13),
-                child: Text('添加账户'),
+                child: Text(
+                  _filter == _OverviewFilter.debt ? '添加负债账户' : '添加账户',
+                ),
               ),
             ),
           ],
@@ -179,14 +270,18 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
   }
 
   bool _isManagedHere(ManagedAccount item) =>
-      !item.account.type.isDebt &&
       item.account.assetForm != AssetForm.investment;
 
   List<ManagedAccount> _accountsFor(
     List<ManagedAccount> accounts,
     AccountFundCategory category,
   ) => accounts
-      .where((item) => item.overviewCategory == category)
+      .where(
+        (item) =>
+            item.overviewCategory == category &&
+            !item.account.type.isDebt &&
+            !item.account.isArchived,
+      )
       .toList(growable: false);
 
   double _sumAccounts(List<ManagedAccount> accounts) => accounts
@@ -194,7 +289,8 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
       .fold<double>(0, (sum, item) => sum + item.account.balance);
 
   void _openAccount(ManagedAccount item) {
-    if (item.category == AccountFundCategory.restricted) {
+    if (item.category == AccountFundCategory.restricted &&
+        !item.account.isArchived) {
       context.push('/profile/accounts/restricted/${item.account.id}');
       return;
     }
@@ -213,7 +309,15 @@ class _AccountManagementPageState extends ConsumerState<AccountManagementPage> {
   }
 }
 
-enum _OverviewFilter { all, available, stored, restricted, receivable }
+enum _OverviewFilter {
+  all,
+  available,
+  stored,
+  restricted,
+  receivable,
+  debt,
+  archived,
+}
 
 class _Header extends StatelessWidget {
   const _Header({required this.onBack, required this.onSearch});
@@ -240,6 +344,7 @@ class _Header extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
+    required this.currency,
     required this.total,
     required this.hidden,
     required this.onHiddenChanged,
@@ -250,6 +355,7 @@ class _SummaryCard extends StatelessWidget {
   });
 
   final double total;
+  final String currency;
   final bool hidden;
   final VoidCallback onHiddenChanged;
   final double available;
@@ -318,10 +424,7 @@ class _SummaryCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [title, const SizedBox(width: 6), visibility],
                       ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: slogan,
-                      ),
+                      Align(alignment: Alignment.centerRight, child: slogan),
                     ],
                   );
                 }
@@ -342,7 +445,9 @@ class _SummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              hidden ? '••••••' : '¥${MoneyFormatter.decimal(total)}',
+              hidden
+                  ? '••••••'
+                  : '${currency == 'CNY' ? '¥' : '$currency '}${MoneyFormatter.decimal(total)}',
               style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
@@ -435,6 +540,7 @@ class _SummaryMetric extends StatelessWidget {
 
 class _AccountGroup extends StatelessWidget {
   const _AccountGroup({
+    required this.currency,
     required this.title,
     required this.total,
     required this.accounts,
@@ -443,6 +549,7 @@ class _AccountGroup extends StatelessWidget {
   });
 
   final String title;
+  final String currency;
   final double total;
   final List<ManagedAccount> accounts;
   final bool hidden;
@@ -466,7 +573,9 @@ class _AccountGroup extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  hidden ? '••••' : '¥${MoneyFormatter.decimal(total)}',
+                  hidden
+                      ? '••••'
+                      : '${currency == 'CNY' ? '¥' : '$currency '}${MoneyFormatter.decimal(total)}',
                   style: TextStyle(
                     color: context.appPrimary,
                     fontWeight: FontWeight.w700,
@@ -510,7 +619,7 @@ class _AccountRow extends StatelessWidget {
           MediaQuery.textScalerOf(context).scale(14) > 17.5;
       final balance = hidden
           ? '••••'
-          : '¥${MoneyFormatter.decimal(item.account.balance)}';
+          : '${item.account.currency == 'CNY' ? '¥' : '${item.account.currency} '}${MoneyFormatter.decimal(item.account.type.isDebt ? item.account.balance.abs() : item.account.balance)}';
       const balanceStyle = TextStyle(fontWeight: FontWeight.w700);
 
       return InkWell(
@@ -548,6 +657,24 @@ class _AccountRow extends StatelessWidget {
                           color: context.appSecondaryText,
                         ),
                       ),
+                    if (item.account.type.isDebt ||
+                        item.account.balance < 0 ||
+                        item.account.isArchived)
+                      Text(
+                        item.account.isArchived
+                            ? '已归档'
+                            : item.account.type.isDebt
+                            ? (item.account.balance < 0
+                                  ? '待还款'
+                                  : item.account.balance > 0
+                                  ? '溢缴余额'
+                                  : '已还清')
+                            : '负余额，请核对或校准',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.appSecondaryText,
+                        ),
+                      ),
                     if (compact)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -562,11 +689,7 @@ class _AccountRow extends StatelessWidget {
               ),
               if (!compact) Text(balance, style: balanceStyle),
               const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: context.appSecondaryText,
-              ),
+              AccountActionsMenu(account: item.account),
             ],
           ),
         ),
@@ -765,7 +888,8 @@ class _AccountSearchDelegate extends SearchDelegate<void> {
             subtitle: Text(item.category.label),
             onTap: () {
               close(context, null);
-              if (item.category == AccountFundCategory.restricted) {
+              if (item.category == AccountFundCategory.restricted &&
+                  !item.account.isArchived) {
                 context.push('/profile/accounts/restricted/${item.account.id}');
               } else {
                 context.push('/profile/accounts/${item.account.id}');
@@ -781,9 +905,7 @@ class _AccountSearchDelegate extends SearchDelegate<void> {
               close(context, null);
               final sourceId = item.sourceTransactionId;
               if (sourceId != null) {
-                context.push(
-                  '/transactions/${Uri.encodeComponent(sourceId)}',
-                );
+                context.push('/transactions/${Uri.encodeComponent(sourceId)}');
               } else {
                 context.push('/profile/accounts/receivables/${item.id}');
               }

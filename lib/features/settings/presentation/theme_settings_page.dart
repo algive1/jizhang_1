@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_definition.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_tokens.dart';
-import '../../../core/widgets/app_bottom_sheet.dart';
-import '../../membership/data/membership_repository.dart';
-import '../../../core/models/membership.dart';
-import '../../../core/config/testing_access.dart';
+import '../../../core/widgets/app_page_background.dart';
 import '../application/theme_controller.dart';
 
 class ThemeSettingsPage extends ConsumerWidget {
@@ -16,11 +13,8 @@ class ThemeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalog = ref.watch(themeCatalogProvider);
-    final preferred = ref.watch(preferredThemeProvider).value ?? BuiltInThemes.freshGreen.id;
-    final member = ref.watch(membershipProvider).value;
-    final premium =
-        kAllFeaturesFreeForTesting ||
-        (member != null && member.has(EntitlementKey.customTheme));
+    final preferred =
+        ref.watch(preferredThemeProvider).value ?? BuiltInThemes.freshGreen.id;
     return Scaffold(
       appBar: AppBar(title: const Text('主题外观')),
       body: catalog.when(
@@ -29,12 +23,13 @@ class ThemeSettingsPage extends ConsumerWidget {
         data: (value) => ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
-            Text('选择你喜欢的界面气质', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              '选择你喜欢的界面气质',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 6),
             Text(
-              kAllFeaturesFreeForTesting
-                  ? '测试阶段全部主题免费开放；上线前会重新启用正式会员权益规则。'
-                  : '默认主题永久免费。会员可使用更多主题；会员到期后会暂时恢复默认主题，但会保留你的选择。',
+              '好好绿与液态玻璃云雾蓝，两款默认主题免费使用。',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 22),
@@ -42,38 +37,17 @@ class ThemeSettingsPage extends ConsumerWidget {
               _ThemeCard(
                 theme: theme,
                 selected: preferred == theme.id,
-                locked: theme.premium && !premium,
                 onTap: () async {
-                  if (theme.premium && !premium) {
-                    final upgrade = await AppBottomSheet.show<bool>(
-                      context: context,
-                      builder: (context) => Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              '会员主题',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              '该主题属于会员个性化权益。开通会员后即可使用；会员到期后会暂时恢复默认主题，并保留本机主题偏好。',
-                            ),
-                            const SizedBox(height: 18),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('查看会员'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                    if (upgrade == true && context.mounted) context.push('/profile/membership');
-                    return;
+                  try {
+                    await ref
+                        .read(preferredThemeProvider.notifier)
+                        .select(theme.id);
+                  } on Object {
+                    if (context.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('主题保存失败，请重试')),
+                      );
                   }
-                  await ref.read(preferredThemeProvider.notifier).select(theme.id);
                 },
               ),
               const SizedBox(height: 12),
@@ -86,10 +60,13 @@ class ThemeSettingsPage extends ConsumerWidget {
 }
 
 class _ThemeCard extends StatelessWidget {
-  const _ThemeCard({required this.theme, required this.selected, required this.locked, required this.onTap});
+  const _ThemeCard({
+    required this.theme,
+    required this.selected,
+    required this.onTap,
+  });
   final AppThemeDefinition theme;
   final bool selected;
-  final bool locked;
   final VoidCallback onTap;
 
   @override
@@ -106,51 +83,40 @@ class _ThemeCard extends StatelessWidget {
           width: selected ? 2 : 1,
         ),
       ),
-      child: Row(children: [
-        _ThemePreview(theme: theme),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  theme.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: context.appPrimaryText,
-                  ),
+      child: Row(
+        children: [
+          _ThemePreview(theme: theme),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        theme.name,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: context.appPrimaryText),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              if (theme.premium) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.workspace_premium_outlined,
-                  size: 18,
-                  color: context.appSecondaryText,
+                const SizedBox(height: 4),
+                Text(
+                  theme.description,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: context.appSecondaryText),
                 ),
               ],
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            theme.description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: context.appSecondaryText,
             ),
           ),
-        ])),
-        if (locked)
-          Icon(
-            Icons.lock_outline,
-            size: 20,
-            color: context.appSecondaryText,
-          )
-        else if (selected)
-          Icon(Icons.check_circle, color: theme.primary),
-      ]),
+          if (selected) Icon(Icons.check_circle, color: theme.primary),
+        ],
+      ),
     ),
   );
 }
-
 
 class _ThemePreview extends StatelessWidget {
   const _ThemePreview({required this.theme});
@@ -159,14 +125,15 @@ class _ThemePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = theme.style == AppThemeStyle.liquidGlass;
-    return Container(
+    final dark = context.appIsDark;
+    final glass = dark || theme.style == AppThemeStyle.liquidGlass;
+    final preview = Container(
       width: 74,
       height: 74,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: theme.background,
-        gradient: glass
+        color: dark ? Colors.transparent : theme.background,
+        gradient: glass && !dark
             ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -186,10 +153,10 @@ class _ThemePreview extends StatelessWidget {
                   height: 15,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .62),
+                      color: Colors.white.withValues(alpha: dark ? .12 : .62),
                       borderRadius: BorderRadius.circular(9),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: .82),
+                        color: Colors.white.withValues(alpha: dark ? .24 : .82),
                       ),
                     ),
                   ),
@@ -201,10 +168,12 @@ class _ThemePreview extends StatelessWidget {
                   height: 20,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .68),
+                      color: dark
+                          ? const Color(0xFF111111).withValues(alpha: .5)
+                          : Colors.white.withValues(alpha: .68),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: .90),
+                        color: Colors.white.withValues(alpha: dark ? .24 : .90),
                       ),
                     ),
                     child: Center(
@@ -224,9 +193,13 @@ class _ThemePreview extends StatelessWidget {
                     width: 28,
                     height: 22,
                     decoration: BoxDecoration(
-                      color: theme.surface.withValues(alpha: .88),
+                      color: dark
+                          ? const Color(0xFF111111)
+                          : theme.surface.withValues(alpha: .88),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.divider),
+                      border: Border.all(
+                        color: dark ? Colors.transparent : theme.divider,
+                      ),
                     ),
                   ),
                 ),
@@ -267,6 +240,14 @@ class _ThemePreview extends StatelessWidget {
                 ),
               ],
             ),
+    );
+    if (!dark) return preview;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Theme(
+        data: AppTheme.dark(theme),
+        child: AppPageBackground(child: preview),
+      ),
     );
   }
 }

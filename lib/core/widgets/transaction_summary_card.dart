@@ -23,7 +23,7 @@ class TransactionSummaryCard extends StatelessWidget {
       material: AppCardMaterial.frosted,
       padding: EdgeInsets.zero,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(context.appIsDark ? 16 : 23),
         child: SizedBox(
           height: 108,
           child: Stack(
@@ -31,34 +31,38 @@ class TransactionSummaryCard extends StatelessWidget {
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        context.appSurface.withValues(
-                          alpha: context.appUsesLiquidGlass ? .42 : 1,
-                        ),
-                        context.appPrimarySoft.withValues(
-                          alpha: context.appUsesLiquidGlass ? .58 : .72,
-                        ),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
+                    color: context.appIsDark ? context.appSurface : null,
+                    gradient: context.appIsDark
+                        ? null
+                        : LinearGradient(
+                            colors: [
+                              context.appSurface.withValues(
+                                alpha: context.appUsesLiquidGlass ? .42 : 1,
+                              ),
+                              context.appPrimarySoft.withValues(
+                                alpha: context.appUsesLiquidGlass ? .58 : .72,
+                              ),
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
                   ),
                 ),
               ),
-              Positioned(
-                right: -22,
-                top: -18,
-                bottom: -22,
-                width: 164,
-                child: Image.asset(
-                  AppAssets.transactionsStillLife,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.centerRight,
-                  cacheWidth:
-                      (164 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+              if (!context.appIsDark)
+                Positioned(
+                  right: -22,
+                  top: -18,
+                  bottom: -22,
+                  width: 164,
+                  child: Image.asset(
+                    AppAssets.transactionsStillLife,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerRight,
+                    cacheWidth: (164 * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
+                  ),
                 ),
-              ),
               Positioned.fill(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
@@ -88,7 +92,7 @@ class TransactionSummaryCard extends StatelessWidget {
                               positive: true,
                             ),
                           ),
-                          SizedBox(width: imageReserve),
+                          SizedBox(width: context.appIsDark ? 0 : imageReserve),
                         ],
                       );
                     },

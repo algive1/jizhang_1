@@ -17,6 +17,10 @@ class AutoBookkeepingRuntimeStatus {
     required this.ruleSchemaVersion,
     required this.ruleVersions,
     required this.ruleSource,
+    this.miuiFamily = false,
+    this.batteryOptimizationIgnored = false,
+    this.backgroundRestricted = false,
+    this.available = true,
   });
 
   final bool enabled;
@@ -33,6 +37,34 @@ class AutoBookkeepingRuntimeStatus {
   final int ruleSchemaVersion;
   final String ruleVersions;
   final String ruleSource;
+  final bool miuiFamily;
+  final bool batteryOptimizationIgnored;
+  final bool backgroundRestricted;
+  final bool available;
+
+  bool get healthy => available && enabled && diagnosisIssues.isEmpty;
+  String get summary => !available
+      ? '无法读取服务状态，请重新检测'
+      : !enabled
+      ? '自动记账未开启'
+      : healthy
+      ? '自动记账运行正常'
+      : diagnosisIssues.first;
+  List<String> get diagnosisIssues => [
+    if (!available) '无法读取权限状态，请重试',
+    if (!accessibilityGranted)
+      '无障碍权限未开启'
+    else if (enabled && !accessibilityConnected)
+      '无障碍已授权但服务未连接',
+    if (!overlayGranted) '悬浮窗权限未开启',
+    if (!notificationGranted) '通知权限或自动记账通知渠道未开启',
+    if (!notificationListenerGranted)
+      '支付通知读取权限未开启'
+    else if (notificationListenerEnabled && !notificationListenerConnected)
+      '支付通知监听已开启但未连接',
+    if (enabled && !foregroundRunning) '自动记账服务未运行',
+    if (backgroundRestricted) '系统限制后台运行',
+  ];
 
   factory AutoBookkeepingRuntimeStatus.fromMap(Map<Object?, Object?> map) {
     bool flag(String key) => map[key] == true;
@@ -48,10 +80,12 @@ class AutoBookkeepingRuntimeStatus {
       notificationListenerConnected: flag('notificationListenerConnected'),
       screenshotSupported: flag('screenshotSupported'),
       screenshotEnabled: flag('screenshotEnabled'),
-      ruleSchemaVersion:
-          (map['ruleSchemaVersion'] as num?)?.toInt() ?? 0,
+      ruleSchemaVersion: (map['ruleSchemaVersion'] as num?)?.toInt() ?? 0,
       ruleVersions: map['ruleVersions']?.toString() ?? '',
       ruleSource: map['ruleSource']?.toString() ?? 'unknown',
+      miuiFamily: flag('miuiFamily'),
+      batteryOptimizationIgnored: flag('batteryOptimizationIgnored'),
+      backgroundRestricted: flag('backgroundRestricted'),
     );
   }
 }
@@ -61,6 +95,9 @@ abstract interface class AutoBookkeepingSettingsBridge {
   Future<void> openAccessibilitySettings();
   Future<bool> isOverlayGranted();
   Future<void> openOverlaySettings();
+  Future<void> openBackgroundSettings();
+  Future<void> openAutoStartSettings();
+  Future<void> reconnectNotificationListener();
   Future<bool> isEnabled();
   Future<bool> isNotificationGranted();
   Future<AutoBookkeepingRuntimeStatus> runtimeStatus();
@@ -102,6 +139,18 @@ class MethodChannelAutoBookkeepingSettings
   Future<void> openOverlaySettings() => _invokeSettings('openOverlaySettings');
 
   @override
+  Future<void> openBackgroundSettings() =>
+      _invokeSettings('openBackgroundSettings');
+
+  @override
+  Future<void> openAutoStartSettings() =>
+      _invokeSettings('openAutoStartSettings');
+
+  @override
+  Future<void> reconnectNotificationListener() =>
+      _invokeSettings('reconnectNotificationListener');
+
+  @override
   Future<bool> isEnabled() async {
     try {
       return await _channel.invokeMethod<bool>('isEnabled') ?? false;
@@ -118,6 +167,7 @@ class MethodChannelAutoBookkeepingSettings
       );
       if (raw == null) {
         return const AutoBookkeepingRuntimeStatus(
+          available: false,
           enabled: false,
           accessibilityGranted: false,
           accessibilityConnected: false,
@@ -137,6 +187,7 @@ class MethodChannelAutoBookkeepingSettings
       return AutoBookkeepingRuntimeStatus.fromMap(raw);
     } on MissingPluginException {
       return const AutoBookkeepingRuntimeStatus(
+        available: false,
         enabled: false,
         accessibilityGranted: false,
         accessibilityConnected: false,
@@ -168,7 +219,9 @@ class MethodChannelAutoBookkeepingSettings
   @override
   Future<bool> requestNotificationPermission() async {
     try {
-      return await _channel.invokeMethod<bool>('requestNotificationPermission') ??
+      return await _channel.invokeMethod<bool>(
+            'requestNotificationPermission',
+          ) ??
           false;
     } on MissingPluginException {
       throw StateError('自动记账仅支持 Android');
@@ -209,3 +262,31 @@ class MethodChannelAutoBookkeepingSettings
 final autoBookkeepingSettingsProvider = Provider<AutoBookkeepingSettingsBridge>(
   (ref) => const MethodChannelAutoBookkeepingSettings(),
 );
+
+final autoBookkeepingRuntimeProvider =
+    NotifierProvider<
+      AutoBookkeepingRuntimeController,
+      AsyncValue<AutoBookkeepingRuntimeStatus>
+    >(AutoBookkeepingRuntimeController.new);
+
+class AutoBookkeepingRuntimeController
+    extends Notifier<AsyncValue<AutoBookkeepingRuntimeStatus>> {
+  int _revision = 0;
+  @override
+  AsyncValue<AutoBookkeepingRuntimeStatus> build() => const AsyncLoading();
+
+  Future<AutoBookkeepingRuntimeStatus?> refresh() async {
+    final revision = ++_revision;
+    try {
+      final status = await ref
+          .read(autoBookkeepingSettingsProvider)
+          .runtimeStatus()
+          .timeout(const Duration(seconds: 5));
+      if (ref.mounted && revision == _revision) state = AsyncData(status);
+    } on Object catch (error, stack) {
+      if (ref.mounted && revision == _revision)
+        state = AsyncError(error, stack);
+    }
+    return ref.mounted ? state.value : null;
+  }
+}

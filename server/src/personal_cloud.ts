@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { requireCondition as check } from './contract.js';
 import type { Store } from './store.js';
-import { allFeaturesFreeForTesting } from './testing_access.js';
+import { hasMembershipEntitlement } from './payment.js';
 
 type User = { id: string; username: string };
 type Authenticate = (header: string | undefined) => User;
@@ -94,13 +94,7 @@ function detectSnapshotEncoding(compressed: Buffer): z.infer<typeof snapshotEnco
 }
 
 function hasCloudEntitlement(store: Store, userId: string) {
-  if (allFeaturesFreeForTesting()) return true;
-  const row = store.db
-    .prepare(
-      'SELECT expires_at FROM membership_subscriptions WHERE user_id=? AND expires_at>?',
-    )
-    .get(userId, store.now()) as { expires_at: number } | undefined;
-  return row != null;
+  return hasMembershipEntitlement(store,userId,'cloudSync');
 }
 
 function status(row: DatasetRow | undefined, localDatasetId: string) {

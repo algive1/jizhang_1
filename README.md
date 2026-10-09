@@ -20,9 +20,13 @@
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --debug
-flutter build apk --release --split-per-abi
+bash scripts/build_install_android.sh --debug --package-only
+bash build_apk_release.sh
 ```
+
+Windows 可直接双击项目根目录的 [`记账工具.bat`](记账工具.bat)，通过中文菜单选择编译版本、安装已有 APK、连接设备、截图并打开。支持自动递增版本号、全部功能开放或正常会员限制，使用说明及验证记录见 [`Windows Android 开发工具`](docs/development/2026-10-04-windows-android-tool.md)。
+
+两个打包入口都在编译前将 `pubspec.yaml` 的末位版本号和构建号加 1：从 `1.0.1` 开始，后续为 `1.0.2`、`1.0.3`。失败的编译也占用本次版本，安装已有 APK 不递增。手动执行 `flutter build apk` 前需先运行 `dart scripts/bump_build_version.dart`。
 
 Android 模拟器一键构建、安装并启动：
 

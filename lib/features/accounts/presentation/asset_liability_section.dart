@@ -11,17 +11,18 @@ import 'asset_dashboard_icons.dart';
 class AssetLiabilitySection extends StatelessWidget {
   const AssetLiabilitySection({
     required this.accounts,
+    required this.overview,
     required this.onAccounts,
     super.key,
   });
   final List<Account> accounts;
+  final AssetOverview overview;
   final VoidCallback onAccounts;
 
   @override
   Widget build(BuildContext context) {
-    final overview = AssetOverview(accounts.first.currency, accounts);
     final debts = accounts
-        .where((account) => account.balance < 0 && !account.isArchived)
+        .where((account) => account.type.isDebt && !account.isArchived)
         .toList();
     final ratio = overview.assets > 0
         ? (overview.liabilities / overview.assets).clamp(0.0, 1.0)
@@ -52,7 +53,10 @@ class AssetLiabilitySection extends StatelessWidget {
                   children: [
                     Text(
                       '总负债 ',
-                      style: TextStyle(fontSize: 10, color: context.appSecondaryText),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.appSecondaryText,
+                      ),
                     ),
                     AssetAmount(
                       overview.liabilities,
@@ -95,13 +99,12 @@ class AssetLiabilitySection extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     if (debts.isEmpty)
-                      SizedBox(
-                        height: 40,
-                        child: Center(
-                          child: Text(
-                            '暂无负债账户',
-                            style: TextStyle(fontSize: 11, color: context.appSecondaryText),
-                          ),
+                      TextButton.icon(
+                        onPressed: onAccounts,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text(
+                          '添加负债账户',
+                          style: TextStyle(fontSize: 11),
                         ),
                       )
                     else
@@ -154,11 +157,19 @@ class AssetLiabilitySection extends StatelessWidget {
                                                       color: context.appPrimaryText,
                                                     ),
                                                   ),
-                                                  AssetAmount(
-                                                    debt.balance.abs(),
-                                                    currency: debt.currency,
-                                                    size: 10,
-                                                  ),
+                                                  if (debt.balance == 0)
+                                                    const Text(
+                                                      '已还清',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                      ),
+                                                    )
+                                                  else
+                                                    AssetAmount(
+                                                      debt.balance.abs(),
+                                                      currency: debt.currency,
+                                                      size: 10,
+                                                    ),
                                                 ],
                                               ),
                                             ),
@@ -217,8 +228,13 @@ class AssetLiabilitySection extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 9,
                             height: 1.45,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Color.lerp(assetCoral, context.appPrimaryText, .28)!
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Color.lerp(
+                                    assetCoral,
+                                    context.appPrimaryText,
+                                    .28,
+                                  )!
                                 : const Color(0xff9c5749),
                           ),
                         ),

@@ -91,14 +91,19 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
     };
     final activeRules = <MerchantRule>[];
     if (expectedRuleCategoryType != null) {
-      for (final rule in await getRules(bookId: bookId)) {
-        final category = await _database.categoryDao.findById(rule.categoryId);
-        if (category != null &&
-            !category.isArchived &&
-            category.type == expectedRuleCategoryType) {
-          activeRules.add(rule);
-        }
-      }
+      final rules = await getRules(bookId: bookId);
+      final categories =
+          await (_database.select(_database.categoryEntries)..where(
+                (category) =>
+                    category.id.isIn(rules.map((rule) => rule.categoryId)) &
+                    category.isArchived.equals(false) &
+                    category.type.equals(expectedRuleCategoryType),
+              ))
+              .get();
+      final activeIds = categories.map((category) => category.id).toSet();
+      activeRules.addAll(
+        rules.where((rule) => activeIds.contains(rule.categoryId)),
+      );
     }
     return _classifier.classify(
       merchant: merchant,
@@ -130,6 +135,7 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
       transaction.copyWith(
         categoryId: categoryId,
         subcategoryId: subcategoryId,
+        clearSubcategory: subcategoryId == null,
         userCorrected: true,
         updatedAt: now,
       ),

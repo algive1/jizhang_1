@@ -13,7 +13,10 @@ export default defineConfig({
     {
       command: "npm run dev -- --port 5178 --strictPort",
       url: "http://127.0.0.1:5178",
-      env: { ADMIN_API_TARGET: "http://127.0.0.1:8790" },
+      env: {
+        ADMIN_API_TARGET: "http://127.0.0.1:8790",
+        ADMIN_LOCAL_API_TARGET: "http://127.0.0.1:8790",
+      },
       reuseExistingServer: false,
     },
   ],

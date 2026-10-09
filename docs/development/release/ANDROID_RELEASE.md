@@ -1,11 +1,11 @@
 # Android 构建与交付
 
-更新时间：2026-09-18
+更新时间：2026-10-06
 
 ## 基本信息
 
 - Application ID：`com.algive.jizhang_app`
-- Version：以 `pubspec.yaml` 为准，当前为 `1.0.0+1`
+- Version：以 `pubspec.yaml` 为准；打包脚本从 `1.0.1` 开始，每次末位版本号和构建号加 1
 - 推荐脚本：`bash build_apk_release.sh`
 - 默认按 ABI 拆分 Release APK：`arm64-v8a`、`armeabi-v7a`、`x86_64`
 - 输出目录：`dist/jizhang_app-<版本>-release-<abi>.apk`
@@ -25,6 +25,7 @@ adb install -r "dist/jizhang_app-1.0.0+1-release.apk"
 flutter pub get
 flutter analyze
 flutter test
+dart scripts/bump_build_version.dart
 flutter build apk --release --split-per-abi
 ```
 

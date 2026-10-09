@@ -12,13 +12,14 @@ extension AppThemeTokens on BuildContext {
   Color get appSurface => appColors.surface;
   Color get appSurfaceSoft => appColors.surfaceContainerLow;
   Color get appSurfaceRaised => appColors.surfaceContainerLowest;
-  Color get appSheetSurface => appUsesLiquidGlass
+  bool get appIsDark => Theme.of(this).brightness == Brightness.dark;
+  Color get appSheetSurface => appUsesLiquidGlass && !appIsDark
       ? appColors.surface.withValues(alpha: .96)
       : appColors.surface;
-  Color get appDialogSurface => appUsesLiquidGlass
+  Color get appDialogSurface => appUsesLiquidGlass && !appIsDark
       ? appColors.surface.withValues(alpha: .97)
       : appColors.surface;
-  Color get appPopoverSurface => appUsesLiquidGlass
+  Color get appPopoverSurface => appUsesLiquidGlass && !appIsDark
       ? Color.alphaBlend(
           appColors.primary.withValues(alpha: .055),
           appColors.surface.withValues(alpha: .95),

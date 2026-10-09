@@ -63,6 +63,7 @@ class QuickBookkeepingRequest {
   final String accountId;
   final String? transactionId;
   final String? bookId;
+
   /// Shared-family attribution. Null means the current recorder.
   final String? payerUserId;
   final String? destinationAccountId;
@@ -271,36 +272,22 @@ class QuickBookkeepingService {
         _toRecord(requests[index], baseTime.add(Duration(microseconds: index))),
     ];
     final saved = await _transactions.createAll(records);
-    Object? firstError;
-    StackTrace? firstStack;
     try {
-      await _settings.set(
-        accountSettingKey(saved.last.bookId),
-        requests.last.accountId,
-      );
+      // These independent enhancements must not keep a committed payment spinning.
+      await Future.wait<void>([
+        _settings.set(
+          accountSettingKey(saved.last.bookId),
+          requests.last.accountId,
+        ),
+        _persistAttachments(saved, requests),
+        _postProcess(saved),
+      ]).timeout(const Duration(seconds: 5));
     } on Object catch (error, stack) {
-      firstError ??= error;
-      firstStack ??= stack;
-    }
-    try {
-      await _persistAttachments(saved, requests);
-    } on Object catch (error, stack) {
-      firstError ??= error;
-      firstStack ??= stack;
-    }
-    try {
-      await _postProcess(saved);
-    } on Object catch (error, stack) {
-      firstError ??= error;
-      firstStack ??= stack;
-    }
-    final secondaryError = firstError;
-    if (secondaryError != null) {
       throw BookkeepingCommittedException(
         records: saved,
-        cause: secondaryError,
+        cause: error,
         stage: 'secondary local processing',
-        stackTrace: firstStack ?? StackTrace.current,
+        stackTrace: stack,
       );
     }
     unawaited(
@@ -498,6 +485,9 @@ class QuickBookkeepingService {
 final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
   ref,
 ) {
+  // Start the ledger stream outside SQLite's transaction zone. The warm
+  // confirmation engine may be the first consumer of this provider.
+  final books = ref.watch(booksProvider).value ?? const <LedgerBook>[];
   return QuickBookkeepingService(
     // The form may explicitly target a different ledger than the global
     // browsing ledger. The request's bookId remains validated by the
@@ -505,10 +495,7 @@ final quickBookkeepingServiceProvider = Provider<QuickBookkeepingService>((
     DriftTransactionRepository(
       ref.watch(databaseProvider),
       accountBookIdForBook: (bookId) =>
-          (ref.watch(booksProvider).value ?? const <LedgerBook>[])
-              .where((book) => book.id == bookId)
-              .firstOrNull
-              ?.assetBookId,
+          books.where((book) => book.id == bookId).firstOrNull?.assetBookId,
     ),
     ref.watch(appSettingsRepositoryProvider),
     intelligence: ref.watch(transactionIntelligenceServiceProvider),

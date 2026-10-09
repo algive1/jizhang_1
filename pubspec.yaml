@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+6021
 
 # Bundle the official sqlite3 native assets for every Android ABI and desktop
 # test host. The hook verifies each downloaded asset against the package's
@@ -51,6 +51,7 @@ dependencies:
   path_provider: ^2.1.6
   sqlite3: ^3.5.2
   speech_to_text: ^7.4.0
+  record: ^7.1.1
   flutter_secure_storage: ^10.0.0
   local_auth: ^3.0.2
   cryptography: ^2.9.0
@@ -114,6 +115,8 @@ flutter:
   assets:
     - assets/images/
     - assets/images/membership/
+    - assets/images/budgets/
+    - assets/images/autobookkeeping/
     - assets/config/
 
 # Android WeChat/Alipay SDKs use merchant-console values at release time.

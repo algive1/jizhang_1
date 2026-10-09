@@ -81,6 +81,10 @@ test("backup metadata excludes content, feedback is redacted and operations pers
   assert.ok(!detail.body.includes("13800138000"));
   assert.ok(!detail.body.includes("private-secret"));
   assert.ok(!detail.body.includes("contact@example.com"));
+  const reply=await app.inject({method:'POST',url:`/api/v1/console/feedback/${id}/messages`,headers,payload:{body:'已收到问题，我们会协助处理'}});
+  assert.equal(reply.statusCode,200,reply.body);
+  const userTicket=await app.inject({url:`/api/v1/support/tickets/${id}`,headers:{authorization:`Bearer ${registered.token}`}});
+  assert.equal(userTicket.json().messages.at(-1).body,'已收到问题，我们会协助处理');
   assert.equal(
     (
       await app.inject({

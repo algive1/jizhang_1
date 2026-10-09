@@ -7,20 +7,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/account.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../core/widgets/app_date_picker.dart';
+import '../data/account_management_repository.dart';
+import '../domain/account_management.dart';
 import '../data/account_repository.dart';
 
 Future<void> showAccountEditor(
   BuildContext context, {
   Account? account,
+  ManagedAccount? managed,
+  AccountType initialType = AccountType.debitCard,
+  String initialCurrency = 'CNY',
   int sortOrder = 0,
 }) => showDialog<void>(
   context: context,
-  builder: (_) => _AccountEditor(account: account, sortOrder: sortOrder),
+  builder: (_) => _AccountEditor(
+    account: account,
+    managed: managed,
+    initialType: initialType,
+    initialCurrency: initialCurrency,
+    sortOrder: sortOrder,
+  ),
 );
 
 class _AccountEditor extends ConsumerStatefulWidget {
-  const _AccountEditor({this.account, required this.sortOrder});
+  const _AccountEditor({
+    this.account,
+    this.managed,
+    required this.initialType,
+    required this.initialCurrency,
+    required this.sortOrder,
+  });
   final Account? account;
+  final ManagedAccount? managed;
+  final AccountType initialType;
+  final String initialCurrency;
   final int sortOrder;
   @override
   ConsumerState<_AccountEditor> createState() => _AccountEditorState();
@@ -33,10 +55,21 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
     text: widget.account?.identifierSuffix ?? '',
   );
   final _balance = TextEditingController(text: '0.00');
-  late AccountType _type = widget.account?.type ?? AccountType.debitCard;
+  late AccountType _type = widget.account?.type ?? widget.initialType;
+  late final _platform = TextEditingController(text: widget.managed?.platform);
+  late final _note = TextEditingController(text: widget.managed?.note);
+  late bool _include = widget.managed?.includeInTotal ?? true;
+  late RestrictedFundStatus _status =
+      widget.managed?.restrictedStatus ?? RestrictedFundStatus.locked;
+  late DateTime? _expected = widget.managed?.expectedReturnAt;
+  bool get _restricted =>
+      widget.managed?.category == AccountFundCategory.restricted;
+  bool get _hasPlatform =>
+      _restricted ||
+      widget.managed?.category == AccountFundCategory.storedValue;
   late AssetForm _assetForm =
       widget.account?.assetForm ?? AssetForm.unspecified;
-  late String _currency = widget.account?.currency ?? 'CNY';
+  late String _currency = widget.account?.currency ?? widget.initialCurrency;
   bool _debt = true;
   bool _saving = false;
   String? _error;
@@ -46,6 +79,8 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
     _name.dispose();
     _identifierSuffix.dispose();
     _balance.dispose();
+    _platform.dispose();
+    _note.dispose();
     super.dispose();
   }
 
@@ -77,7 +112,7 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
                 for (final t in AccountType.values)
                   DropdownMenuItem(value: t, child: Text(t.label)),
               ],
-              onChanged: _saving
+              onChanged: _saving || _hasPlatform
                   ? null
                   : (v) => setState(() {
                       _type = v!;
@@ -174,6 +209,68 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
                 style: TextStyle(fontSize: 12),
               ),
             ],
+            if (widget.managed != null) ...[
+              if (_hasPlatform) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _platform,
+                  decoration: InputDecoration(
+                    labelText: _restricted ? '平台 / 机构' : '平台 / 用途',
+                  ),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? '请填写平台或机构名称' : null,
+                ),
+              ],
+              if (_restricted) ...[
+                const SizedBox(height: 12),
+                AppSelect<RestrictedFundStatus>(
+                  initialValue: _status,
+                  decoration: appFieldDecoration('资金状态'),
+                  items: [
+                    for (final status in RestrictedFundStatus.values)
+                      DropdownMenuItem(
+                        value: status,
+                        child: Text(status.label),
+                      ),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (v) => setState(() => _status = v!),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('预计退回日期'),
+                  subtitle: Text(
+                    _expected == null
+                        ? '未设置'
+                        : _expected!.toIso8601String().substring(0, 10),
+                  ),
+                  trailing: const Icon(Icons.calendar_month_outlined),
+                  onTap: _saving
+                      ? null
+                      : () async {
+                          final date = await AppDatePicker.show(
+                            context,
+                            _expected ?? DateTime.now(),
+                          );
+                          if (date != null && mounted)
+                            setState(() => _expected = date);
+                        },
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _note,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: '备注'),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('计入总资产'),
+                value: _include,
+                onChanged: _saving ? null : (v) => setState(() => _include = v),
+              ),
+            ],
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -209,10 +306,12 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
     final entered =
         MoneyFormatter.parseInput(_balance.text, signed: !_type.isDebt) ?? 0;
     final account = Account(
+      bookId: old?.bookId ?? 'book-personal',
       id: old?.id ?? 'account-${newEntityId()}',
       name: _name.text.trim(),
       type: _type,
       balance: old?.balance ?? (_type.isDebt && _debt ? -entered : entered),
+      openingBalance: old?.openingBalance,
       currency: _currency,
       assetForm: _type.isDebt ? AssetForm.unspecified : _assetForm,
       identifierSuffix: _type.requiresIdentifierSuffix
@@ -226,12 +325,35 @@ class _AccountEditorState extends ConsumerState<_AccountEditor> {
       updatedAt: now,
     );
     try {
-      final repository = ref.read(accountRepositoryProvider);
-      if (old == null) {
-        await repository.create(account);
-      } else {
-        await repository.update(account);
-      }
+      final database = ref.read(databaseProvider);
+      final repository = old == null
+          ? ref.read(accountRepositoryProvider)
+          : DriftAccountRepository(database, bookId: old.bookId);
+      await database.transaction(() async {
+        if (old == null) {
+          await repository.create(account);
+        } else {
+          await repository.update(account);
+        }
+        final managed = widget.managed;
+        if (managed != null) {
+          await DriftAccountManagementRepository(
+            database,
+            repository,
+            bookId: managed.account.bookId,
+          ).updateMeta(
+            accountId: account.id,
+            category: managed.category,
+            platform: _platform.text,
+            restrictedStatus: _restricted ? _status : managed.restrictedStatus,
+            expectedReturnAt: _restricted
+                ? _expected
+                : managed.expectedReturnAt,
+            includeInTotal: _include,
+            note: _note.text,
+          );
+        }
+      });
       if (mounted) Navigator.pop(context);
     } on Object catch (error) {
       if (mounted) {
@@ -278,7 +400,9 @@ class _BalanceCalibrationState extends ConsumerState<_BalanceCalibration> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('校准余额 · ${widget.account.displayName}'),
+    title: Text(
+      '${widget.account.type.isDebt ? '校准欠款' : '校准余额'} · ${widget.account.displayName}',
+    ),
     content: SingleChildScrollView(
       child: Form(
         key: _form,
@@ -350,9 +474,10 @@ class _BalanceCalibrationState extends ConsumerState<_BalanceCalibration> {
     )!;
     if (widget.account.type.isDebt && _debt) value = -value;
     try {
-      await ref
-          .read(accountRepositoryProvider)
-          .reconcileBalance(widget.account.id, value);
+      await DriftAccountRepository(
+        ref.read(databaseProvider),
+        bookId: widget.account.bookId,
+      ).reconcileBalance(widget.account.id, value);
       if (mounted) Navigator.pop(context);
     } on Object catch (error) {
       if (mounted) {

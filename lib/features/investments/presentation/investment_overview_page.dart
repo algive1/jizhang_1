@@ -42,7 +42,6 @@ class _InvestmentOverviewPageState
     return Scaffold(
       backgroundColor: context.appBackground,
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
             _Header(

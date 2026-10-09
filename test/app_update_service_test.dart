@@ -51,64 +51,79 @@ class _FakePlatform implements AppUpdatePlatform {
 }
 
 void main() {
-  test('app update parses optional update and respects check interval', () async {
-    final api = _FakeApi({
-      'status': 'optional',
-      'latestVersion': '1.2.0',
-      'minimumVersion': '1.0.0',
-      'storeUrl': 'https://example.com/app',
-      'message': '更新说明',
-    });
-    final settings = _FakeSettings();
-    final platform = _FakePlatform(
-      const AppBuildInfo(platform: 'android', version: '1.1.0', build: 11),
-    );
-    final service = AppUpdateService(
-      api,
-      settings,
-      platform,
-      minimumCheckInterval: const Duration(days: 1),
-    );
+  test(
+    'app update parses optional update and respects check interval',
+    () async {
+      final api = _FakeApi({
+        'status': 'optional',
+        'latestVersion': '1.2.0',
+        'minimumVersion': '1.0.0',
+        'storeUrl': 'https://example.com/app',
+        'message': '更新说明',
+      });
+      final settings = _FakeSettings();
+      final platform = _FakePlatform(
+        const AppBuildInfo(platform: 'android', version: '1.1.0', build: 11),
+      );
+      final service = AppUpdateService(
+        api,
+        settings,
+        platform,
+        minimumCheckInterval: const Duration(days: 1),
+      );
 
-    final decision = await service.checkIfDue();
-    expect(decision, isNotNull);
-    expect(decision!.kind, AppUpdateKind.optional);
-    expect(decision.currentVersion, '1.1.0');
-    expect(decision.latestVersion, '1.2.0');
-    expect(api.lastPath, contains('platform=android'));
-    expect(api.lastPath, contains('version=1.1.0'));
+      final decision = await service.checkIfDue();
+      expect(decision, isNotNull);
+      expect(decision!.kind, AppUpdateKind.optional);
+      expect(decision.currentVersion, '1.1.0');
+      expect(decision.latestVersion, '1.2.0');
+      expect(api.lastPath, contains('platform=android'));
+      expect(api.lastPath, contains('version=1.1.0'));
+      expect(api.lastPath, contains('build=11'));
+      final installationId = Uri.parse(api.lastPath!)
+          .queryParameters['installationId'];
+      expect(installationId, matches(RegExp(r'^[a-f0-9]{32}$')));
+      await service.checkIfDue(force: true);
+      expect(
+        Uri.parse(api.lastPath!).queryParameters['installationId'],
+        installationId,
+      );
 
-    expect(await service.openStore(decision), isTrue);
-    expect(platform.openedUrl, 'https://example.com/app');
+      expect(await service.openStore(decision), isTrue);
+      expect(platform.openedUrl, 'https://example.com/app');
 
-    final skipped = await service.checkIfDue();
-    expect(skipped, isNull);
-    expect(api.calls, 1);
-  });
+      final skipped = await service.checkIfDue();
+      expect(skipped, isNull);
+      expect(api.calls, 2);
+    },
+  );
 
-  test('app update parses required update and supports forced recheck', () async {
-    final api = _FakeApi({
-      'status': 'required',
-      'latestVersion': '2.0.0',
-      'minimumVersion': '1.5.0',
-      'storeUrl': 'https://example.com/app',
-      'message': null,
-    });
-    final settings = _FakeSettings();
-    final service = AppUpdateService(
-      api,
-      settings,
-      _FakePlatform(
-        const AppBuildInfo(platform: 'ios', version: '1.0.0', build: 1),
-      ),
-    );
+  test(
+    'app update parses required update and supports forced recheck',
+    () async {
+      final api = _FakeApi({
+        'status': 'required',
+        'latestVersion': '2.0.0',
+        'minimumVersion': '1.5.0',
+        'storeUrl': 'https://example.com/app',
+        'message': null,
+      });
+      final settings = _FakeSettings();
+      final service = AppUpdateService(
+        api,
+        settings,
+        _FakePlatform(
+          const AppBuildInfo(platform: 'ios', version: '1.0.0', build: 1),
+        ),
+      );
 
-    final first = await service.checkIfDue();
-    expect(first!.kind, AppUpdateKind.required);
-    final second = await service.checkIfDue(force: true);
-    expect(second!.kind, AppUpdateKind.required);
-    expect(api.calls, 2);
-  });
+      final first = await service.checkIfDue();
+      expect(first!.kind, AppUpdateKind.required);
+      final second = await service.checkIfDue(force: true);
+      expect(second!.kind, AppUpdateKind.required);
+      expect(api.calls, 2);
+    },
+  );
 
   test('no update returns null after a successful check', () async {
     final api = _FakeApi({

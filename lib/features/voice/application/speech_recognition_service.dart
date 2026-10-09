@@ -9,7 +9,14 @@ import '../../sharing/data/session_repository.dart';
 import '../domain/transaction_parser.dart';
 import 'remote_ai_parsing_gateway.dart';
 
-enum SpeechRecognitionStatus { idle, listening, stopped, unavailable, error }
+enum SpeechRecognitionStatus {
+  idle,
+  listening,
+  processing,
+  stopped,
+  unavailable,
+  error,
+}
 
 class SpeechRecognitionEvent {
   const SpeechRecognitionEvent({
@@ -195,20 +202,37 @@ final speechRecognitionServiceProvider = Provider<SpeechRecognitionService>((
   return service;
 });
 
-final voiceTransactionParserProvider = Provider<TransactionParser>((ref) {
-  final membership = ref.watch(membershipProvider).value;
-  return HybridTransactionParser(
-    rules: const RuleBasedTransactionParser(),
-    ai: CachedRetryingAiTransactionParser(
-      gateway: RemoteAiParsingGateway(
-        ref.watch(sharedApiProvider),
-        ref.watch(sessionRepositoryProvider),
-      ),
-    ),
-    canUseAi: () {
-      final quota = membership?.quotaFor(EntitlementKey.voiceAi);
-      return (membership?.has(EntitlementKey.voiceAi) ?? false) &&
-          (quota == null || quota.remaining > 0);
-    },
-  );
-});
+final transactionParserProvider =
+    Provider.family<
+      TransactionParser,
+      ({String source, String? requestId, DateTime? referenceTime})
+    >((ref, context) {
+      final membership = ref.watch(membershipProvider).value;
+      return HybridTransactionParser(
+        rules: const RuleBasedTransactionParser(),
+        ai: CachedRetryingAiTransactionParser(
+          gateway: RemoteAiParsingGateway(
+            ref.watch(sharedApiProvider),
+            ref.watch(sessionRepositoryProvider),
+            source: context.source,
+            requestId: context.requestId,
+            referenceTime: context.referenceTime,
+          ),
+        ),
+        canUseAi: () {
+          final quota = membership?.quotaFor(EntitlementKey.voiceAi);
+          // The server checks the configured source entitlement for every request.
+          return ref.read(sessionProvider).value != null &&
+              (quota == null || quota.remaining > 0);
+        },
+      );
+    });
+final voiceTransactionParserProvider = Provider<TransactionParser>(
+  (ref) => ref.watch(
+    transactionParserProvider((
+      source: 'voice',
+      requestId: null,
+      referenceTime: null,
+    )),
+  ),
+);
