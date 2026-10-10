@@ -1,6 +1,11 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/membership.dart';
+import '../app_runtime/data/app_runtime_repository.dart';
+import '../membership/application/membership_feature_guard.dart';
+import '../membership/data/membership_repository.dart';
+
 class AutoBookkeepingRuntimeStatus {
   const AutoBookkeepingRuntimeStatus({
     required this.enabled,
@@ -108,7 +113,8 @@ abstract interface class AutoBookkeepingSettingsBridge {
 
 class MethodChannelAutoBookkeepingSettings
     implements AutoBookkeepingSettingsBridge {
-  const MethodChannelAutoBookkeepingSettings();
+  const MethodChannelAutoBookkeepingSettings({this.beforeEnable});
+  final Future<void> Function()? beforeEnable;
 
   static const _channel = MethodChannel('jizhang/autobookkeeping');
 
@@ -243,6 +249,7 @@ class MethodChannelAutoBookkeepingSettings
 
   @override
   Future<void> setEnabled(bool enabled) async {
+    if (enabled) await beforeEnable?.call();
     try {
       await _channel.invokeMethod<void>('setEnabled', enabled);
     } on MissingPluginException {
@@ -260,7 +267,17 @@ class MethodChannelAutoBookkeepingSettings
 }
 
 final autoBookkeepingSettingsProvider = Provider<AutoBookkeepingSettingsBridge>(
-  (ref) => const MethodChannelAutoBookkeepingSettings(),
+  (ref) => MethodChannelAutoBookkeepingSettings(
+    beforeEnable: () async {
+      await ref
+          .read(appRuntimeRepositoryProvider)
+          .require(AppCapability.automaticBookkeeping);
+      await requireMembershipFeature(
+        ref.read(membershipFeatureAccessServiceProvider),
+        MembershipFeature.automaticBookkeeping,
+      );
+    },
+  ),
 );
 
 final autoBookkeepingRuntimeProvider =

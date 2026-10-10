@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,8 @@ import '../application/account_session_controller.dart';
 import '../application/cloud_backup_preferences.dart';
 import '../application/dataset_binding_service.dart';
 import 'dataset_binding_page.dart';
+import '../../app_runtime/application/device_heartbeat_service.dart';
+import '../../app_runtime/data/app_runtime_repository.dart';
 
 class CloudBackupCard extends ConsumerStatefulWidget {
   const CloudBackupCard({super.key});
@@ -121,12 +124,15 @@ class _CloudBackupCardState extends ConsumerState<CloudBackupCard> {
                           session?.user?.id != userId ||
                           current.boundUserId != userId)
                         throw StateError('账号已变化');
+                      if (value) await ref.read(appRuntimeRepositoryProvider).require(AppCapability.cloudBackup);
+                      if (!mounted) return;
                       await ref
                           .read(appSettingsRepositoryProvider)
                           .set(
                             cloudAutoBackupKey(userId, current.datasetId),
                             '$value',
                           );
+                      if (mounted) unawaited(ref.read(deviceHeartbeatServiceProvider).sendIfDue(force: true));
                     }),
             ),
             Wrap(

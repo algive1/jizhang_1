@@ -18,6 +18,10 @@ import '../application/local_backup_service.dart';
 import '../domain/transaction_csv.dart';
 import '../../security/application/app_lock_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/models/membership.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../membership/data/membership_repository.dart';
+import '../../membership/presentation/membership_upgrade_prompt.dart';
 
 class DataExportPage extends ConsumerStatefulWidget {
   const DataExportPage({super.key});
@@ -314,6 +318,8 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                             _status = null;
                           });
                           try {
+                            await requireMembershipFeature(ref.read(membershipFeatureAccessServiceProvider), MembershipFeature.dataExport);
+                            if (!mounted) return;
                             final transactions = await ref
                                 .read(transactionRepositoryProvider)
                                 .getAll();
@@ -336,6 +342,12 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                                     ? '已取消导出，未保存文件'
                                     : '流水 CSV 已保存到所选位置',
                               );
+                            }
+                          } on MembershipFeatureDenied catch (error) {
+                            if (context.mounted && error.access.requiresUpgrade) {
+                              await showMembershipUpgradePrompt(context, error.access.feature);
+                            } else if (mounted) {
+                              setState(() => _status = error.toString());
                             }
                           } on Object catch (error) {
                             if (mounted) {
@@ -422,6 +434,8 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
                 Text('使用情况统计', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 const Text('帮助我们了解哪些页面和功能更常用。默认关闭，只有你主动开启后才会上传匿名使用事件。'),
+                const SizedBox(height: 8),
+                const Text('登录后会同步应用版本、自动记账与自动备份开关，用于服务状态诊断；这些状态不包含账本金额或支付内容。'),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

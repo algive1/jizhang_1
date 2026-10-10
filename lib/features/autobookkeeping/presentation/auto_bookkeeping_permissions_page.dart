@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,9 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/platform/app_notice.dart';
 import '../auto_bookkeeping_settings.dart';
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../app_runtime/application/device_heartbeat_service.dart';
+import '../../membership/presentation/membership_upgrade_prompt.dart';
 
 class AutoBookkeepingPermissionsPage extends ConsumerStatefulWidget {
   const AutoBookkeepingPermissionsPage({super.key});
@@ -194,6 +198,7 @@ class _AutoBookkeepingPageState
     try {
       await bridge.setEnabled(enabled);
       if (!mounted) return;
+      unawaited(ref.read(deviceHeartbeatServiceProvider).sendIfDue(force: true));
       setState(() {
         _message = enabled ? '已开启。识别结果将按所选入账策略处理。' : '已关闭自动记账。';
       });
@@ -209,7 +214,12 @@ class _AutoBookkeepingPageState
         await _load();
       }
     } on Object catch (error) {
-      if (mounted) setState(() => _message = '$error');
+      if (mounted) {
+        setState(() => _message = '$error');
+        if (error is MembershipFeatureDenied && error.access.requiresUpgrade) {
+          await showMembershipUpgradePrompt(context, error.access.feature);
+        }
+      }
     }
   }
 

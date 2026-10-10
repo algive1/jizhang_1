@@ -1,5 +1,6 @@
 import { registerAssistantPolicy } from './assistant_policy.js';
 import { registerConsole } from './console/index.js';
+import { registerAppCapabilityGuard } from './console/app_capabilities.js';
 import { assertUserEnabled } from './console/auth.js';
 import {ConsoleAIProvider,registerAIContext} from './console/ai.js';
 import { registerInsightRoutes } from './insights.js';
@@ -63,6 +64,7 @@ export async function createApp(
 ) {
   const app = Fastify({ logger:false, bodyLimit:16*1024*1024 });
   const store = new Store(path);
+  registerAppCapabilityGuard(app, store);
   ensureIntegrations(store);
   const consoleModelProvider=new ConsoleAIProvider(store,modelProvider);
   registerAIContext(app,store);

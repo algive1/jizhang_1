@@ -119,6 +119,26 @@ jobs:
           test/autobookkeeping_learning_test.dart
           test/autobookkeeping_refund_matcher_test.dart
           test/autobookkeeping_transfer_resolver_test.dart
+          test/app_runtime_repository_test.dart
+          test/membership_execution_guard_test.dart
+          test/help_page_regression_test.dart
+          test/shared_api_contract_test.dart
+
+      - name: Set up Node.js for APP/backend integration
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install integration backend
+        working-directory: server
+        run: npm ci
+
+      - name: Run real APP/backend integration
+        run: |
+          flutter test --reporter expanded test/shared_backend_integration_test.dart
+          flutter test --reporter expanded --dart-define=ALL_FEATURES_FREE_FOR_TESTING=false test/app_backend_integration_test.dart
 
       - name: Run Android auto-bookkeeping unit tests
         run: |

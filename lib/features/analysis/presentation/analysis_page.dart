@@ -13,6 +13,8 @@ import 'package:go_router/go_router.dart';
 
 import 'cashflow_cards.dart';
 import '../application/analysis_report_export_service.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../membership/presentation/membership_upgrade_prompt.dart';
 import '../data/analysis_repository.dart';
 
 class AnalysisPage extends ConsumerStatefulWidget {
@@ -236,6 +238,12 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           fileName: name,
           text: '${scope.label} · ${snapshot.currency} 收支报告',
         );
+      }
+    } on MembershipFeatureDenied catch (error) {
+      if (context.mounted && error.access.requiresUpgrade) {
+        await showMembershipUpgradePrompt(context, error.access.feature);
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } on Object catch (error) {
       if (context.mounted) {

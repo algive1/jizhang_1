@@ -14,6 +14,7 @@ class _FakeApi extends SharedApi {
   Future<Map<String, dynamic>> request(
     String path, {
     String method = 'GET',
+    String? bearerToken,
     Object? body,
   }) async {
     calls += 1;

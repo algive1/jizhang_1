@@ -41,9 +41,10 @@ void main() {
       final temp = await Directory.systemTemp.createTemp('ledger-two-clients-');
       final server = await Process.start(
         Platform.environment['NODE_BINARY'] ?? 'node',
-        ['server/node_modules/tsx/dist/cli.mjs', 'server/src/main.ts'],
+        ['--import', './server/node_modules/tsx/dist/loader.mjs', 'server/test/fixtures/flutter_integration_server.ts'],
         environment: {
-          'PORT': '0',
+          'NODE_ENV': 'test',
+          'ALL_FEATURES_FREE_FOR_TESTING': 'true',
           'LEDGER_DB_PATH': '${temp.path}/server.sqlite',
         },
       );

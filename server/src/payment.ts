@@ -267,7 +267,7 @@ export function membershipCurrent(store: Store, userId: string, ignoreTesting=fa
 function membershipActual(store: Store, userId: string) {
   const adjustment=store.db.prepare('SELECT * FROM membership_adjustments WHERE user_id=?').get(userId) as {version_id:string|null;product_id:string;started_at:number;expires_at:number;updated_at:number}|undefined;
   if(adjustment){
-    if(!adjustment.version_id) return {membership:{userId,plan:'free',status:'canceled',updatedAt:adjustment.updated_at},entitlements:[],quotas:[]};
+    if(!adjustment.version_id) return {membership:{userId,plan:'free',status:'canceled',updatedAt:adjustment.updated_at},entitlements:[],featurePolicies:membershipFeaturePolicies(),quotas:[]};
     return membershipSnapshot(store,userId,{id:`admin:${userId}`,plan:adjustment.version_id,productId:adjustment.product_id,provider:'admin',startedAt:adjustment.started_at,expiresAt:adjustment.expires_at,updatedAt:adjustment.updated_at});
   }
   const apple = store.db.prepare("SELECT * FROM apple_transactions WHERE user_id=? AND revoked_at IS NULL AND expires_at IS NOT NULL ORDER BY expires_at DESC LIMIT 1").get(userId) as { transaction_id:string; product_id:string; purchased_at:number|null; expires_at:number; updated_at:number } | undefined;
@@ -277,8 +277,13 @@ function membershipActual(store: Store, userId: string) {
       (apple.expires_at>store.now() && subscription.version_id!=='family' && apple.expires_at>=subscription.expires_at))) {
     return membershipSnapshot(store,userId,{id:apple.transaction_id,plan:'pro',provider:'apple',productId:applePlanForProductId(apple.product_id)??apple.product_id,startedAt:apple.purchased_at??store.now(),expiresAt:apple.expires_at,updatedAt:apple.updated_at});
   }
-  if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], quotas: [] };
+  if (!subscription) return { membership: { userId, plan: 'free', status: 'active', updatedAt: store.now() }, entitlements: [], featurePolicies:membershipFeaturePolicies(), quotas: [] };
   return membershipSnapshot(store,userId,{id:subscription.order_id,plan:subscription.version_id,provider:subscription.provider,productId:subscription.product_id,startedAt:subscription.started_at,expiresAt:subscription.expires_at,updatedAt:subscription.updated_at});
+}
+
+function membershipFeaturePolicies() {
+  const keys:Record<string,string>={automatic_bookkeeping:'automaticBookkeeping',ledger_sync:'cloudSync',asset_reports:'advancedReport',data_export:'dataExport',shared_assets:'familyBook'};
+  return Object.fromEntries(Object.entries(keys).map(([feature,entitlement]) => [feature,{enabled:true,requiresMembership:true,entitlement,source:'membership_catalog'}]));
 }
 
 function membershipSnapshot(store:Store,userId:string,s:{id:string;plan:string;provider:string;productId:string;startedAt:number;expiresAt:number;updatedAt:number}){
@@ -291,9 +296,8 @@ function membershipSnapshot(store:Store,userId:string,s:{id:string;plan:string;p
     if(snapshot.success) product=snapshot.data;
   }
   const keys=planEntitlements(catalog,{versionId:s.plan as 'pro'|'family',rightOverrides:product?.rightOverrides??[]});
-  const policies:Record<string,unknown>={};
-  const featureKeys:Record<string,string>={automatic_bookkeeping:'automaticBookkeeping',ledger_sync:'cloudSync',asset_reports:'advancedReport',data_export:'dataExport',shared_assets:'familyBook'};
-  for(const [feature,key] of Object.entries(featureKeys)) policies[feature]={enabled:keys.includes(key),requiresMembership:true,entitlement:key,source:'membership_catalog'};
+  const policies=membershipFeaturePolicies();
+  for (const policy of Object.values(policies)) policy.enabled = keys.includes(policy.entitlement);
   return {
     membership:{userId,plan:s.plan,status,updatedAt:s.updatedAt},
     subscription:{id:s.id,userId,provider:s.provider,productId:s.productId,startedAt:s.startedAt,expiresAt:s.expiresAt,autoRenew:false,externalSubscriptionId:s.id},

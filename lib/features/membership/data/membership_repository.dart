@@ -91,7 +91,14 @@ class RemoteMembershipRepository implements MembershipRepository {
     await session.initialize();
     if (session.user == null)
       return LocalOnlyMembershipRepository().getCurrent();
+    final userId = session.userId;
+    final token = api.sessionToken;
     final data = await api.request('/membership/current');
+    if (session.userId != userId ||
+        api.sessionToken != token ||
+        (data['membership'] as Map?)?['userId'] != userId) {
+      throw StateError('账号已切换，请重试');
+    }
     return _snapshotFromJson(data);
   }
 

@@ -6,6 +6,7 @@ import '../../../core/models/membership.dart';
 import '../../membership/data/membership_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
+import '../../app_runtime/data/app_runtime_repository.dart';
 
 class CloudSyncMembershipRequired implements Exception {
   const CloudSyncMembershipRequired();
@@ -64,39 +65,55 @@ class PersonalCloudBootstrapService {
     this.database,
     this.session,
     this.api,
-    this.membership,
-  );
+    this.membership, {
+    this.beforeCloudOperation,
+  });
 
   final AppDatabase database;
   final SessionRepository session;
   final SharedApi api;
   final MembershipRepository membership;
+  final Future<void> Function()? beforeCloudOperation;
 
-  Future<({String userId, DeviceDataBinding binding})> _context() async {
+  void _assertSession(String userId, String? token) {
+    if (session.userId != userId || api.sessionToken != token) {
+      throw StateError('账号已切换，请重试');
+    }
+  }
+
+  Future<({String userId, String? token, DeviceDataBinding binding})>
+  _context() async {
     await session.initialize();
     final userId = session.userId;
+    final token = api.sessionToken;
     if (userId == null) throw StateError('请先登录');
+    await beforeCloudOperation?.call();
+    _assertSession(userId, token);
 
     final membershipSnapshot = await membership.getCurrent();
-    if (!membershipSnapshot.has(EntitlementKey.cloudSync)) {
+    if (!membershipSnapshot.has(EntitlementKey.cloudSync) ||
+        !membershipSnapshot.canUseFeature(MembershipFeature.ledgerSync)) {
       throw const CloudSyncMembershipRequired();
     }
 
     final binding = await database.getDeviceDataBinding();
+    _assertSession(userId, token);
     if (binding.boundUserId == null) {
       throw StateError('请先绑定本地数据');
     }
     if (binding.boundUserId != userId) {
       throw const DatasetBindingConflict('other-account');
     }
-    return (userId: userId, binding: binding);
+    return (userId: userId, token: token, binding: binding);
   }
 
   Future<PersonalCloudStatus> status() async {
     final context = await _context();
     final data = await api.request(
       '/sync/status?datasetId=${context.binding.datasetId}',
+      bearerToken: context.token,
     );
+    _assertSession(context.userId, context.token);
     return PersonalCloudStatus.fromJson(data);
   }
 
@@ -105,8 +122,10 @@ class PersonalCloudBootstrapService {
     final data = await api.request(
       '/sync/bootstrap',
       method: 'POST',
+      bearerToken: context.token,
       body: {'datasetId': context.binding.datasetId},
     );
+    _assertSession(context.userId, context.token);
     final result = PersonalCloudStatus.fromJson(data);
     if (result.datasetMatches) {
       await database.setDatasetCloudSyncEnabled(
@@ -125,5 +144,8 @@ final personalCloudBootstrapServiceProvider =
         ref.watch(sessionRepositoryProvider),
         ref.watch(sharedApiProvider),
         ref.watch(membershipRepositoryProvider),
+        beforeCloudOperation: () => ref
+            .read(appRuntimeRepositoryProvider)
+            .require(AppCapability.cloudBackup),
       );
     });

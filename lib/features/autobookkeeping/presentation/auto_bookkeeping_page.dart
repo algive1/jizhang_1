@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide Column;
@@ -16,6 +17,9 @@ import '../auto_bookkeeping_inbox.dart';
 import '../auto_bookkeeping_settings.dart';
 import '../auto_bookkeeping_strategy.dart';
 import 'auto_bookkeeping_visuals.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../app_runtime/application/device_heartbeat_service.dart';
+import '../../membership/presentation/membership_upgrade_prompt.dart';
 
 final recentAutoBookkeepingProvider = StreamProvider<List<TransactionRecord>>((
   ref,
@@ -123,6 +127,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       await ref.read(autoBookkeepingSettingsProvider).setEnabled(enabled);
+      if (mounted) unawaited(ref.read(deviceHeartbeatServiceProvider).sendIfDue(force: true));
       if (!mounted || revision != _toggleRevision) return;
       setState(() => _enabled = enabled);
       await _refresh(refreshInbox: false);
@@ -149,7 +154,7 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
               : '自动记账已关闭',
         );
       }
-    } on Object {
+    } on Object catch (error) {
       if (mounted && revision == _toggleRevision) {
         await _refresh(refreshInbox: false);
         if (mounted && revision == _toggleRevision) {
@@ -157,7 +162,11 @@ class _AutoBookkeepingPageState extends ConsumerState<AutoBookkeepingPage>
             _busy = false;
             _connecting = false;
           });
-          await AppNotice.show(context, '设置失败，请重新检测');
+          if (error is MembershipFeatureDenied && error.access.requiresUpgrade) {
+            await showMembershipUpgradePrompt(context, error.access.feature);
+          } else {
+            await AppNotice.show(context, error.toString());
+          }
         }
       }
     } finally {

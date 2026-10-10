@@ -19,6 +19,7 @@ import '../application/bill_screenshot_parser.dart';
 import '../../../app/theme/app_theme_tokens.dart';
 import '../../../core/widgets/app_form.dart';
 import '../../assistant/application/assistant_input_policy.dart';
+import '../../app_runtime/data/app_runtime_repository.dart';
 
 class ReceiptOcrPage extends ConsumerStatefulWidget {
   const ReceiptOcrPage({super.key});
@@ -326,6 +327,8 @@ class _ReceiptOcrPageState extends ConsumerState<ReceiptOcrPage> {
       _parsed = null;
     });
     try {
+      await ref.read(appRuntimeRepositoryProvider).require(AppCapability.ocr);
+      if (!mounted) return;
       final image = await ImagePicker().pickImage(
         source: source,
         imageQuality: 95,

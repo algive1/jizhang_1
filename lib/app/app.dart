@@ -36,6 +36,11 @@ import '../features/transactions/data/transactions_repository.dart';
 import '../features/books/data/book_repository.dart';
 import '../features/settings/application/theme_controller.dart';
 import '../core/platform/app_notice_theme.dart';
+import '../features/app_runtime/data/app_runtime_repository.dart';
+import '../features/app_runtime/application/device_heartbeat_service.dart';
+import '../features/autobookkeeping/auto_bookkeeping_settings.dart';
+import '../features/membership/data/membership_repository.dart';
+import '../core/models/membership.dart';
 
 class JizhangApp extends ConsumerStatefulWidget {
   const JizhangApp({super.key});
@@ -230,6 +235,43 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
     unawaited(_flushDiagnosticsAfterSessionRestore());
     _syncPersonalCloudForeground();
     _registerPushIfAvailable();
+    unawaited(_syncRuntimeWithBackend());
+  }
+
+  Future<void> _syncRuntimeWithBackend() async {
+    try {
+      final config = await ref.read(appRuntimeRepositoryProvider).refreshConfiguration();
+      if (!mounted) return;
+      final bridge = ref.read(autoBookkeepingSettingsProvider);
+      if (await bridge.isEnabled()) {
+        var allowed = config.allows(AppCapability.automaticBookkeeping);
+        if (allowed && mounted) {
+          final access = await ref.read(membershipFeatureAccessServiceProvider)
+              .accessFor(MembershipFeature.automaticBookkeeping);
+          allowed = access.allowed;
+        }
+        if (!allowed) {
+          await bridge.setEnabled(false);
+          if (mounted) await ref.read(autoBookkeepingRuntimeProvider.notifier).refresh();
+        }
+      }
+      if (!mounted) return;
+      unawaited(_refreshOperationsContent());
+      await ref.read(deviceHeartbeatServiceProvider).sendIfDue();
+    } on Object {
+      // Configuration and operational telemetry must not block bookkeeping.
+    }
+  }
+
+  Future<void> _refreshOperationsContent() async {
+    final repository = ref.read(appRuntimeRepositoryProvider);
+    if (!repository.enabled) return;
+    await Future.wait(['faq', 'banner', 'activity'].map((kind) async {
+      final result = await repository.operations(kind);
+      if (mounted && !result.cached && !result.unavailable) {
+        ref.invalidate(appOperationsProvider(kind));
+      }
+    }));
   }
 
   void _registerPushIfAvailable() {
@@ -463,6 +505,12 @@ class _JizhangAppState extends ConsumerState<JizhangApp>
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
+    ref.listen(sessionProvider, (previous, next) {
+      if (next.hasValue && next.value?.id != previous?.value?.id) {
+        unawaited(_syncRuntimeWithBackend());
+        ref.invalidate(membershipProvider);
+      }
+    });
     final overlayHost = isAutoBookkeepingOverlayRoute(
       PlatformDispatcher.instance.defaultRouteName,
     );
