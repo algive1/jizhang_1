@@ -10,6 +10,127 @@ import 'package:jizhang_app/core/database/database_provider.dart';
 import 'package:jizhang_app/features/data_export/application/local_backup_service.dart';
 
 void main() {
+  for (final existingDevice in [true, false]) {
+    test(
+      'restore keeps device identity and consent ${existingDevice ? 'on this device' : 'off on a new device'}',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'restore-device-settings-',
+        );
+        final sourceDirectory = await Directory('${root.path}/source').create();
+        final targetDirectory = await Directory('${root.path}/target').create();
+        final source = AppDatabase.forTesting(
+          NativeDatabase(
+            File(
+              '${sourceDirectory.path}/${LocalBackupService.databaseFileName}',
+            ),
+          ),
+        );
+        final target = AppDatabase.forTesting(
+          NativeDatabase(
+            File(
+              '${targetDirectory.path}/${LocalBackupService.databaseFileName}',
+            ),
+          ),
+        );
+        addTearDown(() async {
+          await source.close();
+          await target.close();
+          await root.delete(recursive: true);
+        });
+        final now = DateTime.now();
+        final importedDeviceSettings = {
+          'analytics.installation_id.v1': 'a' * 32,
+          'push.device_id.v1': 'source-push',
+          'analytics.enabled.v1': 'true',
+          'analytics.queue.v1': '[{"eventId":"source-event"}]',
+          'app.heartbeat.v1.origin.user': 'source-checkpoint',
+          'app.runtime.v1.origin.config': 'source-cache',
+          'cloud.backup.auto.user.dataset': 'true',
+        };
+        for (final entry in importedDeviceSettings.entries) {
+          await source.appSettingsDao.setValue(entry.key, entry.value, now);
+        }
+        await source.appSettingsDao.setValue(
+          'theme.selected',
+          'fresh_green',
+          now,
+        );
+        if (existingDevice) {
+          await target.appSettingsDao.setValue(
+            'analytics.installation_id.v1',
+            'b' * 32,
+            now,
+          );
+          await target.appSettingsDao.setValue(
+            'push.device_id.v1',
+            'target-push',
+            now,
+          );
+          await target.appSettingsDao.setValue(
+            'analytics.enabled.v1',
+            'false',
+            now,
+          );
+          await target.appSettingsDao.setValue(
+            'cloud.backup.auto.user.dataset',
+            'false',
+            now,
+          );
+          await target.appSettingsDao.setValue(
+            'app.runtime.v1.origin.config',
+            'target-cache',
+            now,
+          );
+        }
+        final sourceBackup = LocalBackupService(
+          source,
+          documentsDirectory: () async => sourceDirectory,
+        );
+        final targetBackup = LocalBackupService(
+          target,
+          documentsDirectory: () async => targetDirectory,
+        );
+        await targetBackup.restoreDatabase(await sourceBackup.exportDatabase());
+        final pending = sqlite3.open(
+          '${targetDirectory.path}/${LocalBackupService.databaseFileName}${LocalBackupService.pendingRestoreSuffix}',
+        );
+        try {
+          final settings = {
+            for (final row in pending.select(
+              'SELECT key,value FROM app_settings',
+            ))
+              row['key'] as String: row['value'],
+          };
+          expect(settings['theme.selected'], 'fresh_green');
+          expect(
+            settings['analytics.installation_id.v1'],
+            existingDevice ? 'b' * 32 : isNull,
+          );
+          expect(
+            settings['push.device_id.v1'],
+            existingDevice ? 'target-push' : isNull,
+          );
+          expect(
+            settings['analytics.enabled.v1'],
+            existingDevice ? 'false' : isNull,
+          );
+          expect(
+            settings['cloud.backup.auto.user.dataset'],
+            existingDevice ? 'false' : isNull,
+          );
+          expect(
+            settings['app.runtime.v1.origin.config'],
+            existingDevice ? 'target-cache' : isNull,
+          );
+          expect(settings['analytics.queue.v1'], isNull);
+          expect(settings['app.heartbeat.v1.origin.user'], isNull);
+        } finally {
+          pending.close();
+        }
+      },
+    );
+  }
   test('exports the current database file as a valid SQLite backup', () async {
     final directory = await Directory.systemTemp.createTemp('jizhang-backup-');
     final database = AppDatabase.forTesting(
@@ -95,9 +216,7 @@ void main() {
     );
     final sourceDatabase = AppDatabase.forTesting(
       NativeDatabase(
-        File(
-          '${sourceDirectory.path}/${LocalBackupService.databaseFileName}',
-        ),
+        File('${sourceDirectory.path}/${LocalBackupService.databaseFileName}'),
       ),
     );
     final targetDatabase = createMemoryDatabase();
@@ -175,12 +294,10 @@ void main() {
 
     final restored = sqlite3.open(pending.path);
     addTearDown(restored.close);
-    final row = restored
-        .select(
-          'SELECT path,size_in_bytes FROM transaction_attachments WHERE id=?',
-          ['attachment-test'],
-        )
-        .single;
+    final row = restored.select(
+      'SELECT path,size_in_bytes FROM transaction_attachments WHERE id=?',
+      ['attachment-test'],
+    ).single;
     final restoredPath = row['path'] as String;
     expect(restoredPath, isNot(attachment.path));
     expect(await File(restoredPath).readAsString(), 'receipt-content');
