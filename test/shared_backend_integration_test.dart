@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:jizhang_app/core/database/database_provider.dart';
+import 'package:jizhang_app/core/database/app_database.dart';
 import 'package:jizhang_app/core/database/database_seeder.dart';
 import 'package:jizhang_app/core/models/family.dart';
 import 'package:jizhang_app/core/models/goal.dart';
@@ -81,6 +82,7 @@ void main() {
       final transport = HttpClient();
       Future<void> Function()? duringPromotion;
       var dropPromotionResponse = false;
+      var dropBookChangesResponses = false;
       proxy.listen((incoming) async {
         final outgoing = await transport.openUrl(
           incoming.method,
@@ -109,6 +111,11 @@ void main() {
             incoming.uri.path == '/api/v1/books') {
           dropPromotionResponse = false;
           await duringPromotion!();
+          (await incoming.response.detachSocket(writeHeaders: false)).destroy();
+          return;
+        }
+        if (dropBookChangesResponses && incoming.method == 'GET' &&
+            incoming.uri.path.endsWith('/changes')) {
           (await incoming.response.detachSocket(writeHeaders: false)).destroy();
           return;
         }
@@ -184,6 +191,15 @@ void main() {
           .firstWhere((book) => book.id == family.id);
       expect(shared.isShared, isTrue);
       final remote = shared.sharedId!;
+      dropBookChangesResponses = true;
+      await syncA.sync();
+      expect(syncA.lastError, contains('同步未完成'));
+      expect(sessionA.userId, isNotNull);
+      expect(apiA.sessionToken, isNotNull);
+      expect(await a.canAccessBook(family.id), isTrue);
+      dropBookChangesResponses = false;
+      await syncA.sync();
+      expect(syncA.lastError, isNull);
       final invitation = await SharedFamilyService(syncA)
           .createInvitation(familyId: remote);
       await SharedFamilyService(syncB).acceptInvitation(invitation.code);
