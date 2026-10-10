@@ -1,7 +1,6 @@
 // 临时渲染脚本：把导航栏和新页面真实渲染成 PNG，用于人工查看效果。
 // 加载系统中文字体 + Material 图标字体，避免渲染成方块。
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';

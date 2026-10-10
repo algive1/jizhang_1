@@ -17,7 +17,10 @@ const props = defineProps<{
   selection?: boolean;
   exportValue?: (row: T, column: TableColumnData) => unknown;
 }>();
-const emit = defineEmits<{ selectionChange: [keys: Array<string | number>] }>();
+const emit = defineEmits<{
+  selectionChange: [keys: Array<string | number>];
+  reset: [];
+}>();
 const selectedKeys = ref<Array<string | number>>([]);
 const query = ref({
   page: 1,
@@ -129,6 +132,7 @@ defineExpose({ refresh });
       ><a-button
         @click="
           query.q = '';
+          emit('reset');
           search();
         "
         >重置</a-button

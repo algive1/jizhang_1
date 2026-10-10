@@ -742,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
   static const pendingRestoreSuffix = '.pending-restore';
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   static Future<void> applyPendingRestore(File databaseFile) {
     return _applyPendingDatabaseRestore(databaseFile);
@@ -974,6 +974,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 25) {
           await _createPhotoGalleryIndex();
         }
+        if (from < 26) {
+          await _createTransactionLookupIndexes();
+        }
       });
     },
     beforeOpen: (details) async {
@@ -1015,6 +1018,7 @@ class AppDatabase extends _$AppDatabase {
     await _createPhotoGalleryIndex();
     await _createAccountIdentifierIndex();
     await _createInvestmentIndexes();
+    await _createTransactionLookupIndexes();
   }
 
   Future<void> _createTransactionRangeIndex() async {
@@ -1187,9 +1191,7 @@ class AppDatabase extends _$AppDatabase {
     final eventColumns = await customSelect(
       'PRAGMA table_info(receivable_events)',
     ).get();
-    if (!eventColumns.any(
-      (row) => row.read<String>('name') == 'book_id',
-    )) {
+    if (!eventColumns.any((row) => row.read<String>('name') == 'book_id')) {
       await customStatement(
         'ALTER TABLE receivable_events ADD COLUMN book_id TEXT',
       );
@@ -1484,9 +1486,7 @@ Future<void> _ensureDatabaseEncrypted(File file, String key) async {
       return;
     }
     if (!_canReadPlainDatabase(file)) {
-      throw StateError(
-        '本地数据库无法解密。系统安全存储中的数据库密钥可能已丢失，请从备份恢复。',
-      );
+      throw StateError('本地数据库无法解密。系统安全存储中的数据库密钥可能已丢失，请从备份恢复。');
     }
 
     final temporary = File(
@@ -1796,10 +1796,7 @@ class CategoryDao extends DatabaseAccessor<AppDatabase>
   }
 }
 
-typedef TransactionDateRange = ({
-  DateTime start,
-  DateTime endExclusive,
-});
+typedef TransactionDateRange = ({DateTime start, DateTime endExclusive});
 
 typedef TransactionRecordedMonthNeighbors = ({
   int? previousMonthKey,
@@ -1919,7 +1916,8 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       if (occurredBefore != null) 'AND t.occurred_at < ?',
       if (occurredThrough != null) 'AND t.occurred_at <= ?',
     ].join('\n');
-    final sql = '''
+    final sql =
+        '''
       WITH search_term(q) AS (VALUES (?))
       SELECT t.*
       FROM transactions AS t
@@ -1998,9 +1996,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       },
     );
     return raw.watch().map(
-      (rows) => [
-        for (final row in rows) transactionEntries.map(row.data),
-      ],
+      (rows) => [for (final row in rows) transactionEntries.map(row.data)],
     );
   }
 
@@ -2055,9 +2051,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       readsFrom: {transactionEntries},
     );
     return raw.watch().map(
-      (rows) => [
-        for (final row in rows) transactionEntries.map(row.data),
-      ],
+      (rows) => [for (final row in rows) transactionEntries.map(row.data)],
     );
   }
 
@@ -2125,9 +2119,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return query.watch();
   }
 
-  Future<List<TransactionEntity>> getImportDedupCandidates({
-    String? bookId,
-  }) {
+  Future<List<TransactionEntity>> getImportDedupCandidates({String? bookId}) {
     return (select(transactionEntries)
           ..where(
             (row) =>
@@ -2257,9 +2249,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       ],
       readsFrom: {transactionEntries},
     ).get();
-    return [
-      for (final row in rows) transactionEntries.map(row.data),
-    ];
+    return [for (final row in rows) transactionEntries.map(row.data)];
   }
 
   Future<List<TransactionEntity>> getActiveByTypes({
@@ -2353,9 +2343,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     return raw.watchSingle().map((row) => row.read<int>('total_cents'));
   }
 
-  Stream<List<DateTime>> watchActiveOccurredDays({
-    String? bookId,
-  }) {
+  Stream<List<DateTime>> watchActiveOccurredDays({String? bookId}) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
     final raw = customSelect(
       '''
@@ -2368,9 +2356,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         AND occurred_at <= CAST(strftime('%s', 'now') AS INTEGER)
       ORDER BY day ASC
       ''',
-      variables: [
-        if (bookId != null) Variable<String>(bookId),
-      ],
+      variables: [if (bookId != null) Variable<String>(bookId)],
       readsFrom: {transactionEntries},
     );
     return raw.watch().map(
@@ -2466,9 +2452,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         AND ${SharedSyncSchema.visibleBooksSql('book_id')}
         $bookFilter
       ''',
-      variables: [
-        if (bookId != null) Variable<String>(bookId),
-      ],
+      variables: [if (bookId != null) Variable<String>(bookId)],
       readsFrom: {transactionEntries},
     );
     return query.watchSingle().map((row) => row.read<int>('row_count'));
@@ -2486,15 +2470,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         $bookFilter
       ORDER BY year DESC
       ''',
-      variables: [
-        if (bookId != null) Variable<String>(bookId),
-      ],
+      variables: [if (bookId != null) Variable<String>(bookId)],
       readsFrom: {transactionEntries},
     );
     return query.watch().map(
-      (rows) => [
-        for (final row in rows) row.read<int>('year'),
-      ],
+      (rows) => [for (final row in rows) row.read<int>('year')],
     );
   }
 
@@ -2562,15 +2542,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         $bookFilter
       ORDER BY currency
       ''',
-      variables: [
-        if (bookId != null) Variable<String>(bookId),
-      ],
+      variables: [if (bookId != null) Variable<String>(bookId)],
       readsFrom: {transactionEntries},
     );
     return query.watch().map(
-      (rows) => [
-        for (final row in rows) row.read<String>('currency'),
-      ],
+      (rows) => [for (final row in rows) row.read<String>('currency')],
     );
   }
 
@@ -2580,8 +2556,9 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     DateTime? cutoff,
   }) {
     final bookFilter = bookId == null ? '' : 'AND book_id = ?';
-    final cutoffSql =
-        cutoff == null ? "CAST(strftime('%s', 'now') AS INTEGER)" : '?';
+    final cutoffSql = cutoff == null
+        ? "CAST(strftime('%s', 'now') AS INTEGER)"
+        : '?';
     final variables = <Variable<Object>>[
       Variable<String>(currency),
       if (cutoff != null) Variable<DateTime>(cutoff),
@@ -2623,14 +2600,10 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
       variables: variables,
       readsFrom: {transactionEntries},
     );
-    return query.watchSingle().map(
-      (row) => row.read<int>('threshold_cents'),
-    );
+    return query.watchSingle().map((row) => row.read<int>('threshold_cents'));
   }
 
-  Stream<List<TransactionEntity>> watchPendingReimbursements({
-    String? bookId,
-  }) {
+  Stream<List<TransactionEntity>> watchPendingReimbursements({String? bookId}) {
     return (select(transactionEntries)
           ..where(
             (row) =>
@@ -2762,9 +2735,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
-  Stream<List<TransactionEntity>> watchReimbursementSources({
-    String? bookId,
-  }) {
+  Stream<List<TransactionEntity>> watchReimbursementSources({String? bookId}) {
     return (select(transactionEntries)
           ..where(
             (row) =>
@@ -2805,8 +2776,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     required String type,
     String? excludingTransactionId,
   }) async {
-    final excludeSql =
-        excludingTransactionId == null ? '' : 'AND id != ?';
+    final excludeSql = excludingTransactionId == null ? '' : 'AND id != ?';
     final row = await customSelect(
       '''
       SELECT COALESCE(SUM(amount_in_cents), 0) AS total_cents
@@ -2908,10 +2878,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         AND json_extract(metadata_json, '\$.paymentFingerprint') = ?
       LIMIT 1
       ''',
-      variables: [
-        Variable<String>(bookId),
-        Variable<String>(fingerprint),
-      ],
+      variables: [Variable<String>(bookId), Variable<String>(fingerprint)],
       readsFrom: {transactionEntries},
     ).getSingleOrNull();
     return row != null;
@@ -3026,10 +2993,7 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
         Variable<DateTime>(endExclusive),
         Variable<DateTime>(now),
       ],
-      readsFrom: {
-        transactionEntries,
-        attachedDatabase.categoryEntries,
-      },
+      readsFrom: {transactionEntries, attachedDatabase.categoryEntries},
     );
     return query.watch().map(
       (rows) => [
@@ -3156,9 +3120,8 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
 
   /// Emits whenever anything the investment module renders changes, so the UI
   /// can refresh after a holding or transaction write.
-  Stream<void> watchChanges() => select(investmentHoldingEntries).watch().map(
-    (_) {},
-  );
+  Stream<void> watchChanges() =>
+      select(investmentHoldingEntries).watch().map((_) {});
 
   // ---------------------------------------------------------------- assets
 
@@ -3177,16 +3140,16 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<InvestmentAssetEntity?> findAssetById(String id) {
-    return (select(investmentAssetEntries)
-          ..where((row) => row.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      investmentAssetEntries,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
   }
 
   Future<List<InvestmentAssetEntity>> getAssetsByIds(List<String> ids) {
     if (ids.isEmpty) return Future.value(const []);
-    return (select(investmentAssetEntries)
-          ..where((row) => row.id.isIn(ids)))
-        .get();
+    return (select(
+      investmentAssetEntries,
+    )..where((row) => row.id.isIn(ids))).get();
   }
 
   Future<void> upsertAsset(InvestmentAssetEntriesCompanion asset) {
@@ -3194,13 +3157,14 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<void> writeAssetPrice(String id, double? manualPrice) {
-    return (update(investmentAssetEntries)..where((row) => row.id.equals(id)))
-        .write(
-          InvestmentAssetEntriesCompanion(
-            manualPrice: Value(manualPrice),
-            updatedAt: Value(DateTime.now()),
-          ),
-        );
+    return (update(
+      investmentAssetEntries,
+    )..where((row) => row.id.equals(id))).write(
+      InvestmentAssetEntriesCompanion(
+        manualPrice: Value(manualPrice),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   // -------------------------------------------------------------- holdings
@@ -3208,18 +3172,17 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
   Future<List<InvestmentHoldingEntity>> getHoldings({String? bookId}) {
     final query = select(investmentHoldingEntries)
       ..where(
-        (row) => bookId == null
-            ? const Constant(true)
-            : row.bookId.equals(bookId),
+        (row) =>
+            bookId == null ? const Constant(true) : row.bookId.equals(bookId),
       )
       ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
     return query.get();
   }
 
   Future<InvestmentHoldingEntity?> findHoldingById(String id) {
-    return (select(investmentHoldingEntries)
-          ..where((row) => row.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      investmentHoldingEntries,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
   }
 
   Future<void> insertHolding(InvestmentHoldingEntriesCompanion holding) {
@@ -3243,9 +3206,7 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
 
   // ---------------------------------------------------------- transactions
 
-  Future<List<InvestmentTransactionEntity>> getTransactions(
-    String holdingId,
-  ) {
+  Future<List<InvestmentTransactionEntity>> getTransactions(String holdingId) {
     final query = select(investmentTransactionEntries)
       ..where((row) => row.holdingId.equals(holdingId))
       ..orderBy([
@@ -3274,7 +3235,10 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
     required String fromDate,
   }) {
     final query = select(investmentSnapshotEntries)
-      ..where((row) => row.bookId.equals(bookId) & row.date.isBiggerOrEqualValue(fromDate))
+      ..where(
+        (row) =>
+            row.bookId.equals(bookId) & row.date.isBiggerOrEqualValue(fromDate),
+      )
       ..orderBy([(row) => OrderingTerm.asc(row.date)]);
     return query.get();
   }
@@ -3288,9 +3252,7 @@ class InvestmentDao extends DatabaseAccessor<AppDatabase>
         .getSingleOrNull();
   }
 
-  Future<void> upsertSnapshot(
-    InvestmentSnapshotEntriesCompanion snapshot,
-  ) {
+  Future<void> upsertSnapshot(InvestmentSnapshotEntriesCompanion snapshot) {
     return into(investmentSnapshotEntries).insertOnConflictUpdate(snapshot);
   }
 }

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
 import '../application/analysis_report_export_service.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../membership/presentation/membership_upgrade_prompt.dart';
 import '../data/analysis_repository.dart';
 import '../domain/annual_financial_report_service.dart';
 import '../../../app/theme/app_theme_tokens.dart';
@@ -189,6 +191,12 @@ class _AnnualReportPageState extends ConsumerState<AnnualReportPage> {
           fileName: baseName,
           text: '$year 年年度报告 · $scopeLabel',
         );
+      }
+    } on MembershipFeatureDenied catch (error) {
+      if (context.mounted && error.access.requiresUpgrade) {
+        await showMembershipUpgradePrompt(context, error.access.feature);
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } on Object catch (error) {
       if (context.mounted) {

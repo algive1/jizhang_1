@@ -79,16 +79,16 @@ class HoldingItem extends StatelessWidget {
                           if (position.isStale) ...[
                             const SizedBox(width: 5),
                             const Icon(
-                            Icons.cloud_off_outlined,
-                            size: 11,
-                            color: AppColors.warning,
-                          ),
+                              Icons.cloud_off_outlined,
+                              size: 11,
+                              color: AppColors.warning,
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
                 const SizedBox(width: 8),
                 // The amount column is capped so an extreme position can never
                 // break the card: PrivacyAmount's FittedBox scales down inside
@@ -100,20 +100,31 @@ class HoldingItem extends StatelessWidget {
                     children: [
                       InvestmentAmountText(
                         position.marketValue,
+                        currency: position.holding.asset.currency,
                         hidden: amountHidden,
                         size: 14,
                       ),
                       const SizedBox(height: 2),
-                      InvestmentAmountText(
-                        position.profit,
-                        hidden: amountHidden,
-                        signed: true,
-                        size: 11,
-                        weight: FontWeight.w600,
-                        color: percent == null
-                            ? context.appSecondaryText
-                            : profitColor(percent, context: context),
-                      ),
+                      if (position.quote == null)
+                        Text(
+                          amountHidden ? '••••' : '暂无报价',
+                          style: TextStyle(
+                            color: context.appSecondaryText,
+                            fontSize: 11,
+                          ),
+                        )
+                      else
+                        InvestmentAmountText(
+                          position.profit,
+                          currency: position.holding.asset.currency,
+                          hidden: amountHidden,
+                          signed: true,
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: percent == null
+                              ? context.appSecondaryText
+                              : profitColor(percent, context: context),
+                        ),
                       ProfitText(
                         percent: percent,
                         fontSize: 10,
@@ -194,6 +205,7 @@ class HoldingMiniRow extends StatelessWidget {
                   children: [
                     InvestmentAmountText(
                       position.marketValue,
+                      currency: position.holding.asset.currency,
                       hidden: amountHidden,
                       size: 13,
                     ),

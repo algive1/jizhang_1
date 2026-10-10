@@ -58,6 +58,10 @@ const columns: TableColumnData[] = [
   { title: "失败原因", dataIndex: "reason", width: 190 },
   { title: "操作", slotName: "actions", fixed: "right", width: 100 },
 ];
+const initialFilters = { ...filters };
+function resetFilters() {
+  Object.assign(filters, initialFilters);
+}
 </script>
 <template>
   <page-header
@@ -70,6 +74,7 @@ const columns: TableColumnData[] = [
     :columns="columns"
     :load="api.events"
     :filters="filters"
+    @reset="resetFilters"
     row-key="eventId"
     empty-text="尚未收到符合条件的事件"
     ><template #filters

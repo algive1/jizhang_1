@@ -78,14 +78,14 @@ export async function registerConsole(
     const { installationId } = publicQuery.parse(request.query);
     return {
       documents: getPublishedDocuments(store, "config", installationId),
-      integration: "客户端需校验与缓存；未接入前不改变本地设置",
+      integration: "APP 校验并缓存发布配置；停用配置后恢复本地默认开关。",
     };
   });
   app.get("/api/v1/app/rules", async (request) => {
     const { installationId } = publicQuery.parse(request.query);
     return {
       documents: getPublishedDocuments(store, "rule", installationId),
-      integration: "客户端需保留本地默认规则",
+      integration: "当前为后台正则规则格式，Android 仍使用本地标签规则；需完成格式适配后才能在客户端生效。",
     };
   });
   app.post("/api/v1/app/heartbeat", async (request) => {

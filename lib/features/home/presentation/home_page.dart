@@ -3,6 +3,7 @@ import '../../assistant/presentation/assistant_entry_button.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../app_runtime/presentation/operations_notice.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -170,6 +171,7 @@ class _HomePageState extends ConsumerState<HomePage>
               onNotifications: () => context.push('/assistant'),
               onCalendar: () => context.push('/transactions/calendar'),
             ),
+            const OperationsNotice(),
             _HomeInsightSection(
               bookId: book?.id ?? '',
               day: _day,

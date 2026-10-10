@@ -12,6 +12,7 @@ import '../../membership/data/membership_repository.dart';
 import '../../sharing/data/session_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import 'personal_cloud_bootstrap_service.dart';
+import '../../app_runtime/data/app_runtime_repository.dart';
 
 class PersonalCloudRevisionConflict implements Exception {
   const PersonalCloudRevisionConflict({
@@ -32,42 +33,57 @@ class PersonalCloudBackupService {
     this.session,
     this.api,
     this.membership,
-    this.localBackup,
-  );
+    this.localBackup, {
+    this.beforeCloudOperation,
+  });
 
   final AppDatabase database;
   final SessionRepository session;
   final SharedApi api;
   final MembershipRepository membership;
   final LocalBackupService localBackup;
+  final Future<void> Function()? beforeCloudOperation;
 
-  Future<({String userId, DeviceDataBinding binding})> _context({
+  void _assertSession(String userId, String? token) {
+    if (session.userId != userId || api.sessionToken != token) {
+      throw StateError('账号已切换，请重试');
+    }
+  }
+
+  Future<({String userId, String? token, DeviceDataBinding binding})> _context({
     bool requireEnabled = true,
   }) async {
     await session.initialize();
     final userId = session.userId;
+    final token = api.sessionToken;
     if (userId == null) throw StateError('请先登录');
+    await beforeCloudOperation?.call();
+    _assertSession(userId, token);
 
     final membershipSnapshot = await membership.getCurrent();
-    if (!membershipSnapshot.has(EntitlementKey.cloudSync)) {
+    if (!membershipSnapshot.has(EntitlementKey.cloudSync) ||
+        !membershipSnapshot.canUseFeature(MembershipFeature.ledgerSync)) {
       throw const CloudSyncMembershipRequired();
     }
 
     final binding = await database.getDeviceDataBinding();
+    _assertSession(userId, token);
     if (binding.boundUserId != userId) {
       throw StateError('本地数据尚未绑定当前账号');
     }
     if (requireEnabled && !binding.cloudSyncEnabled) {
       throw StateError('请先启用云同步通道');
     }
-    return (userId: userId, binding: binding);
+    return (userId: userId, token: token, binding: binding);
   }
 
   Future<PersonalCloudStatus> uploadSnapshot() async {
     final context = await _context();
     final statusJson = await api.request(
       '/sync/status?datasetId=${context.binding.datasetId}',
+      bearerToken: context.token,
     );
+    _assertSession(context.userId, context.token);
     final current = PersonalCloudStatus.fromJson(statusJson);
     if (!current.exists || !current.datasetMatches) {
       throw const PersonalCloudDatasetConflict();
@@ -99,10 +115,12 @@ class PersonalCloudBackupService {
     }
 
     final databaseBytes = await localBackup.exportDatabase();
-    final attachmentRows = await database.customSelect(
-      'SELECT id,path,name FROM transaction_attachments '
-      'WHERE deleted_at IS NULL ORDER BY id',
-    ).get();
+    final attachmentRows = await database
+        .customSelect(
+          'SELECT id,path,name FROM transaction_attachments '
+          'WHERE deleted_at IS NULL ORDER BY id',
+        )
+        .get();
     final attachments = <Map<String, Object?>>[];
     for (final row in attachmentRows) {
       final id = row.read<String>('id');
@@ -113,11 +131,7 @@ class PersonalCloudBackupService {
       if (path.isNotEmpty && await file.exists()) {
         content = base64Encode(await file.readAsBytes());
       }
-      attachments.add({
-        'id': id,
-        'name': name,
-        'content': content,
-      });
+      attachments.add({'id': id, 'name': name, 'content': content});
     }
 
     final package = utf8.encode(
@@ -132,9 +146,11 @@ class PersonalCloudBackupService {
       throw StateError('账务与附件备份压缩后超过 10MB，暂时无法上传');
     }
 
+    _assertSession(context.userId, context.token);
     final response = await api.request(
       '/sync/snapshot',
       method: 'POST',
+      bearerToken: context.token,
       body: {
         'datasetId': context.binding.datasetId,
         'baseRevision': current.revision,
@@ -142,6 +158,7 @@ class PersonalCloudBackupService {
         'snapshot': base64Encode(compressed),
       },
     );
+    _assertSession(context.userId, context.token);
     final result = PersonalCloudStatus.fromJson(response);
     if (!result.datasetMatches || !result.hasSnapshot) {
       throw StateError('云端备份状态异常，请稍后重试');
@@ -154,12 +171,16 @@ class PersonalCloudBackupService {
     );
     return result;
   }
+
   Future<PersonalCloudRestoreResult> downloadAndPrepareRestore() async {
     final context = await _context(requireEnabled: false);
-    final response = await api.request('/sync/snapshot/download');
+    final response = await api.request(
+      '/sync/snapshot/download',
+      bearerToken: context.token,
+    );
+    _assertSession(context.userId, context.token);
     final encoding = response['encoding'] as String?;
-    if (encoding != 'gzip+base64' &&
-        encoding != 'gzip+base64+json-v2') {
+    if (encoding != 'gzip+base64' && encoding != 'gzip+base64+json-v2') {
       throw const FormatException('云端备份编码不受支持');
     }
 
@@ -213,6 +234,7 @@ class PersonalCloudBackupService {
     }
 
     LocalBackupService.validateBackupBytes(databaseBytes);
+    _assertSession(context.userId, context.token);
     await localBackup.restoreDatabase(databaseBytes);
     if (encoding == 'gzip+base64+json-v2') {
       await localBackup.preparePendingRestoreAttachments(restoredAttachments);
@@ -239,9 +261,7 @@ class PersonalCloudBackupService {
           : null,
     );
   }
-
 }
-
 
 class PersonalCloudRestoreResult {
   const PersonalCloudRestoreResult({
@@ -264,5 +284,8 @@ final personalCloudBackupServiceProvider = Provider<PersonalCloudBackupService>(
     ref.watch(sharedApiProvider),
     ref.watch(membershipRepositoryProvider),
     ref.watch(localBackupServiceProvider),
+    beforeCloudOperation: () => ref
+        .read(appRuntimeRepositoryProvider)
+        .require(AppCapability.cloudBackup),
   ),
 );

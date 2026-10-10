@@ -1,3 +1,4 @@
+import '../../../core/utils/entity_id.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/models/transaction_intelligence.dart';
 import '../../../core/models/transaction_record.dart';
@@ -18,7 +19,7 @@ class EconomicEventRepository {
     }
     final now = DateTime.now();
     final event = EconomicEvent(
-      id: 'event-${now.microsecondsSinceEpoch}',
+      id: 'event-${newEntityId()}',
       bookId: first.bookId,
       amount: first.amount,
       occurredAt: first.occurredAt.isBefore(second.occurredAt)

@@ -86,6 +86,10 @@ async function batch(disabled: boolean) {
     busy.value = false;
   }
 }
+const initialFilters = { ...filters };
+function resetFilters() {
+  Object.assign(filters, initialFilters);
+}
 </script>
 <template>
   <page-header
@@ -96,6 +100,7 @@ async function batch(disabled: boolean) {
     :columns="columns"
     :load="api.users"
     :filters="filters"
+    @reset="resetFilters"
     :export-value="exported"
     :selection="can('user:disable')"
     @selection-change="selected = $event.map(String)"

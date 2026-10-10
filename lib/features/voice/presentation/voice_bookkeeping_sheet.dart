@@ -3,6 +3,7 @@ import '../../bookkeeping/presentation/components/ai_confirm_card.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../app_runtime/data/app_runtime_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -85,6 +86,13 @@ class _VoiceBookkeepingSheetState extends ConsumerState<VoiceBookkeepingSheet> {
   }
 
   Future<void> _startListening({bool cloud = false}) async {
+    try {
+      await ref.read(appRuntimeRepositoryProvider).require(AppCapability.voice);
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+      return;
+    }
+    if (!mounted) return;
     await _subscription?.cancel();
     await _speechService.cancel();
     if (!mounted) return;

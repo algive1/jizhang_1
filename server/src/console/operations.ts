@@ -258,7 +258,7 @@ export function registerPublicOperations(app: FastifyInstance, store: Store) {
         )
         .all(kind),
       integration:
-        "TODO：APP 接入 Banner / FAQ / 活动渲染；公告沿用现有消息中心。",
+        "FAQ 在使用手册展示，Banner / 活动在首页展示；客户端缓存有效期 7 天，公告沿用消息中心。",
     };
   });
 }

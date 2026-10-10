@@ -64,8 +64,9 @@ class _InvestmentAddPageState extends ConsumerState<InvestmentAddPage> {
             _Header(
               mode: _mode,
               saving: _saving,
-              onBack: () =>
-                  context.canPop() ? context.pop() : context.go('/profile/investments'),
+              onBack: () => context.canPop()
+                  ? context.pop()
+                  : context.go('/profile/investments'),
               onMode: (mode) => setState(() => _mode = mode),
             ),
             Expanded(
@@ -111,9 +112,9 @@ class _InvestmentAddPageState extends ConsumerState<InvestmentAddPage> {
     }
   }
 
-  void _toast(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _toast(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _Header extends StatelessWidget {
@@ -264,6 +265,8 @@ class _SearchModeState extends ConsumerState<_SearchMode> {
         name: selected.name,
         symbol: selected.symbol,
         suggestedPrice: selected.price,
+        currency: selected.currency,
+        market: selected.market,
         priceSource: PriceSource.market,
         onCancel: () => setState(() => _selected = null),
         onSubmit: widget.onSubmit,
@@ -494,7 +497,7 @@ class _SearchResultRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '¥${InvestmentInput.formatPriceLabel(result.price)}',
+                  '${result.currency} ${InvestmentInput.formatPriceLabel(result.price)}',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -543,6 +546,8 @@ class _InvestmentForm extends ConsumerStatefulWidget {
     this.name,
     this.symbol,
     this.suggestedPrice,
+    this.currency = 'CNY',
+    this.market,
     this.onCancel,
     super.key,
   });
@@ -554,6 +559,8 @@ class _InvestmentForm extends ConsumerStatefulWidget {
   final String? name;
   final String? symbol;
   final double? suggestedPrice;
+  final String currency;
+  final String? market;
   final VoidCallback? onCancel;
 
   @override
@@ -561,8 +568,7 @@ class _InvestmentForm extends ConsumerStatefulWidget {
 }
 
 class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
-  static const _homeAssetsTip =
-      '关闭后，投资类金额仅在投资管理页面展示，不计入首页展示的账目净资产。';
+  static const _homeAssetsTip = '关闭后，投资类金额仅在投资管理页面展示，不计入首页展示的账目净资产。';
 
   final _formKey = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.name);
@@ -578,6 +584,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
   late InvestmentAssetType _type = widget.type;
   DateTime _date = DateUtils.dateOnly(DateTime.now());
   String? _accountId;
+  late String _currency = widget.currency.toUpperCase();
   bool _includeInHomeNetAssets = false;
 
   bool get _isLocked => widget.onCancel != null;
@@ -595,10 +602,15 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = ref.watch(assetDashboardAccountsProvider).value ??
-        const <Account>[];
+    final accounts =
+        ref.watch(assetDashboardAccountsProvider).value ?? const <Account>[];
     final active = accounts
-        .where((account) => !account.isArchived && !account.type.isDebt)
+        .where(
+          (account) =>
+              !account.isArchived &&
+              !account.type.isDebt &&
+              account.currency.toUpperCase() == _currency,
+        )
         .toList(growable: false);
     return Form(
       key: _formKey,
@@ -699,6 +711,37 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             ),
             const SizedBox(height: 12),
           ],
+          if (!_isLocked) ...[
+            AppSelect<String>(
+              initialValue: _currency,
+              decoration: appFieldDecoration('计价币种'),
+              items: [
+                for (final currency in const [
+                  'CNY',
+                  'USD',
+                  'HKD',
+                  'EUR',
+                  'JPY',
+                  'GBP',
+                ])
+                  DropdownMenuItem(value: currency, child: Text(currency)),
+              ],
+              onChanged: (value) {
+                if (value != null)
+                  setState(() {
+                    _currency = value;
+                    _accountId = null;
+                  });
+              },
+            ),
+            const SizedBox(height: 12),
+          ] else ...[
+            Text(
+              '计价币种：$_currency',
+              style: TextStyle(color: context.appSecondaryText),
+            ),
+            const SizedBox(height: 12),
+          ],
           _DateField(
             date: _date,
             onPick: () async {
@@ -708,6 +751,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
           ),
           const SizedBox(height: 12),
           AppSelect<String>(
+            key: ValueKey('investment-account-$_currency'),
             initialValue: _accountId,
             decoration: appFieldDecoration('持有账户'),
             hint: const Text('请选择'),
@@ -737,7 +781,7 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('计入首页账目净资产'),
+                const Expanded(child: Text('计入首页账目净资产')),
                 IconButton(
                   key: const ValueKey('investment-home-assets-tip'),
                   tooltip: '提示',
@@ -795,6 +839,8 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
         quantity: quantity,
         transactionDate: _date,
         accountId: _accountId,
+        currency: _currency,
+        market: widget.market,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
         priceSource: widget.priceSource,
         currentPrice: widget.priceSource == PriceSource.manual
@@ -804,7 +850,6 @@ class _InvestmentFormState extends ConsumerState<_InvestmentForm> {
       ),
     );
   }
-
 }
 
 class _SelectedBanner extends StatelessWidget {
@@ -850,10 +895,7 @@ class _SelectedBanner extends StatelessWidget {
                 '$symbol · 点击下方确认买入价格与数量',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.appSecondaryText,
-                ),
+                style: TextStyle(fontSize: 11, color: context.appSecondaryText),
               ),
             ],
           ),
@@ -883,9 +925,9 @@ class _DateField extends StatelessWidget {
     button: true,
     label: '买入日期，点击选择',
     child: InkWell(
-    key: const ValueKey('investment-form-date'),
-    onTap: onPick,
-    borderRadius: BorderRadius.circular(16),
+      key: const ValueKey('investment-form-date'),
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(16),
       child: InputDecorator(
         decoration: appFieldDecoration('买入日期'),
         child: Row(

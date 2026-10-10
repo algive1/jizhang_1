@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../../../core/constants/app_assets.dart';
 import '../../../core/formatters/money_formatter.dart';
 import '../domain/budget_period.dart';
@@ -12,6 +14,7 @@ const budgetMuted = Color(0xFF657284);
 const budgetGreen = Color(0xFF00CB87);
 const budgetGold = Color(0xFF8A4707);
 TextStyle budgetText(
+  BuildContext context,
   double size, {
   FontWeight weight = FontWeight.w400,
   Color color = budgetInk,
@@ -19,7 +22,13 @@ TextStyle budgetText(
   fontSize: size,
   height: 1.2,
   fontWeight: weight,
-  color: color,
+  color: color == budgetInk
+      ? context.appPrimaryText
+      : color == budgetMuted
+      ? context.appSecondaryText
+      : color == budgetGold
+      ? context.appPrimary
+      : color,
   letterSpacing: 0,
   fontFeatures: const [ui.FontFeature.tabularFigures()],
 );
@@ -36,12 +45,16 @@ class BudgetBackground extends StatelessWidget {
         alignment: Alignment.topCenter,
         filterQuality: FilterQuality.high,
       ),
-      const DecoratedBox(
+      DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0x00FFF4E6), Color(0x15FFF4E6), Color(0x65F5DABB)],
+            colors: [
+              context.appBackground.withValues(alpha: .72),
+              context.appBackground.withValues(alpha: .86),
+              context.appBackground,
+            ],
             stops: [0, .45, 1],
           ),
         ),
@@ -68,15 +81,16 @@ class BudgetSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final decoration = BoxDecoration(
       borderRadius: BorderRadius.circular(radius),
-      border: frosted
-          ? Border.all(color: Colors.white.withValues(alpha: .82), width: .8)
-          : null,
-      color: frosted ? null : Colors.white.withValues(alpha: opacity),
+      border: frosted ? Border.all(color: context.appDivider, width: .8) : null,
+      color: frosted ? null : context.appSurface.withValues(alpha: opacity),
       gradient: frosted
-          ? const LinearGradient(
+          ? LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xDDFFFFFF), Color(0xB8FFF8F1), Color(0xC9FFF4E5)],
+              colors: [
+                context.appSurface.withValues(alpha: .96),
+                context.appSurfaceSoft.withValues(alpha: .94),
+              ],
             )
           : null,
     );
@@ -136,7 +150,7 @@ class BudgetSection extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: budgetText(16, weight: FontWeight.w800),
+                    style: budgetText(context, 16, weight: FontWeight.w800),
                   ),
                 ),
                 InkWell(
@@ -153,6 +167,7 @@ class BudgetSection extends StatelessWidget {
                         Text(
                           moreLabel,
                           style: budgetText(
+                            context,
                             10.5,
                             weight: FontWeight.w500,
                             color: budgetMuted,
@@ -213,7 +228,11 @@ class BudgetOverviewCard extends StatelessWidget {
                             data.period.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: budgetText(15, weight: FontWeight.w700),
+                            style: budgetText(
+                              context,
+                              15,
+                              weight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 5),
@@ -265,9 +284,9 @@ class _BudgetPeriodSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      color: const Color(0x66FFF5DC),
+      color: context.appSurfaceSoft,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white, width: 1),
+      border: Border.all(color: context.appDivider, width: 1),
     ),
     child: Padding(
       padding: const EdgeInsets.all(1),
@@ -290,7 +309,7 @@ class _BudgetPeriodSelector extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       color: selected == kind
-                          ? const Color(0xFFFFE5AF)
+                          ? context.appPrimarySoft
                           : Colors.transparent,
                     ),
                     child: Center(
@@ -301,6 +320,7 @@ class _BudgetPeriodSelector extends StatelessWidget {
                           BudgetPeriodKind.custom => '自定义',
                         },
                         style: budgetText(
+                          context,
                           10.5,
                           weight: selected == kind
                               ? FontWeight.w600
@@ -337,6 +357,7 @@ class _BudgetMetrics extends StatelessWidget {
             Text(
               label,
               style: budgetText(
+                context,
                 11.5,
                 weight: FontWeight.w500,
                 color: budgetMuted,
@@ -344,7 +365,10 @@ class _BudgetMetrics extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             if (amount == null)
-              Text('未设置', style: budgetText(14, weight: FontWeight.w700))
+              Text(
+                '未设置',
+                style: budgetText(context, 14, weight: FontWeight.w700),
+              )
             else
               _BudgetAmount(amount: amount),
             const SizedBox(height: 7),
@@ -370,7 +394,7 @@ class _BudgetMetrics extends StatelessWidget {
               total?.budget.amount,
               Text(
                 '日均 ¥ ${MoneyFormatter.decimal(data.dailyBudget)}',
-                style: budgetText(10.5, color: budgetMuted),
+                style: budgetText(context, 10.5, color: budgetMuted),
               ),
             ),
             const VerticalDivider(
@@ -395,6 +419,7 @@ class _BudgetMetrics extends StatelessWidget {
                     Text(
                       '${change.abs().round()}%',
                       style: budgetText(
+                        context,
                         11.5,
                         weight: FontWeight.w700,
                         color: change >= 0 ? Colors.red : budgetGreen,
@@ -410,7 +435,7 @@ class _BudgetMetrics extends StatelessWidget {
                             BudgetPeriodKind.year => '较上年',
                             BudgetPeriodKind.custom => '较前期',
                           },
-                    style: budgetText(10, color: budgetMuted),
+                    style: budgetText(context, 10, color: budgetMuted),
                   ),
                 ],
               ),
@@ -429,7 +454,7 @@ class _BudgetMetrics extends StatelessWidget {
                     : remaining < 0
                     ? '已超出预算'
                     : '剩余 ${(remaining / total!.budget.amount * 100).round()}%',
-                style: budgetText(10.5, color: budgetMuted),
+                style: budgetText(context, 10.5, color: budgetMuted),
               ),
             ),
           ],
@@ -451,7 +476,7 @@ class _BudgetAmount extends StatelessWidget {
       child: Text.rich(
         maxLines: 1,
         TextSpan(
-          style: budgetText(16, weight: FontWeight.w800),
+          style: budgetText(context, 16, weight: FontWeight.w800),
           children: [
             const TextSpan(text: '¥ ', style: TextStyle(fontSize: 13)),
             TextSpan(text: parts.first),
@@ -487,11 +512,14 @@ class BudgetProgressRing extends StatelessWidget {
                 child: Text(
                   '${(value * 100).round()}%',
                   maxLines: 1,
-                  style: budgetText(23, weight: FontWeight.w800),
+                  style: budgetText(context, 23, weight: FontWeight.w800),
                 ),
               ),
               const SizedBox(height: 3),
-              Text('预算进度', style: budgetText(10.5, color: budgetMuted)),
+              Text(
+                '预算进度',
+                style: budgetText(context, 10.5, color: budgetMuted),
+              ),
             ],
           ),
         ),
@@ -569,14 +597,8 @@ class BudgetActionButton extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(25),
-      border: Border.all(color: Colors.white, width: 1),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: primary
-            ? const [Color(0xFFFFDC86), Color(0xFFE29B42), Color(0xFFFFCF73)]
-            : const [Color(0xFFFFF9E7), Color(0xFFFFEACA)],
-      ),
+      border: Border.all(color: context.appDivider, width: 1),
+      color: primary ? context.appPrimary : context.appSurface,
     ),
     child: Material(
       type: MaterialType.transparency,
@@ -595,21 +617,19 @@ class BudgetActionButton extends StatelessWidget {
                   MediaQuery.textScalerOf(context).scale(14) < 19 &&
                   MediaQuery.sizeOf(context).width >= 350) ...[
                 if (primary)
-                  const BudgetCrown(size: 23, color: Colors.white)
+                  BudgetCrown(size: 23, color: context.appColors.onPrimary)
                 else
                   Container(
                     width: 27,
                     height: 27,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFFFF5D4), Color(0xFFFFD98D)],
-                      ),
+                      color: context.appPrimarySoft,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.add_rounded,
                       size: 23,
-                      color: budgetGold,
+                      color: context.appPrimary,
                     ),
                   ),
                 const SizedBox(width: 11),
@@ -620,21 +640,22 @@ class BudgetActionButton extends StatelessWidget {
                   maxLines: 1,
                   textAlign: TextAlign.center,
                   style: budgetText(
+                    context,
                     compact ? 10.5 : 14,
                     weight: FontWeight.w700,
-                    color: primary && !compact
-                        ? Colors.white
-                        : compact
-                        ? budgetGold
-                        : budgetInk,
+                    color: primary
+                        ? context.appColors.onPrimary
+                        : context.appPrimaryText,
                   ),
                 ),
               ),
               if (compact)
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 14,
-                  color: budgetGold,
+                  color: primary
+                      ? context.appColors.onPrimary
+                      : context.appPrimary,
                 ),
             ],
           ),

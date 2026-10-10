@@ -11,9 +11,13 @@ class InvestmentCategorySummary {
     required this.value,
     required this.cost,
     required this.holdingCount,
+    this.currency = 'CNY',
+    this.hasMissingQuote = false,
   });
 
   final InvestmentAssetType type;
+  final String currency;
+  final bool hasMissingQuote;
 
   /// Current market value of everything held in this class.
   final double value;
@@ -27,18 +31,15 @@ class InvestmentCategorySummary {
 
   /// Null when there is no comparable cost base, so the UI can render
   /// “暂无可比基数” instead of a fabricated 0%.
-  double? get profitPercent => cost > 0 ? profit / cost * 100 : null;
+  double? get profitPercent =>
+      !hasMissingQuote && cost > 0 ? profit / cost * 100 : null;
 
   bool get isEmpty => holdingCount == 0;
 }
 
 /// A valued position: the holding plus the quote used to value it.
 class ValuedHolding {
-  const ValuedHolding({
-    required this.holding,
-    required this.price,
-    this.quote,
-  });
+  const ValuedHolding({required this.holding, required this.price, this.quote});
 
   final InvestmentHolding holding;
   final double price;
@@ -47,7 +48,8 @@ class ValuedHolding {
   double get marketValue => holding.marketValue(price);
   double get cost => holding.cost;
   double get profit => holding.profit(price);
-  double? get profitPercent => holding.profitPercent(price);
+  double? get profitPercent =>
+      quote == null ? null : holding.profitPercent(price);
 
   /// Today's move for this position, derived from the quote when available.
   double get todayProfit =>
@@ -107,10 +109,45 @@ class InvestmentPortfolio {
 
   bool get isEmpty => positions.isEmpty;
 
-  double get investmentValue =>
-      positions.fold(0, (sum, position) => sum + position.marketValue);
+  /// Positions keep their original currencies; sums never silently convert.
+  Iterable<ValuedHolding> get currencyPositions => positions.where(
+    (position) =>
+        position.holding.asset.currency.toUpperCase() == currency.toUpperCase(),
+  );
+  List<String> get currencies =>
+      (positions
+          .map((p) => p.holding.asset.currency.toUpperCase())
+          .toSet()
+          .toList()
+        ..sort());
+  bool get hasMissingQuote => currencyPositions.any((p) => p.quote == null);
+  bool get hasTodayChange =>
+      currencyPositions.isNotEmpty &&
+      currencyPositions.every(
+        (p) =>
+            p.holding.asset.priceSource == PriceSource.market &&
+            p.quote != null &&
+            !p.isStale,
+      );
+  InvestmentPortfolio inCurrency(String value) => buildPortfolio(
+    holdings: positions
+        .where(
+          (p) => p.holding.asset.currency.toUpperCase() == value.toUpperCase(),
+        )
+        .map((p) => p.holding)
+        .toList(),
+    quotes: {
+      for (final p in positions)
+        if (p.quote != null) p.holding.asset.quoteKey: p.quote!,
+    },
+    currency: value.toUpperCase(),
+  );
 
-  double get cost => positions.fold(0, (sum, position) => sum + position.cost);
+  double get investmentValue =>
+      currencyPositions.fold(0, (sum, position) => sum + position.marketValue);
+
+  double get cost =>
+      currencyPositions.fold(0, (sum, position) => sum + position.cost);
 
   double get totalProfit => investmentValue - cost;
 
@@ -121,7 +158,7 @@ class InvestmentPortfolio {
   }
 
   double get todayProfit =>
-      positions.fold(0, (sum, position) => sum + position.todayProfit);
+      currencyPositions.fold(0, (sum, position) => sum + position.todayProfit);
 
   /// Today's return is measured against yesterday's close, which is the
   /// current value minus today's move.
@@ -138,6 +175,7 @@ class InvestmentPortfolio {
         (category) => category.type == type,
         orElse: () => InvestmentCategorySummary(
           type: type,
+          currency: currency,
           value: 0,
           cost: 0,
           holdingCount: 0,
@@ -148,7 +186,12 @@ class InvestmentPortfolio {
   /// summary card reuses exactly the same maths as the overview.
   InvestmentPortfolio scopedTo(InvestmentAssetType type) {
     final scoped = positions
-        .where((position) => position.holding.asset.type == type)
+        .where(
+          (position) =>
+              position.holding.asset.type == type &&
+              position.holding.asset.currency.toUpperCase() ==
+                  currency.toUpperCase(),
+        )
         .toList(growable: false);
     return InvestmentPortfolio(
       currency: currency,
@@ -156,9 +199,11 @@ class InvestmentPortfolio {
       categories: [
         InvestmentCategorySummary(
           type: type,
+          currency: currency,
           value: scoped.fold(0, (sum, position) => sum + position.marketValue),
           cost: scoped.fold(0, (sum, position) => sum + position.cost),
           holdingCount: scoped.length,
+          hasMissingQuote: scoped.any((p) => p.quote == null),
         ),
       ],
     );
@@ -180,7 +225,13 @@ InvestmentPortfolio buildPortfolio({
   final positions = <ValuedHolding>[];
   for (final holding in holdings) {
     if (holding.isArchived) continue;
-    final quote = quotes[holding.asset.quoteKey] ?? quotes[holding.asset.symbol];
+    final candidate =
+        quotes[holding.asset.quoteKey] ?? quotes[holding.asset.symbol];
+    final quote =
+        candidate?.currency.toUpperCase() ==
+            holding.asset.currency.toUpperCase()
+        ? candidate
+        : null;
     positions.add(
       ValuedHolding(
         holding: holding,
@@ -189,21 +240,26 @@ InvestmentPortfolio buildPortfolio({
       ),
     );
   }
-  positions.sort(
-    (a, b) => b.marketValue.compareTo(a.marketValue),
-  );
+  positions.sort((a, b) => b.marketValue.compareTo(a.marketValue));
 
   final categories = <InvestmentCategorySummary>[];
   for (final type in InvestmentAssetType.values) {
     final scoped = positions
-        .where((position) => position.holding.asset.type == type)
+        .where(
+          (position) =>
+              position.holding.asset.type == type &&
+              position.holding.asset.currency.toUpperCase() ==
+                  currency.toUpperCase(),
+        )
         .toList(growable: false);
     categories.add(
       InvestmentCategorySummary(
         type: type,
+        currency: currency,
         value: scoped.fold(0, (sum, position) => sum + position.marketValue),
         cost: scoped.fold(0, (sum, position) => sum + position.cost),
         holdingCount: scoped.length,
+        hasMissingQuote: scoped.any((p) => p.quote == null),
       ),
     );
   }
@@ -272,18 +328,14 @@ class InvestmentTrend {
       ..sort((a, b) => a.date.compareTo(b.date));
     final windowed = sorted
         .where(
-          (snapshot) => !snapshot.date.isBefore(start) &&
-              !snapshot.date.isAfter(today),
+          (snapshot) =>
+              !snapshot.date.isBefore(start) && !snapshot.date.isAfter(today),
         )
         .toList(growable: false);
     return InvestmentTrend([
       for (final snapshot in windowed)
         InvestmentHistoryPoint(
-          DateTime(
-            snapshot.date.year,
-            snapshot.date.month,
-            snapshot.date.day,
-          ),
+          DateTime(snapshot.date.year, snapshot.date.month, snapshot.date.day),
           snapshot.investmentValue,
         ),
     ]);

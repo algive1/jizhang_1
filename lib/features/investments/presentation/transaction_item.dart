@@ -12,11 +12,13 @@ class TransactionItem extends StatelessWidget {
   const TransactionItem({
     required this.transaction,
     this.unit = '份',
+    this.currency = 'CNY',
     super.key,
   });
 
   final InvestmentTransaction transaction;
   final String unit;
+  final String currency;
 
   @override
   Widget build(BuildContext context) {
@@ -64,49 +66,46 @@ class TransactionItem extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           color: context.appPrimaryText,
                         ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        DateFormat(
-                          'yyyy-MM-dd',
-                        ).format(transaction.transactionDate),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.appSecondaryText,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          DateFormat('yyyy-MM-dd')
+                              .format(transaction.transactionDate),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.appSecondaryText,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isCashOnly
-                      ? '现金分红'
-                      : transaction.amountLabel(unit: unit),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.appSecondaryText,
+                    ],
                   ),
-                ),
-                if (transaction.note != null &&
-                    transaction.note!.trim().isNotEmpty)
+                  const SizedBox(height: 2),
                   Text(
-                    transaction.note!,
+                    isCashOnly ? '现金分红' : transaction.amountLabel(unit: unit),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       color: context.appSecondaryText,
                     ),
                   ),
-              ],
+                  if (transaction.note != null &&
+                      transaction.note!.trim().isNotEmpty)
+                    Text(
+                      transaction.note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.appSecondaryText,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
             const SizedBox(width: 8),
             // Bounded so a very large trade amount scales down rather than
             // overflowing the row.
@@ -117,6 +116,7 @@ class TransactionItem extends StatelessWidget {
                     ? -transaction.amount
                     : transaction.amount,
                 signed: true,
+                currency: currency,
                 size: 14,
                 weight: FontWeight.w700,
                 color: amountColor,
@@ -141,5 +141,4 @@ class TransactionItem extends StatelessWidget {
     InvestmentTransactionType.dividend => const Color(0xFFCE9A45),
     InvestmentTransactionType.interest => const Color(0xFF7C8BD9),
   };
-
 }

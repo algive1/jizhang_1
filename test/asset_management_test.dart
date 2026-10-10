@@ -149,7 +149,7 @@ void main() {
       final account = (await DriftAccountRepository(migrated).getAll()).single;
       expect(account.balance, -123.45);
       expect(account.assetForm, AssetForm.unspecified);
-      expect(migrated.schemaVersion, 22);
+      expect(migrated.schemaVersion, 26);
       // The pre-investment branch is additive: an old database gains the investment
       // tables without losing the account it already had.
       final investmentTables = await migrated

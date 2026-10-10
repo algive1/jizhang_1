@@ -59,6 +59,17 @@ class GoalsPage extends ConsumerWidget {
           const PlacementSlot(surface: PlacementSurface.goalPromo),
           if (goalsAsync.isLoading && goals.isEmpty)
             const Center(child: CircularProgressIndicator())
+          else if (goalsAsync.hasError)
+            Column(
+              children: [
+                const Text('目标读取失败，你的记录没有被删除'),
+                TextButton.icon(
+                  onPressed: () => ref.invalidate(goalsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('重新加载'),
+                ),
+              ],
+            )
           else ...[
             Row(
               children: [

@@ -87,18 +87,18 @@ class LocalBackupService {
     }
   }
 
-  Future<Uint8List> exportEncryptedArchive({
-    required String password,
-  }) async {
+  Future<Uint8List> exportEncryptedArchive({required String password}) async {
     final normalizedPassword = password.trim();
     if (normalizedPassword.length < 8) {
       throw const FormatException('备份密码至少需要 8 个字符');
     }
     final databaseBytes = await exportDatabase();
-    final attachmentRows = await _database.customSelect(
-      'SELECT id,path,name FROM transaction_attachments '
-      'WHERE deleted_at IS NULL ORDER BY id',
-    ).get();
+    final attachmentRows = await _database
+        .customSelect(
+          'SELECT id,path,name FROM transaction_attachments '
+          'WHERE deleted_at IS NULL ORDER BY id',
+        )
+        .get();
 
     final attachments = <Map<String, Object?>>[];
     for (final row in attachmentRows) {
@@ -119,12 +119,14 @@ class LocalBackupService {
       });
     }
 
-    final clearPackage = utf8.encode(jsonEncode({
-      'format': 'haohao-local-package-v2',
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'database': base64Encode(databaseBytes),
-      'attachments': attachments,
-    }));
+    final clearPackage = utf8.encode(
+      jsonEncode({
+        'format': 'haohao-local-package-v2',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'database': base64Encode(databaseBytes),
+        'attachments': attachments,
+      }),
+    );
     final compressed = gzip.encode(clearPackage);
     if (compressed.length > _maxArchiveBytes) {
       throw const FormatException('完整备份过大，请先清理不需要的附件后重试');
@@ -274,6 +276,7 @@ class LocalBackupService {
     await temporaryFile.writeAsBytes(bytes, flush: true);
     try {
       _validateDatabaseFile(temporaryFile);
+      await _preserveDeviceSettings(temporaryFile);
       await _database.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
       if (await databaseFile.exists()) {
         final safetyCopy = File(
@@ -289,6 +292,42 @@ class LocalBackupService {
         await temporaryFile.delete();
       }
       rethrow;
+    }
+  }
+
+  /// Installation identity, consent and operational caches belong to this
+  /// device. Importing them would collapse two devices into one console record
+  /// and could silently opt a new device into telemetry or automatic backups.
+  Future<void> _preserveDeviceSettings(File restoredFile) async {
+    const deviceSettings =
+        "key IN ("
+        "'analytics.installation_id.v1','push.device_id.v1',"
+        "'support.installation_id.v1','analytics.enabled.v1',"
+        "'analytics.queue.v1','app.update.last_check.v1') "
+        "OR key LIKE 'app.runtime.v1.%' OR key LIKE 'app.heartbeat.v1.%' "
+        "OR key LIKE 'cloud.backup.auto.%'";
+    final current = await _database
+        .customSelect(
+          'SELECT key,value,updated_at FROM app_settings WHERE $deviceSettings',
+        )
+        .get();
+    final restored = sqlite3.open(restoredFile.path);
+    try {
+      restored.execute('BEGIN IMMEDIATE');
+      restored.execute('DELETE FROM app_settings WHERE $deviceSettings');
+      for (final row in current) {
+        restored.execute(
+          'INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)',
+          [
+            row.read<String>('key'),
+            row.read<String>('value'),
+            row.read<int>('updated_at'),
+          ],
+        );
+      }
+      restored.execute('COMMIT');
+    } finally {
+      restored.close();
     }
   }
 
@@ -310,11 +349,10 @@ class LocalBackupService {
     Database? pending;
     try {
       pending = sqlite3.open(pendingFile.path);
-      final tables = pending
-          .select(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name='transaction_attachments'",
-          );
+      final tables = pending.select(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name='transaction_attachments'",
+      );
       if (tables.isEmpty) return;
 
       // Cloud package v2 owns the active attachment paths. Clear source-device
@@ -328,14 +366,9 @@ class LocalBackupService {
         final bytes = attachment.bytes;
         if (bytes == null) continue;
         final baseName = p.basename(attachment.name).trim();
-        final safeName = (baseName.isEmpty ? 'attachment' : baseName).replaceAll(
-          RegExp(r'[^\w.\-\u4e00-\u9fa5]'),
-          '_',
-        );
-        final safeId = attachment.id.replaceAll(
-          RegExp(r'[^\\w.\\-]'),
-          '_',
-        );
+        final safeName = (baseName.isEmpty ? 'attachment' : baseName)
+            .replaceAll(RegExp(r'[^\w.\-\u4e00-\u9fa5]'), '_');
+        final safeId = attachment.id.replaceAll(RegExp(r'[^\\w.\\-]'), '_');
         final file = File(
           p.join(attachmentDirectory.path, '$safeId-$safeName'),
         );
@@ -372,8 +405,9 @@ class LocalBackupService {
     Database? pending;
     try {
       pending = sqlite3.open(pendingFile.path);
-      final tables = pending
-          .select("SELECT name FROM sqlite_master WHERE type='table' AND name='device_data_binding'");
+      final tables = pending.select(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='device_data_binding'",
+      );
       if (tables.isEmpty) {
         pending.execute('''
           CREATE TABLE device_data_binding(

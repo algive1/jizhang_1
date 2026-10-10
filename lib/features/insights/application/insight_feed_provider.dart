@@ -17,6 +17,7 @@ import '../../transactions/data/transactions_repository.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/financial_insight_engine.dart';
 import '../domain/insight_models.dart';
+import '../domain/insight_month_summary.dart';
 
 final financialInsightEngineProvider = Provider<FinancialInsightEngine>(
   (ref) => const FinancialInsightEngine(),
@@ -40,10 +41,12 @@ final insightRecentTransactionsProvider =
       await ref.watch(databaseBootstrapProvider.future);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      yield* ref.watch(transactionRepositoryProvider).watchRange(
-        start: today.subtract(const Duration(days: 180)),
-        endExclusive: today.add(const Duration(days: 1)),
-      );
+      yield* ref
+          .watch(transactionRepositoryProvider)
+          .watchRange(
+            start: today.subtract(const Duration(days: 180)),
+            endExclusive: today.add(const Duration(days: 1)),
+          );
     });
 
 final insightPendingReimbursementsProvider =
@@ -54,7 +57,9 @@ final insightPendingReimbursementsProvider =
           .watchPendingReimbursements();
     });
 
-final insightLargeExpenseThresholdProvider = StreamProvider<double>((ref) async* {
+final insightLargeExpenseThresholdProvider = StreamProvider<double>((
+  ref,
+) async* {
   await ref.watch(databaseBootstrapProvider.future);
   yield* ref
       .watch(databaseProvider)
@@ -65,7 +70,47 @@ final insightLargeExpenseThresholdProvider = StreamProvider<double>((ref) async*
       .map((cents) => cents / 100);
 });
 
+final insightDataStateProvider = Provider<AsyncValue<void>>((ref) {
+  final now = DateTime.now();
+  final sources = <AsyncValue<dynamic>>[
+    ref.watch(insightRecentTransactionsProvider),
+    ref.watch(insightPendingReimbursementsProvider),
+    ref.watch(insightLargeExpenseThresholdProvider),
+    ref.watch(allAccountsProvider),
+    ref.watch(allCategoriesProvider),
+    ref.watch(goalsProvider),
+    ref.watch(recurringBillsProvider),
+    ref.watch(currentMonthBudgetsProvider),
+    ref.watch(transactionsForMonthProvider((year: now.year, month: now.month))),
+    ref.watch(insightPreferencesProvider),
+  ];
+  for (final source in sources) {
+    if (source.hasError)
+      return AsyncError(source.error!, source.stackTrace ?? StackTrace.current);
+  }
+  if (sources.any((source) => source.isLoading || !source.hasValue))
+    return const AsyncLoading();
+  return const AsyncData(null);
+});
+
+final insightMonthSummaryProvider = Provider<InsightMonthSummary>(
+  (ref) => InsightMonthSummary.from(
+    ref.watch(insightRecentTransactionsProvider).value ?? const [],
+    DateTime.now(),
+  ),
+);
+
 final localInsightFeedProvider = Provider<InsightFeed>((ref) {
+  final state = ref.watch(insightDataStateProvider);
+  if (!state.hasValue || state.hasError || state.isLoading) {
+    return const InsightFeed(
+      items: [],
+      dataConfidence: 0,
+      completeness: 0,
+      classificationConfidence: 0,
+      baselineConfidence: 0,
+    );
+  }
   final transactions = _mergeInsightTransactions(
     ref.watch(insightRecentTransactionsProvider).value ??
         const <TransactionRecord>[],
@@ -73,22 +118,23 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
         const <TransactionRecord>[],
   );
   final engine = ref.watch(financialInsightEngineProvider);
-  final analysis = ref.watch(statisticalAnalysisServiceProvider).analyze(
+  final analysis = ref
+      .watch(statisticalAnalysisServiceProvider)
+      .analyze(
         engine.normalizeAnalysisTransactions(transactions),
         period: AnalysisPeriod.currentMonth,
         currency: 'CNY',
-        largeExpenseThreshold:
-            ref.watch(insightLargeExpenseThresholdProvider).value,
+        largeExpenseThreshold: ref
+            .watch(insightLargeExpenseThresholdProvider)
+            .value,
       );
   final budgets = ref.watch(budgetOverviewProvider);
   final accounts = ref.watch(allAccountsProvider).value ?? const [];
   final categories = ref.watch(allCategoriesProvider).value ?? const [];
   final goals = ref.watch(goalsProvider).value ?? const [];
-  final recurringBills =
-      ref.watch(recurringBillsProvider).value ?? const [];
+  final recurringBills = ref.watch(recurringBillsProvider).value ?? const [];
   final preferences =
-      ref.watch(insightPreferencesProvider).value ??
-      const InsightPreferences();
+      ref.watch(insightPreferencesProvider).value ?? const InsightPreferences();
   return engine.build(
     transactions: transactions,
     analysis: analysis,
@@ -101,8 +147,9 @@ final localInsightFeedProvider = Provider<InsightFeed>((ref) {
   );
 });
 
-
 final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
+  final state = ref.watch(insightDataStateProvider);
+  if (!state.hasValue || state.isLoading || state.hasError) return null;
   // Keep remote analysis reactive to transaction changes without subscribing
   // to the entire ledger. The bounded stream reruns on transaction-table
   // updates, while the actual query below follows the server's history policy.
@@ -111,11 +158,9 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
   final budgets = ref.watch(currentMonthBudgetsProvider).value ?? const [];
   final categories = ref.watch(allCategoriesProvider).value ?? const [];
   final goals = ref.watch(goalsProvider).value ?? const [];
-  final recurringBills =
-      ref.watch(recurringBillsProvider).value ?? const [];
+  final recurringBills = ref.watch(recurringBillsProvider).value ?? const [];
   final preferences =
-      ref.watch(insightPreferencesProvider).value ??
-      const InsightPreferences();
+      ref.watch(insightPreferencesProvider).value ?? const InsightPreferences();
   final bookId = ref.watch(activeBookIdProvider);
   // Debounce bursts from automatic/import bookkeeping. Keep the delay
   // cancellable so disposing the provider never leaves a timer alive in tests
@@ -132,33 +177,40 @@ final confirmedInsightFeedProvider = FutureProvider<InsightFeed?>((ref) async {
   if (disposed) return null;
   final remoteRepository = ref.read(remoteInsightRepositoryProvider);
   final remotePolicy = await remoteRepository.policy();
-  final historyDays =
-      (remotePolicy?.historyDays ?? 90).clamp(1, 3650).toInt();
+  final historyDays = (remotePolicy?.historyDays ?? 90).clamp(1, 3650).toInt();
   final now = DateTime.now();
-  final transactions = await ref.read(transactionRepositoryProvider).getRange(
+  final transactions = await ref
+      .read(transactionRepositoryProvider)
+      .getRange(
         start: now.subtract(Duration(days: historyDays)),
         endExclusive: DateTime(now.year, now.month, now.day + 1),
       );
   if (disposed) return null;
   return remoteRepository.analyze(
-        bookId: bookId,
-        transactions: transactions,
-        accounts: accounts,
-        budgets: budgets,
-        categories: categories,
-        goals: goals,
-        recurringBills: recurringBills,
-        preferences: preferences,
-      );
+    bookId: bookId,
+    transactions: transactions,
+    accounts: accounts,
+    budgets: budgets,
+    categories: categories,
+    goals: goals,
+    recurringBills: recurringBills,
+    preferences: preferences,
+  );
 });
 
 final insightFeedProvider = Provider<InsightFeed>((ref) {
   final local = ref.watch(localInsightFeedProvider);
-  final remote = ref.watch(confirmedInsightFeedProvider).value;
+  final remoteState = ref.watch(confirmedInsightFeedProvider);
+  // A previous request can belong to a different book or old transaction set.
+  final remote = !remoteState.isLoading && !remoteState.hasError
+      ? remoteState.value
+      : null;
   final preferences =
-      ref.watch(insightPreferencesProvider).value ??
-      const InsightPreferences();
-  final selected = remote ?? local;
+      ref.watch(insightPreferencesProvider).value ?? const InsightPreferences();
+  final ready = ref.watch(insightDataStateProvider);
+  final selected = ready.hasValue && !ready.isLoading && !ready.hasError
+      ? remote ?? local
+      : local;
   if (preferences.dismissedIds.isEmpty) return selected;
   return selected.copyWith(
     items: selected.items

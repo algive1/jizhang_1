@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/formatters/money_formatter.dart';
@@ -81,11 +82,8 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
             Text(
               '当前持有 ${InvestmentTransaction.formatQuantity(holding.quantity)}'
               ' · 平均成本 '
-              '¥${InvestmentInput.formatPriceLabel(holding.averageCost)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
+              '${holding.asset.currency} ${InvestmentInput.formatPriceLabel(holding.averageCost)}',
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
             ),
             const SizedBox(height: 12),
             Container(
@@ -284,9 +282,8 @@ class _TransactionSheetState extends ConsumerState<_TransactionSheet> {
     } on Object {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
     }
   }
 }

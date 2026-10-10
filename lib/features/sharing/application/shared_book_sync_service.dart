@@ -163,7 +163,7 @@ class SharedBookSyncService {
         try {
           await _syncBook(state);
         } on SharedApiException catch (e) {
-          if (e.status == 401) rethrow;
+          if (e.status == 401 || e.status == 0) rethrow;
           if (e.status == 403)
             await database.customStatement(
               'UPDATE sync_books SET access=0 WHERE book_id=?',
@@ -180,9 +180,9 @@ class SharedBookSyncService {
       _retryAfter = null;
       lastError = null;
     } on SharedApiException catch (e) {
-      lastError = e.message;
-      // 只有服务器明确返回 401 才视为登录失效。网络异常走下面的通用分支，
-      // 不会清 Token、不会清账号，也不会把用户标记成已退出。
+      lastError = e.status == 0 ? '同步未完成：${e.message}' : e.message;
+      // 只有服务器明确返回 401 才视为登录失效。传输错误使用状态 0，
+      // 保留登录态、待同步记录和重试退避。
       if (e.status == 401) await session.markSessionExpired();
       _backoff();
     } catch (e) {

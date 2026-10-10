@@ -7,14 +7,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import '../../../core/models/membership.dart';
+import '../../membership/application/membership_feature_guard.dart';
+import '../../membership/data/membership_repository.dart';
 
 class AnalysisReportExportService {
-  const AnalysisReportExportService();
+  const AnalysisReportExportService({this.beforeExport});
+  final Future<void> Function()? beforeExport;
 
   Future<Uint8List> capturePng(
     GlobalKey boundaryKey, {
     double pixelRatio = 2.5,
   }) async {
+    await beforeExport?.call();
     await WidgetsBinding.instance.endOfFrame;
     final context = boundaryKey.currentContext;
     final boundary = context?.findRenderObject();
@@ -108,5 +113,9 @@ class AnalysisReportExportService {
 }
 
 final analysisReportExportServiceProvider = Provider(
-  (ref) => const AnalysisReportExportService(),
+  (ref) => AnalysisReportExportService(beforeExport: () async {
+    final service = ref.read(membershipFeatureAccessServiceProvider);
+    await requireMembershipFeature(service, MembershipFeature.assetReports);
+    await requireMembershipFeature(service, MembershipFeature.dataExport);
+  }),
 );

@@ -4,19 +4,16 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/entity_id.dart';
+import '../installation/installation_identity.dart';
 import '../../features/settings/data/app_settings_repository.dart';
 import '../../features/sharing/data/session_repository.dart';
 import '../../features/sharing/data/shared_api.dart';
 
 class ProductAnalytics {
-  ProductAnalytics(
-    this._api,
-    this._settings, {
-    this.autoFlush = true,
-  });
+  ProductAnalytics(this._api, this._settings, {this.autoFlush = true});
 
   static const enabledKey = 'analytics.enabled.v1';
-  static const installationIdKey = 'analytics.installation_id.v1';
+  static const installationIdKey = installationIdentityKey;
   static const queueKey = 'analytics.queue.v1';
   static const _allowedEvents = <String>{
     'app_open',
@@ -88,10 +85,7 @@ class ProductAnalytics {
       await _api.request(
         '/analytics/events',
         method: 'POST',
-        body: {
-          'installationId': await _installationId(),
-          'events': batch,
-        },
+        body: {'installationId': await _installationId(), 'events': batch},
       );
       final sentIds = batch.map((event) => event['eventId']).toSet();
       final latest = await _readQueue();
@@ -109,10 +103,7 @@ class ProductAnalytics {
       RegExp(r'^/transactions/[^/]+$'),
       '/transactions/:transactionId',
     );
-    screen = screen.replaceFirst(
-      RegExp(r'^/goals/[^/]+$'),
-      '/goals/:goalId',
-    );
+    screen = screen.replaceFirst(RegExp(r'^/goals/[^/]+$'), '/goals/:goalId');
     screen = screen.replaceFirst(
       RegExp(r'^/profile/accounts/[^/]+$'),
       '/profile/accounts/:accountId',
@@ -148,13 +139,7 @@ class ProductAnalytics {
   }
 
   Future<String> _installationId() async {
-    final current = (await _settings.get(installationIdKey))?.trim();
-    if (current != null && RegExp(r'^[a-f0-9]{32}$').hasMatch(current)) {
-      return current;
-    }
-    final created = newEntityId();
-    await _settings.set(installationIdKey, created);
-    return created;
+    return installationIdentity(_settings);
   }
 
   Future<List<Map<String, Object?>>> _readQueue() async {
@@ -166,9 +151,7 @@ class ProductAnalytics {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => item.map(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)),
           )
           .toList(growable: true);
     } on Object {

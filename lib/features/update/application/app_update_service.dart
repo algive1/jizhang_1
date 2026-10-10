@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../sharing/data/shared_api.dart';
 import '../../sharing/data/session_repository.dart';
-import '../../../core/analytics/product_analytics.dart';
-import '../../../core/utils/entity_id.dart';
+import '../../../core/installation/installation_identity.dart';
 
 enum AppUpdateKind { none, optional, required }
 
@@ -100,14 +99,8 @@ class AppUpdateService {
 
     final app = await _platform.appInfo();
     if (app.platform != 'android' && app.platform != 'ios') return null;
-    var installationId = await _settings.get(
-      ProductAnalytics.installationIdKey,
-    );
-    if (installationId == null ||
-        !RegExp(r'^[a-f0-9]{32}$').hasMatch(installationId)) {
-      installationId = newEntityId();
-      await _settings.set(ProductAnalytics.installationIdKey, installationId);
-    }
+    final installationId = await installationIdentity(_settings);
+    _api.installationId = installationId;
 
     final response = await _api.request(
       '/app/update'

@@ -21,7 +21,7 @@ void main() {
   tearDown(() => database.close());
 
   test('scoped transaction range index is installed', () async {
-    expect(database.schemaVersion, 25);
+    expect(database.schemaVersion, 26);
     final indexes = await database
         .customSelect("PRAGMA index_list('transactions')")
         .get();

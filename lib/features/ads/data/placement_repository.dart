@@ -1,3 +1,5 @@
+import '../../../core/utils/entity_id.dart';
+
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -168,10 +170,7 @@ class RemotePlacementConfigRepository implements PlacementConfigRepository {
     );
   }
 
-  static bool _formatMatchesSurface(
-    PlacementSurface surface,
-    AdFormat format,
-  ) {
+  static bool _formatMatchesSurface(PlacementSurface surface, AdFormat format) {
     return switch (surface) {
       PlacementSurface.splash => format == AdFormat.splash,
       PlacementSurface.aiReward => format == AdFormat.rewarded,
@@ -252,7 +251,7 @@ class AdEventRepository {
     final now = DateTime.now();
     await _database.adEventDao.insertEvent(
       AdEventEntriesCompanion.insert(
-        id: 'ad-event-${now.microsecondsSinceEpoch}',
+        id: 'ad-event-${newEntityId()}',
         placementId: placement.id,
         eventType: type.name,
         provider: placement.provider,
@@ -349,16 +348,16 @@ class RewardedAdService {
   }
 }
 
-final placementConfigRepositoryProvider = Provider<PlacementConfigRepository>(
-  (ref) {
-    const baseUrl = String.fromEnvironment('SHARED_API_BASE_URL');
-    if (baseUrl.isEmpty) return const BundledPlacementConfigRepository();
-    return RemotePlacementConfigRepository(
-      api: ref.watch(sharedApiProvider),
-      fallback: const BundledPlacementConfigRepository(),
-    );
-  },
-);
+final placementConfigRepositoryProvider = Provider<PlacementConfigRepository>((
+  ref,
+) {
+  const baseUrl = String.fromEnvironment('SHARED_API_BASE_URL');
+  if (baseUrl.isEmpty) return const BundledPlacementConfigRepository();
+  return RemotePlacementConfigRepository(
+    api: ref.watch(sharedApiProvider),
+    fallback: const BundledPlacementConfigRepository(),
+  );
+});
 
 final adEventRepositoryProvider = Provider((ref) {
   return AdEventRepository(ref.watch(databaseProvider));

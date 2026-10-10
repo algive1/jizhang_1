@@ -122,3 +122,23 @@ The public endpoint `GET /api/v1/ads/placements` is intentionally safe when no r
 - Invalid provider/content combinations, unsafe content categories, mismatched surface/format pairs, duplicate IDs, and splash limits above one per day are rejected.
 - Third-party Native placements remain non-renderable until an official network Native renderer is integrated.
 - Rewarded placements must not grant server AI quota until a server-verified reward receipt flow exists.
+
+
+## Investment market data
+
+The existing normalized gateway remains the default. To use the concrete official Twelve Data adapter, configure server-only variables:
+
+```dotenv
+MARKET_DATA_PROVIDER=twelvedata
+TWELVE_DATA_API_KEY=your-server-side-key
+```
+
+Restart the backend, then use the app's existing investment search, quotes and history pages. Never place this key in Flutter defines or client assets. No credential is bundled and the adapter makes no requests when the key is absent.
+
+The adapter maps supported stocks, ETFs and cryptocurrency pairs, preserving exchange-qualified symbols (for example `AAPL:NASDAQ`), currency and vendor timestamps. Coverage depends on the account plan and exchange permissions. This does not provide general mainland mutual-fund NAVs or bond prices; unsupported assets remain available as manual valuations. Existing mainland holdings are not silently remapped to another ticker.
+
+Requests use a 12-second timeout, a bounded cache, concurrent-request deduplication and a conservative cap of 8 requests/minute and 800/day per process. Search hydrates at most three supported results to control credit use. With multiple backend processes, use a shared quota service before enabling this provider; process-local caps do not enforce a shared account limit. Partial batches retain valid symbols. Failures never become fabricated zero prices.
+
+Free access is useful for personal evaluation; it is not a blanket license for public app display. Confirm the applicable business/exchange display rights before public rollout. Official references: https://twelvedata.com/docs, https://support.twelvedata.com/en/articles/5332349-commercial-and-personal-usage and https://twelvedata.com/terms.
+
+The app displays holdings by original currency without summing USD and CNY together. Portfolio history currently stores CNY snapshots only; foreign-currency charts remain unavailable until a currency-aware snapshot migration is introduced. Market changes are quote changes against the previous close, not realized trading returns.
