@@ -75,6 +75,7 @@ jobs:
           test/consumption_calendar_test.dart
           test/budget_alert_notification_service_test.dart
           test/budget_and_management_test.dart
+          test/budget_page_test.dart
           test/budget_recommendation_service_test.dart
           test/statistical_analysis_service_test.dart
           test/analysis_period_cache_test.dart
@@ -105,6 +106,13 @@ jobs:
           test/account_management_schema_test.dart
           test/account_management_sync_id_map_test.dart
           test/investment_repository_test.dart
+          test/investment_currency_regression_test.dart
+          test/investment_domain_test.dart
+          test/investment_market_test.dart
+          test/investment_responsive_test.dart
+          test/insight_month_summary_test.dart
+          test/insights_page_regression_test.dart
+          test/cloud_auto_backup_preferences_test.dart
           test/voice_parser_test.dart
           test/payment_notification_test.dart
           test/autobookkeeping_page_test.dart

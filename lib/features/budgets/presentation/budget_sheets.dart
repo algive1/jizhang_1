@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/formatters/money_formatter.dart';
@@ -36,7 +38,7 @@ Future<DateTime?> showBudgetMonthPicker(
                     child: Text(
                       '$year 年',
                       textAlign: TextAlign.center,
-                      style: budgetText(18, weight: FontWeight.w700),
+                      style: budgetText(context, 18, weight: FontWeight.w700),
                     ),
                   ),
                   IconButton(
@@ -100,7 +102,10 @@ Future<void> showBudgetSettings(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('提醒与策略', style: budgetText(18, weight: FontWeight.w700)),
+              Text(
+                '提醒与策略',
+                style: budgetText(context, 18, weight: FontWeight.w700),
+              ),
               const SizedBox(height: 8),
               if (preferences.hasValue && !preferences.isLoading) ...[
                 for (final preference in BudgetPreference.values)
@@ -136,14 +141,17 @@ Future<void> showBudgetSettings(
                 label: const Text('查看每周复盘'),
               ),
               const Divider(),
-              Text('预算计算', style: budgetText(14, weight: FontWeight.w700)),
+              Text(
+                '预算计算',
+                style: budgetText(context, 14, weight: FontWeight.w700),
+              ),
               const SizedBox(height: 6),
               Text(
                 '全年预算汇总各月已设置的额度；自定义范围按覆盖天数折算各月额度。'
                 '未设置预算的月份不会自动套用其他月份的额度。\n\n'
                 '目标预留计入预算使用率并从剩余预算中扣除。日均为期间预算除以期间天数。'
                 '系统通知权限关闭时，每周报告仍会保存，可在此查看。',
-                style: budgetText(12, color: budgetMuted),
+                style: budgetText(context, 12, color: budgetMuted),
               ),
             ],
           ),
@@ -166,7 +174,10 @@ Future<void> showBudgetWeeklyReviews(
       child: Consumer(
         builder: (context, ref, _) => Column(
           children: [
-            Text('每周复盘', style: budgetText(18, weight: FontWeight.w700)),
+            Text(
+              '每周复盘',
+              style: budgetText(context, 18, weight: FontWeight.w700),
+            ),
             const SizedBox(height: 10),
             Expanded(
               child: ref
@@ -179,7 +190,11 @@ Future<void> showBudgetWeeklyReviews(
                               child: Text(
                                 '暂时没有周报告。开启每周复盘后，有收支记录的上一完整周会自动生成汇总。',
                                 textAlign: TextAlign.center,
-                                style: budgetText(13, color: budgetMuted),
+                                style: budgetText(
+                                  context,
+                                  13,
+                                  color: budgetMuted,
+                                ),
                               ),
                             ),
                           )
@@ -199,6 +214,7 @@ Future<void> showBudgetWeeklyReviews(
                                     Text(
                                       '${report.start.year}年 ${report.title}',
                                       style: budgetText(
+                                        context,
                                         14,
                                         weight: FontWeight.w700,
                                       ),
@@ -206,12 +222,16 @@ Future<void> showBudgetWeeklyReviews(
                                     const SizedBox(height: 10),
                                     Text(
                                       '支出 ¥${MoneyFormatter.decimal(report.spent)}  ·  收入 ¥${MoneyFormatter.decimal(report.income)}',
-                                      style: budgetText(13),
+                                      style: budgetText(context, 13),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
                                       '共 ${report.count} 笔消费 · ${report.topCategory} ¥${MoneyFormatter.decimal(report.topAmount)}',
-                                      style: budgetText(12, color: budgetMuted),
+                                      style: budgetText(
+                                        context,
+                                        12,
+                                        color: budgetMuted,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -250,23 +270,23 @@ Future<void> showBudgetAdviceDetails(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('小冰建议', style: budgetText(18, weight: FontWeight.w700)),
+          Text('小冰建议', style: budgetText(context, 18, weight: FontWeight.w700)),
           const SizedBox(height: 8),
           Text(
             data.period.description,
-            style: budgetText(12, color: budgetMuted),
+            style: budgetText(context, 12, color: budgetMuted),
           ),
           const SizedBox(height: 16),
           Text(
             '期间支出 ¥${MoneyFormatter.decimal(data.spent)}',
-            style: budgetText(16, weight: FontWeight.w700),
+            style: budgetText(context, 16, weight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           if (data.overview.total case final total?) ...[
             Text(
               '剩余预算 ¥${MoneyFormatter.decimal(total.remaining)}\n目标预留 ¥${MoneyFormatter.decimal(total.goalReservation)}\n'
               '日均可用 ¥${MoneyFormatter.decimal(total.dailyAvailable)}',
-              style: budgetText(13),
+              style: budgetText(context, 13),
             ),
             const SizedBox(height: 16),
           ],
@@ -278,12 +298,12 @@ Future<void> showBudgetAdviceDetails(
                   Expanded(
                     child: Text(
                       row.category?.name ?? '已隐藏分类',
-                      style: budgetText(13),
+                      style: budgetText(context, 13),
                     ),
                   ),
                   Text(
                     '¥${MoneyFormatter.decimal(row.used)} · ${data.spent == 0 ? 0 : (row.used / data.spent * 100).round()}%',
-                    style: budgetText(13),
+                    style: budgetText(context, 13),
                   ),
                 ],
               ),
@@ -293,7 +313,7 @@ Future<void> showBudgetAdviceDetails(
                 ? '继续记录日常收支，积累消费记录后再观察分类变化。'
                 : '${data.leadingCategory!.category?.name ?? '主要分类'}是当前已设预算分类中支出最多的一项。'
                       '可从减少非必要消费、检查大额支出和调整分类预算开始。',
-            style: budgetText(13, color: budgetMuted),
+            style: budgetText(context, 13, color: budgetMuted),
           ),
         ],
       ),

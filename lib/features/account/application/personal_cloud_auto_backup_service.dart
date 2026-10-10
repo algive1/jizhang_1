@@ -4,24 +4,24 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../sharing/data/session_repository.dart';
 import 'personal_cloud_backup_service.dart';
+import 'cloud_backup_preferences.dart';
+import '../../settings/data/app_settings_repository.dart';
 
-enum PersonalCloudAutoBackupResult {
-  skipped,
-  backedUp,
-  conflict,
-  failed,
-}
+enum PersonalCloudAutoBackupResult { skipped, backedUp, conflict, failed }
 
 class PersonalCloudAutoBackupService {
-  const PersonalCloudAutoBackupService(
+  PersonalCloudAutoBackupService(
     this.ref, {
     this.minimumInterval = const Duration(hours: 6),
   });
 
   final Ref ref;
+  bool _running = false;
   final Duration minimumInterval;
 
   Future<PersonalCloudAutoBackupResult> backupIfDue() async {
+    if (_running) return PersonalCloudAutoBackupResult.skipped;
+    _running = true;
     try {
       final session = ref.read(sessionRepositoryProvider);
       await session.initialize();
@@ -37,6 +37,10 @@ class PersonalCloudAutoBackupService {
         return PersonalCloudAutoBackupResult.skipped;
       }
 
+      final enabled = await ref
+          .read(appSettingsRepositoryProvider)
+          .get(cloudAutoBackupKey(userId, binding.datasetId));
+      if (enabled != 'true') return PersonalCloudAutoBackupResult.skipped;
       if (binding.hasRemoteUpdate) {
         return PersonalCloudAutoBackupResult.conflict;
       }
@@ -52,6 +56,8 @@ class PersonalCloudAutoBackupService {
       return PersonalCloudAutoBackupResult.conflict;
     } on Object {
       return PersonalCloudAutoBackupResult.failed;
+    } finally {
+      _running = false;
     }
   }
 }

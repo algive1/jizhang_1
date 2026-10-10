@@ -3,158 +3,115 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme_tokens.dart';
+import '../../../core/formatters/money_formatter.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../accounts/data/account_repository.dart';
+import '../../books/data/book_repository.dart';
+import '../../budgets/data/budget_repository.dart';
+import '../../categories/data/category_repository.dart';
+import '../../goals/data/goal_repository.dart';
+import '../../recurring/data/recurring_bill_repository.dart';
+import '../../transactions/data/transactions_repository.dart';
 import '../application/insight_feed_provider.dart';
 import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
+import '../domain/insight_month_summary.dart';
 import 'insight_preferences_sheet.dart';
 
 enum _InsightFilter { all, important, changes, discovery }
 
 class InsightsPage extends ConsumerStatefulWidget {
   const InsightsPage({super.key});
-
   @override
   ConsumerState<InsightsPage> createState() => _InsightsPageState();
 }
 
 class _InsightsPageState extends ConsumerState<InsightsPage> {
   _InsightFilter _filter = _InsightFilter.all;
-  bool _prompted = false;
+  String? _error;
+
+  Future<void> _refresh() async {
+    ref.invalidate(insightRecentTransactionsProvider);
+    ref.invalidate(insightPendingReimbursementsProvider);
+    ref.invalidate(insightLargeExpenseThresholdProvider);
+    ref.invalidate(allAccountsProvider);
+    ref.invalidate(allCategoriesProvider);
+    ref.invalidate(goalsProvider);
+    ref.invalidate(recurringBillsProvider);
+    ref.invalidate(currentMonthBudgetsProvider);
+    final now = DateTime.now();
+    ref.invalidate(
+      transactionsForMonthProvider((year: now.year, month: now.month)),
+    );
+    ref.invalidate(insightPreferencesProvider);
+    ref.invalidate(confirmedInsightFeedProvider);
+    try {
+      await ref.read(insightRecentTransactionsProvider.future);
+    } on Object {
+      /* The page renders the source error and retry action. */
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(insightDataStateProvider);
     final feed = ref.watch(insightFeedProvider);
-    final preferencesAsync = ref.watch(insightPreferencesProvider);
     final preferences =
-        preferencesAsync.value ?? const InsightPreferences();
-
-    if (!_prompted && preferencesAsync.hasValue && !preferences.configured) {
-      _prompted = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showPreferences(preferences);
-      });
-    }
-
-    final items = feed.items.where((item) {
-      return switch (_filter) {
-        _InsightFilter.all => true,
-        _InsightFilter.important => item.isImportant,
-        _InsightFilter.changes =>
-          item.kind == FinancialInsightKind.behavior ||
-              item.kind == FinancialInsightKind.positive,
-        _InsightFilter.discovery =>
-          item.kind == FinancialInsightKind.discovery ||
-              item.kind == FinancialInsightKind.life,
-      };
-    }).toList();
-
+        ref.watch(insightPreferencesProvider).value ??
+        const InsightPreferences();
+    final summary = ref.watch(insightMonthSummaryProvider);
+    final bookName = ref.watch(activeBookProvider)?.name ?? '当前账本';
+    final now = DateTime.now();
+    final ready = state.hasValue && !state.hasError && !state.isLoading;
+    final items =
+        feed.items
+            .where(
+              (item) => switch (_filter) {
+                _InsightFilter.all => true,
+                _InsightFilter.important =>
+                  item.isImportant ||
+                      item.kind == FinancialInsightKind.risk ||
+                      item.kind == FinancialInsightKind.goal,
+                _InsightFilter.changes =>
+                  item.kind == FinancialInsightKind.behavior ||
+                      item.kind == FinancialInsightKind.positive ||
+                      item.kind == FinancialInsightKind.financial,
+                _InsightFilter.discovery =>
+                  item.kind == FinancialInsightKind.discovery ||
+                      item.kind == FinancialInsightKind.life,
+              },
+            )
+            .toList()
+          ..sort((a, b) {
+            final priority = b.priority.index.compareTo(a.priority.index);
+            return priority != 0 ? priority : b.score.compareTo(a.score);
+          });
     return SafeArea(
-      child: ListView(
-        // The glass navigation bar floats over the page; leave its whole
-        // footprint free so the last card can scroll clear of it.
-        padding: EdgeInsets.fromLTRB(
-          18,
-          12,
-          18,
-          AppScaffold.reservedBottomInset(context),
-        ),
-        children: [
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            12,
+            16,
+            AppScaffold.reservedBottomInset(context),
+          ),
+          children: [
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    '洞察',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _showPreferences(preferences),
-                  icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: const Text('关注设置'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              preferences.intents.isEmpty
-                  ? '不是为了多说，而是只告诉你真正值得知道的变化。'
-                  : '会优先围绕「${preferences.intents.map((e) => e.label).join(' · ')}」来分析。',
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _QualityCard(feed: feed),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text('值得关注', style: Theme.of(context).textTheme.titleLarge),
-                const Spacer(),
-                Text(
-                  '${feed.items.length} 条',
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChip(
-                    label: '全部',
-                    selected: _filter == _InsightFilter.all,
-                    onTap: () => setState(() => _filter = _InsightFilter.all),
-                  ),
-                  _FilterChip(
-                    label: '重要',
-                    selected: _filter == _InsightFilter.important,
-                    onTap: () =>
-                        setState(() => _filter = _InsightFilter.important),
-                  ),
-                  _FilterChip(
-                    label: '变化',
-                    selected: _filter == _InsightFilter.changes,
-                    onTap: () =>
-                        setState(() => _filter = _InsightFilter.changes),
-                  ),
-                  _FilterChip(
-                    label: '发现',
-                    selected: _filter == _InsightFilter.discovery,
-                    onTap: () =>
-                        setState(() => _filter = _InsightFilter.discovery),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (items.isEmpty)
-              AppCard(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.eco_outlined,
-                        color: context.appPrimary,
-                        size: 38,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        '目前没有需要打扰你的事情',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 5),
                       Text(
-                        '继续正常记账即可。数据不足时，我们宁可不下结论。',
-                        textAlign: TextAlign.center,
+                        '洞察',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$bookName · ${now.month}月1日至今',
                         style: TextStyle(
                           color: context.appSecondaryText,
                           fontSize: 12,
@@ -163,137 +120,279 @@ class _InsightsPageState extends ConsumerState<InsightsPage> {
                     ],
                   ),
                 ),
-              )
-            else
-              ...items.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _InsightCard(
-                    item: item,
-                    onTap: () => context.push(
-                      '/insights/${Uri.encodeComponent(item.id)}',
-                      extra: item,
-                    ),
-                    onDismiss: () => _dismiss(item),
-                  ),
+                IconButton(
+                  tooltip: '刷新洞察',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
                 ),
-              ),
-            const SizedBox(height: 18),
-            Text('深入看看', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.75,
-              children: [
-                _Shortcut(
-                  icon: Icons.show_chart_rounded,
-                  title: '趋势分析',
-                  subtitle: '钱最近怎么变',
-                  onTap: () => context.push('/analysis'),
-                ),
-                _Shortcut(
-                  icon: Icons.account_balance_wallet_outlined,
-                  title: '预算',
-                  subtitle: '控制消费速度',
-                  onTap: () => context.push('/profile/budgets'),
-                ),
-                _Shortcut(
-                  icon: Icons.autorenew_rounded,
-                  title: '周期账单',
-                  subtitle: '固定支出与订阅',
-                  onTap: () => context.push('/profile/recurring-bills'),
-                ),
-                _Shortcut(
-                  icon: Icons.flag_outlined,
-                  title: '财务目标',
-                  subtitle: '存钱与目标进度',
-                  onTap: () => context.push('/goals'),
+                IconButton(
+                  tooltip: '关注设置',
+                  onPressed: () => _showPreferences(preferences),
+                  icon: const Icon(Icons.tune_rounded),
                 ),
               ],
             ),
+            const SizedBox(height: 18),
+            if (state.hasError)
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '账务数据暂时没有读取成功',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('暂不生成结论，已有账本和记录不受影响。'),
+                    TextButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('重新加载'),
+                    ),
+                  ],
+                ),
+              )
+            else if (!ready)
+              const AppCard(
+                child: Column(
+                  children: [
+                    LinearProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('正在整理当前账本…'),
+                  ],
+                ),
+              )
+            else ...[
+              _MonthCard(summary: summary),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '值得关注',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  Text(
+                    '${feed.items.length} 条',
+                    style: TextStyle(color: context.appSecondaryText),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final entry in const [
+                      (_InsightFilter.all, '全部'),
+                      (_InsightFilter.important, '待处理'),
+                      (_InsightFilter.changes, '收支变化'),
+                      (_InsightFilter.discovery, '消费发现'),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(entry.$2),
+                          selected: _filter == entry.$1,
+                          onSelected: (_) => setState(() => _filter = entry.$1),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (items.isEmpty)
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.auto_graph_rounded,
+                        color: context.appPrimary,
+                        size: 30,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        feed.items.isNotEmpty
+                            ? '这个分类暂时没有新发现'
+                            : summary.count == 0
+                            ? '本月还没有可分析的消费记录'
+                            : '暂时没有明显变化需要提醒',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        summary.count == 0
+                            ? '记下真实支出后，这里会展示变化、依据和可做的调整。'
+                            : '结论只来自已记录的数据；历史不足时不推测涨跌原因。',
+                        style: TextStyle(color: context.appSecondaryText),
+                      ),
+                      if (feed.items.isNotEmpty)
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _filter = _InsightFilter.all),
+                          child: const Text('查看全部'),
+                        ),
+                    ],
+                  ),
+                )
+              else
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _InsightCard(
+                      item: item,
+                      onDetails: () => context.push(
+                        '/insights/${Uri.encodeComponent(item.id)}',
+                        extra: item,
+                      ),
+                      onAction: item.actionRoute == null
+                          ? null
+                          : () => _openAction(item),
+                      onDismiss: () => _dismiss(item),
+                    ),
+                  ),
+              const SizedBox(height: 8),
+              Text(
+                feed.isServerConfirmed ? '已更新分析 · 结论可查看具体依据' : '本地分析 · 离线也可查看',
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+              ),
+            ],
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            const SizedBox(height: 22),
+            Text('把发现变成行动', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _ActionRow(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: '调整预算',
+                    subtitle: '按自己的节奏安排本月支出',
+                    route: '/profile/budgets',
+                  ),
+                  Divider(height: 1, indent: 56, color: context.appDivider),
+                  _ActionRow(
+                    icon: Icons.flag_outlined,
+                    title: '储蓄目标',
+                    subtitle: '查看进度，安排下一笔存入',
+                    route: '/goals',
+                  ),
+                  Divider(height: 1, indent: 56, color: context.appDivider),
+                  _ActionRow(
+                    icon: Icons.autorenew,
+                    title: '周期账单',
+                    subtitle: '检查订阅和固定支出',
+                    route: '/profile/recurring-bills',
+                  ),
+                  Divider(height: 1, indent: 56, color: context.appDivider),
+                  _ActionRow(
+                    icon: Icons.bar_chart_rounded,
+                    title: '收支分析',
+                    subtitle: '查看完整趋势和分类明细',
+                    route: '/analysis',
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
+      ),
     );
   }
 
+  void _openAction(FinancialInsightItem item) {
+    final route = item.actionRoute;
+    if (route == '/transactions' && item.relatedTransactionIds.isNotEmpty) {
+      context.push('/transactions/search', extra: item.relatedTransactionIds);
+    } else if (route != null) {
+      context.push(route);
+    }
+  }
+
   Future<void> _dismiss(FinancialInsightItem item) async {
-    await ref.read(insightPreferencesRepositoryProvider).dismiss(item.id);
-    ref.invalidate(insightPreferencesProvider);
+    try {
+      await ref.read(insightPreferencesRepositoryProvider).dismiss(item.id);
+      ref.invalidate(insightPreferencesProvider);
+    } on Object {
+      if (mounted) setState(() => _error = '未能保存这次设置，请重试');
+    }
   }
 
   Future<void> _showPreferences(InsightPreferences current) async {
     final saved = await showInsightPreferencesSheet(context, current);
-    if (saved == null) return;
-    await ref.read(insightPreferencesRepositoryProvider).save(saved);
-    ref.invalidate(insightPreferencesProvider);
+    if (saved == null || !mounted) return;
+    try {
+      await ref.read(insightPreferencesRepositoryProvider).save(saved);
+      ref.invalidate(insightPreferencesProvider);
+    } on Object {
+      if (mounted) setState(() => _error = '关注设置保存失败，请重试');
+    }
   }
-
 }
 
-class _QualityCard extends StatelessWidget {
-  const _QualityCard({required this.feed});
-  final InsightFeed feed;
-
+class _MonthCard extends StatelessWidget {
+  const _MonthCard({required this.summary});
+  final InsightMonthSummary summary;
   @override
   Widget build(BuildContext context) {
-    final confidence = (
-      feed.dataConfidence * .3 +
-      feed.completeness * .25 +
-      feed.classificationConfidence * .2 +
-      feed.baselineConfidence * .25
-    ).clamp(0, 1);
-    final label = feed.completeness < .15
-        ? '先记几笔，我们再开始分析'
-        : feed.isServerConfirmed
-        ? '已基于当前账务上下文确认'
-        : confidence >= .75
-        ? '洞察基础较稳定'
-        : confidence >= .5
-        ? '洞察还在学习'
-        : '有些数据还需要确认';
+    final change = summary.changePercent;
     return AppCard(
-      child: Row(
+      color: context.appPrimarySoft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            backgroundColor: context.appPrimarySoft,
-            child: Icon(Icons.auto_graph_rounded, color: context.appPrimary),
+          Text(
+            '本月个人消费',
+            style: TextStyle(color: context.appColors.onPrimaryContainer),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  feed.completeness < .15
-                      ? '目前样本还少，不会急着给你下结论。'
-                      : feed.isServerConfirmed
-                      ? '已用当前账本的流水、账户、预算、目标和周期账单统一复核；数据不足时仍会减少判断。'
-                      : confidence >= .75
-                      ? '已有足够数据建立个人基线，会优先和过去的你比较。'
-                      : '数据覆盖、分类准确度和历史样本会共同决定我们敢不敢下结论。',
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '¥${MoneyFormatter.decimal(summary.spent)}',
+              style: Theme.of(context).textTheme.headlineLarge
+                  ?.copyWith(color: context.appColors.onPrimaryContainer),
             ),
           ),
-          Icon(
-            feed.isServerConfirmed || confidence >= .75
-                ? Icons.verified_outlined
-                : Icons.hourglass_bottom_rounded,
-            color: context.appPrimary,
-            size: 20,
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              Text(
+                '${summary.count} 笔消费',
+                style: TextStyle(color: context.appColors.onPrimaryContainer),
+              ),
+              Text(
+                change == null
+                    ? '上月同期记录不足，暂不比较'
+                    : '较上月同期${change >= 0 ? '增加' : '减少'} ${change.abs().toStringAsFixed(1)}%',
+                style: TextStyle(
+                  color: context.appColors.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '人民币消费 · 已扣退款和报销 · 不含转账及投资',
+            style: TextStyle(
+              color: context.appColors.onPrimaryContainer,
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -301,92 +400,45 @@ class _QualityCard extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-    ),
-  );
-}
-
 class _InsightCard extends StatelessWidget {
   const _InsightCard({
     required this.item,
-    required this.onTap,
+    required this.onDetails,
     required this.onDismiss,
+    this.onAction,
   });
   final FinancialInsightItem item;
-  final VoidCallback onTap;
-  final VoidCallback onDismiss;
+  final VoidCallback onDetails, onDismiss;
+  final VoidCallback? onAction;
+
+  String _value(InsightEvidence evidence) {
+    final n = evidence.value;
+    if (evidence.unit == 'CNY') return '¥${MoneyFormatter.decimal(n)}';
+    return '${n.toStringAsFixed(n % 1 == 0 ? 0 : 1)}${evidence.unit ?? ''}';
+  }
 
   @override
   Widget build(BuildContext context) => AppCard(
-    padding: EdgeInsets.zero,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            CircleAvatar(
-              backgroundColor: context.appPrimarySoft,
-              child: Icon(_icon(item.kind), color: context.appPrimary),
+            Icon(
+              item.isImportant
+                  ? Icons.priority_high_rounded
+                  : Icons.auto_graph_rounded,
+              size: 18,
+              color: item.isImportant
+                  ? Theme.of(context).colorScheme.error
+                  : context.appPrimary,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 6),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _KindPill(kind: item.kind),
-                      const SizedBox(width: 6),
-                      if (item.isImportant)
-                        Text(
-                          '值得先看',
-                          style: TextStyle(
-                            color: context.appPrimary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.summary,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
+              child: Text(
+                item.kind.label,
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
               ),
             ),
             IconButton(
@@ -396,83 +448,89 @@ class _InsightCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
+        Text(
+          item.title,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          item.summary,
+          style: TextStyle(color: context.appSecondaryText, height: 1.5),
+        ),
+        if (item.evidence.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.appSurfaceSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Wrap(
+              spacing: 20,
+              runSpacing: 12,
+              children: [
+                for (final evidence in item.evidence.take(2))
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        evidence.label,
+                        style: TextStyle(
+                          color: context.appSecondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _value(evidence),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: context.appPrimaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (onAction != null)
+              FilledButton.tonal(
+                onPressed: onAction,
+                child: Text(item.actionLabel ?? '去处理'),
+              ),
+            TextButton(onPressed: onDetails, child: const Text('查看依据')),
+          ],
+        ),
+      ],
     ),
   );
-
-  IconData _icon(FinancialInsightKind kind) => switch (kind) {
-    FinancialInsightKind.financial => Icons.account_balance_wallet_outlined,
-    FinancialInsightKind.behavior => Icons.timeline_rounded,
-    FinancialInsightKind.risk => Icons.notifications_active_outlined,
-    FinancialInsightKind.goal => Icons.flag_outlined,
-    FinancialInsightKind.discovery => Icons.search_rounded,
-    FinancialInsightKind.positive => Icons.emoji_events_outlined,
-    FinancialInsightKind.life => Icons.favorite_border_rounded,
-  };
 }
 
-class _KindPill extends StatelessWidget {
-  const _KindPill({required this.kind});
-  final FinancialInsightKind kind;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    kind.label,
-    style: TextStyle(
-      color: context.appSecondaryText,
-      fontSize: 10,
-      fontWeight: FontWeight.w600,
-    ),
-  );
-}
-
-class _Shortcut extends StatelessWidget {
-  const _Shortcut({
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    required this.route,
   });
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
+  final String title, subtitle, route;
   @override
-  Widget build(BuildContext context) => AppCard(
-    padding: EdgeInsets.zero,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Row(
-          children: [
-            Icon(icon, color: context.appPrimary),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: context.appSecondaryText,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon, color: context.appPrimary),
+    title: Text(title),
+    subtitle: Text(subtitle),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () => context.push(route),
   );
 }

@@ -137,9 +137,11 @@ class InvestmentSummaryCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _SummaryMetric(
-                        label: '今日涨跌',
-                        amount: today,
-                        percent: portfolio.todayProfitPercent,
+                        label: '行情涨跌',
+                        amount: portfolio.hasTodayChange ? today : null,
+                        percent: portfolio.hasTodayChange
+                            ? portfolio.todayProfitPercent
+                            : null,
                         hidden: amountHidden,
                         currency: portfolio.currency,
                       ),
@@ -151,9 +153,11 @@ class InvestmentSummaryCard extends StatelessWidget {
                     ),
                     Expanded(
                       child: _SummaryMetric(
-                        label: '累计收益',
-                        amount: total,
-                        percent: portfolio.totalProfitPercent,
+                        label: '持仓盈亏',
+                        amount: portfolio.hasMissingQuote ? null : total,
+                        percent: portfolio.hasMissingQuote
+                            ? null
+                            : portfolio.totalProfitPercent,
                         hidden: amountHidden,
                         currency: portfolio.currency,
                         showSign: true,
@@ -181,7 +185,7 @@ class _SummaryMetric extends StatelessWidget {
   });
 
   final String label;
-  final double amount;
+  final double? amount;
   final double? percent;
   final bool hidden;
   final String currency;
@@ -198,16 +202,22 @@ class _SummaryMetric extends StatelessWidget {
           style: TextStyle(fontSize: 10, color: context.appSecondaryText),
         ),
         const SizedBox(height: 2),
-        InvestmentAmountText(
-          amount,
-          hidden: hidden,
-          signed: showSign,
-          size: 15,
-          currency: currency,
-          color: percent == null
-              ? context.appSecondaryText
-              : profitColor(percent!, context: context),
-        ),
+        if (amount == null)
+          Text(
+            hidden ? '••••' : '—',
+            style: TextStyle(color: context.appSecondaryText, fontSize: 15),
+          )
+        else
+          InvestmentAmountText(
+            amount!,
+            hidden: hidden,
+            signed: showSign,
+            size: 15,
+            currency: currency,
+            color: percent == null
+                ? context.appSecondaryText
+                : profitColor(percent!, context: context),
+          ),
         ProfitText(percent: percent, fontSize: 10),
       ],
     ),
@@ -308,6 +318,7 @@ class InvestmentCategoryCard extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: InvestmentAmountText(
                   summary.value,
+                  currency: summary.currency,
                   hidden: amountHidden,
                   size: 15,
                   weight: FontWeight.w800,

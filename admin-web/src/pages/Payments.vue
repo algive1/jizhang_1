@@ -43,6 +43,10 @@ async function action(kind: "refresh" | "close" | "refund", id: string) {
     busy.value = false;
   }
 }
+const initialFilters = { ...filters };
+function resetFilters() {
+  Object.assign(filters, initialFilters);
+}
 </script>
 <template>
   <page-header
@@ -54,6 +58,7 @@ async function action(kind: "refresh" | "close" | "refund", id: string) {
     :columns="columns"
     :load="commerce.orders"
     :filters="filters"
+    @reset="resetFilters"
     ><template #filters
       ><a-select
         v-model="filters.status"

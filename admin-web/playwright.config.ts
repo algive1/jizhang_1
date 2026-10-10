@@ -6,7 +6,8 @@ export default defineConfig({
   use: { baseURL: "http://127.0.0.1:5178", headless: true },
   webServer: [
     {
-      command: "node ../server/node_modules/tsx/dist/cli.mjs tests/server.ts",
+      command:
+        "node --import ../server/node_modules/tsx/dist/loader.mjs tests/server.ts",
       url: "http://127.0.0.1:8790/api/v1/app/update?platform=android&version=1.0.0",
       reuseExistingServer: false,
     },

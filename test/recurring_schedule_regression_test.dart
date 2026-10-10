@@ -81,6 +81,6 @@ void main() {
     final old = sqlite.sqlite3.open(file.path); for (final row in old.select("SELECT name FROM sqlite_master WHERE type='trigger'")) { old.execute('DROP TRIGGER ${row['name']}'); } old.execute('ALTER TABLE recurring_bills DROP COLUMN schedule_json'); old.userVersion = 16; old.close();
     final db = AppDatabase.forTesting(NativeDatabase(file)); addTearDown(db.close);
     final bill = (await DriftRecurringBillRepository(db, bookId: SeedIds.personalBook).getAll()).single;
-    expect(bill.name, '房租'); expect(bill.interval, 1); expect(bill.repeatCount, isNull); expect(db.schemaVersion, 18);
+    expect(bill.name, '房租'); expect(bill.interval, 1); expect(bill.repeatCount, isNull); expect(db.schemaVersion, 26);
   });
 }

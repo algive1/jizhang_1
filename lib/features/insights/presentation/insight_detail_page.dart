@@ -11,11 +11,7 @@ import '../data/insight_preferences_repository.dart';
 import '../domain/insight_models.dart';
 
 class InsightDetailPage extends ConsumerStatefulWidget {
-  const InsightDetailPage({
-    required this.insightId,
-    this.fallback,
-    super.key,
-  });
+  const InsightDetailPage({required this.insightId, this.fallback, super.key});
 
   final String insightId;
   final FinancialInsightItem? fallback;
@@ -52,10 +48,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
                   onPressed: context.pop,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                Text(
-                  '洞察详情',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
+                Text('洞察详情', style: Theme.of(context).textTheme.headlineSmall),
               ],
             ),
             const SizedBox(height: 32),
@@ -138,8 +131,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
             ),
           ],
           const SizedBox(height: 18),
-          if (feed.isServerConfirmed &&
-              remotePolicy?.aiAvailable == true) ...[
+          if (feed.isServerConfirmed && remotePolicy?.aiAvailable == true) ...[
             if (_aiText != null)
               _Section(
                 title: 'AI 深度解读',
@@ -163,20 +155,14 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
               const SizedBox(height: 6),
               Text(
                 '今日 AI 深度解读次数已用完',
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 11),
               ),
             ],
             if (_aiError != null) ...[
               const SizedBox(height: 6),
               Text(
                 _aiError!,
-                style: TextStyle(
-                  color: context.appSecondaryText,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: context.appSecondaryText, fontSize: 11),
               ),
             ],
           ],
@@ -200,10 +186,7 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
               ),
               OutlinedButton.icon(
                 onPressed: () => _feedback(context, ref, item, 'inaccurate'),
-                icon: const Icon(
-                  Icons.report_gmailerrorred_outlined,
-                  size: 18,
-                ),
+                icon: const Icon(Icons.report_gmailerrorred_outlined, size: 18),
                 label: const Text('判断不准'),
               ),
               OutlinedButton.icon(
@@ -221,26 +204,17 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
           const SizedBox(height: 14),
           Text(
             '结论只基于当前可用账务数据。数据覆盖、分类准确度或历史样本不足时，系统会减少判断。',
-            style: TextStyle(
-              color: context.appSecondaryText,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: context.appSecondaryText, fontSize: 11),
           ),
         ],
       ),
     );
   }
 
-  void _openAction(
-    BuildContext context,
-    FinancialInsightItem item,
-  ) {
+  void _openAction(BuildContext context, FinancialInsightItem item) {
     if (item.actionRoute == '/transactions' &&
         item.relatedTransactionIds.isNotEmpty) {
-      context.push(
-        '/transactions/search',
-        extra: item.relatedTransactionIds,
-      );
+      context.push('/transactions/search', extra: item.relatedTransactionIds);
       return;
     }
     context.push(item.actionRoute!);
@@ -252,19 +226,19 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
       _aiError = null;
     });
     try {
-      final text = await ref.read(remoteInsightRepositoryProvider).interpret(item);
+      final text = await ref
+          .read(remoteInsightRepositoryProvider)
+          .interpret(item);
       if (!mounted) return;
       setState(() {
         _aiText = text;
         _aiError = text == null ? '当前无法提供 AI 深度解读' : null;
       });
-      await ref
-          .read(remoteInsightRepositoryProvider)
-          .policy(force: true);
+      await ref.read(remoteInsightRepositoryProvider).policy(force: true);
       ref.invalidate(insightRemotePolicyProvider);
-    } on Object catch (error) {
+    } on Object {
       if (!mounted) return;
-      setState(() => _aiError = error.toString());
+      setState(() => _aiError = '解读暂时不可用，请稍后重试');
     } finally {
       if (mounted) setState(() => _loadingAi = false);
     }
@@ -281,9 +255,8 @@ class _InsightDetailPageState extends ConsumerState<InsightDetailPage> {
         .recordFeedback(item.id, item.kind, action);
     ref.invalidate(insightPreferencesProvider);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已收到反馈，会用于后续洞察优化')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已收到反馈，会用于后续洞察优化')));
     }
   }
 
@@ -333,23 +306,30 @@ class _EvidenceRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(evidence.label)),
-          Text(
-            value(evidence.value),
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          if (evidence.baselineValue != null) ...[
-            const SizedBox(width: 8),
-            Text(
-              '平时 ${value(evidence.baselineValue!)}',
-              style: TextStyle(
-                color: context.appSecondaryText,
-                fontSize: 12,
+          Text(evidence.label),
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              Text(
+                value(evidence.value),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-            ),
-          ],
+              if (evidence.baselineValue != null) ...[
+                Text(
+                  '平时 ${value(evidence.baselineValue!)}',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );

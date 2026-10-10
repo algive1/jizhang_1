@@ -1,3 +1,5 @@
+import '../../../core/utils/entity_id.dart';
+
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -72,7 +74,7 @@ class DriftBillInboxRepository implements BillInboxRepository {
       throw StateError('收件箱流水必须属于当前账本');
     }
     final item = BillInboxItem(
-      id: 'inbox-${now.microsecondsSinceEpoch}',
+      id: 'inbox-${newEntityId()}',
       transactionId: transactionId,
       candidateTransactionId: candidateTransactionId,
       reason: reason,

@@ -79,9 +79,9 @@ class DatasetBindingPage extends ConsumerWidget {
                             ? '云端版本 ${value.lastSeenRemoteRevision}，本机基线版本 ${value.lastCloudRevision}。为避免覆盖其他设备的新数据，自动备份已暂停。'
                             : value.cloudSyncEnabled
                             ? value.lastSyncAt == null
-                                ? '云同步通道已建立，可手动上传首份云端备份。'
-                                : '最近备份：${value.lastSyncAt!.toLocal()}\n'
-                                    '首次手动备份完成后，打开或回到应用时每 6 小时最多自动备份一次。'
+                                  ? '云同步通道已建立，可手动上传首份云端备份。'
+                                  : '最近备份：${value.lastSyncAt!.toLocal()}\n'
+                                        '首次手动备份完成后，可在“数据与安全”中开启自动备份。'
                             : '尚未建立个人云同步通道。登录和绑定都不会自动上传数据。',
                       ),
                     ],
@@ -121,13 +121,13 @@ class DatasetBindingPage extends ConsumerWidget {
                 else ...[
                   if (value.hasRemoteUpdate)
                     FilledButton.icon(
-                      onPressed: () => _restoreCloudBackup(context, ref),
+                      onPressed: () => restoreCloudBackup(context, ref),
                       icon: const Icon(Icons.cloud_download_outlined),
                       label: const Text('恢复云端新版本'),
                     )
                   else
                     FilledButton.icon(
-                      onPressed: () => _uploadCloudBackup(context, ref),
+                      onPressed: () => uploadCloudBackup(context, ref),
                       icon: const Icon(Icons.cloud_upload_outlined),
                       label: Text(
                         value.lastSyncAt == null ? '首次备份到云端' : '立即备份到云端',
@@ -141,13 +141,12 @@ class DatasetBindingPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: () => _restoreCloudBackup(context, ref),
+                    onPressed: () => restoreCloudBackup(context, ref),
                     icon: const Icon(Icons.restore_outlined),
                     label: const Text('从云端恢复'),
                   ),
                 ],
-              ]
-              else
+              ] else
                 const Card(
                   child: ListTile(
                     leading: Icon(Icons.lock_outline),
@@ -170,9 +169,7 @@ class DatasetBindingPage extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('启用云同步通道？'),
-        content: const Text(
-          '本步骤只在服务器登记你的个人云数据集，不上传账本、流水或附件。真正首次上传会在下一步再次确认。',
-        ),
+        content: const Text('本步骤只在服务器登记你的个人云数据集，不上传账本、流水或附件。真正首次上传会在下一步再次确认。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -213,14 +210,13 @@ class DatasetBindingPage extends ConsumerWidget {
           ),
         );
         if (restore == true && context.mounted) {
-          await _restoreCloudBackup(context, ref);
+          await restoreCloudBackup(context, ref);
         }
         return;
       }
       ref.invalidate(datasetBindingProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('云同步通道已建立，尚未上传账务数据')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('云同步通道已建立，尚未上传账务数据')));
     } on CloudSyncMembershipRequired {
       if (!context.mounted) return;
       final upgrade = await showDialog<bool>(
@@ -245,14 +241,13 @@ class DatasetBindingPage extends ConsumerWidget {
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
 
-  static Future<void> _uploadCloudBackup(
+  static Future<void> uploadCloudBackup(
     BuildContext context,
     WidgetRef ref,
   ) async {
@@ -311,18 +306,17 @@ class DatasetBindingPage extends ConsumerWidget {
         ),
       );
       if (restore == true && context.mounted) {
-        await _restoreCloudBackup(context, ref);
+        await restoreCloudBackup(context, ref);
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
 
-  static Future<void> _restoreCloudBackup(
+  static Future<void> restoreCloudBackup(
     BuildContext context,
     WidgetRef ref,
   ) async {
@@ -355,9 +349,7 @@ class DatasetBindingPage extends ConsumerWidget {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('云端恢复已准备'),
-          content: Text(
-            '已下载云端版本 ${result.revision}。请完全关闭并重新打开应用后生效。',
-          ),
+          content: Text('已下载云端版本 ${result.revision}。请完全关闭并重新打开应用后生效。'),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -368,9 +360,8 @@ class DatasetBindingPage extends ConsumerWidget {
       );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -387,7 +378,9 @@ class DatasetBindingPage extends ConsumerWidget {
       final status = await ref
           .read(personalCloudBootstrapServiceProvider)
           .status();
-      final localBinding = await ref.read(datasetBindingServiceProvider).status();
+      final localBinding = await ref
+          .read(datasetBindingServiceProvider)
+          .status();
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
@@ -396,8 +389,8 @@ class DatasetBindingPage extends ConsumerWidget {
           content: Text(
             status.datasetMatches
                 ? '云端版本 ${status.revision}，'
-                    '本机基线版本 ${localBinding.lastCloudRevision}。'
-                    '${status.hasSnapshot ? '已有云端备份。' : '尚未上传首份账务备份。'}'
+                      '本机基线版本 ${localBinding.lastCloudRevision}。'
+                      '${status.hasSnapshot ? '已有云端备份。' : '尚未上传首份账务备份。'}'
                 : '账号云端存在另一份数据集，当前设备需要先恢复或合并。',
           ),
           actions: [
@@ -410,9 +403,8 @@ class DatasetBindingPage extends ConsumerWidget {
       );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -443,9 +435,8 @@ class DatasetBindingPage extends ConsumerWidget {
       ref.invalidate(datasetBindingProvider);
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.toString())));
       }
     }
   }
@@ -464,26 +455,23 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: context.appPrimary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: context.appSecondaryText,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, color: context.appPrimary),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(
+              subtitle,
+              style: TextStyle(color: context.appSecondaryText, height: 1.4),
             ),
-          ),
-        ],
-      );
+          ],
+        ),
+      ),
+    ],
+  );
 }

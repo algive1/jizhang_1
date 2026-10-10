@@ -32,12 +32,20 @@ class _InvestmentOverviewPageState
     extends ConsumerState<InvestmentOverviewPage> {
   late _InvestmentTab _tab = widget.initialTab;
   bool _hidden = false;
+  String _currency = 'CNY';
+  bool _refreshing = false;
   PortfolioRange _range = PortfolioRange.month;
 
   @override
   Widget build(BuildContext context) {
     final portfolioState = ref.watch(investmentPortfolioProvider);
-    final portfolio = portfolioState.value;
+    final all = portfolioState.value;
+    final currencies = all?.currencies ?? const <String>[];
+    final selectedCurrency =
+        currencies.contains(_currency) || currencies.isEmpty
+        ? _currency
+        : currencies.first;
+    final portfolio = all?.inCurrency(selectedCurrency);
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -47,6 +55,7 @@ class _InvestmentOverviewPageState
             _Header(
               onBack: _goBack,
               onAdd: _startAdd,
+              onRefresh: _refreshing ? null : _refresh,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
@@ -55,6 +64,32 @@ class _InvestmentOverviewPageState
                 onChanged: (value) => setState(() => _tab = value),
               ),
             ),
+            if (currencies.length > 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final currency in currencies)
+                      ChoiceChip(
+                        label: Text(currency),
+                        selected: selectedCurrency == currency,
+                        onSelected: (_) => setState(() => _currency = currency),
+                      ),
+                  ],
+                ),
+              ),
+            if (currencies.length > 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  '按原币种分别统计，未进行汇率折算',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             Expanded(
               child: portfolioState.hasError && portfolio == null
                   ? ListView(
@@ -62,9 +97,8 @@ class _InvestmentOverviewPageState
                       children: [
                         InvestmentErrorState(
                           message: '投资数据加载失败，请重试',
-                          onRetry: () => ref.invalidate(
-                            investmentPortfolioProvider,
-                          ),
+                          onRetry: () =>
+                              ref.invalidate(investmentPortfolioProvider),
                         ),
                       ],
                     )
@@ -105,6 +139,23 @@ class _InvestmentOverviewPageState
       context.pop();
     } else {
       context.go('/profile/assets');
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(quoteCacheProvider).clear();
+      await ref.read(investmentRepositoryProvider).getPortfolio();
+      if (!mounted) return;
+      ref.invalidate(investmentPortfolioProvider);
+    } on Object {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('行情刷新未完成，请稍后重试')));
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
@@ -154,9 +205,7 @@ class _InvestmentTabBar extends StatelessWidget {
               selected: selected == item.$1,
               button: true,
               child: InkWell(
-                key: ValueKey(
-                  'investment-tab-${item.$1?.name ?? 'overview'}',
-                ),
+                key: ValueKey('investment-tab-${item.$1?.name ?? 'overview'}'),
                 onTap: () => onChanged(item.$1),
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
@@ -196,10 +245,11 @@ class _InvestmentTabBar extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onBack, required this.onAdd});
+  const _Header({required this.onBack, required this.onAdd, this.onRefresh});
 
   final VoidCallback onBack;
   final VoidCallback onAdd;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -223,6 +273,11 @@ class _Header extends StatelessWidget {
               color: context.appPrimaryText,
             ),
           ),
+        ),
+        IconButton(
+          tooltip: '刷新行情',
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded),
         ),
         IconButton(
           key: const ValueKey('investment-add-action'),
@@ -272,9 +327,17 @@ class _OverviewTab extends ConsumerWidget {
           portfolio: portfolio,
           amountHidden: hidden,
           onAmountHiddenChanged: onHidden,
-          staleLabel: portfolio.hasStaleQuote
+          staleLabel: portfolio.hasMissingQuote
+              ? Text(
+                  '部分行情暂不可用，资产暂按买入成本展示',
+                  style: TextStyle(
+                    color: context.appSecondaryText,
+                    fontSize: 12,
+                  ),
+                )
+              : portfolio.hasStaleQuote
               ? const QuoteStatus(timestamp: null, isStale: true)
-              : null,
+              : _PortfolioQuoteStatus(portfolio: portfolio),
         ),
         const SizedBox(height: 12),
         const InvestmentSectionHeader(title: '投资分类'),
@@ -284,12 +347,14 @@ class _OverviewTab extends ConsumerWidget {
           onOpenType: onOpenType,
         ),
         const SizedBox(height: 14),
-        _TrendSection(range: range, onRange: onRange),
+        if (portfolio.currency == 'CNY')
+          _TrendSection(range: range, onRange: onRange, hidden: hidden),
         const SizedBox(height: 14),
         InvestmentSectionHeader(
-          title: '投资资产变动',
+          title: '主要持仓',
           action: '查看全部',
-          onAction: () => onOpenType(portfolio.positions.first.holding.asset.type),
+          onAction: () =>
+              onOpenType(portfolio.positions.first.holding.asset.type),
         ),
         _PositionsList(
           positions: portfolio.positions.take(5).toList(growable: false),
@@ -337,7 +402,13 @@ class _CategoryGrid extends StatelessWidget {
 }
 
 class _TrendSection extends ConsumerWidget {
-  const _TrendSection({required this.range, required this.onRange});
+  const _TrendSection({
+    required this.range,
+    required this.onRange,
+    required this.hidden,
+  });
+
+  final bool hidden;
 
   final PortfolioRange range;
   final ValueChanged<PortfolioRange> onRange;
@@ -346,16 +417,12 @@ class _TrendSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshots = ref.watch(investmentSnapshotsProvider(range.days));
     final trend = snapshots.maybeWhen(
-      data: (rows) => InvestmentTrend.from(
-        rows,
-        now: DateTime.now(),
-        days: range.days,
-      ),
+      data: (rows) =>
+          InvestmentTrend.from(rows, now: DateTime.now(), days: range.days),
       orElse: () => const InvestmentTrend([]),
     );
     final points = [
-      for (final point in trend.points)
-        (date: point.date, value: point.value),
+      for (final point in trend.points) (date: point.date, value: point.value),
     ];
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
@@ -401,8 +468,8 @@ class _TrendSection extends ConsumerWidget {
             InvestmentChart(
               keyPrefix: 'portfolio-trend',
               points: points,
-              amountHidden: false,
-              emptyLabel: '明天起显示资产趋势',
+              amountHidden: hidden,
+              emptyLabel: snapshots.hasError ? '趋势读取失败，请稍后刷新' : '积累两天有效估值后显示趋势',
             ),
         ],
       ),
@@ -565,6 +632,7 @@ class _CategorySummaryCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: InvestmentAmountText(
               summary.value,
+              currency: summary.currency,
               hidden: hidden,
               size: 26,
               color: context.appPrimaryText,
@@ -576,32 +644,56 @@ class _CategorySummaryCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                '累计收益',
+                '持仓盈亏',
                 style: TextStyle(fontSize: 11, color: context.appSecondaryText),
               ),
               SizedBox(width: 6),
               Flexible(
-                child: InvestmentAmountText(
-                  summary.profit,
-                  hidden: hidden,
-                  signed: true,
-                  size: 13,
-                  color: summary.profitPercent == null
-                      ? context.appSecondaryText
-                      : profitColor(summary.profit, context: context),
-                ),
+                child: summary.hasMissingQuote
+                    ? Text(hidden ? '••••' : '暂无报价')
+                    : InvestmentAmountText(
+                        summary.profit,
+                        currency: summary.currency,
+                        hidden: hidden,
+                        signed: true,
+                        size: 13,
+                        color: summary.profitPercent == null
+                            ? context.appSecondaryText
+                            : profitColor(summary.profit, context: context),
+                      ),
               ),
               const SizedBox(width: 6),
               Flexible(
-                child: ProfitText(
-                  percent: summary.profitPercent,
-                  fontSize: 11,
-                ),
+                child: ProfitText(percent: summary.profitPercent, fontSize: 11),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+}
+
+class _PortfolioQuoteStatus extends StatelessWidget {
+  const _PortfolioQuoteStatus({required this.portfolio});
+  final InvestmentPortfolio portfolio;
+  @override
+  Widget build(BuildContext context) {
+    final times =
+        portfolio.positions
+            .where(
+              (p) =>
+                  p.holding.asset.priceSource == PriceSource.market &&
+                  p.quote != null,
+            )
+            .map((p) => p.quote!.timestamp)
+            .toList()
+          ..sort();
+    if (times.isEmpty)
+      return Text(
+        '手动估值',
+        style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+      );
+    return QuoteStatus(timestamp: times.first);
   }
 }

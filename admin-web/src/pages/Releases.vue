@@ -54,6 +54,10 @@ async function state(
     Message.error(e instanceof Error ? e.message : "更新失败");
   }
 }
+const initialFilters = { ...filters };
+function resetFilters() {
+  Object.assign(filters, initialFilters);
+}
 </script>
 <template>
   <page-header
@@ -64,6 +68,7 @@ async function state(
     :columns="columns"
     :load="api.releases"
     :filters="filters"
+    @reset="resetFilters"
     ><template #filters
       ><a-select
         v-model="filters.platform"

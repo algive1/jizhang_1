@@ -155,13 +155,14 @@ class DriftInvestmentRepository implements InvestmentRepository {
 
   @override
   Stream<InvestmentPortfolio> watchPortfolio() {
-    return _dao.watchChanges().asyncMap((_) => _portfolioFromCache()).asyncExpand(
-      (initial) async* {
-        yield initial;
-        final refreshed = await _revalidate(initial);
-        if (refreshed != null) yield refreshed;
-      },
-    );
+    return _dao
+        .watchChanges()
+        .asyncMap((_) => _portfolioFromCache())
+        .asyncExpand((initial) async* {
+          yield initial;
+          final refreshed = await _revalidate(initial);
+          if (refreshed != null) yield refreshed;
+        });
   }
 
   @override
@@ -228,11 +229,23 @@ class DriftInvestmentRepository implements InvestmentRepository {
         final quotes = await _market.getQuotes([
           for (final symbol in symbols) (symbol: symbol, type: entry.key),
         ]);
-        for (final quote in quotes.entries) {
-          fetched[quote.key] = quote.value;
+        for (final holding in holdings.where(
+          (h) => h.asset.type == entry.key,
+        )) {
+          final matches = quotes.values.where(
+            (q) =>
+                q.symbol.toUpperCase() == holding.asset.symbol.toUpperCase() &&
+                q.type == holding.asset.type &&
+                q.currency.toUpperCase() ==
+                    holding.asset.currency.toUpperCase(),
+          );
+          if (matches.isEmpty) continue;
+          final quote = matches.first;
+          final key = holding.asset.quoteKey;
+          fetched[key] = quote;
           await _cache.set(
-            quote.key,
-            quote.value,
+            key,
+            quote,
             ttl: InvestmentConfig.ttlFor(entry.key, now: _clock()),
           );
         }
@@ -249,11 +262,11 @@ class DriftInvestmentRepository implements InvestmentRepository {
     final merged = <String, InvestmentQuote>{
       for (final entry in cached.entries)
         entry.key: entry.value.copyWith(
-          isStale: failed && !fetched.containsKey(entry.key),
+          isStale: !fetched.containsKey(entry.key),
         ),
       ...fetched,
     };
-    for (final holding in holdings) {
+    for (final holding in initial.positions.map((p) => p.holding)) {
       if (holding.asset.priceSource == PriceSource.manual &&
           holding.asset.manualPrice != null) {
         merged[holding.asset.quoteKey] = InvestmentQuote(
@@ -285,8 +298,15 @@ class DriftInvestmentRepository implements InvestmentRepository {
     if (a.positions.length != b.positions.length) return false;
     if (a.hasStaleQuote != b.hasStaleQuote) return false;
     for (var i = 0; i < a.positions.length; i++) {
+      if (a.positions[i].holding.id != b.positions[i].holding.id) return false;
       if (a.positions[i].price != b.positions[i].price) return false;
       if (a.positions[i].isStale != b.positions[i].isStale) return false;
+      if ((a.positions[i].quote == null) != (b.positions[i].quote == null))
+        return false;
+      if (a.positions[i].quote?.change != b.positions[i].quote?.change)
+        return false;
+      if (a.positions[i].quote?.timestamp != b.positions[i].quote?.timestamp)
+        return false;
     }
     return true;
   }
@@ -326,9 +346,9 @@ class DriftInvestmentRepository implements InvestmentRepository {
   Future<List<InvestmentHolding>> _loadHoldings() async {
     final rows = await _dao.getHoldings(bookId: bookId);
     final holdings = await _mapHoldings(rows);
-    return holdings.where((holding) => !holding.isArchived).toList(
-      growable: false,
-    );
+    return holdings
+        .where((holding) => !holding.isArchived)
+        .toList(growable: false);
   }
 
   Future<List<InvestmentHolding>> _mapHoldings(
@@ -484,6 +504,10 @@ class DriftInvestmentRepository implements InvestmentRepository {
       symbol: symbol,
     );
     if (existing != null) {
+      if (existing.currency.toUpperCase() != request.currency.toUpperCase() ||
+          existing.priceSource != request.priceSource.name) {
+        throw ArgumentError('该代码已有不同币种或估值方式的资产，请核对代码与市场');
+      }
       // A manual asset the user just re-valued keeps the newer price.
       if (request.priceSource == PriceSource.manual &&
           request.currentPrice != null) {
@@ -524,10 +548,15 @@ class DriftInvestmentRepository implements InvestmentRepository {
       final quotes = await _market.getQuotes([
         (symbol: symbol, type: request.type),
       ]);
-      for (final entry in quotes.entries) {
+      for (final quote in quotes.values.where(
+        (q) =>
+            q.symbol.toUpperCase() == symbol &&
+            q.type == request.type &&
+            q.currency.toUpperCase() == request.currency.toUpperCase(),
+      )) {
         await _cache.set(
-          entry.key,
-          entry.value,
+          'quote:${request.type.name}:${request.market ?? request.type.market}:$symbol',
+          quote,
           ttl: InvestmentConfig.ttlFor(request.type, now: now),
         );
       }
@@ -630,7 +659,10 @@ class DriftInvestmentRepository implements InvestmentRepository {
     if (accountId == null) return;
     // An archived or missing account means there is nothing to move the money
     // from. The trade stays unmirrored instead of failing the whole entry.
-    if (await _database.accountDao.findById(accountId) == null) return;
+    final account = await _database.accountDao.findById(accountId);
+    if (account == null) return;
+    if (account.currency.toUpperCase() != currency.toUpperCase())
+      throw ArgumentError('持有账户与投资资产币种必须一致');
     final amount = price * quantity;
     if (!amount.isFinite || amount <= 0) return;
     final transactionType = switch (type) {
@@ -720,7 +752,7 @@ class DriftInvestmentRepository implements InvestmentRepository {
     // quote refresh is needed for the snapshot alone.
     final existing = await _dao.findSnapshot(bookId: bookId, date: key);
     if (existing != null) return;
-    final portfolio = await getPortfolio();
+    final portfolio = (await getPortfolio()).inCurrency('CNY');
     if (portfolio.isEmpty) return;
     final marketPositions = portfolio.positions.where(
       (position) => position.holding.asset.priceSource == PriceSource.market,
@@ -805,9 +837,8 @@ class ApiInvestmentRepository implements InvestmentRepository {
       _unimplemented();
 
   @override
-  Future<List<InvestmentTransaction>> getTransactions(
-    String holdingId,
-  ) async => _unimplemented();
+  Future<List<InvestmentTransaction>> getTransactions(String holdingId) async =>
+      _unimplemented();
 
   @override
   Future<List<MarketSearchResult>> searchAssets(
@@ -823,9 +854,8 @@ class ApiInvestmentRepository implements InvestmentRepository {
   Future<ValuedHolding?> valueHolding(String id) async => _unimplemented();
 
   @override
-  Stream<InvestmentPortfolio> watchPortfolio() => Stream.error(
-    UnimplementedError('ApiInvestmentRepository 尚未接入'),
-  );
+  Stream<InvestmentPortfolio> watchPortfolio() =>
+      Stream.error(UnimplementedError('ApiInvestmentRepository 尚未接入'));
 }
 
 // ------------------------------------------------------------------ providers
@@ -839,7 +869,11 @@ final quoteCacheProvider = Provider<QuoteCache>((ref) => MemoryQuoteCache());
 /// fallback when no local server is running.
 final marketDataProviderProvider = Provider<MarketDataProvider>((ref) {
   final real = HttpMarketDataProvider(ref.watch(sharedApiProvider));
-  if (kReleaseMode) return real;
+  const useMock = bool.fromEnvironment(
+    'MARKET_DATA_USE_MOCK',
+    defaultValue: false,
+  );
+  if (kReleaseMode || !useMock) return real;
   return DevelopmentMarketDataProvider(
     primary: real,
     fallback: MockMarketDataProvider(),
@@ -866,8 +900,22 @@ final investmentPortfolioProvider = StreamProvider<InvestmentPortfolio>((
 ) async* {
   await ref.watch(databaseBootstrapProvider.future);
   final repository = ref.watch(investmentRepositoryProvider);
-  yield* repository.watchPortfolio();
-  unawaited(repository.ensureTodaySnapshot());
+  var snapshotAttempted = false;
+  await for (final portfolio in repository.watchPortfolio()) {
+    yield portfolio;
+    if (!snapshotAttempted &&
+        !portfolio.isEmpty &&
+        !portfolio.hasMissingQuote &&
+        !portfolio.hasStaleQuote) {
+      snapshotAttempted = true;
+      try {
+        await repository.ensureTodaySnapshot();
+        ref.invalidate(investmentSnapshotsProvider);
+      } on Object {
+        snapshotAttempted = false;
+      }
+    }
+  }
 });
 
 /// Market value of every investment position, grouped by currency.
@@ -888,19 +936,20 @@ final investmentValueByCurrencyProvider = Provider<Map<String, double>>((ref) {
 
 /// Market value of holdings opted into the homepage's account net assets.
 /// Investment management continues to use the complete portfolio above.
-final includedInvestmentValueByCurrencyProvider =
-    Provider<Map<String, double>>((ref) {
-      final positions = ref.watch(investmentPortfolioProvider).value?.positions;
-      if (positions == null || positions.isEmpty) return const {};
-      final totals = <String, double>{};
-      for (final position in positions) {
-        if (!position.holding.includeInHomeNetAssets) continue;
-        final currency = position.holding.asset.currency.toUpperCase();
-        final value = position.marketValue;
-        totals.update(currency, (v) => v + value, ifAbsent: () => value);
-      }
-      return totals;
-    });
+final includedInvestmentValueByCurrencyProvider = Provider<Map<String, double>>(
+  (ref) {
+    final positions = ref.watch(investmentPortfolioProvider).value?.positions;
+    if (positions == null || positions.isEmpty) return const {};
+    final totals = <String, double>{};
+    for (final position in positions) {
+      if (!position.holding.includeInHomeNetAssets) continue;
+      final currency = position.holding.asset.currency.toUpperCase();
+      final value = position.marketValue;
+      totals.update(currency, (v) => v + value, ifAbsent: () => value);
+    }
+    return totals;
+  },
+);
 
 /// Stored once-per-day snapshots for the 投资资产趋势 chart.
 ///
@@ -944,14 +993,15 @@ final investmentHistoryProvider =
 /// Search results for the 搜索添加 tab. Kept as a provider so the debounced
 /// query, not the widget, owns the in-flight request.
 final investmentSearchProvider = FutureProvider.family
-    .autoDispose<List<MarketSearchResult>, ({String query, InvestmentAssetType? type})>(
-      (ref, key) async {
-        if (key.query.trim().isEmpty) return const [];
-        return ref
-            .watch(investmentRepositoryProvider)
-            .searchAssets(key.query, type: key.type);
-      },
-    );
+    .autoDispose<
+      List<MarketSearchResult>,
+      ({String query, InvestmentAssetType? type})
+    >((ref, key) async {
+      if (key.query.trim().isEmpty) return const [];
+      return ref
+          .watch(investmentRepositoryProvider)
+          .searchAssets(key.query, type: key.type);
+    });
 
 /// Transactions of one holding.
 final investmentTransactionsProvider =
@@ -960,17 +1010,16 @@ final investmentTransactionsProvider =
       holdingId,
     ) async {
       await ref.watch(databaseBootstrapProvider.future);
-      return ref
-          .watch(investmentRepositoryProvider)
-          .getTransactions(holdingId);
+      return ref.watch(investmentRepositoryProvider).getTransactions(holdingId);
     });
 
 /// One holding with its current valuation, for 单个投资详情.
-final investmentHoldingProvider =
-    FutureProvider.family<ValuedHolding?, String>((ref, holdingId) async {
-      await ref.watch(databaseBootstrapProvider.future);
-      // Re-evaluate whenever the portfolio changes so the detail page follows
-      // a refresh triggered elsewhere.
-      ref.watch(investmentPortfolioProvider);
-      return ref.watch(investmentRepositoryProvider).valueHolding(holdingId);
-    });
+final investmentHoldingProvider = FutureProvider.family<ValuedHolding?, String>(
+  (ref, holdingId) async {
+    await ref.watch(databaseBootstrapProvider.future);
+    // Re-evaluate whenever the portfolio changes so the detail page follows
+    // a refresh triggered elsewhere.
+    ref.watch(investmentPortfolioProvider);
+    return ref.watch(investmentRepositoryProvider).valueHolding(holdingId);
+  },
+);

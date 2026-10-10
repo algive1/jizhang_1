@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { TwelveDataMarketDataProvider } from './twelve_data_provider.js';
+import { MarketDataUnavailable } from './market_data_types.js';
+import type { MarketAssetType, MarketQuote, MarketHistoryPoint, MarketSearchResult, ServerMarketDataProvider } from './market_data_types.js';
+export { MarketDataUnavailable } from './market_data_types.js';
+export type { MarketAssetType, MarketQuote, MarketHistoryPoint, MarketSearchResult, ServerMarketDataProvider } from './market_data_types.js';
 
 const assetType = z.enum(['stock', 'fund', 'bond', 'crypto']);
 const quoteRequest = z.strictObject({
@@ -37,26 +42,12 @@ const historyQuery = z.strictObject({
   days: z.coerce.number().int().min(1).max(3650),
 });
 
-export type MarketAssetType = z.infer<typeof assetType>;
-export type MarketQuote = z.infer<typeof quoteSchema>;
-export type MarketSearchResult = z.infer<typeof searchResultSchema>;
-export type MarketHistoryPoint = z.infer<typeof historyPointSchema>;
-
-export interface ServerMarketDataProvider {
-  readonly name: string;
-  search(query: string, type: MarketAssetType | undefined, limit: number): Promise<MarketSearchResult[]>;
-  quotes(requests: Array<{ symbol: string; type: MarketAssetType }>): Promise<MarketQuote[]>;
-  history(symbol: string, type: MarketAssetType, days: number): Promise<MarketHistoryPoint[]>;
-}
-
-export class MarketDataUnavailable extends Error {}
-
 function cleanBaseUrl(value: string | undefined): string {
   const raw = value?.trim() ?? '';
-  if (!raw) throw new MarketDataUnavailable('MARKET_DATA_BASE_URL is not configured');
+  if (!raw) throw new MarketDataUnavailable('行情服务尚未配置，可使用手动估值');
   const url = new URL(raw);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname))) {
-    throw new MarketDataUnavailable('MARKET_DATA_BASE_URL must use HTTPS');
+    throw new MarketDataUnavailable('行情数据源配置无效');
   }
   return url.toString().replace(/\/$/, '');
 }
@@ -157,7 +148,9 @@ class MemoryServerQuoteCache implements ServerQuoteCache {
   }
 
   async set(key: string, quote: MarketQuote, ttlSeconds: number): Promise<void> {
+    this.values.delete(key);
     this.values.set(key, { quote, expiresAt: Date.now() + ttlSeconds * 1000 });
+    if (this.values.size > 2000) this.values.delete(this.values.keys().next().value!);
   }
 }
 
@@ -223,7 +216,7 @@ function quoteKey(type: MarketAssetType, symbol: string): string {
 
 function quoteTtl(type: MarketAssetType, at = new Date()): number {
   if (type === 'crypto') return 120;
-  const day = at.getUTCDay();
+  const day = new Date(at.getTime() + 8 * 3600_000).getUTCDay();
   // China Standard Time = UTC+8. The server may run anywhere.
   const chinaMinutes = ((at.getUTCHours() + 8) % 24) * 60 + at.getUTCMinutes();
   const weekday = day !== 0 && day !== 6;
@@ -246,7 +239,7 @@ function createCache(): ServerQuoteCache {
 
 export function registerMarketDataRoutes(
   app: FastifyInstance,
-  provider: ServerMarketDataProvider = new NormalizedHttpMarketDataProvider(),
+  provider: ServerMarketDataProvider = createMarketDataProvider(),
   cache: ServerQuoteCache = createCache(),
 ) {
   app.get('/api/v1/market/search', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async request => {
@@ -289,7 +282,7 @@ export function registerMarketDataRoutes(
         const key = quoteKey(parsed.type, parsed.symbol);
         cached.set(key, parsed);
         try {
-          await cache.set(key, parsed, quoteTtl(parsed.type));
+          await cache.set(key, parsed, provider.name === 'Twelve Data' ? 300 : quoteTtl(parsed.type));
         } catch {
           // A cache outage must never turn a successful vendor quote into a
           // user-visible outage. The next request can fetch the provider again.
@@ -315,4 +308,11 @@ export function registerMarketDataRoutes(
       throw error;
     }
   });
+}
+
+export function createMarketDataProvider(): ServerMarketDataProvider {
+  const name = process.env.MARKET_DATA_PROVIDER?.trim() || 'normalized';
+  if (name === 'twelvedata') return new TwelveDataMarketDataProvider();
+  if (name === 'normalized') return new NormalizedHttpMarketDataProvider();
+  throw new Error('Unknown MARKET_DATA_PROVIDER');
 }

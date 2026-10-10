@@ -89,7 +89,7 @@ class AppLiquidGlassSurface extends StatelessWidget {
         shadow: shadow,
         chromaticEdge: false,
         clipBehavior: clipBehavior,
-        child: child,
+        child: Material(type: MaterialType.transparency, child: child),
       );
     }
 
@@ -153,7 +153,10 @@ class AppLiquidGlassSurface extends StatelessWidget {
       touch: interactive && !MediaQuery.disableAnimationsOf(context)
           ? const LiquidGlassTouch.flexing(LiquidGlassFlex.subtle())
           : null,
-      child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+      child: Padding(
+        padding: padding ?? EdgeInsets.zero,
+        child: Material(type: MaterialType.transparency, child: child),
+      ),
     );
 
     if (margin == null) return lens;

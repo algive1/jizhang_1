@@ -19,7 +19,7 @@ void main() {
       "('account_management_meta','receivables','receivable_events')",
     ).get();
 
-    expect(database.schemaVersion, 25);
+    expect(database.schemaVersion, 26);
     expect(
       rows.map((row) => row.read<String>('name')).toSet(),
       {

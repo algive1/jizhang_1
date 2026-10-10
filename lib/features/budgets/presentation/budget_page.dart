@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/theme/app_theme_tokens.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,32 +39,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
     final preferences = ref.watch(budgetPreferencesProvider);
     final goals = ref.watch(goalsProvider);
     final base = Theme.of(context);
-    final theme = base.copyWith(
-      brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: budgetGold,
-        brightness: Brightness.light,
-        surface: const Color(0xFFFFFAF1),
-      ),
-      scaffoldBackgroundColor: Colors.transparent,
-      textTheme: base.textTheme.apply(
-        bodyColor: budgetInk,
-        displayColor: budgetInk,
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: budgetGold,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: budgetGold),
-      ),
-      dialogTheme: const DialogThemeData(
-        backgroundColor: Color(0xFFFFFAF1),
-        surfaceTintColor: Colors.transparent,
-      ),
-    );
+    final theme = base;
     return Theme(
       data: theme,
       child: Builder(
@@ -75,11 +53,17 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
             );
           }
           return AnnotatedRegion<SystemUiOverlayStyle>(
-            value: SystemUiOverlayStyle.light.copyWith(
-              statusBarColor: Colors.transparent,
-              systemNavigationBarColor: Colors.transparent,
-              systemNavigationBarIconBrightness: Brightness.dark,
-            ),
+            value:
+                (page.appIsDark
+                        ? SystemUiOverlayStyle.light
+                        : SystemUiOverlayStyle.dark)
+                    .copyWith(
+                      statusBarColor: Colors.transparent,
+                      systemNavigationBarColor: Colors.transparent,
+                      systemNavigationBarIconBrightness: page.appIsDark
+                          ? Brightness.light
+                          : Brightness.dark,
+                    ),
             child: Stack(
               children: [
                 const Positioned.fill(child: BudgetBackground()),
@@ -97,10 +81,10 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                                 width: 44,
                                 child: IconButton(
                                   tooltip: '返回',
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.chevron_left_rounded,
                                     size: 28,
-                                    color: Colors.white,
+                                    color: page.appPrimaryText,
                                   ),
                                   onPressed: () {
                                     final router = GoRouter.maybeOf(page);
@@ -119,9 +103,10 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                                   '预算与目标',
                                   textAlign: TextAlign.center,
                                   style: budgetText(
+                                    context,
                                     18,
                                     weight: FontWeight.w700,
-                                    color: Colors.white,
+                                    color: page.appPrimaryText,
                                   ),
                                 ),
                               ),
@@ -224,6 +209,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                                         Text(
                                           '预算暂时无法读取',
                                           style: budgetText(
+                                            context,
                                             16,
                                             weight: FontWeight.w700,
                                           ),
@@ -427,7 +413,7 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                     Expanded(
                       child: Text(
                         '分类预算 · ${_period.label}',
-                        style: budgetText(16, weight: FontWeight.w700),
+                        style: budgetText(context, 16, weight: FontWeight.w700),
                       ),
                     ),
                     TextButton(

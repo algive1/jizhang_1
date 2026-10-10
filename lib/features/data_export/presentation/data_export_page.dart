@@ -1,3 +1,5 @@
+import '../../account/presentation/cloud_backup_card.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -52,20 +54,20 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
     if (_appLockChanging) return;
     setState(() => _appLockChanging = true);
     try {
-      final changed = await ref.read(appLockServiceProvider).setEnabled(enabled);
+      final changed = await ref
+          .read(appLockServiceProvider)
+          .setEnabled(enabled);
       if (!mounted) return;
       if (changed) {
         setState(() => _appLockEnabled = enabled);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('设备未完成身份验证，应用锁设置没有改变')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('设备未完成身份验证，应用锁设置没有改变')));
       }
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('应用锁设置失败：$error')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('应用锁设置失败：$error')));
       }
     } finally {
       if (mounted) setState(() => _appLockChanging = false);
@@ -148,9 +150,8 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
       if (mounted) setState(() => _analyticsEnabled = enabled);
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('统计设置保存失败：$error')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('统计设置保存失败：$error')));
       }
     } finally {
       if (mounted) setState(() => _analyticsChanging = false);
@@ -177,9 +178,8 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
       );
       if (mounted) {
         setState(
-          () => _status = uri == null
-              ? '已取消备份，未保存文件'
-              : '加密完整备份已保存，数据库与现有附件均已包含',
+          () =>
+              _status = uri == null ? '已取消备份，未保存文件' : '加密完整备份已保存，数据库与现有附件均已包含',
         );
       }
     } on Object catch (error) {
@@ -194,9 +194,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('恢复本地备份？'),
-        content: const Text(
-          '恢复会覆盖当前本机账本。应用会先保留恢复前数据库副本；新格式备份还会恢复附件。确认继续吗？',
-        ),
+        content: const Text('恢复会覆盖当前本机账本。应用会先保留恢复前数据库副本；新格式备份还会恢复附件。确认继续吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -241,9 +239,7 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
         await service.restoreDatabase(bytes);
       }
       if (mounted) {
-        setState(
-          () => _status = '备份已安全暂存。请完全关闭并重新打开应用后切换到恢复的数据。',
-        );
+        setState(() => _status = '备份已安全暂存。请完全关闭并重新打开应用后切换到恢复的数据。');
       }
     } on Object catch (error) {
       if (mounted) setState(() => _status = '恢复失败：$error');
@@ -361,6 +357,8 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
             ),
           ),
           const SizedBox(height: 16),
+          const CloudBackupCard(),
+          const SizedBox(height: 16),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,21 +419,14 @@ class _DataExportPageState extends ConsumerState<DataExportPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '使用情况统计',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('使用情况统计', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                const Text(
-                  '帮助我们了解哪些页面和功能更常用。默认关闭，只有你主动开启后才会上传匿名使用事件。',
-                ),
+                const Text('帮助我们了解哪些页面和功能更常用。默认关闭，只有你主动开启后才会上传匿名使用事件。'),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('允许匿名使用情况统计'),
-                  subtitle: const Text(
-                    '不上传金额、商户、备注、分类名、附件路径、账户信息或流水内容。',
-                  ),
+                  subtitle: const Text('不上传金额、商户、备注、分类名、附件路径、账户信息或流水内容。'),
                   value: _analyticsEnabled ?? false,
                   onChanged: _analyticsEnabled == null || _analyticsChanging
                       ? null

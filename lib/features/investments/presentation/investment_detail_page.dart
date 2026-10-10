@@ -115,7 +115,10 @@ class _InvestmentDetailPageState extends ConsumerState<InvestmentDetailPage> {
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: TransactionItem(
                                     transaction: transaction,
-                                    unit: _unitLabel(position.holding.asset.type),
+                                    currency: position.holding.asset.currency,
+                                    unit: _unitLabel(
+                                      position.holding.asset.type,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -301,73 +304,82 @@ class _PositionHeaderCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    Text(
-                      _priceLabel(asset.type),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.appSecondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '¥${InvestmentInput.formatPriceLabel(position.price)}',
+                      Text(
+                        _priceLabel(asset.type),
                         style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: context.appPrimaryText,
-                          fontFeatures: [FontFeature.tabularFigures()],
+                          fontSize: 11,
+                          color: context.appSecondaryText,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Bounded so a large change value scales down instead of
-              // overflowing the card.
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: box.maxWidth * .42),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _changeLabel(asset.type),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.appSecondaryText,
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${position.holding.asset.currency} ${InvestmentInput.formatPriceLabel(position.price)}',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: context.appPrimaryText,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 2),
-                    InvestmentAmountText(
-                      quote?.change ?? 0,
-                      hidden: hidden,
-                      signed: true,
-                      size: 14,
-                      color: quote == null
-                          ? context.appSecondaryText
-                          : profitColor(quote.change, context: context),
-                    ),
-                    ProfitText(
-                      percent: quote?.changePercent,
-                      fontSize: 11,
-                      alignment: Alignment.centerRight,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                // Bounded so a large change value scales down instead of
+                // overflowing the card.
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: box.maxWidth * .42),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _changeLabel(asset.type),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.appSecondaryText,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      if (quote == null)
+                        Text(
+                          '—',
+                          style: TextStyle(color: context.appSecondaryText),
+                        )
+                      else
+                        InvestmentAmountText(
+                          quote.change,
+                          currency: position.holding.asset.currency,
+                          hidden: hidden,
+                          signed: true,
+                          size: 14,
+                          color: profitColor(quote.change, context: context),
+                        ),
+                      ProfitText(
+                        percent: quote?.changePercent,
+                        fontSize: 11,
+                        alignment: Alignment.centerRight,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           if (quote != null) ...[
             const SizedBox(height: 6),
-            QuoteStatus(
-              timestamp: quote.timestamp,
-              isStale: quote.isStale,
+            QuoteStatus(timestamp: quote.timestamp, isStale: quote.isStale),
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '暂无报价，市值暂按成本估算',
+                style: TextStyle(color: context.appSecondaryText, fontSize: 12),
+              ),
             ),
-          ],
           Divider(height: 20),
           Row(
             children: [
@@ -385,6 +397,7 @@ class _PositionHeaderCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     InvestmentAmountText(
                       position.marketValue,
+                      currency: position.holding.asset.currency,
                       hidden: hidden,
                       size: 17,
                     ),
@@ -396,7 +409,7 @@ class _PositionHeaderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '累计收益',
+                      '持仓盈亏',
                       style: TextStyle(
                         fontSize: 11,
                         color: context.appSecondaryText,
@@ -406,15 +419,21 @@ class _PositionHeaderCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: InvestmentAmountText(
-                            position.profit,
-                            hidden: hidden,
-                            signed: true,
-                            size: 17,
-                            color: position.profitPercent == null
-                                ? context.appSecondaryText
-                                : profitColor(position.profit, context: context),
-                          ),
+                          child: quote == null
+                              ? Text(hidden ? '••••' : '—')
+                              : InvestmentAmountText(
+                                  position.profit,
+                                  currency: position.holding.asset.currency,
+                                  hidden: hidden,
+                                  signed: true,
+                                  size: 17,
+                                  color: position.profitPercent == null
+                                      ? context.appSecondaryText
+                                      : profitColor(
+                                          position.profit,
+                                          context: context,
+                                        ),
+                                ),
                         ),
                         const SizedBox(width: 5),
                         Flexible(
@@ -441,8 +460,8 @@ class _PositionHeaderCard extends StatelessWidget {
   };
 
   static String _changeLabel(InvestmentAssetType type) => switch (type) {
-    InvestmentAssetType.crypto => '24H涨跌',
-    _ => '今日涨跌',
+    InvestmentAssetType.crypto => '报价涨跌',
+    _ => '行情涨跌',
   };
 }
 
@@ -483,7 +502,7 @@ class _PositionStatsCard extends StatelessWidget {
               _StatTile(
                 label: '平均成本',
                 value:
-                    '¥${InvestmentInput.formatPriceLabel(holding.averageCost)}',
+                    '${holding.asset.currency} ${InvestmentInput.formatPriceLabel(holding.averageCost)}',
               ),
               _StatTile(
                 label: _quantityLabel(asset.type),
@@ -492,7 +511,8 @@ class _PositionStatsCard extends StatelessWidget {
               ),
               _StatTile(
                 label: '持仓成本',
-                value: '¥${MoneyFormatter.decimal(holding.cost)}',
+                value:
+                    '${holding.asset.currency} ${MoneyFormatter.decimal(holding.cost)}',
                 hiddenValue: hidden,
               ),
               for (final extra in _extras(asset, position.price))
@@ -503,10 +523,7 @@ class _PositionStatsCard extends StatelessWidget {
             SizedBox(height: 8),
             Text(
               '计价货币 ${asset.currency}，暂不折算为本位币',
-              style: TextStyle(
-                fontSize: 11,
-                color: context.appSecondaryText,
-              ),
+              style: TextStyle(fontSize: 11, color: context.appSecondaryText),
             ),
           ],
         ],
@@ -520,15 +537,10 @@ class _PositionStatsCard extends StatelessWidget {
   /// a stock's 今日涨跌 detail are intentionally omitted until a real quote
   /// source supplies them — showing an invented value is worse than showing
   /// nothing.
-  static List<(String, String)> _extras(
-    InvestmentAsset asset,
-    double price,
-  ) {
+  static List<(String, String)> _extras(InvestmentAsset asset, double price) {
     switch (asset.type) {
       case InvestmentAssetType.fund:
-        return [
-          ('净值日期', DateFormat('yyyy-MM-dd').format(DateTime.now())),
-        ];
+        return [('净值日期', DateFormat('yyyy-MM-dd').format(DateTime.now()))];
       case InvestmentAssetType.bond:
       case InvestmentAssetType.stock:
       case InvestmentAssetType.crypto:
@@ -568,10 +580,7 @@ class _StatTile extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 10,
-            color: context.appSecondaryText,
-          ),
+          style: TextStyle(fontSize: 10, color: context.appSecondaryText),
         ),
         SizedBox(height: 3),
         Text(
@@ -662,10 +671,7 @@ class _TrendCard extends ConsumerWidget {
               child: Center(
                 child: Text(
                   '行情更新失败',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.warning,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.warning),
                 ),
               ),
             )
@@ -676,7 +682,7 @@ class _TrendCard extends ConsumerWidget {
               amountHidden: false,
               lineColor: asset.type.accent,
               valueFormatter: (value) =>
-                  '¥${InvestmentInput.formatPriceLabel(value)}',
+                  '${asset.currency} ${InvestmentInput.formatPriceLabel(value)}',
               emptyLabel: '暂无走势数据',
             ),
         ],

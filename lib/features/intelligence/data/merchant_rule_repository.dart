@@ -1,3 +1,5 @@
+import '../../../core/utils/entity_id.dart';
+
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -155,7 +157,7 @@ class DriftMerchantRuleRepository implements MerchantRuleRepository {
         .firstOrNull;
     await _database.intelligenceDao.upsertMerchantRule(
       MerchantRuleEntriesCompanion.insert(
-        id: existing?.id ?? 'merchant-rule-${now.microsecondsSinceEpoch}',
+        id: existing?.id ?? 'merchant-rule-${newEntityId()}',
         bookId: Value(transaction.bookId),
         merchantPattern: merchant,
         normalizedPattern: normalized,

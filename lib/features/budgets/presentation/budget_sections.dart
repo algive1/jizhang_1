@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme_tokens.dart';
+
 import '../../../core/formatters/money_formatter.dart';
 import '../../../core/models/budget.dart';
 import '../../../core/models/goal.dart';
@@ -75,12 +77,12 @@ class CategoryBudgetRow extends StatelessWidget {
           progress.category?.name ?? '已隐藏分类',
           maxLines: compact ? 2 : 1,
           overflow: TextOverflow.ellipsis,
-          style: budgetText(12.5, weight: FontWeight.w700),
+          style: budgetText(context, 12.5, weight: FontWeight.w700),
         ),
         const SizedBox(height: 3),
         Text(
           '¥ ${MoneyFormatter.whole(progress.budget.amount)}',
-          style: budgetText(10.5, color: budgetMuted),
+          style: budgetText(context, 10.5, color: budgetMuted),
         ),
       ],
     );
@@ -88,11 +90,11 @@ class CategoryBudgetRow extends StatelessWidget {
       '已支出 ¥ ${MoneyFormatter.whole(progress.used)}',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: budgetText(10.3, weight: FontWeight.w600),
+      style: budgetText(context, 10.3, weight: FontWeight.w600),
     );
     final percent = Text(
       '${(progress.percentage * 100).round()}%',
-      style: budgetText(10.5, weight: FontWeight.w600),
+      style: budgetText(context, 10.5, weight: FontWeight.w600),
     );
     final icon = _BudgetIconTile(
       size: 35,
@@ -275,6 +277,7 @@ class _BudgetStatus extends StatelessWidget {
           BudgetAlertStatus.exceeded => '已超预算',
         },
         style: budgetText(
+          context,
           9.5,
           weight: FontWeight.w600,
           color: normal ? const Color(0xFF00B975) : const Color(0xFFFF3549),
@@ -405,14 +408,18 @@ class SavingsGoalCard extends StatelessWidget {
                             goal.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: budgetText(12.5, weight: FontWeight.w700),
+                            style: budgetText(
+                              context,
+                              12.5,
+                              weight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             goal.description ?? goal.goalType.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: budgetText(10, color: budgetMuted),
+                            style: budgetText(context, 10, color: budgetMuted),
                           ),
                         ],
                       ),
@@ -425,12 +432,12 @@ class SavingsGoalCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text.rich(
                     TextSpan(
-                      style: budgetText(11.5, color: budgetMuted),
+                      style: budgetText(context, 11.5, color: budgetMuted),
                       children: [
                         TextSpan(
                           text: '¥ ${MoneyFormatter.whole(goal.currentAmount)}',
-                          style: const TextStyle(
-                            color: budgetInk,
+                          style: TextStyle(
+                            color: context.appPrimaryText,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -456,7 +463,11 @@ class SavingsGoalCard extends StatelessWidget {
                       width: MediaQuery.textScalerOf(context).scale(25),
                       child: Text(
                         '${goal.progressPercent}%',
-                        style: budgetText(10.5, weight: FontWeight.w600),
+                        style: budgetText(
+                          context,
+                          10.5,
+                          weight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -473,7 +484,7 @@ class SavingsGoalCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         '${goal.targetDate.year}年${goal.targetDate.month}月',
-                        style: budgetText(10.5, color: budgetMuted),
+                        style: budgetText(context, 10.5, color: budgetMuted),
                       ),
                     ),
                   ],
@@ -613,7 +624,11 @@ class ReminderToggleCard extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         title,
-                        style: budgetText(11.5, weight: FontWeight.w700),
+                        style: budgetText(
+                          context,
+                          11.5,
+                          weight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 3),
                       FittedBox(
@@ -622,7 +637,7 @@ class ReminderToggleCard extends StatelessWidget {
                         child: Text(
                           subtitle,
                           maxLines: 1,
-                          style: budgetText(8.5, color: budgetMuted),
+                          style: budgetText(context, 8.5, color: budgetMuted),
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -749,11 +764,11 @@ class BudgetAdviceBanner extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withValues(alpha: .85)),
-        gradient: const LinearGradient(
+        border: Border.all(color: context.appDivider),
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF3CE), Color(0xFFFFE7B6), Color(0xFFFFF0D7)],
+          colors: [context.appPrimarySoft, context.appSurfaceSoft],
         ),
       ),
       child: Padding(
@@ -812,6 +827,7 @@ class BudgetAdviceBanner extends StatelessWidget {
                             Text(
                               '小冰建议',
                               style: budgetText(
+                                context,
                                 8,
                                 weight: FontWeight.w600,
                                 color: const Color(0xFFBA7019),
@@ -825,11 +841,18 @@ class BudgetAdviceBanner extends StatelessWidget {
                         padding: EdgeInsets.only(right: large ? 0 : 81),
                         child: Text(
                           title,
-                          style: budgetText(10.5, weight: FontWeight.w700),
+                          style: budgetText(
+                            context,
+                            10.5,
+                            weight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(detail, style: budgetText(9.5, color: budgetMuted)),
+                      Text(
+                        detail,
+                        style: budgetText(context, 9.5, color: budgetMuted),
+                      ),
                       if (large) ...[
                         const SizedBox(height: 6),
                         Align(
@@ -867,14 +890,19 @@ class _BudgetEmpty extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(text, style: budgetText(11, color: budgetMuted)),
+          child: Text(text, style: budgetText(context, 11, color: budgetMuted)),
         ),
         const SizedBox(width: 8),
         TextButton(
           onPressed: onTap,
           child: Text(
             action,
-            style: budgetText(11, weight: FontWeight.w600, color: budgetGold),
+            style: budgetText(
+              context,
+              11,
+              weight: FontWeight.w600,
+              color: budgetGold,
+            ),
           ),
         ),
       ],

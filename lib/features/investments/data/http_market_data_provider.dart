@@ -13,7 +13,7 @@ class HttpMarketDataProvider implements MarketDataProvider {
   final SharedApi _api;
 
   @override
-  String get name => '实时行情';
+  String get name => '市场报价';
 
   @override
   Future<List<MarketSearchResult>> search(
